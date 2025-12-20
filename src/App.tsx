@@ -14,6 +14,9 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
 import AdminBorrowers from "./pages/admin/AdminBorrowers";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminEmployers from "./pages/admin/AdminEmployers";
+import AdminDisbursements from "./pages/admin/AdminDisbursements";
+import AdminReports from "./pages/admin/AdminReports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +40,9 @@ const App = () => (
             <Route path="/admin/applications" element={<AdminApplications />} />
             <Route path="/admin/borrowers" element={<AdminBorrowers />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/employers" element={<AdminEmployers />} />
+            <Route path="/admin/disbursements" element={<AdminDisbursements />} />
+            <Route path="/admin/reports" element={<AdminReports />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
