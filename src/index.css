@@ -50,13 +50,20 @@
     --gradient-hero: linear-gradient(135deg, hsl(280, 60%, 8%) 0%, hsl(300, 50%, 6%) 50%, hsl(280, 60%, 4%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(280, 50%, 12%) 0%, hsl(280, 50%, 6%) 100%);
     --gradient-button: linear-gradient(135deg, hsl(330, 90%, 55%) 0%, hsl(340, 85%, 50%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(160, 70%, 40%) 0%, hsl(140, 60%, 35%) 100%);
     
     --shadow-glow: 0 0 60px hsl(330, 90%, 55% / 0.3);
     --shadow-card: 0 8px 32px hsl(280, 60%, 4% / 0.5);
     --shadow-button: 0 4px 20px hsl(330, 90%, 55% / 0.4);
+    --shadow-elevated: 0 20px 40px -12px hsl(280, 60%, 4% / 0.6);
 
     --glass-bg: hsl(280 50% 10% / 0.6);
     --glass-border: hsl(280 30% 25% / 0.3);
+
+    /* Status colors */
+    --success: 160 70% 40%;
+    --warning: 45 90% 50%;
+    --info: 210 80% 55%;
   }
 
   .dark {
@@ -154,6 +161,29 @@
   .animate-fade-in {
     animation: fade-in 0.8s ease-out forwards;
   }
+
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--secondary)) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.4s ease-out forwards;
+  }
 }
 
 @keyframes float {
@@ -191,5 +221,25 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
