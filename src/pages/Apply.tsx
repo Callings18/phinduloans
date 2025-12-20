@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,8 +8,11 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
 
 const steps = [
   { id: 1, title: "Personal Info", icon: User },
@@ -17,11 +21,39 @@ const steps = [
   { id: 4, title: "Documents", icon: FileText },
 ];
 
+const personalInfoSchema = z.object({
+  firstName: z.string().min(2, "First name is required"),
+  lastName: z.string().min(2, "Last name is required"),
+  email: z.string().email("Valid email required"),
+  phone: z.string().min(10, "Valid phone number required"),
+  nrc: z.string().min(6, "Valid NRC number required"),
+  dob: z.string().min(1, "Date of birth required"),
+  address: z.string().min(5, "Address required"),
+});
+
+const employmentSchema = z.object({
+  employerName: z.string().min(2, "Employer name required"),
+  jobTitle: z.string().min(2, "Job title required"),
+  employmentType: z.string().min(1, "Employment type required"),
+  monthlyIncome: z.string().min(1, "Monthly income required"),
+  employmentDuration: z.string().min(1, "Employment duration required"),
+});
+
+const loanSchema = z.object({
+  loanAmount: z.number().min(500, "Minimum loan amount is K500"),
+  loanPurpose: z.string().min(1, "Loan purpose required"),
+  loanTerm: z.number().min(1, "Loan term required"),
+});
+
 const Apply = () => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
-    // Personal Info
     firstName: "",
     lastName: "",
     email: "",
@@ -30,8 +62,7 @@ const Apply = () => {
     dob: "",
     gender: "",
     address: "",
-    
-    // Employment
+    city: "",
     employerName: "",
     employerAddress: "",
     jobTitle: "",
@@ -39,49 +70,170 @@ const Apply = () => {
     monthlyIncome: "",
     payDay: "",
     employmentDuration: "",
-    
-    // Loan Details
     loanAmount: 5000,
     loanPurpose: "",
     loanTerm: 6,
     repaymentMethod: "",
-    
-    // Documents
     nrcFront: null as File | null,
     nrcBack: null as File | null,
     payslip: null as File | null,
     selfie: null as File | null,
-    
-    // Consent
     termsAccepted: false,
     dataConsent: false,
   });
 
+  // Pre-fill email if user is logged in
+  useEffect(() => {
+    if (user?.email) {
+      setFormData(prev => ({ ...prev, email: user.email || "" }));
+    }
+  }, [user]);
+
   const updateFormData = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when field is updated
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const handleFileUpload = (field: string, file: File | null) => {
     updateFormData(field, file);
   };
 
+  const validateStep = (step: number): boolean => {
+    try {
+      if (step === 1) {
+        personalInfoSchema.parse({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          nrc: formData.nrc,
+          dob: formData.dob,
+          address: formData.address,
+        });
+      } else if (step === 2) {
+        employmentSchema.parse({
+          employerName: formData.employerName,
+          jobTitle: formData.jobTitle,
+          employmentType: formData.employmentType,
+          monthlyIncome: formData.monthlyIncome,
+          employmentDuration: formData.employmentDuration,
+        });
+      } else if (step === 3) {
+        loanSchema.parse({
+          loanAmount: formData.loanAmount,
+          loanPurpose: formData.loanPurpose,
+          loanTerm: formData.loanTerm,
+        });
+      }
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            newErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(newErrors);
+      }
+      return false;
+    }
+  };
+
   const nextStep = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
+    if (validateStep(currentStep) && currentStep < 4) {
+      setCurrentStep(currentStep + 1);
+    }
   };
 
   const prevStep = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
-  const handleSubmit = () => {
-    toast({
-      title: "Application Submitted!",
-      description: "We'll review your application and get back to you within 24 hours.",
-    });
-  };
-
   const interestRate = 0.15;
-  const monthlyPayment = (formData.loanAmount * (1 + interestRate * formData.loanTerm)) / formData.loanTerm;
+  const totalInterest = formData.loanAmount * interestRate * (formData.loanTerm / 12);
+  const totalRepayment = formData.loanAmount + totalInterest;
+  const monthlyPayment = totalRepayment / formData.loanTerm;
+
+  const handleSubmit = async () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please login or create an account to submit your application.",
+        variant: "destructive",
+      });
+      navigate('/auth');
+      return;
+    }
+
+    if (!formData.termsAccepted || !formData.dataConsent) {
+      toast({
+        title: "Consent Required",
+        description: "Please accept the terms and data consent to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Map employment type to enum
+      const employmentTypeMap: Record<string, "employed" | "self_employed" | "contract" | "other"> = {
+        "permanent": "employed",
+        "contract": "contract",
+        "self-employed": "self_employed",
+      };
+
+      const { error } = await supabase.from('loan_applications').insert({
+        user_id: user.id,
+        full_name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        phone: formData.phone,
+        nrc_number: formData.nrc,
+        date_of_birth: formData.dob || null,
+        address: formData.address,
+        city: formData.city || null,
+        employment_type: employmentTypeMap[formData.employmentType] || "other",
+        employer_name: formData.employerName,
+        job_title: formData.jobTitle,
+        monthly_income: parseFloat(formData.monthlyIncome) || 0,
+        employment_duration: formData.employmentDuration,
+        loan_amount: formData.loanAmount,
+        loan_purpose: formData.loanPurpose,
+        loan_term_months: formData.loanTerm,
+        interest_rate: interestRate * 100,
+        monthly_payment: monthlyPayment,
+        total_repayment: totalRepayment,
+        status: 'pending',
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Application Submitted!",
+        description: "We'll review your application and get back to you within 24 hours.",
+      });
+
+      navigate('/dashboard');
+    } catch (error: any) {
+      toast({
+        title: "Submission Failed",
+        description: error.message || "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,12 +243,20 @@ const Apply = () => {
         <div className="container mx-auto px-4">
           {/* Header */}
           <div className="text-center max-w-2xl mx-auto mb-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
+              <Sparkles className="text-primary-foreground" size={28} />
+            </div>
             <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
               Apply for a <span className="text-gradient">Loan</span>
             </h1>
             <p className="text-muted-foreground">
               Complete the form below to apply for your loan. It only takes a few minutes.
             </p>
+            {!user && !isLoading && (
+              <p className="text-primary text-sm mt-2">
+                Already have an account? <a href="/auth" className="underline font-medium">Login</a> to auto-fill your details
+              </p>
+            )}
           </div>
 
           {/* Progress Steps */}
@@ -106,23 +266,23 @@ const Apply = () => {
                 <div key={step.id} className="flex-1 flex items-center">
                   <div className="flex flex-col items-center w-full">
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${
                         currentStep >= step.id
-                          ? "gradient-primary shadow-glow"
+                          ? "gradient-primary shadow-glow scale-110"
                           : "bg-secondary border border-border"
                       }`}
                     >
                       {currentStep > step.id ? (
-                        <CheckCircle className="text-primary-foreground" size={24} />
+                        <CheckCircle className="text-primary-foreground" size={26} />
                       ) : (
                         <step.icon
                           className={currentStep >= step.id ? "text-primary-foreground" : "text-muted-foreground"}
-                          size={24}
+                          size={26}
                         />
                       )}
                     </div>
                     <span
-                      className={`mt-2 text-sm font-medium hidden md:block ${
+                      className={`mt-3 text-sm font-medium hidden md:block transition-colors duration-300 ${
                         currentStep >= step.id ? "text-foreground" : "text-muted-foreground"
                       }`}
                     >
@@ -131,8 +291,8 @@ const Apply = () => {
                   </div>
                   {index < steps.length - 1 && (
                     <div
-                      className={`flex-1 h-0.5 mx-2 transition-colors duration-300 ${
-                        currentStep > step.id ? "bg-primary" : "bg-border"
+                      className={`flex-1 h-1 mx-3 rounded-full transition-all duration-500 ${
+                        currentStep > step.id ? "gradient-primary" : "bg-border"
                       }`}
                     />
                   )}
@@ -143,7 +303,7 @@ const Apply = () => {
 
           {/* Form */}
           <div className="max-w-2xl mx-auto">
-            <div className="glass rounded-3xl p-8 md:p-12">
+            <div className="glass rounded-3xl p-8 md:p-12 shadow-card">
               {/* Step 1: Personal Info */}
               {currentStep === 1 && (
                 <div className="space-y-6 animate-fade-in">
@@ -151,65 +311,77 @@ const Apply = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
+                      <Label htmlFor="firstName">First Name *</Label>
                       <Input
                         id="firstName"
                         placeholder="Enter first name"
                         value={formData.firstName}
                         onChange={(e) => updateFormData("firstName", e.target.value)}
+                        className={errors.firstName ? "border-destructive" : ""}
                       />
+                      {errors.firstName && <p className="text-sm text-destructive">{errors.firstName}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
+                      <Label htmlFor="lastName">Last Name *</Label>
                       <Input
                         id="lastName"
                         placeholder="Enter last name"
                         value={formData.lastName}
                         onChange={(e) => updateFormData("lastName", e.target.value)}
+                        className={errors.lastName ? "border-destructive" : ""}
                       />
+                      {errors.lastName && <p className="text-sm text-destructive">{errors.lastName}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
+                      <Label htmlFor="email">Email Address *</Label>
                       <Input
                         id="email"
                         type="email"
                         placeholder="your@email.com"
                         value={formData.email}
                         onChange={(e) => updateFormData("email", e.target.value)}
+                        className={errors.email ? "border-destructive" : ""}
                       />
+                      {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number</Label>
+                      <Label htmlFor="phone">Phone Number *</Label>
                       <Input
                         id="phone"
                         placeholder="+260 XXX XXX XXX"
                         value={formData.phone}
                         onChange={(e) => updateFormData("phone", e.target.value)}
+                        className={errors.phone ? "border-destructive" : ""}
                       />
+                      {errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="nrc">NRC Number</Label>
+                      <Label htmlFor="nrc">NRC Number *</Label>
                       <Input
                         id="nrc"
                         placeholder="XXXXXX/XX/X"
                         value={formData.nrc}
                         onChange={(e) => updateFormData("nrc", e.target.value)}
+                        className={errors.nrc ? "border-destructive" : ""}
                       />
+                      {errors.nrc && <p className="text-sm text-destructive">{errors.nrc}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="dob">Date of Birth</Label>
+                      <Label htmlFor="dob">Date of Birth *</Label>
                       <Input
                         id="dob"
                         type="date"
                         value={formData.dob}
                         onChange={(e) => updateFormData("dob", e.target.value)}
+                        className={errors.dob ? "border-destructive" : ""}
                       />
+                      {errors.dob && <p className="text-sm text-destructive">{errors.dob}</p>}
                     </div>
                   </div>
 
@@ -227,14 +399,26 @@ const Apply = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="address">Residential Address</Label>
+                      <Label htmlFor="city">City</Label>
                       <Input
-                        id="address"
-                        placeholder="Enter your address"
-                        value={formData.address}
-                        onChange={(e) => updateFormData("address", e.target.value)}
+                        id="city"
+                        placeholder="Enter your city"
+                        value={formData.city}
+                        onChange={(e) => updateFormData("city", e.target.value)}
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Residential Address *</Label>
+                    <Input
+                      id="address"
+                      placeholder="Enter your full address"
+                      value={formData.address}
+                      onChange={(e) => updateFormData("address", e.target.value)}
+                      className={errors.address ? "border-destructive" : ""}
+                    />
+                    {errors.address && <p className="text-sm text-destructive">{errors.address}</p>}
                   </div>
                 </div>
               )}
@@ -246,22 +430,26 @@ const Apply = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="employerName">Employer Name</Label>
+                      <Label htmlFor="employerName">Employer Name *</Label>
                       <Input
                         id="employerName"
                         placeholder="Company name"
                         value={formData.employerName}
                         onChange={(e) => updateFormData("employerName", e.target.value)}
+                        className={errors.employerName ? "border-destructive" : ""}
                       />
+                      {errors.employerName && <p className="text-sm text-destructive">{errors.employerName}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="jobTitle">Job Title</Label>
+                      <Label htmlFor="jobTitle">Job Title *</Label>
                       <Input
                         id="jobTitle"
                         placeholder="Your position"
                         value={formData.jobTitle}
                         onChange={(e) => updateFormData("jobTitle", e.target.value)}
+                        className={errors.jobTitle ? "border-destructive" : ""}
                       />
+                      {errors.jobTitle && <p className="text-sm text-destructive">{errors.jobTitle}</p>}
                     </div>
                   </div>
 
@@ -277,9 +465,9 @@ const Apply = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label>Employment Type</Label>
+                      <Label>Employment Type *</Label>
                       <Select value={formData.employmentType} onValueChange={(v) => updateFormData("employmentType", v)}>
-                        <SelectTrigger>
+                        <SelectTrigger className={errors.employmentType ? "border-destructive" : ""}>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -288,11 +476,12 @@ const Apply = () => {
                           <SelectItem value="self-employed">Self-Employed</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.employmentType && <p className="text-sm text-destructive">{errors.employmentType}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label>Employment Duration</Label>
+                      <Label>Employment Duration *</Label>
                       <Select value={formData.employmentDuration} onValueChange={(v) => updateFormData("employmentDuration", v)}>
-                        <SelectTrigger>
+                        <SelectTrigger className={errors.employmentDuration ? "border-destructive" : ""}>
                           <SelectValue placeholder="How long?" />
                         </SelectTrigger>
                         <SelectContent>
@@ -302,19 +491,22 @@ const Apply = () => {
                           <SelectItem value="2+">More than 2 years</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.employmentDuration && <p className="text-sm text-destructive">{errors.employmentDuration}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="monthlyIncome">Monthly Income (ZMW)</Label>
+                      <Label htmlFor="monthlyIncome">Monthly Income (ZMW) *</Label>
                       <Input
                         id="monthlyIncome"
                         type="number"
                         placeholder="e.g. 5000"
                         value={formData.monthlyIncome}
                         onChange={(e) => updateFormData("monthlyIncome", e.target.value)}
+                        className={errors.monthlyIncome ? "border-destructive" : ""}
                       />
+                      {errors.monthlyIncome && <p className="text-sm text-destructive">{errors.monthlyIncome}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="payDay">Pay Day</Label>
@@ -341,7 +533,7 @@ const Apply = () => {
                     <div>
                       <div className="flex justify-between mb-4">
                         <Label>Loan Amount</Label>
-                        <span className="text-primary font-bold text-xl">K{formData.loanAmount.toLocaleString()}</span>
+                        <span className="text-primary font-bold text-2xl">K{formData.loanAmount.toLocaleString()}</span>
                       </div>
                       <Slider
                         value={[formData.loanAmount]}
@@ -359,7 +551,7 @@ const Apply = () => {
                     <div>
                       <div className="flex justify-between mb-4">
                         <Label>Loan Term</Label>
-                        <span className="text-primary font-bold text-xl">{formData.loanTerm} months</span>
+                        <span className="text-primary font-bold text-2xl">{formData.loanTerm} months</span>
                       </div>
                       <Slider
                         value={[formData.loanTerm]}
@@ -376,9 +568,9 @@ const Apply = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Purpose of Loan</Label>
+                    <Label>Purpose of Loan *</Label>
                     <Select value={formData.loanPurpose} onValueChange={(v) => updateFormData("loanPurpose", v)}>
-                      <SelectTrigger>
+                      <SelectTrigger className={errors.loanPurpose ? "border-destructive" : ""}>
                         <SelectValue placeholder="Why do you need this loan?" />
                       </SelectTrigger>
                       <SelectContent>
@@ -390,6 +582,7 @@ const Apply = () => {
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
+                    {errors.loanPurpose && <p className="text-sm text-destructive">{errors.loanPurpose}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -407,7 +600,7 @@ const Apply = () => {
                   </div>
 
                   {/* Summary */}
-                  <div className="p-6 rounded-2xl bg-secondary/50 border border-border">
+                  <div className="p-6 rounded-2xl gradient-card border border-border/50">
                     <h3 className="text-lg font-semibold text-foreground mb-4">Loan Summary</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
@@ -415,16 +608,21 @@ const Apply = () => {
                         <span className="text-foreground font-medium">K{formData.loanAmount.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Term</span>
-                        <span className="text-foreground font-medium">{formData.loanTerm} months</span>
+                        <span className="text-muted-foreground">Interest Rate</span>
+                        <span className="text-foreground font-medium">15% p.a.</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Interest Rate</span>
-                        <span className="text-foreground font-medium">15% flat</span>
+                        <span className="text-muted-foreground">Loan Term</span>
+                        <span className="text-foreground font-medium">{formData.loanTerm} months</span>
                       </div>
-                      <div className="border-t border-border pt-3 flex justify-between">
-                        <span className="text-foreground font-semibold">Monthly Payment</span>
-                        <span className="text-primary font-bold text-xl">K{monthlyPayment.toFixed(2)}</span>
+                      <div className="h-px bg-border my-3" />
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Monthly Payment</span>
+                        <span className="text-primary font-bold text-lg">K{monthlyPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total Repayment</span>
+                        <span className="text-foreground font-semibold">K{totalRepayment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       </div>
                     </div>
                   </div>
@@ -446,10 +644,10 @@ const Apply = () => {
                       <div key={doc.field} className="space-y-2">
                         <Label>{doc.label}</Label>
                         <label
-                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
                             formData[doc.field as keyof typeof formData]
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
+                              ? "border-primary bg-primary/10 shadow-glow"
+                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
                           }`}
                         >
                           <input
@@ -503,24 +701,35 @@ const Apply = () => {
                   variant="ghost"
                   onClick={prevStep}
                   disabled={currentStep === 1}
+                  className="gap-2"
                 >
-                  <ArrowLeft size={20} />
+                  <ArrowLeft size={18} />
                   Previous
                 </Button>
                 
                 {currentStep < 4 ? (
-                  <Button variant="hero" onClick={nextStep}>
+                  <Button variant="hero" onClick={nextStep} className="gap-2">
                     Next Step
-                    <ArrowRight size={20} />
+                    <ArrowRight size={18} />
                   </Button>
                 ) : (
                   <Button
                     variant="hero"
                     onClick={handleSubmit}
-                    disabled={!formData.termsAccepted || !formData.dataConsent}
+                    disabled={!formData.termsAccepted || !formData.dataConsent || isSubmitting}
+                    className="gap-2"
                   >
-                    Submit Application
-                    <ArrowRight size={20} />
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        Submit Application
+                        <ArrowRight size={18} />
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
