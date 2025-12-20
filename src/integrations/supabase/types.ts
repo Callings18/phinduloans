@@ -263,6 +263,39 @@ export type Database = {
           },
         ]
       }
+      payment_gateway_settings: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          environment: string | null
+          gateway_name: string
+          id: string
+          is_active: boolean | null
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          environment?: string | null
+          gateway_name: string
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          environment?: string | null
+          gateway_name?: string
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
