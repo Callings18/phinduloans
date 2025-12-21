@@ -13,6 +13,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  Package,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const menuItems = [
   { icon: FileText, label: "Applications", path: "/admin/applications" },
   { icon: Users, label: "Borrowers", path: "/admin/borrowers" },
   { icon: Building2, label: "Employers", path: "/admin/employers" },
+  { icon: Package, label: "Loan Products", path: "/admin/loan-products" },
   { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },

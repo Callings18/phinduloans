@@ -117,6 +117,7 @@ export type Database = {
           interest_rate: number | null
           job_title: string | null
           loan_amount: number
+          loan_product_id: string | null
           loan_purpose: string
           loan_term_months: number
           monthly_income: number
@@ -151,6 +152,7 @@ export type Database = {
           interest_rate?: number | null
           job_title?: string | null
           loan_amount: number
+          loan_product_id?: string | null
           loan_purpose: string
           loan_term_months: number
           monthly_income: number
@@ -185,6 +187,7 @@ export type Database = {
           interest_rate?: number | null
           job_title?: string | null
           loan_amount?: number
+          loan_product_id?: string | null
           loan_purpose?: string
           loan_term_months?: number
           monthly_income?: number
@@ -211,7 +214,65 @@ export type Database = {
             referencedRelation: "employers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "loan_applications_loan_product_id_fkey"
+            columns: ["loan_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      loan_products: {
+        Row: {
+          created_at: string
+          description: string | null
+          employment_types: string[] | null
+          id: string
+          interest_rate: number
+          is_active: boolean | null
+          max_amount: number
+          max_term_months: number
+          min_amount: number
+          min_term_months: number
+          name: string
+          processing_fee_percent: number | null
+          requirements: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          employment_types?: string[] | null
+          id?: string
+          interest_rate?: number
+          is_active?: boolean | null
+          max_amount?: number
+          max_term_months?: number
+          min_amount?: number
+          min_term_months?: number
+          name: string
+          processing_fee_percent?: number | null
+          requirements?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          employment_types?: string[] | null
+          id?: string
+          interest_rate?: number
+          is_active?: boolean | null
+          max_amount?: number
+          max_term_months?: number
+          min_amount?: number
+          min_term_months?: number
+          name?: string
+          processing_fee_percent?: number | null
+          requirements?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       loan_repayments: {
         Row: {

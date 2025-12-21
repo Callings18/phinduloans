@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,11 +8,25 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
+import { cn } from "@/lib/utils";
+
+interface LoanProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  min_amount: number;
+  max_amount: number;
+  min_term_months: number;
+  max_term_months: number;
+  interest_rate: number;
+  processing_fee_percent: number | null;
+  requirements: string[] | null;
+}
 
 const steps = [
   { id: 1, title: "Personal Info", icon: User },
@@ -49,9 +63,12 @@ const Apply = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loanProducts, setLoanProducts] = useState<LoanProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -82,12 +99,48 @@ const Apply = () => {
     dataConsent: false,
   });
 
+  // Fetch loan products
+  useEffect(() => {
+    const fetchProducts = async () => {
+      const { data } = await supabase
+        .from("loan_products")
+        .select("*")
+        .eq("is_active", true)
+        .order("min_amount", { ascending: true });
+      
+      if (data && data.length > 0) {
+        setLoanProducts(data);
+        const productId = searchParams.get("product");
+        const found = data.find((p) => p.id === productId);
+        const product = found || data[0];
+        setSelectedProduct(product);
+        setFormData(prev => ({
+          ...prev,
+          loanAmount: product.min_amount,
+          loanTerm: product.min_term_months,
+        }));
+      }
+    };
+    fetchProducts();
+  }, [searchParams]);
+
   // Pre-fill email if user is logged in
   useEffect(() => {
     if (user?.email) {
       setFormData(prev => ({ ...prev, email: user.email || "" }));
     }
   }, [user]);
+
+  // Update sliders when product changes
+  useEffect(() => {
+    if (selectedProduct) {
+      setFormData(prev => ({
+        ...prev,
+        loanAmount: Math.max(selectedProduct.min_amount, Math.min(prev.loanAmount, selectedProduct.max_amount)),
+        loanTerm: Math.max(selectedProduct.min_term_months, Math.min(prev.loanTerm, selectedProduct.max_term_months)),
+      }));
+    }
+  }, [selectedProduct]);
 
   const updateFormData = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -158,7 +211,7 @@ const Apply = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
-  const interestRate = 0.15;
+  const interestRate = selectedProduct ? selectedProduct.interest_rate / 100 : 0.15;
   const totalInterest = formData.loanAmount * interestRate * (formData.loanTerm / 12);
   const totalRepayment = formData.loanAmount + totalInterest;
   const monthlyPayment = totalRepayment / formData.loanTerm;
@@ -210,9 +263,10 @@ const Apply = () => {
         loan_amount: formData.loanAmount,
         loan_purpose: formData.loanPurpose,
         loan_term_months: formData.loanTerm,
-        interest_rate: interestRate * 100,
+        interest_rate: (selectedProduct?.interest_rate || 15),
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
+        loan_product_id: selectedProduct?.id || null,
         status: 'pending',
       });
 
@@ -529,6 +583,35 @@ const Apply = () => {
                 <div className="space-y-8 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Loan Details</h2>
                   
+                  {/* Loan Product Selector */}
+                  {loanProducts.length > 0 && (
+                    <div className="space-y-3">
+                      <Label>Loan Type *</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {loanProducts.map((product) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => setSelectedProduct(product)}
+                            className={cn(
+                              "p-4 rounded-xl border text-left transition-all",
+                              selectedProduct?.id === product.id
+                                ? "border-primary bg-primary/10 shadow-glow"
+                                : "border-border hover:border-primary/50"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <Package size={16} className="text-primary" />
+                              <span className="font-medium text-foreground">{product.name}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{product.description}</p>
+                            <p className="text-xs text-primary mt-1">{product.interest_rate}% interest</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-6">
                     <div>
                       <div className="flex justify-between mb-4">
@@ -538,13 +621,13 @@ const Apply = () => {
                       <Slider
                         value={[formData.loanAmount]}
                         onValueChange={(value) => updateFormData("loanAmount", value[0])}
-                        min={500}
-                        max={50000}
-                        step={500}
+                        min={selectedProduct?.min_amount || 500}
+                        max={selectedProduct?.max_amount || 50000}
+                        step={100}
                       />
                       <div className="flex justify-between mt-2 text-muted-foreground text-sm">
-                        <span>K500</span>
-                        <span>K50,000</span>
+                        <span>K{(selectedProduct?.min_amount || 500).toLocaleString()}</span>
+                        <span>K{(selectedProduct?.max_amount || 50000).toLocaleString()}</span>
                       </div>
                     </div>
 
@@ -556,13 +639,13 @@ const Apply = () => {
                       <Slider
                         value={[formData.loanTerm]}
                         onValueChange={(value) => updateFormData("loanTerm", value[0])}
-                        min={1}
-                        max={24}
+                        min={selectedProduct?.min_term_months || 1}
+                        max={selectedProduct?.max_term_months || 24}
                         step={1}
                       />
                       <div className="flex justify-between mt-2 text-muted-foreground text-sm">
-                        <span>1 month</span>
-                        <span>24 months</span>
+                        <span>{selectedProduct?.min_term_months || 1} month</span>
+                        <span>{selectedProduct?.max_term_months || 24} months</span>
                       </div>
                     </div>
                   </div>
@@ -609,7 +692,7 @@ const Apply = () => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Interest Rate</span>
-                        <span className="text-foreground font-medium">15% p.a.</span>
+                        <span className="text-foreground font-medium">{selectedProduct?.interest_rate || 15}% p.a.</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Loan Term</span>
