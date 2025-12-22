@@ -43,9 +43,9 @@ import {
   Trash2,
   FileText,
   DollarSign,
-  Upload,
   ExternalLink,
   ShieldCheck,
+  Printer,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,6 +54,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { generateLoanContract } from "@/utils/generateLoanContract";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -78,14 +79,8 @@ const AdminApplications = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Add loan form state
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string>("");
   const [newLoan, setNewLoan] = useState({
-    full_name: "",
-    email: "",
-    phone: "",
-    nrc_number: "",
-    date_of_birth: "",
-    address: "",
-    city: "",
     employer_name: "",
     job_title: "",
     employment_type: "employed" as const,
@@ -136,40 +131,55 @@ const AdminApplications = () => {
     },
   });
 
+  // Fetch borrowers (profiles)
+  const { data: borrowers } = useQuery({
+    queryKey: ['borrowers-profiles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Create loan mutation
   const createLoanMutation = useMutation({
-    mutationFn: async (loanData: any) => {
-      const monthlyIncome = parseFloat(loanData.monthly_income);
-      const loanAmount = parseFloat(loanData.loan_amount);
-      const interestRate = parseFloat(loanData.interest_rate);
-      const termMonths = parseInt(loanData.loan_term_months);
+    mutationFn: async (data: { borrowerId: string; loanData: typeof newLoan }) => {
+      const borrower = borrowers?.find(b => b.id === data.borrowerId);
+      if (!borrower) throw new Error('Borrower not found');
+
+      const monthlyIncome = parseFloat(data.loanData.monthly_income);
+      const loanAmount = parseFloat(data.loanData.loan_amount);
+      const interestRate = parseFloat(data.loanData.interest_rate);
+      const termMonths = parseInt(data.loanData.loan_term_months);
       
       const totalRepayment = loanAmount * (1 + (interestRate / 100) * (termMonths / 12));
       const monthlyPayment = totalRepayment / termMonths;
 
       const { error } = await supabase.from('loan_applications').insert({
-        user_id: user?.id,
-        full_name: loanData.full_name,
-        email: loanData.email,
-        phone: loanData.phone,
-        nrc_number: loanData.nrc_number,
-        date_of_birth: loanData.date_of_birth || null,
-        address: loanData.address || null,
-        city: loanData.city || null,
-        employer_name: loanData.employer_name || null,
-        job_title: loanData.job_title || null,
-        employment_type: loanData.employment_type,
-        employment_duration: loanData.employment_duration || null,
+        user_id: borrower.id,
+        full_name: borrower.full_name || borrower.email,
+        email: borrower.email,
+        phone: borrower.phone || '',
+        nrc_number: borrower.nrc_number || '',
+        address: borrower.address || null,
+        city: borrower.city || null,
+        employer_name: data.loanData.employer_name || null,
+        job_title: data.loanData.job_title || null,
+        employment_type: data.loanData.employment_type,
+        employment_duration: data.loanData.employment_duration || null,
         monthly_income: monthlyIncome,
         loan_amount: loanAmount,
         loan_term_months: termMonths,
-        loan_purpose: loanData.loan_purpose,
+        loan_purpose: data.loanData.loan_purpose,
         interest_rate: interestRate,
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
-        collateral_description: loanData.collateral_description || null,
-        collateral_value: loanData.collateral_value ? parseFloat(loanData.collateral_value) : null,
-        admin_notes: loanData.admin_notes || null,
+        collateral_description: data.loanData.collateral_description || null,
+        collateral_value: data.loanData.collateral_value ? parseFloat(data.loanData.collateral_value) : null,
+        admin_notes: data.loanData.admin_notes || null,
         status: 'pending',
       });
       
@@ -277,14 +287,8 @@ const AdminApplications = () => {
   });
 
   const resetNewLoanForm = () => {
+    setSelectedBorrowerId("");
     setNewLoan({
-      full_name: "",
-      email: "",
-      phone: "",
-      nrc_number: "",
-      date_of_birth: "",
-      address: "",
-      city: "",
       employer_name: "",
       job_title: "",
       employment_type: "employed",
@@ -331,12 +335,15 @@ const AdminApplications = () => {
   };
 
   const handleCreateLoan = () => {
-    if (!newLoan.full_name || !newLoan.email || !newLoan.phone || !newLoan.nrc_number || 
-        !newLoan.loan_amount || !newLoan.loan_term_months || !newLoan.loan_purpose || !newLoan.monthly_income) {
+    if (!selectedBorrowerId) {
+      toast({ title: "Please select a borrower", variant: "destructive" });
+      return;
+    }
+    if (!newLoan.loan_amount || !newLoan.loan_term_months || !newLoan.loan_purpose || !newLoan.monthly_income) {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
-    createLoanMutation.mutate(newLoan);
+    createLoanMutation.mutate({ borrowerId: selectedBorrowerId, loanData: newLoan });
   };
 
   const handleDisburse = () => {
@@ -485,73 +492,72 @@ const AdminApplications = () => {
             <DialogDescription>Create a new loan application manually</DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="personal" className="w-full">
+          <Tabs defaultValue="borrower" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="personal">Personal</TabsTrigger>
+              <TabsTrigger value="borrower">Borrower</TabsTrigger>
               <TabsTrigger value="employment">Employment</TabsTrigger>
               <TabsTrigger value="loan">Loan Details</TabsTrigger>
               <TabsTrigger value="collateral">Collateral</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="personal" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+            <TabsContent value="borrower" className="space-y-4 mt-4">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Full Name *</Label>
-                  <Input
-                    value={newLoan.full_name}
-                    onChange={(e) => setNewLoan({ ...newLoan, full_name: e.target.value })}
-                    placeholder="John Doe"
-                  />
+                  <Label>Select Borrower *</Label>
+                  <Select value={selectedBorrowerId} onValueChange={setSelectedBorrowerId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a borrower from the system" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {borrowers?.map((borrower) => (
+                        <SelectItem key={borrower.id} value={borrower.id}>
+                          {borrower.full_name || borrower.email} - {borrower.nrc_number || 'No NRC'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {borrowers?.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No borrowers found. Add borrowers first.</p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input
-                    type="email"
-                    value={newLoan.email}
-                    onChange={(e) => setNewLoan({ ...newLoan, email: e.target.value })}
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone *</Label>
-                  <Input
-                    value={newLoan.phone}
-                    onChange={(e) => setNewLoan({ ...newLoan, phone: e.target.value })}
-                    placeholder="+260 97X XXX XXX"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>NRC Number *</Label>
-                  <Input
-                    value={newLoan.nrc_number}
-                    onChange={(e) => setNewLoan({ ...newLoan, nrc_number: e.target.value })}
-                    placeholder="123456/78/1"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Date of Birth</Label>
-                  <Input
-                    type="date"
-                    value={newLoan.date_of_birth}
-                    onChange={(e) => setNewLoan({ ...newLoan, date_of_birth: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  <Input
-                    value={newLoan.city}
-                    onChange={(e) => setNewLoan({ ...newLoan, city: e.target.value })}
-                    placeholder="Lusaka"
-                  />
-                </div>
-                <div className="col-span-2 space-y-2">
-                  <Label>Address</Label>
-                  <Textarea
-                    value={newLoan.address}
-                    onChange={(e) => setNewLoan({ ...newLoan, address: e.target.value })}
-                    placeholder="Full address..."
-                  />
-                </div>
+
+                {selectedBorrowerId && (() => {
+                  const borrower = borrowers?.find(b => b.id === selectedBorrowerId);
+                  if (!borrower) return null;
+                  return (
+                    <Card className="bg-secondary/30 border-border/50">
+                      <CardContent className="p-4">
+                        <h4 className="font-semibold mb-3 text-foreground">Borrower Details</h4>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Full Name</p>
+                            <p className="text-foreground font-medium">{borrower.full_name || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Email</p>
+                            <p className="text-foreground font-medium">{borrower.email}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Phone</p>
+                            <p className="text-foreground font-medium">{borrower.phone || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">NRC Number</p>
+                            <p className="text-foreground font-medium">{borrower.nrc_number || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">City</p>
+                            <p className="text-foreground font-medium">{borrower.city || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Address</p>
+                            <p className="text-foreground font-medium">{borrower.address || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
               </div>
             </TabsContent>
 
@@ -984,7 +990,39 @@ const AdminApplications = () => {
             </Tabs>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (selectedApp) {
+                  generateLoanContract({
+                    id: selectedApp.id,
+                    full_name: selectedApp.full_name,
+                    email: selectedApp.email,
+                    phone: selectedApp.phone,
+                    nrc_number: selectedApp.nrc_number,
+                    address: selectedApp.address,
+                    city: selectedApp.city,
+                    date_of_birth: selectedApp.date_of_birth,
+                    employer_name: selectedApp.employer_name,
+                    job_title: selectedApp.job_title,
+                    monthly_income: Number(selectedApp.monthly_income),
+                    loan_amount: Number(selectedApp.loan_amount),
+                    loan_term_months: selectedApp.loan_term_months,
+                    interest_rate: Number(selectedApp.interest_rate),
+                    monthly_payment: Number(selectedApp.monthly_payment),
+                    total_repayment: Number(selectedApp.total_repayment),
+                    loan_purpose: selectedApp.loan_purpose,
+                    collateral_description: selectedApp.collateral_description,
+                    collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
+                    created_at: selectedApp.created_at,
+                  });
+                }
+              }}
+            >
+              <Printer size={16} className="mr-1" />
+              Print Contract
+            </Button>
             <Button variant="outline" onClick={() => setIsViewOpen(false)}>
               Close
             </Button>
