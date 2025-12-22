@@ -8,23 +8,23 @@ const About = () => {
   const values = [
     {
       icon: Target,
-      title: "Mission",
-      description: "To provide accessible, fast, and transparent financial solutions to every Zambian, empowering them to achieve their goals.",
+      title: "Integrity",
+      description: "We uphold the highest standards of honesty and ethical conduct in all our interactions with clients and partners.",
     },
     {
       icon: Eye,
-      title: "Vision",
-      description: "To become Zambia's most trusted digital lending platform, bridging the gap between financial need and opportunity.",
+      title: "Transparency",
+      description: "Our lending processes are straightforward and fair, ensuring clients clearly understand their obligations and terms.",
     },
     {
       icon: Users,
-      title: "Customer First",
-      description: "We put our customers at the heart of everything we do, ensuring fair practices and excellent service.",
+      title: "Financial Inclusion",
+      description: "We bridge the gap between financial need and opportunity, making credit accessible to all who need it.",
     },
     {
       icon: Award,
-      title: "Excellence",
-      description: "We strive for excellence in our technology, processes, and customer experience every single day.",
+      title: "Customer Dignity",
+      description: "We treat every client with respect, offering personalized service that honors their unique circumstances and goals.",
     },
   ];
 
@@ -63,19 +63,22 @@ const About = () => {
                 </h2>
                 <div className="space-y-4 text-muted-foreground">
                   <p>
-                    Phindu Credit Solutions was born from a simple observation: too many hardworking Zambians 
-                    struggle to access credit when they need it most. Traditional banks have lengthy processes, 
-                    strict requirements, and often can't serve those who need help urgently.
+                    Phindu Credit Solutions is a customer-focused money-lending institution committed to providing 
+                    accessible, reliable, and responsible financial solutions to individuals and small businesses. 
+                    We exist to bridge the gap between financial need and opportunity by offering timely credit 
+                    services that empower our clients to grow, stabilize, and achieve their financial goals.
                   </p>
                   <p>
-                    We built Phindu to change that. Using modern technology, we've created a lending platform 
-                    that can assess and approve loans within 24 hours. Our digital-first approach means less 
-                    paperwork, faster decisions, and money delivered directly to your mobile money account.
+                    At Phindu Credit Solutions, we understand that access to credit is essential for economic 
+                    participation and personal advancement. Our products are designed to be flexible, transparent, 
+                    and tailored to meet the diverse needs of our clients, whether for business expansion, 
+                    emergency needs, or personal development.
                   </p>
                   <p>
-                    Today, we're proud to serve thousands of Zambians across the country, from civil servants 
-                    to small business owners. Our commitment remains the same: provide money when you need it, 
-                    with fair terms and complete transparency.
+                    Phindu Credit Solutions leverages modern technology and sound risk management practices to 
+                    deliver efficient loan processing and effective portfolio management. Our team is dedicated 
+                    to maintaining high professional and ethical standards while complying with all applicable 
+                    laws and regulatory requirements.
                   </p>
                 </div>
               </div>
@@ -88,10 +91,10 @@ const About = () => {
           <div className="container mx-auto px-4">
             <div className="text-center max-w-2xl mx-auto mb-16">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                Our <span className="text-gradient">Values</span>
+                Our <span className="text-gradient">Guiding Principles</span>
               </h2>
               <p className="text-muted-foreground">
-                The principles that guide everything we do at Phindu.
+                We are guided by the principles of integrity, transparency, financial inclusion, and customer dignity.
               </p>
             </div>
 
