@@ -1,6 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,22 +20,40 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Search,
   Filter,
   Eye,
   CheckCircle,
   XCircle,
-  Clock,
   User,
   Calendar,
   CreditCard,
   Briefcase,
+  Plus,
+  Trash2,
+  FileText,
+  DollarSign,
+  Upload,
+  ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -53,8 +71,42 @@ const AdminApplications = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isDisburseOpen, setIsDisburseOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Add loan form state
+  const [newLoan, setNewLoan] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    nrc_number: "",
+    date_of_birth: "",
+    address: "",
+    city: "",
+    employer_name: "",
+    job_title: "",
+    employment_type: "employed" as const,
+    employment_duration: "",
+    monthly_income: "",
+    loan_amount: "",
+    loan_term_months: "",
+    loan_purpose: "",
+    interest_rate: "15",
+    collateral_description: "",
+    collateral_value: "",
+    admin_notes: "",
+  });
+
+  // Disbursement form state
+  const [disbursement, setDisbursement] = useState({
+    disbursement_method: "bank_transfer",
+    account_number: "",
+    mobile_money_number: "",
+    transaction_reference: "",
+  });
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -66,7 +118,7 @@ const AdminApplications = () => {
       let query = supabase.from('loan_applications').select('*').order('created_at', { ascending: false });
       
       if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter as "pending" | "under_review" | "approved" | "rejected" | "disbursed" | "active" | "completed" | "defaulted");
+        query = query.eq('status', statusFilter as any);
       }
       
       const { data, error } = await query;
@@ -75,6 +127,66 @@ const AdminApplications = () => {
     },
   });
 
+  const { data: loanProducts } = useQuery({
+    queryKey: ['loan-products'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('loan_products').select('*').eq('is_active', true);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Create loan mutation
+  const createLoanMutation = useMutation({
+    mutationFn: async (loanData: any) => {
+      const monthlyIncome = parseFloat(loanData.monthly_income);
+      const loanAmount = parseFloat(loanData.loan_amount);
+      const interestRate = parseFloat(loanData.interest_rate);
+      const termMonths = parseInt(loanData.loan_term_months);
+      
+      const totalRepayment = loanAmount * (1 + (interestRate / 100) * (termMonths / 12));
+      const monthlyPayment = totalRepayment / termMonths;
+
+      const { error } = await supabase.from('loan_applications').insert({
+        user_id: user?.id,
+        full_name: loanData.full_name,
+        email: loanData.email,
+        phone: loanData.phone,
+        nrc_number: loanData.nrc_number,
+        date_of_birth: loanData.date_of_birth || null,
+        address: loanData.address || null,
+        city: loanData.city || null,
+        employer_name: loanData.employer_name || null,
+        job_title: loanData.job_title || null,
+        employment_type: loanData.employment_type,
+        employment_duration: loanData.employment_duration || null,
+        monthly_income: monthlyIncome,
+        loan_amount: loanAmount,
+        loan_term_months: termMonths,
+        loan_purpose: loanData.loan_purpose,
+        interest_rate: interestRate,
+        monthly_payment: monthlyPayment,
+        total_repayment: totalRepayment,
+        collateral_description: loanData.collateral_description || null,
+        collateral_value: loanData.collateral_value ? parseFloat(loanData.collateral_value) : null,
+        admin_notes: loanData.admin_notes || null,
+        status: 'pending',
+      });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      toast({ title: "Loan application created successfully" });
+      setIsAddOpen(false);
+      resetNewLoanForm();
+    },
+    onError: (error) => {
+      toast({ title: "Error creating loan", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
       const updateData: any = {
@@ -105,6 +217,98 @@ const AdminApplications = () => {
     },
   });
 
+  // Disburse mutation
+  const disburseMutation = useMutation({
+    mutationFn: async (data: any) => {
+      // Create disbursement record
+      const { error: disbError } = await supabase.from('disbursements').insert({
+        loan_id: selectedApp.id,
+        amount: selectedApp.loan_amount,
+        disbursement_method: data.disbursement_method,
+        account_number: data.account_number || null,
+        mobile_money_number: data.mobile_money_number || null,
+        transaction_reference: data.transaction_reference || null,
+        status: 'completed',
+        disbursed_at: new Date().toISOString(),
+      });
+      
+      if (disbError) throw disbError;
+
+      // Update loan status to disbursed
+      const { error: loanError } = await supabase
+        .from('loan_applications')
+        .update({ 
+          status: 'disbursed',
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', selectedApp.id);
+      
+      if (loanError) throw loanError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      queryClient.invalidateQueries({ queryKey: ['disbursements'] });
+      toast({ title: "Loan disbursed successfully" });
+      setIsDisburseOpen(false);
+      setIsViewOpen(false);
+      resetDisbursementForm();
+    },
+    onError: (error) => {
+      toast({ title: "Error disbursing loan", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('loan_applications').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      toast({ title: "Application deleted successfully" });
+      setIsDeleteOpen(false);
+      setIsViewOpen(false);
+    },
+    onError: (error) => {
+      toast({ title: "Error deleting application", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetNewLoanForm = () => {
+    setNewLoan({
+      full_name: "",
+      email: "",
+      phone: "",
+      nrc_number: "",
+      date_of_birth: "",
+      address: "",
+      city: "",
+      employer_name: "",
+      job_title: "",
+      employment_type: "employed",
+      employment_duration: "",
+      monthly_income: "",
+      loan_amount: "",
+      loan_term_months: "",
+      loan_purpose: "",
+      interest_rate: "15",
+      collateral_description: "",
+      collateral_value: "",
+      admin_notes: "",
+    });
+  };
+
+  const resetDisbursementForm = () => {
+    setDisbursement({
+      disbursement_method: "bank_transfer",
+      account_number: "",
+      mobile_money_number: "",
+      transaction_reference: "",
+    });
+  };
+
   const handleApprove = async () => {
     if (!selectedApp) return;
     setIsProcessing(true);
@@ -126,6 +330,31 @@ const AdminApplications = () => {
     setIsProcessing(false);
   };
 
+  const handleCreateLoan = () => {
+    if (!newLoan.full_name || !newLoan.email || !newLoan.phone || !newLoan.nrc_number || 
+        !newLoan.loan_amount || !newLoan.loan_term_months || !newLoan.loan_purpose || !newLoan.monthly_income) {
+      toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+    createLoanMutation.mutate(newLoan);
+  };
+
+  const handleDisburse = () => {
+    if (!disbursement.transaction_reference) {
+      toast({ title: "Please enter a transaction reference", variant: "destructive" });
+      return;
+    }
+    if (disbursement.disbursement_method === 'bank_transfer' && !disbursement.account_number) {
+      toast({ title: "Please enter account number for bank transfer", variant: "destructive" });
+      return;
+    }
+    if (disbursement.disbursement_method === 'mobile_money' && !disbursement.mobile_money_number) {
+      toast({ title: "Please enter mobile money number", variant: "destructive" });
+      return;
+    }
+    disburseMutation.mutate(disbursement);
+  };
+
   const filteredApps = applications?.filter(app =>
     app.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -139,8 +368,12 @@ const AdminApplications = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground">Loan Applications</h1>
-            <p className="text-muted-foreground mt-1">Review and manage loan applications</p>
+            <p className="text-muted-foreground mt-1">Review, add, and manage loan applications</p>
           </div>
+          <Button onClick={() => setIsAddOpen(true)} className="gap-2">
+            <Plus size={16} />
+            Add Loan
+          </Button>
         </div>
 
         {/* Filters */}
@@ -244,135 +477,616 @@ const AdminApplications = () => {
         )}
       </div>
 
-      {/* Application Detail Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* Add Loan Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Application Details</DialogTitle>
-            <DialogDescription>Review the loan application details below</DialogDescription>
+            <DialogTitle className="text-foreground">Add New Loan Application</DialogTitle>
+            <DialogDescription>Create a new loan application manually</DialogDescription>
           </DialogHeader>
 
-          {selectedApp && (
-            <div className="space-y-6">
-              {/* Applicant Info */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-foreground flex items-center gap-2">
-                  <User size={18} />
-                  Personal Information
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Full Name</p>
-                    <p className="text-foreground font-medium">{selectedApp.full_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Email</p>
-                    <p className="text-foreground font-medium">{selectedApp.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Phone</p>
-                    <p className="text-foreground font-medium">{selectedApp.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">NRC Number</p>
-                    <p className="text-foreground font-medium">{selectedApp.nrc_number}</p>
-                  </div>
-                </div>
-              </div>
+          <Tabs defaultValue="personal" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="personal">Personal</TabsTrigger>
+              <TabsTrigger value="employment">Employment</TabsTrigger>
+              <TabsTrigger value="loan">Loan Details</TabsTrigger>
+              <TabsTrigger value="collateral">Collateral</TabsTrigger>
+            </TabsList>
 
-              {/* Employment Info */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-foreground flex items-center gap-2">
-                  <Briefcase size={18} />
-                  Employment Details
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Employer</p>
-                    <p className="text-foreground font-medium">{selectedApp.employer_name || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Job Title</p>
-                    <p className="text-foreground font-medium">{selectedApp.job_title || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Monthly Income</p>
-                    <p className="text-foreground font-medium">K{Number(selectedApp.monthly_income).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Employment Type</p>
-                    <p className="text-foreground font-medium capitalize">{selectedApp.employment_type}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Loan Details */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-foreground flex items-center gap-2">
-                  <CreditCard size={18} />
-                  Loan Details
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Loan Amount</p>
-                    <p className="text-foreground font-medium text-lg">K{Number(selectedApp.loan_amount).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Term</p>
-                    <p className="text-foreground font-medium">{selectedApp.loan_term_months} months</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Purpose</p>
-                    <p className="text-foreground font-medium capitalize">{selectedApp.loan_purpose}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Monthly Payment</p>
-                    <p className="text-foreground font-medium">K{Number(selectedApp.monthly_payment || 0).toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Rejection Reason Input (for pending applications) */}
-              {selectedApp.status === 'pending' && (
+            <TabsContent value="personal" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Rejection Reason (required if rejecting)</label>
-                  <Textarea
-                    placeholder="Enter reason for rejection..."
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
+                  <Label>Full Name *</Label>
+                  <Input
+                    value={newLoan.full_name}
+                    onChange={(e) => setNewLoan({ ...newLoan, full_name: e.target.value })}
+                    placeholder="John Doe"
                   />
                 </div>
-              )}
-            </div>
-          )}
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    value={newLoan.email}
+                    onChange={(e) => setNewLoan({ ...newLoan, email: e.target.value })}
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone *</Label>
+                  <Input
+                    value={newLoan.phone}
+                    onChange={(e) => setNewLoan({ ...newLoan, phone: e.target.value })}
+                    placeholder="+260 97X XXX XXX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>NRC Number *</Label>
+                  <Input
+                    value={newLoan.nrc_number}
+                    onChange={(e) => setNewLoan({ ...newLoan, nrc_number: e.target.value })}
+                    placeholder="123456/78/1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date of Birth</Label>
+                  <Input
+                    type="date"
+                    value={newLoan.date_of_birth}
+                    onChange={(e) => setNewLoan({ ...newLoan, date_of_birth: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input
+                    value={newLoan.city}
+                    onChange={(e) => setNewLoan({ ...newLoan, city: e.target.value })}
+                    placeholder="Lusaka"
+                  />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label>Address</Label>
+                  <Textarea
+                    value={newLoan.address}
+                    onChange={(e) => setNewLoan({ ...newLoan, address: e.target.value })}
+                    placeholder="Full address..."
+                  />
+                </div>
+              </div>
+            </TabsContent>
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsViewOpen(false)}>
-              Close
+            <TabsContent value="employment" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employer Name</Label>
+                  <Input
+                    value={newLoan.employer_name}
+                    onChange={(e) => setNewLoan({ ...newLoan, employer_name: e.target.value })}
+                    placeholder="ABC Company"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Job Title</Label>
+                  <Input
+                    value={newLoan.job_title}
+                    onChange={(e) => setNewLoan({ ...newLoan, job_title: e.target.value })}
+                    placeholder="Manager"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Employment Type *</Label>
+                  <Select
+                    value={newLoan.employment_type}
+                    onValueChange={(v: any) => setNewLoan({ ...newLoan, employment_type: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employed">Employed</SelectItem>
+                      <SelectItem value="self_employed">Self Employed</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Employment Duration</Label>
+                  <Input
+                    value={newLoan.employment_duration}
+                    onChange={(e) => setNewLoan({ ...newLoan, employment_duration: e.target.value })}
+                    placeholder="2 years"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Monthly Income (K) *</Label>
+                  <Input
+                    type="number"
+                    value={newLoan.monthly_income}
+                    onChange={(e) => setNewLoan({ ...newLoan, monthly_income: e.target.value })}
+                    placeholder="5000"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="loan" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Loan Amount (K) *</Label>
+                  <Input
+                    type="number"
+                    value={newLoan.loan_amount}
+                    onChange={(e) => setNewLoan({ ...newLoan, loan_amount: e.target.value })}
+                    placeholder="10000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Loan Term (months) *</Label>
+                  <Input
+                    type="number"
+                    value={newLoan.loan_term_months}
+                    onChange={(e) => setNewLoan({ ...newLoan, loan_term_months: e.target.value })}
+                    placeholder="12"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Interest Rate (%) *</Label>
+                  <Input
+                    type="number"
+                    value={newLoan.interest_rate}
+                    onChange={(e) => setNewLoan({ ...newLoan, interest_rate: e.target.value })}
+                    placeholder="15"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Loan Purpose *</Label>
+                  <Select
+                    value={newLoan.loan_purpose}
+                    onValueChange={(v) => setNewLoan({ ...newLoan, loan_purpose: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select purpose" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="personal">Personal</SelectItem>
+                      <SelectItem value="business">Business</SelectItem>
+                      <SelectItem value="education">Education</SelectItem>
+                      <SelectItem value="medical">Medical</SelectItem>
+                      <SelectItem value="home_improvement">Home Improvement</SelectItem>
+                      <SelectItem value="emergency">Emergency</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {newLoan.loan_amount && newLoan.loan_term_months && newLoan.interest_rate && (
+                <Card className="bg-secondary/50 border-border/50">
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold mb-2 text-foreground">Loan Summary</h4>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Total Repayment</p>
+                        <p className="font-medium text-foreground">
+                          K{(parseFloat(newLoan.loan_amount) * (1 + (parseFloat(newLoan.interest_rate) / 100) * (parseInt(newLoan.loan_term_months) / 12))).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Monthly Payment</p>
+                        <p className="font-medium text-foreground">
+                          K{((parseFloat(newLoan.loan_amount) * (1 + (parseFloat(newLoan.interest_rate) / 100) * (parseInt(newLoan.loan_term_months) / 12))) / parseInt(newLoan.loan_term_months)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Total Interest</p>
+                        <p className="font-medium text-foreground">
+                          K{(parseFloat(newLoan.loan_amount) * (parseFloat(newLoan.interest_rate) / 100) * (parseInt(newLoan.loan_term_months) / 12)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="collateral" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label>Collateral Description</Label>
+                  <Textarea
+                    value={newLoan.collateral_description}
+                    onChange={(e) => setNewLoan({ ...newLoan, collateral_description: e.target.value })}
+                    placeholder="Describe the collateral (e.g., Vehicle, Property, etc.)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Collateral Value (K)</Label>
+                  <Input
+                    type="number"
+                    value={newLoan.collateral_value}
+                    onChange={(e) => setNewLoan({ ...newLoan, collateral_value: e.target.value })}
+                    placeholder="50000"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Admin Notes</Label>
+                <Textarea
+                  value={newLoan.admin_notes}
+                  onChange={(e) => setNewLoan({ ...newLoan, admin_notes: e.target.value })}
+                  placeholder="Internal notes about this application..."
+                  rows={4}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+              Cancel
             </Button>
-            {selectedApp?.status === 'pending' && (
-              <>
-                <Button
-                  variant="destructive"
-                  onClick={handleReject}
-                  disabled={isProcessing}
-                >
-                  <XCircle size={16} className="mr-1" />
-                  Reject
-                </Button>
-                <Button
-                  variant="hero"
-                  onClick={handleApprove}
-                  disabled={isProcessing}
-                >
-                  <CheckCircle size={16} className="mr-1" />
-                  Approve
-                </Button>
-              </>
-            )}
+            <Button onClick={handleCreateLoan} disabled={createLoanMutation.isPending}>
+              <Plus size={16} className="mr-1" />
+              Create Loan
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Application Detail Dialog */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              Application Details
+              {selectedApp && (
+                <Badge className={`${statusConfig[selectedApp.status as keyof typeof statusConfig]?.color} border ml-2`}>
+                  {statusConfig[selectedApp.status as keyof typeof statusConfig]?.label}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>Review and manage loan application</DialogDescription>
+          </DialogHeader>
+
+          {selectedApp && (
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="actions">Actions</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="details" className="space-y-6 mt-4">
+                {/* Personal Info */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-foreground flex items-center gap-2">
+                    <User size={18} />
+                    Personal Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Full Name</p>
+                      <p className="text-foreground font-medium">{selectedApp.full_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Email</p>
+                      <p className="text-foreground font-medium">{selectedApp.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Phone</p>
+                      <p className="text-foreground font-medium">{selectedApp.phone}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">NRC Number</p>
+                      <p className="text-foreground font-medium">{selectedApp.nrc_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Address</p>
+                      <p className="text-foreground font-medium">{selectedApp.address || 'N/A'}, {selectedApp.city || ''}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Date of Birth</p>
+                      <p className="text-foreground font-medium">{selectedApp.date_of_birth ? new Date(selectedApp.date_of_birth).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Employment Info */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-foreground flex items-center gap-2">
+                    <Briefcase size={18} />
+                    Employment Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Employer</p>
+                      <p className="text-foreground font-medium">{selectedApp.employer_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Job Title</p>
+                      <p className="text-foreground font-medium">{selectedApp.job_title || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Monthly Income</p>
+                      <p className="text-foreground font-medium">K{Number(selectedApp.monthly_income).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Employment Type</p>
+                      <p className="text-foreground font-medium capitalize">{selectedApp.employment_type?.replace('_', ' ')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Loan Details */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-foreground flex items-center gap-2">
+                    <CreditCard size={18} />
+                    Loan Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Loan Amount</p>
+                      <p className="text-foreground font-medium text-lg">K{Number(selectedApp.loan_amount).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Term</p>
+                      <p className="text-foreground font-medium">{selectedApp.loan_term_months} months</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Interest Rate</p>
+                      <p className="text-foreground font-medium">{selectedApp.interest_rate}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Monthly Payment</p>
+                      <p className="text-foreground font-medium">K{Number(selectedApp.monthly_payment || 0).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Total Repayment</p>
+                      <p className="text-foreground font-medium">K{Number(selectedApp.total_repayment || 0).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Purpose</p>
+                      <p className="text-foreground font-medium capitalize">{selectedApp.loan_purpose?.replace('_', ' ')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Collateral */}
+                {(selectedApp.collateral_description || selectedApp.collateral_value) && (
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-foreground flex items-center gap-2">
+                      <ShieldCheck size={18} />
+                      Collateral
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="col-span-2">
+                        <p className="text-muted-foreground">Description</p>
+                        <p className="text-foreground font-medium">{selectedApp.collateral_description || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Value</p>
+                        <p className="text-foreground font-medium">K{Number(selectedApp.collateral_value || 0).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin Notes */}
+                {selectedApp.admin_notes && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-foreground">Admin Notes</h4>
+                    <p className="text-muted-foreground text-sm">{selectedApp.admin_notes}</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="documents" className="space-y-4 mt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: "NRC Front", url: selectedApp.nrc_front_url },
+                    { label: "NRC Back", url: selectedApp.nrc_back_url },
+                    { label: "Payslip", url: selectedApp.payslip_url },
+                    { label: "Selfie", url: selectedApp.selfie_url },
+                    { label: "Employer Letter", url: selectedApp.employer_letter_url },
+                    { label: "Contract", url: selectedApp.contract_url },
+                  ].map((doc) => (
+                    <Card key={doc.label} className="bg-secondary/30 border-border/50">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText size={18} className="text-muted-foreground" />
+                          <span className="text-foreground">{doc.label}</span>
+                        </div>
+                        {doc.url ? (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink size={14} className="mr-1" />
+                              View
+                            </a>
+                          </Button>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Not uploaded
+                          </Badge>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="actions" className="space-y-4 mt-4">
+                {/* Status-based actions */}
+                {selectedApp.status === 'pending' && (
+                  <Card className="bg-secondary/30 border-border/50">
+                    <CardContent className="p-4 space-y-4">
+                      <h4 className="font-semibold text-foreground">Review Application</h4>
+                      <div className="space-y-2">
+                        <Label>Rejection Reason (required if rejecting)</Label>
+                        <Textarea
+                          placeholder="Enter reason for rejection..."
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          onClick={handleReject}
+                          disabled={isProcessing}
+                        >
+                          <XCircle size={16} className="mr-1" />
+                          Reject
+                        </Button>
+                        <Button
+                          onClick={handleApprove}
+                          disabled={isProcessing}
+                        >
+                          <CheckCircle size={16} className="mr-1" />
+                          Approve
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {selectedApp.status === 'approved' && (
+                  <Card className="bg-secondary/30 border-border/50">
+                    <CardContent className="p-4 space-y-4">
+                      <h4 className="font-semibold text-foreground">Disburse Loan</h4>
+                      <p className="text-sm text-muted-foreground">
+                        This loan is approved and ready for disbursement.
+                      </p>
+                      <Button onClick={() => setIsDisburseOpen(true)}>
+                        <DollarSign size={16} className="mr-1" />
+                        Disburse Now
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Delete action */}
+                <Card className="bg-destructive/10 border-destructive/30">
+                  <CardContent className="p-4 space-y-4">
+                    <h4 className="font-semibold text-destructive">Danger Zone</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Permanently delete this loan application. This action cannot be undone.
+                    </p>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setIsDeleteOpen(true)}
+                    >
+                      <Trash2 size={16} className="mr-1" />
+                      Delete Application
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disburse Dialog */}
+      <Dialog open={isDisburseOpen} onOpenChange={setIsDisburseOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Disburse Loan</DialogTitle>
+            <DialogDescription>
+              Enter disbursement details for K{Number(selectedApp?.loan_amount || 0).toLocaleString()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Disbursement Method</Label>
+              <Select
+                value={disbursement.disbursement_method}
+                onValueChange={(v) => setDisbursement({ ...disbursement, disbursement_method: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {disbursement.disbursement_method === 'bank_transfer' && (
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input
+                  value={disbursement.account_number}
+                  onChange={(e) => setDisbursement({ ...disbursement, account_number: e.target.value })}
+                  placeholder="Enter account number"
+                />
+              </div>
+            )}
+
+            {disbursement.disbursement_method === 'mobile_money' && (
+              <div className="space-y-2">
+                <Label>Mobile Money Number</Label>
+                <Input
+                  value={disbursement.mobile_money_number}
+                  onChange={(e) => setDisbursement({ ...disbursement, mobile_money_number: e.target.value })}
+                  placeholder="+260 97X XXX XXX"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Transaction Reference *</Label>
+              <Input
+                value={disbursement.transaction_reference}
+                onChange={(e) => setDisbursement({ ...disbursement, transaction_reference: e.target.value })}
+                placeholder="Enter transaction reference"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsDisburseOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleDisburse} disabled={disburseMutation.isPending}>
+              <DollarSign size={16} className="mr-1" />
+              Confirm Disbursement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Application</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the loan application for{" "}
+              <span className="font-semibold">{selectedApp?.full_name}</span>? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => selectedApp && deleteMutation.mutate(selectedApp.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayout>
   );
 };
