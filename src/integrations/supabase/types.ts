@@ -103,7 +103,11 @@ export type Database = {
       loan_applications: {
         Row: {
           address: string | null
+          admin_notes: string | null
           city: string | null
+          collateral_description: string | null
+          collateral_value: number | null
+          contract_url: string | null
           created_at: string
           date_of_birth: string | null
           email: string
@@ -138,7 +142,11 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          admin_notes?: string | null
           city?: string | null
+          collateral_description?: string | null
+          collateral_value?: number | null
+          contract_url?: string | null
           created_at?: string
           date_of_birth?: string | null
           email: string
@@ -173,7 +181,11 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          admin_notes?: string | null
           city?: string | null
+          collateral_description?: string | null
+          collateral_value?: number | null
+          contract_url?: string | null
           created_at?: string
           date_of_birth?: string | null
           email?: string
