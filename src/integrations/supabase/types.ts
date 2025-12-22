@@ -280,6 +280,7 @@ export type Database = {
           created_at: string
           due_date: string
           id: string
+          installment_number: number | null
           loan_id: string
           paid_date: string | null
           payment_method: string | null
@@ -293,6 +294,7 @@ export type Database = {
           created_at?: string
           due_date: string
           id?: string
+          installment_number?: number | null
           loan_id: string
           paid_date?: string | null
           payment_method?: string | null
@@ -306,6 +308,7 @@ export type Database = {
           created_at?: string
           due_date?: string
           id?: string
+          installment_number?: number | null
           loan_id?: string
           paid_date?: string | null
           payment_method?: string | null
