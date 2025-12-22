@@ -46,6 +46,9 @@ import {
   ExternalLink,
   ShieldCheck,
   Printer,
+  Download,
+  Mail,
+  MessageCircle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,7 +57,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { generateLoanContract } from "@/utils/generateLoanContract";
+import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp } from "@/utils/generateLoanContract";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -990,39 +993,132 @@ const AdminApplications = () => {
             </Tabs>
           )}
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (selectedApp) {
-                  generateLoanContract({
-                    id: selectedApp.id,
-                    full_name: selectedApp.full_name,
-                    email: selectedApp.email,
-                    phone: selectedApp.phone,
-                    nrc_number: selectedApp.nrc_number,
-                    address: selectedApp.address,
-                    city: selectedApp.city,
-                    date_of_birth: selectedApp.date_of_birth,
-                    employer_name: selectedApp.employer_name,
-                    job_title: selectedApp.job_title,
-                    monthly_income: Number(selectedApp.monthly_income),
-                    loan_amount: Number(selectedApp.loan_amount),
-                    loan_term_months: selectedApp.loan_term_months,
-                    interest_rate: Number(selectedApp.interest_rate),
-                    monthly_payment: Number(selectedApp.monthly_payment),
-                    total_repayment: Number(selectedApp.total_repayment),
-                    loan_purpose: selectedApp.loan_purpose,
-                    collateral_description: selectedApp.collateral_description,
-                    collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
-                    created_at: selectedApp.created_at,
-                  });
-                }
-              }}
-            >
-              <Printer size={16} className="mr-1" />
-              Print Contract
-            </Button>
+          <DialogFooter className="gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedApp) {
+                    generateLoanContract({
+                      id: selectedApp.id,
+                      full_name: selectedApp.full_name,
+                      email: selectedApp.email,
+                      phone: selectedApp.phone,
+                      nrc_number: selectedApp.nrc_number,
+                      address: selectedApp.address,
+                      city: selectedApp.city,
+                      date_of_birth: selectedApp.date_of_birth,
+                      employer_name: selectedApp.employer_name,
+                      job_title: selectedApp.job_title,
+                      monthly_income: Number(selectedApp.monthly_income),
+                      loan_amount: Number(selectedApp.loan_amount),
+                      loan_term_months: selectedApp.loan_term_months,
+                      interest_rate: Number(selectedApp.interest_rate),
+                      monthly_payment: Number(selectedApp.monthly_payment),
+                      total_repayment: Number(selectedApp.total_repayment),
+                      loan_purpose: selectedApp.loan_purpose,
+                      collateral_description: selectedApp.collateral_description,
+                      collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
+                      created_at: selectedApp.created_at,
+                    });
+                  }
+                }}
+              >
+                <Printer size={16} className="mr-1" />
+                Print
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedApp) {
+                    downloadLoanContract({
+                      id: selectedApp.id,
+                      full_name: selectedApp.full_name,
+                      email: selectedApp.email,
+                      phone: selectedApp.phone,
+                      nrc_number: selectedApp.nrc_number,
+                      address: selectedApp.address,
+                      city: selectedApp.city,
+                      monthly_income: Number(selectedApp.monthly_income),
+                      loan_amount: Number(selectedApp.loan_amount),
+                      loan_term_months: selectedApp.loan_term_months,
+                      interest_rate: Number(selectedApp.interest_rate),
+                      monthly_payment: Number(selectedApp.monthly_payment),
+                      total_repayment: Number(selectedApp.total_repayment),
+                      loan_purpose: selectedApp.loan_purpose,
+                      collateral_description: selectedApp.collateral_description,
+                      collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
+                      created_at: selectedApp.created_at,
+                    });
+                  }
+                }}
+              >
+                <Download size={16} className="mr-1" />
+                Save PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedApp) {
+                    emailContract({
+                      id: selectedApp.id,
+                      full_name: selectedApp.full_name,
+                      email: selectedApp.email,
+                      phone: selectedApp.phone,
+                      nrc_number: selectedApp.nrc_number,
+                      address: selectedApp.address,
+                      city: selectedApp.city,
+                      monthly_income: Number(selectedApp.monthly_income),
+                      loan_amount: Number(selectedApp.loan_amount),
+                      loan_term_months: selectedApp.loan_term_months,
+                      interest_rate: Number(selectedApp.interest_rate),
+                      monthly_payment: Number(selectedApp.monthly_payment),
+                      total_repayment: Number(selectedApp.total_repayment),
+                      loan_purpose: selectedApp.loan_purpose,
+                      collateral_description: selectedApp.collateral_description,
+                      collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
+                      created_at: selectedApp.created_at,
+                    });
+                  }
+                }}
+              >
+                <Mail size={16} className="mr-1" />
+                Email
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedApp) {
+                    shareContractViaWhatsApp({
+                      id: selectedApp.id,
+                      full_name: selectedApp.full_name,
+                      email: selectedApp.email,
+                      phone: selectedApp.phone,
+                      nrc_number: selectedApp.nrc_number,
+                      address: selectedApp.address,
+                      city: selectedApp.city,
+                      monthly_income: Number(selectedApp.monthly_income),
+                      loan_amount: Number(selectedApp.loan_amount),
+                      loan_term_months: selectedApp.loan_term_months,
+                      interest_rate: Number(selectedApp.interest_rate),
+                      monthly_payment: Number(selectedApp.monthly_payment),
+                      total_repayment: Number(selectedApp.total_repayment),
+                      loan_purpose: selectedApp.loan_purpose,
+                      collateral_description: selectedApp.collateral_description,
+                      collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
+                      created_at: selectedApp.created_at,
+                    });
+                  }
+                }}
+              >
+                <MessageCircle size={16} className="mr-1" />
+                WhatsApp
+              </Button>
+            </div>
             <Button variant="outline" onClick={() => setIsViewOpen(false)}>
               Close
             </Button>

@@ -23,7 +23,7 @@ interface LoanData {
   created_at: string;
 }
 
-export const generateLoanContract = (loan: LoanData) => {
+const createContractPDF = (loan: LoanData): jsPDF => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -61,11 +61,11 @@ export const generateLoanContract = (loan: LoanData) => {
     yPos += 5;
   };
 
-  // Header
-  doc.setFillColor(37, 99, 235);
+  // Header - Gold/Amber color (RGB: 234, 179, 8 - matching warning/gold color)
+  doc.setFillColor(234, 179, 8);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(0, 0, 0);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   centerText('PHINDU CREDIT SOLUTIONS', 18, 20);
@@ -187,8 +187,85 @@ export const generateLoanContract = (loan: LoanData) => {
   centerText('Phindu Credit Solutions - Money When You Need It', yPos, 8);
   centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', yPos + 4, 8);
 
-  // Open in new window for printing
+  return doc;
+};
+
+// Open in new window for printing
+export const generateLoanContract = (loan: LoanData) => {
+  const doc = createContractPDF(loan);
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   window.open(pdfUrl, '_blank');
+};
+
+// Download as PDF file
+export const downloadLoanContract = (loan: LoanData) => {
+  const doc = createContractPDF(loan);
+  const fileName = `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}_${loan.id.slice(0, 8)}.pdf`;
+  doc.save(fileName);
+};
+
+// Get PDF as blob for email/sharing
+export const getLoanContractBlob = (loan: LoanData): Blob => {
+  const doc = createContractPDF(loan);
+  return doc.output('blob');
+};
+
+// Get PDF as base64 for email
+export const getLoanContractBase64 = (loan: LoanData): string => {
+  const doc = createContractPDF(loan);
+  return doc.output('datauristring');
+};
+
+// Share via WhatsApp (opens WhatsApp with message - user needs to manually attach the downloaded PDF)
+export const shareContractViaWhatsApp = (loan: LoanData) => {
+  const message = encodeURIComponent(
+    `Hello ${loan.full_name},\n\n` +
+    `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
+    `Loan Details:\n` +
+    `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
+    `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
+    `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
+    `- Term: ${loan.loan_term_months} months\n\n` +
+    `Please sign and return the contract.\n\n` +
+    `Phindu Credit Solutions`
+  );
+  
+  // Format phone for WhatsApp (remove spaces and ensure international format)
+  const phone = loan.phone.replace(/\s+/g, '').replace(/^0/, '260');
+  const whatsappUrl = `https://wa.me/${phone}?text=${message}`;
+  
+  // First download the PDF so user can attach it
+  downloadLoanContract(loan);
+  
+  // Then open WhatsApp
+  window.open(whatsappUrl, '_blank');
+};
+
+// Prepare mailto link with contract info
+export const emailContract = (loan: LoanData) => {
+  const subject = encodeURIComponent(`Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`);
+  const body = encodeURIComponent(
+    `Dear ${loan.full_name},\n\n` +
+    `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
+    `Loan Details:\n` +
+    `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
+    `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
+    `- Interest Rate: ${loan.interest_rate}%\n` +
+    `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
+    `- Term: ${loan.loan_term_months} months\n` +
+    `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
+    `Please review, sign, and return the contract at your earliest convenience.\n\n` +
+    `If you have any questions, please don't hesitate to contact us.\n\n` +
+    `Best regards,\n` +
+    `Phindu Credit Solutions\n` +
+    `info@phinducredit.co.zm`
+  );
+  
+  // First download the PDF so user can attach it to email
+  downloadLoanContract(loan);
+  
+  // Then open email client
+  const mailtoUrl = `mailto:${loan.email}?subject=${subject}&body=${body}`;
+  window.location.href = mailtoUrl;
 };
