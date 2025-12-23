@@ -132,22 +132,29 @@ const AdminBorrowers = () => {
     enabled: !!selectedBorrower?.id && isViewOpen,
   });
 
-  // Create borrower mutation - Note: This creates a profile, user must sign up separately
+  // Create borrower mutation - Uses edge function to create auth user
   const createMutation = useMutation({
     mutationFn: async (data: BorrowerForm) => {
-      // For admin-created borrowers, we create a placeholder profile
-      // The user will need to sign up to get auth access
-      const { error } = await supabase.from('profiles').insert({
-        id: crypto.randomUUID(), // Generate a placeholder ID
-        email: data.email,
-        full_name: data.full_name,
-        phone: data.phone || null,
-        nrc_number: data.nrc_number || null,
-        address: data.address || null,
-        city: data.city || null,
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await supabase.functions.invoke('create-borrower', {
+        body: {
+          email: data.email,
+          full_name: data.full_name,
+          phone: data.phone || null,
+          nrc_number: data.nrc_number || null,
+          address: data.address || null,
+          city: data.city || null,
+        },
       });
 
-      if (error) throw error;
+      if (response.error) throw response.error;
+      if (response.data?.error) throw new Error(response.data.error);
+      
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-borrowers'] });
