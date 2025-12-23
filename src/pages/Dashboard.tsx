@@ -6,11 +6,11 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  CreditCard, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  CreditCard,
+  Clock,
+  CheckCircle,
+  AlertCircle,
   TrendingUp,
   FileText,
   Plus,
@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { generateAccountStatement } from "@/utils/generateStatement";
+import { useState } from "react";
+import { Loader2, Download } from "lucide-react";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
@@ -35,6 +38,7 @@ const statusConfig = {
 const Dashboard = () => {
   const { user, isLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [isGenerating, setIsGenerating] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -54,7 +58,7 @@ const Dashboard = () => {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data;
     },
@@ -70,12 +74,35 @@ const Dashboard = () => {
         .select('*')
         .eq('id', user.id)
         .single();
-      
+
       if (error) throw error;
       return data;
     },
     enabled: !!user?.id,
   });
+
+  const downloadStatement = async (loan: any) => {
+    setIsGenerating(loan.id);
+    try {
+      const { data: repayments, error } = await supabase
+        .from('repayments')
+        .select('*')
+        .eq('loan_id', loan.id)
+        .eq('status', 'completed')
+        .order('payment_date', { ascending: true });
+
+      if (error) throw error;
+
+      generateAccountStatement({
+        ...loan,
+        repayments: repayments || []
+      });
+    } catch (error) {
+      console.error("Failed to generate statement", error);
+    } finally {
+      setIsGenerating(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -92,7 +119,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Header */}
@@ -186,7 +213,7 @@ const Dashboard = () => {
                 {loans.slice(0, 5).map((loan) => {
                   const config = statusConfig[loan.status as keyof typeof statusConfig];
                   const StatusIcon = config?.icon || Clock;
-                  
+
                   return (
                     <Card key={loan.id} className="glass border-border/50 hover:border-primary/30 transition-colors">
                       <CardContent className="p-6">
@@ -204,9 +231,26 @@ const Dashboard = () => {
                               </div>
                             </div>
                           </div>
-                          <Badge className={`${config?.color} border`}>
-                            {config?.label}
-                          </Badge>
+                          <div className="flex items-center gap-3">
+                            <Badge className={`${config?.color} border`}>
+                              {config?.label}
+                            </Badge>
+                            {['active', 'disbursed', 'completed'].includes(loan.status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => downloadStatement(loan)}
+                                disabled={isGenerating === loan.id}
+                              >
+                                {isGenerating === loan.id ? (
+                                  <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                  <Download size={16} className="mr-1" />
+                                )}
+                                Statement
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

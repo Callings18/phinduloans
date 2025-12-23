@@ -59,6 +59,13 @@ const loanSchema = z.object({
   loanTerm: z.number().min(1, "Loan term required"),
 });
 
+const documentsSchema = z.object({
+  nrcFront: z.any().refine((file) => file !== null, "NRC Front is required"),
+  nrcBack: z.any().refine((file) => file !== null, "NRC Back is required"),
+  payslip: z.any().refine((file) => file !== null, "Latest payslip is required"),
+  selfie: z.any().refine((file) => file !== null, "Selfie is required"),
+});
+
 const Apply = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,7 +114,7 @@ const Apply = () => {
         .select("*")
         .eq("is_active", true)
         .order("min_amount", { ascending: true });
-      
+
       if (data && data.length > 0) {
         setLoanProducts(data);
         const productId = searchParams.get("product");
@@ -184,6 +191,13 @@ const Apply = () => {
           loanPurpose: formData.loanPurpose,
           loanTerm: formData.loanTerm,
         });
+      } else if (step === 4) {
+        documentsSchema.parse({
+          nrcFront: formData.nrcFront,
+          nrcBack: formData.nrcBack,
+          payslip: formData.payslip,
+          selfie: formData.selfie,
+        });
       }
       setErrors({});
       return true;
@@ -239,13 +253,39 @@ const Apply = () => {
     setIsSubmitting(true);
 
     try {
-      // Map employment type to enum
+      // 1. Upload Documents
+      const uploadFile = async (file: File, prefix: string) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${prefix}_${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage
+          .from('loan_documents')
+          .upload(fileName, file);
+
+        if (error) throw error;
+
+        // Get public URL or signed URL? 
+        // For private documents, we should ideally use signed URLs on fetch, 
+        // but for now let's store the path to get publicUrl if bucket is public,
+        // or just store the path and fetch later.
+        const { data: { publicUrl } } = supabase.storage.from('loan_documents').getPublicUrl(fileName);
+        return publicUrl;
+      };
+
+      const [nrcFrontUrl, nrcBackUrl, payslipUrl, selfieUrl] = await Promise.all([
+        uploadFile(formData.nrcFront!, 'nrc_front'),
+        uploadFile(formData.nrcBack!, 'nrc_back'),
+        uploadFile(formData.payslip!, 'payslip'),
+        uploadFile(formData.selfie!, 'selfie'),
+      ]);
+
+      // 2. Map employment type to enum
       const employmentTypeMap: Record<string, "employed" | "self_employed" | "contract" | "other"> = {
         "permanent": "employed",
         "contract": "contract",
         "self-employed": "self_employed",
       };
 
+      // 3. Insert Application
       const { error } = await supabase.from('loan_applications').insert({
         user_id: user.id,
         full_name: `${formData.firstName} ${formData.lastName}`,
@@ -267,6 +307,10 @@ const Apply = () => {
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
         loan_product_id: selectedProduct?.id || null,
+        nrc_front_url: nrcFrontUrl,
+        nrc_back_url: nrcBackUrl,
+        payslip_url: payslipUrl,
+        selfie_url: selfieUrl,
         status: 'pending',
       });
 
@@ -292,7 +336,7 @@ const Apply = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Header */}
@@ -320,11 +364,10 @@ const Apply = () => {
                 <div key={step.id} className="flex-1 flex items-center">
                   <div className="flex flex-col items-center w-full">
                     <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${
-                        currentStep >= step.id
+                      className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${currentStep >= step.id
                           ? "gradient-primary shadow-glow scale-110"
                           : "bg-secondary border border-border"
-                      }`}
+                        }`}
                     >
                       {currentStep > step.id ? (
                         <CheckCircle className="text-primary-foreground" size={26} />
@@ -336,18 +379,16 @@ const Apply = () => {
                       )}
                     </div>
                     <span
-                      className={`mt-3 text-sm font-medium hidden md:block transition-colors duration-300 ${
-                        currentStep >= step.id ? "text-foreground" : "text-muted-foreground"
-                      }`}
+                      className={`mt-3 text-sm font-medium hidden md:block transition-colors duration-300 ${currentStep >= step.id ? "text-foreground" : "text-muted-foreground"
+                        }`}
                     >
                       {step.title}
                     </span>
                   </div>
                   {index < steps.length - 1 && (
                     <div
-                      className={`flex-1 h-1 mx-3 rounded-full transition-all duration-500 ${
-                        currentStep > step.id ? "gradient-primary" : "bg-border"
-                      }`}
+                      className={`flex-1 h-1 mx-3 rounded-full transition-all duration-500 ${currentStep > step.id ? "gradient-primary" : "bg-border"
+                        }`}
                     />
                   )}
                 </div>
@@ -362,7 +403,7 @@ const Apply = () => {
               {currentStep === 1 && (
                 <div className="space-y-6 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Personal Information</h2>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name *</Label>
@@ -481,7 +522,7 @@ const Apply = () => {
               {currentStep === 2 && (
                 <div className="space-y-6 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Employment Details</h2>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="employerName">Employer Name *</Label>
@@ -582,7 +623,7 @@ const Apply = () => {
               {currentStep === 3 && (
                 <div className="space-y-8 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Loan Details</h2>
-                  
+
                   {/* Loan Product Selector */}
                   {loanProducts.length > 0 && (
                     <div className="space-y-3">
@@ -716,35 +757,38 @@ const Apply = () => {
               {currentStep === 4 && (
                 <div className="space-y-6 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Upload Documents</h2>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {[
-                      { field: "nrcFront", label: "NRC (Front)", description: "Clear photo of front" },
-                      { field: "nrcBack", label: "NRC (Back)", description: "Clear photo of back" },
-                      { field: "payslip", label: "Latest Payslip", description: "Most recent payslip" },
-                      { field: "selfie", label: "Selfie", description: "Clear photo of your face" },
+                      { field: "nrcFront", label: "NRC (Front) *", description: "Clear photo of front" },
+                      { field: "nrcBack", label: "NRC (Back) *", description: "Clear photo of back" },
+                      { field: "payslip", label: "Latest Payslip *", description: "Most recent payslip" },
+                      { field: "selfie", label: "Selfie *", description: "Clear photo of your face" },
                     ].map((doc) => (
                       <div key={doc.field} className="space-y-2">
-                        <Label>{doc.label}</Label>
+                        <Label className={errors[doc.field] ? "text-destructive" : ""}>{doc.label}</Label>
                         <label
-                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
-                            formData[doc.field as keyof typeof formData]
+                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
                               ? "border-primary bg-primary/10 shadow-glow"
-                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                          }`}
+                              : errors[doc.field]
+                                ? "border-destructive bg-destructive/5"
+                                : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                            }`}
                         >
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,.pdf"
                             className="hidden"
                             onChange={(e) => handleFileUpload(doc.field, e.target.files?.[0] || null)}
                           />
                           {formData[doc.field as keyof typeof formData] ? (
                             <CheckCircle className="text-primary mb-2" size={32} />
                           ) : (
-                            <Upload className="text-muted-foreground mb-2" size={32} />
+                            <Upload className={errors[doc.field] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
                           )}
-                          <span className="text-sm text-muted-foreground">{doc.description}</span>
+                          <span className={`text-sm ${errors[doc.field] ? "text-destructive" : "text-muted-foreground"}`}>
+                            {errors[doc.field] || doc.description}
+                          </span>
                         </label>
                       </div>
                     ))}
@@ -789,7 +833,7 @@ const Apply = () => {
                   <ArrowLeft size={18} />
                   Previous
                 </Button>
-                
+
                 {currentStep < 4 ? (
                   <Button variant="hero" onClick={nextStep} className="gap-2">
                     Next Step

@@ -446,7 +446,17 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user" | "employer"
+      app_role: 
+        | "admin" 
+        | "user" 
+        | "employer" 
+        | "super_admin" 
+        | "loan_officer" 
+        | "credit_officer" 
+        | "finance_officer" 
+        | "collections_officer" 
+        | "auditor" 
+        | "support"
       employment_type: "employed" | "self_employed" | "contract" | "other"
       loan_status:
         | "pending"

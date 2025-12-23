@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FileText,
   Users,
+  Shield,
   Building2,
   CreditCard,
   BarChart3,
@@ -30,13 +31,14 @@ const menuItems = [
   { icon: Banknote, label: "Repayments", path: "/admin/repayments" },
   { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
+  { icon: Shield, label: "Staff", path: "/admin/staff" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 
 const AdminSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, isAdmin } = useAuth();
 
   return (
     <aside
@@ -76,6 +78,11 @@ const AdminSidebar = () => {
       {/* Navigation */}
       <nav className="p-4 space-y-2">
         {menuItems.map((item) => {
+          // Hide sensitive modules from non-admin staff
+          if ((item.label === 'Staff' || item.label === 'Settings' || item.label === 'Loan Products') && !isAdmin) {
+            return null;
+          }
+
           const isActive = location.pathname === item.path;
           return (
             <Link

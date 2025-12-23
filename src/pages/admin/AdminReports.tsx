@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth, isAfter } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -46,6 +46,7 @@ import {
   XCircle,
   Clock,
   Banknote,
+  AlertTriangle,
 } from "lucide-react";
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))', 'hsl(var(--info))'];
@@ -74,12 +75,12 @@ const AdminReports = () => {
         const date = subMonths(new Date(), i);
         const start = startOfMonth(date);
         const end = endOfMonth(date);
-        
+
         const monthLoans = loans.filter(l => {
           const created = new Date(l.created_at);
           return created >= start && created <= end;
         });
-        
+
         const monthDisbursements = disb.filter(d => {
           const created = new Date(d.created_at);
           return created >= start && created <= end && d.status === 'completed';
@@ -100,9 +101,45 @@ const AdminReports = () => {
         { name: 'Pending', value: loans.filter(l => l.status === 'pending').length, color: 'hsl(var(--warning))' },
         { name: 'Approved', value: loans.filter(l => l.status === 'approved').length, color: 'hsl(var(--success))' },
         { name: 'Rejected', value: loans.filter(l => l.status === 'rejected').length, color: 'hsl(var(--destructive))' },
-        { name: 'Disbursed', value: loans.filter(l => l.status === 'disbursed').length, color: 'hsl(var(--primary))' },
-        { name: 'Active', value: loans.filter(l => l.status === 'active').length, color: 'hsl(var(--info))' },
+        { name: 'Disbursed', value: loans.filter(l => ['disbursed', 'active'].includes(l.status)).length, color: 'hsl(var(--primary))' },
+        { name: 'Completed', value: loans.filter(l => l.status === 'completed').length, color: 'hsl(var(--emerald-500))' },
       ].filter(s => s.value > 0);
+
+      // Collection Data (Scheduled vs Paid)
+      const collectionHistory = [];
+      const today = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const date = subMonths(today, i);
+        const start = startOfMonth(date);
+        const end = endOfMonth(date);
+
+        const scheduledReps = reps.filter(r => {
+          const due = new Date(r.due_date);
+          return due >= start && due <= end;
+        });
+
+        const paidReps = scheduledReps.filter(r => r.status === 'paid');
+
+        collectionHistory.push({
+          month: format(date, 'MMM'),
+          target: scheduledReps.reduce((sum, r) => sum + Number(r.amount), 0),
+          collected: paidReps.reduce((sum, r) => sum + Number(r.amount), 0),
+        });
+      }
+
+      // Portfolio Quality (PAR)
+      const activeLoans = loans.filter(l => ['active', 'disbursed'].includes(l.status));
+      const activeBalance = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
+
+      const overdueReps = reps.filter(r => r.status === 'pending' && isAfter(today, new Date(r.due_date)));
+      const overdueAmount = overdueReps.reduce((sum, r) => sum + Number(r.amount), 0);
+
+      const parPercentage = activeBalance > 0 ? (overdueAmount / activeBalance) * 100 : 0;
+
+      // Financials
+      const totalInterestRevenue = loans
+        .filter(l => ['disbursed', 'active', 'completed'].includes(l.status))
+        .reduce((sum, l) => sum + (Number(l.total_repayment) - Number(l.loan_amount)), 0);
 
       // Employment type distribution
       const employmentTypes = [
@@ -122,15 +159,16 @@ const AdminReports = () => {
 
       // Calculate stats
       const totalDisbursed = disb.filter(d => d.status === 'completed').reduce((sum, d) => sum + Number(d.amount), 0);
-      const avgLoanAmount = loans.length > 0 
-        ? loans.reduce((sum, l) => sum + Number(l.loan_amount), 0) / loans.length 
+      const avgLoanAmount = loans.length > 0
+        ? loans.reduce((sum, l) => sum + Number(l.loan_amount), 0) / loans.length
         : 0;
-      const approvalRate = loans.length > 0 
+      const approvalRate = loans.length > 0
         ? (loans.filter(l => ['approved', 'disbursed', 'active', 'completed'].includes(l.status)).length / loans.length) * 100
         : 0;
 
       return {
         monthlyData: months,
+        collectionHistory,
         statusDistribution,
         employmentTypes,
         loanPurposes,
@@ -141,6 +179,9 @@ const AdminReports = () => {
           approvalRate: Math.round(approvalRate),
           totalUsers: users.length,
           pendingReview: loans.filter(l => l.status === 'pending').length,
+          parPercentage: Math.round(parPercentage * 10) / 10,
+          totalInterestRevenue: Math.round(totalInterestRevenue),
+          overdueAmount: Math.round(overdueAmount),
         },
       };
     },
@@ -198,17 +239,17 @@ const AdminReports = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-muted-foreground text-sm">Total Applications</p>
+                  <p className="text-muted-foreground text-sm">Portfolio At Risk (PAR)</p>
                   <p className="text-3xl font-bold text-foreground mt-1">
-                    {reportData?.stats.totalApplications || 0}
+                    {reportData?.stats.parPercentage || 0}%
                   </p>
-                  <div className="flex items-center gap-1 mt-2 text-sm text-success">
-                    <ArrowUpRight size={14} />
-                    <span>+12% growth</span>
+                  <div className={`flex items-center gap-1 mt-2 text-sm ${(reportData?.stats.parPercentage || 0) > 10 ? 'text-destructive' : 'text-success'}`}>
+                    <Activity size={14} />
+                    <span>{reportData?.stats.parPercentage || 0 > 10 ? 'Needs Attention' : 'Healthy Range'}</span>
                   </div>
                 </div>
-                <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                  <FileText className="text-primary-foreground" size={24} />
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-destructive to-red-600 flex items-center justify-center">
+                  <AlertTriangle className="text-white" size={24} />
                 </div>
               </div>
             </CardContent>
@@ -224,7 +265,7 @@ const AdminReports = () => {
                   </p>
                   <div className="flex items-center gap-1 mt-2 text-sm text-success">
                     <ArrowUpRight size={14} />
-                    <span>+18% volume</span>
+                    <span>Total Cash Out</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center">
@@ -238,17 +279,17 @@ const AdminReports = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-muted-foreground text-sm">Approval Rate</p>
+                  <p className="text-muted-foreground text-sm">Revenue (Interest)</p>
                   <p className="text-3xl font-bold text-foreground mt-1">
-                    {reportData?.stats.approvalRate || 0}%
+                    K{(reportData?.stats.totalInterestRevenue || 0).toLocaleString()}
                   </p>
-                  <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
-                    <Activity size={14} />
-                    <span>Healthy rate</span>
+                  <div className="flex items-center gap-1 mt-2 text-sm text-info">
+                    <TrendingUp size={14} />
+                    <span>Projected Yield</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-info to-blue-600 flex items-center justify-center">
-                  <TrendingUp className="text-white" size={24} />
+                  <Banknote className="text-white" size={24} />
                 </div>
               </div>
             </CardContent>
@@ -258,17 +299,17 @@ const AdminReports = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-muted-foreground text-sm">Avg Loan Amount</p>
+                  <p className="text-muted-foreground text-sm">Overdue Amount</p>
                   <p className="text-3xl font-bold text-foreground mt-1">
-                    K{(reportData?.stats.avgLoanAmount || 0).toLocaleString()}
+                    K{(reportData?.stats.overdueAmount || 0).toLocaleString()}
                   </p>
-                  <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
-                    <Banknote size={14} />
-                    <span>Per application</span>
+                  <div className="flex items-center gap-1 mt-2 text-sm text-destructive">
+                    <Clock size={14} />
+                    <span>Awaiting Collection</span>
                   </div>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
-                  <Banknote className="text-white" size={24} />
+                  <Activity className="text-white" size={24} />
                 </div>
               </div>
             </CardContent>
@@ -378,14 +419,46 @@ const AdminReports = () => {
 
         {/* Charts Row 2 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Disbursement Volume */}
+          {/* Collection Performance */}
+          <Card className="border-border/50 bg-card/80">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp size={20} />
+                Collection vs Target
+              </CardTitle>
+              <CardDescription>Scheduled repayments vs actual collections</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={reportData?.collectionHistory || []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" name="Scheduled" />
+                    <Line type="monotone" dataKey="collected" stroke="hsl(var(--success))" strokeWidth={3} name="Collected" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Disbursement Trends */}
           <Card className="border-border/50 bg-card/80">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Wallet size={20} />
-                Disbursement Volume
+                Disbursement Trend
               </CardTitle>
-              <CardDescription>Monthly disbursement amounts (K)</CardDescription>
+              <CardDescription>Monthly capital outflow</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
@@ -402,45 +475,9 @@ const AdminReports = () => {
                       }}
                       formatter={(value: number) => [`K${value.toLocaleString()}`, 'Amount']}
                     />
-                    <Bar dataKey="amount" fill="hsl(var(--success))" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Employment Type Distribution */}
-          <Card className="border-border/50 bg-card/80">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users size={20} />
-                Borrower Profile
-              </CardTitle>
-              <CardDescription>Distribution by employment type</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
-                {reportData?.employmentTypes && reportData.employmentTypes.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={reportData.employmentTypes} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                      <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                      <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} width={100} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-muted-foreground">No data available</p>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>

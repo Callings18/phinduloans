@@ -1,6 +1,7 @@
-import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { notificationService } from "@/utils/notifications";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,8 @@ import {
   Download,
   Mail,
   MessageCircle,
+  UserCheck,
+  Loader2,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +61,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp } from "@/utils/generateLoanContract";
+import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -80,7 +84,7 @@ const AdminApplications = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Add loan form state
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string>("");
   const [newLoan, setNewLoan] = useState({
@@ -105,7 +109,9 @@ const AdminApplications = () => {
     mobile_money_number: "",
     transaction_reference: "",
   });
-  
+
+  const [assigneeId, setAssigneeId] = useState<string>("");
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -114,11 +120,11 @@ const AdminApplications = () => {
     queryKey: ['admin-applications', statusFilter],
     queryFn: async () => {
       let query = supabase.from('loan_applications').select('*').order('created_at', { ascending: false });
-      
+
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter as any);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
       return data;
@@ -147,6 +153,34 @@ const AdminApplications = () => {
     },
   });
 
+  // Fetch staff for assignment
+  const { data: staffList } = useQuery({
+    queryKey: ['staff-list-simple'],
+    queryFn: async () => {
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .neq('role', 'user')
+        .neq('role', 'employer');
+
+      if (rolesError) throw rolesError;
+      if (!roles || roles.length === 0) return [];
+
+      const userIds = roles.map(r => r.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      return roles.map(role => ({
+        ...role,
+        profile: profiles?.find(p => p.id === role.user_id)
+      }));
+    }
+  });
+
   // Create loan mutation
   const createLoanMutation = useMutation({
     mutationFn: async (data: { borrowerId: string; loanData: typeof newLoan }) => {
@@ -157,7 +191,7 @@ const AdminApplications = () => {
       const loanAmount = parseFloat(data.loanData.loan_amount);
       const interestRate = parseFloat(data.loanData.interest_rate);
       const termMonths = parseInt(data.loanData.loan_term_months);
-      
+
       const totalRepayment = loanAmount * (1 + (interestRate / 100) * (termMonths / 12));
       const monthlyPayment = totalRepayment / termMonths;
 
@@ -185,7 +219,7 @@ const AdminApplications = () => {
         admin_notes: data.loanData.admin_notes || null,
         status: 'pending',
       });
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -207,7 +241,7 @@ const AdminApplications = () => {
         reviewed_by: user?.id,
         reviewed_at: new Date().toISOString(),
       };
-      
+
       if (reason) {
         updateData.rejection_reason = reason;
       }
@@ -216,11 +250,30 @@ const AdminApplications = () => {
         .from('loan_applications')
         .update(updateData)
         .eq('id', id);
-      
+
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+
+      // Trigger notification
+      if (variables.status === 'approved' && selectedApp) {
+        notificationService.sendLoanApproval(
+          selectedApp.user_id,
+          selectedApp.full_name,
+          selectedApp.loan_amount,
+          selectedApp.email
+        );
+      } else if (variables.status === 'rejected' && selectedApp) {
+        notificationService.send({
+          userId: selectedApp.user_id,
+          type: 'email',
+          recipient: selectedApp.email,
+          title: 'Loan Application Update',
+          message: `Hello ${selectedApp.full_name}, unfortunately your loan application has been rejected. Reason: ${variables.reason || 'Not disclosed'}.`
+        });
+      }
+
       toast({ title: "Application updated successfully" });
       setIsViewOpen(false);
       setRejectionReason("");
@@ -244,24 +297,36 @@ const AdminApplications = () => {
         status: 'completed',
         disbursed_at: new Date().toISOString(),
       });
-      
+
       if (disbError) throw disbError;
 
       // Update loan status to disbursed
       const { error: loanError } = await supabase
         .from('loan_applications')
-        .update({ 
+        .update({
           status: 'disbursed',
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', selectedApp.id);
-      
+
       if (loanError) throw loanError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       queryClient.invalidateQueries({ queryKey: ['disbursements'] });
+
+      // Trigger Disbursement notification
+      if (selectedApp) {
+        notificationService.send({
+          userId: selectedApp.user_id,
+          type: 'sms',
+          recipient: selectedApp.phone,
+          title: 'Loan Disbursed',
+          message: `Hello ${selectedApp.full_name}, your loan of K${Number(selectedApp.loan_amount).toLocaleString()} has been disbursed. Please check your account.`
+        });
+      }
+
       toast({ title: "Loan disbursed successfully" });
       setIsDisburseOpen(false);
       setIsViewOpen(false);
@@ -286,6 +351,25 @@ const AdminApplications = () => {
     },
     onError: (error) => {
       toast({ title: "Error deleting application", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Assign application mutation
+  const assignMutation = useMutation({
+    mutationFn: async ({ id, staffId }: { id: string; staffId: string }) => {
+      const { error } = await supabase
+        .from('loan_applications')
+        .update({ assigned_to: staffId || null } as any)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      toast({ title: "Application assigned successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Error assigning application", description: error.message, variant: "destructive" });
     },
   });
 
@@ -329,8 +413,8 @@ const AdminApplications = () => {
       return;
     }
     setIsProcessing(true);
-    await updateStatusMutation.mutateAsync({ 
-      id: selectedApp.id, 
+    await updateStatusMutation.mutateAsync({
+      id: selectedApp.id,
       status: 'rejected',
       reason: rejectionReason,
     });
@@ -427,7 +511,7 @@ const AdminApplications = () => {
           <div className="space-y-4">
             {filteredApps.map((app) => {
               const config = statusConfig[app.status as keyof typeof statusConfig];
-              
+
               return (
                 <Card key={app.id} className="glass border-border/50 hover:border-primary/30 transition-colors">
                   <CardContent className="p-6">
@@ -452,10 +536,14 @@ const AdminApplications = () => {
                               <Calendar size={12} />
                               {new Date(app.created_at).toLocaleDateString()}
                             </span>
+                            <span className="flex items-center gap-1 text-primary">
+                              <UserCheck size={12} />
+                              {staffList?.find((s: any) => s.user_id === (app as any).assigned_to)?.profile?.full_name || 'Unassigned'}
+                            </span>
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-3">
                         <Badge className={`${config?.color} border`}>
                           {config?.label}
@@ -465,6 +553,7 @@ const AdminApplications = () => {
                           size="sm"
                           onClick={() => {
                             setSelectedApp(app);
+                            setAssigneeId((app as any).assigned_to || "");
                             setIsViewOpen(true);
                           }}
                         >
@@ -759,9 +848,10 @@ const AdminApplications = () => {
 
           {selectedApp && (
             <Tabs defaultValue="details" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="risk">Risk Review</TabsTrigger>
                 <TabsTrigger value="actions">Actions</TabsTrigger>
               </TabsList>
 
@@ -796,6 +886,13 @@ const AdminApplications = () => {
                     <div>
                       <p className="text-muted-foreground">Date of Birth</p>
                       <p className="text-foreground font-medium">{selectedApp.date_of_birth ? new Date(selectedApp.date_of_birth).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Assigned Officer</p>
+                      <p className="text-primary font-medium flex items-center gap-1">
+                        <UserCheck size={14} />
+                        {staffList?.find((s: any) => s.user_id === selectedApp.assigned_to)?.profile?.full_name || 'Unassigned'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -923,6 +1020,10 @@ const AdminApplications = () => {
                 </div>
               </TabsContent>
 
+              <TabsContent value="risk" className="space-y-4 mt-4">
+                <RiskAssessmentModule applicationId={selectedApp.id} />
+              </TabsContent>
+
               <TabsContent value="actions" className="space-y-4 mt-4">
                 {/* Status-based actions */}
                 {selectedApp.status === 'pending' && (
@@ -986,6 +1087,43 @@ const AdminApplications = () => {
                     >
                       <Trash2 size={16} className="mr-1" />
                       Delete Application
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Assignment action */}
+                <Card className="bg-secondary/30 border-border/50">
+                  <CardContent className="p-4 space-y-4">
+                    <h4 className="font-semibold text-foreground flex items-center gap-2">
+                      <UserCheck size={18} />
+                      Assign to Officer
+                    </h4>
+                    <div className="space-y-2">
+                      <Label>Select Staff Member</Label>
+                      <Select value={assigneeId} onValueChange={setAssigneeId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {staffList?.map((staff: any) => (
+                            <SelectItem key={staff.user_id} value={staff.user_id}>
+                              {staff.profile?.full_name || staff.profile?.email} ({staff.role.replace('_', ' ')})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => assignMutation.mutate({
+                        id: selectedApp.id,
+                        staffId: assigneeId === "unassigned" ? "" : assigneeId
+                      })}
+                      disabled={assignMutation.isPending}
+                    >
+                      {assignMutation.isPending && <Loader2 className="animate-spin mr-2" />}
+                      Update Assignment
                     </Button>
                   </CardContent>
                 </Card>
@@ -1206,7 +1344,7 @@ const AdminApplications = () => {
             <AlertDialogTitle>Delete Application</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the loan application for{" "}
-              <span className="font-semibold">{selectedApp?.full_name}</span>? 
+              <span className="font-semibold">{selectedApp?.full_name}</span>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

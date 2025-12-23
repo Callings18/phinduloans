@@ -6,7 +6,10 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  roles: string[];
   isAdmin: boolean;
+  isStaff: boolean;
+  hasRole: (role: string) => boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -18,22 +21,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [roles, setRoles] = useState<string[]>([]);
 
-  const checkAdminRole = async (userId: string) => {
+  const fetchUserRoles = async (userId: string) => {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-    
+      .eq('user_id', userId);
+
     if (error) {
-      console.error('Error checking admin role:', error);
-      return false;
+      console.error('Error fetching user roles:', error);
+      return [];
     }
-    return !!data;
+    return data.map(r => r.role);
   };
+
+  const hasRole = (role: string) => roles.includes(role);
+  // Admin is now super_admin or admin
+  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+
+  // Staff includes all employee roles
+  const isStaff = roles.some(role =>
+    ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
+  );
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -43,13 +53,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
         setIsLoading(false);
 
-        // Defer role check with setTimeout
+        // Defer role check 
         if (session?.user) {
-          setTimeout(() => {
-            checkAdminRole(session.user.id).then(setIsAdmin);
-          }, 0);
+          fetchUserRoles(session.user.id).then(setRoles);
         } else {
-          setIsAdmin(false);
+          setRoles([]);
         }
       }
     );
@@ -61,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
 
       if (session?.user) {
-        checkAdminRole(session.user.id).then(setIsAdmin);
+        fetchUserRoles(session.user.id).then(setRoles);
       }
     });
 
@@ -70,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -96,11 +104,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setIsAdmin(false);
+    setRoles([]);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, isAdmin, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
