@@ -87,19 +87,18 @@ const AdminCollections = () => {
     // Log Activity Mutation
     const logActivityMutation = useMutation({
         mutationFn: async (data: any) => {
+            const user = (await supabase.auth.getUser()).data.user;
             const { error } = await supabase.from('collection_activities').insert({
                 loan_id: selectedRepayment.loan_id,
                 repayment_id: selectedRepayment.id,
-                staff_id: (await supabase.auth.getUser()).data.user?.id,
+                staff_id: user?.id,
                 activity_type: data.activity_type,
                 notes: data.notes,
                 outcome: data.outcome,
                 promise_date: data.promise_date || null,
                 follow_up_date: data.follow_up_date || null,
-            });
+            } as any);
             if (error) throw error;
-
-            // If promise date is set, maybe update repayment status or notes
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['overdue-repayments'] });
