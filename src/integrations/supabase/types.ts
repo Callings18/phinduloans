@@ -56,7 +56,10 @@ export type Database = {
       collection_activities: {
         Row: {
           activity_type: string
+          assigned_to: string | null
+          contact_method: string | null
           created_at: string
+          escalation_level: number | null
           follow_up_date: string | null
           id: string
           loan_id: string
@@ -64,12 +67,16 @@ export type Database = {
           outcome: string | null
           promise_amount: number | null
           promise_date: string | null
+          ptp_status: string | null
           repayment_id: string | null
           staff_id: string | null
         }
         Insert: {
           activity_type: string
+          assigned_to?: string | null
+          contact_method?: string | null
           created_at?: string
+          escalation_level?: number | null
           follow_up_date?: string | null
           id?: string
           loan_id: string
@@ -77,12 +84,16 @@ export type Database = {
           outcome?: string | null
           promise_amount?: number | null
           promise_date?: string | null
+          ptp_status?: string | null
           repayment_id?: string | null
           staff_id?: string | null
         }
         Update: {
           activity_type?: string
+          assigned_to?: string | null
+          contact_method?: string | null
           created_at?: string
+          escalation_level?: number | null
           follow_up_date?: string | null
           id?: string
           loan_id?: string
@@ -90,6 +101,7 @@ export type Database = {
           outcome?: string | null
           promise_amount?: number | null
           promise_date?: string | null
+          ptp_status?: string | null
           repayment_id?: string | null
           staff_id?: string | null
         }
@@ -102,11 +114,147 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "collection_activities_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+          {
             foreignKeyName: "collection_activities_repayment_id_fkey"
             columns: ["repayment_id"]
             isOneToOne: false
             referencedRelation: "loan_repayments"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      collection_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          collector_id: string
+          created_at: string
+          id: string
+          last_contact_at: string | null
+          loan_id: string
+          next_action_date: string | null
+          notes: string | null
+          priority: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          collector_id: string
+          created_at?: string
+          id?: string
+          last_contact_at?: string | null
+          loan_id: string
+          next_action_date?: string | null
+          notes?: string | null
+          priority?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          collector_id?: string
+          created_at?: string
+          id?: string
+          last_contact_at?: string | null
+          loan_id?: string
+          next_action_date?: string | null
+          notes?: string | null
+          priority?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_assignments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_assignments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
+      demand_letters: {
+        Row: {
+          amount_demanded: number | null
+          created_at: string
+          delivery_status: string | null
+          due_date: string | null
+          file_url: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          letter_type: string
+          loan_id: string
+          response_date: string | null
+          response_notes: string | null
+          response_received: boolean | null
+          sent_at: string | null
+          sent_via: string | null
+        }
+        Insert: {
+          amount_demanded?: number | null
+          created_at?: string
+          delivery_status?: string | null
+          due_date?: string | null
+          file_url?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          letter_type?: string
+          loan_id: string
+          response_date?: string | null
+          response_notes?: string | null
+          response_received?: boolean | null
+          sent_at?: string | null
+          sent_via?: string | null
+        }
+        Update: {
+          amount_demanded?: number | null
+          created_at?: string
+          delivery_status?: string | null
+          due_date?: string | null
+          file_url?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          letter_type?: string
+          loan_id?: string
+          response_date?: string | null
+          response_notes?: string | null
+          response_received?: boolean | null
+          sent_at?: string | null
+          sent_via?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demand_letters_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demand_letters_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
           },
         ]
       }
@@ -154,6 +302,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "loan_applications"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disbursements_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
           },
         ]
       }
@@ -505,6 +660,13 @@ export type Database = {
             referencedRelation: "loan_applications"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "loan_repayments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
         ]
       }
       notification_logs: {
@@ -663,6 +825,13 @@ export type Database = {
             referencedRelation: "loan_applications"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "risk_assessments_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
         ]
       }
       system_settings: {
@@ -718,7 +887,30 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      overdue_loans_view: {
+        Row: {
+          active_ptp_amount: number | null
+          active_ptp_date: string | null
+          assigned_collector_id: string | null
+          borrower_email: string | null
+          borrower_name: string | null
+          borrower_phone: string | null
+          collection_priority: string | null
+          last_activity_date: string | null
+          last_activity_type: string | null
+          last_contact_at: string | null
+          loan_amount: number | null
+          loan_id: string | null
+          loan_status: Database["public"]["Enums"]["loan_status"] | null
+          next_action_date: string | null
+          oldest_overdue_date: string | null
+          overdue_amount: number | null
+          overdue_count: number | null
+          total_paid: number | null
+          total_repayment: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       apply_loan_penalties: { Args: { p_loan_id: string }; Returns: number }
