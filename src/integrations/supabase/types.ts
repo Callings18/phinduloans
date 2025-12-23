@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity_id: string
+          entity_type: string
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       disbursements: {
         Row: {
           account_number: string | null
@@ -104,6 +143,7 @@ export type Database = {
         Row: {
           address: string | null
           admin_notes: string | null
+          assigned_to: string | null
           city: string | null
           collateral_description: string | null
           collateral_value: number | null
@@ -143,6 +183,7 @@ export type Database = {
         Insert: {
           address?: string | null
           admin_notes?: string | null
+          assigned_to?: string | null
           city?: string | null
           collateral_description?: string | null
           collateral_value?: number | null
@@ -182,6 +223,7 @@ export type Database = {
         Update: {
           address?: string | null
           admin_notes?: string | null
+          assigned_to?: string | null
           city?: string | null
           collateral_description?: string | null
           collateral_value?: number | null
@@ -339,6 +381,45 @@ export type Database = {
           },
         ]
       }
+      notification_logs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          provider_response: Json | null
+          recipient: string
+          sent_at: string | null
+          status: string | null
+          title: string | null
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          provider_response?: Json | null
+          recipient: string
+          sent_at?: string | null
+          status?: string | null
+          title?: string | null
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          provider_response?: Json | null
+          recipient?: string
+          sent_at?: string | null
+          status?: string | null
+          title?: string | null
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       payment_gateway_settings: {
         Row: {
           api_key: string | null
@@ -411,6 +492,83 @@ export type Database = {
         }
         Relationships: []
       }
+      risk_assessments: {
+        Row: {
+          admin_notes: string | null
+          assessed_by: string | null
+          created_at: string
+          credit_score: number | null
+          decision: string | null
+          id: string
+          items: Json | null
+          loan_application_id: string | null
+          risk_rating: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          assessed_by?: string | null
+          created_at?: string
+          credit_score?: number | null
+          decision?: string | null
+          id?: string
+          items?: Json | null
+          loan_application_id?: string | null
+          risk_rating?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          assessed_by?: string | null
+          created_at?: string
+          credit_score?: number | null
+          decision?: string | null
+          id?: string
+          items?: Json | null
+          loan_application_id?: string | null
+          risk_rating?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_assessments_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -446,16 +604,16 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: 
-        | "admin" 
-        | "user" 
-        | "employer" 
-        | "super_admin" 
-        | "loan_officer" 
-        | "credit_officer" 
-        | "finance_officer" 
-        | "collections_officer" 
-        | "auditor" 
+      app_role:
+        | "admin"
+        | "user"
+        | "employer"
+        | "super_admin"
+        | "loan_officer"
+        | "credit_officer"
+        | "finance_officer"
+        | "collections_officer"
+        | "auditor"
         | "support"
       employment_type: "employed" | "self_employed" | "contract" | "other"
       loan_status:
@@ -594,7 +752,18 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "employer"],
+      app_role: [
+        "admin",
+        "user",
+        "employer",
+        "super_admin",
+        "loan_officer",
+        "credit_officer",
+        "finance_officer",
+        "collections_officer",
+        "auditor",
+        "support",
+      ],
       employment_type: ["employed", "self_employed", "contract", "other"],
       loan_status: [
         "pending",
