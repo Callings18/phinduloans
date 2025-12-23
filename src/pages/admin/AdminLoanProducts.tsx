@@ -30,6 +30,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Plus,
   Pencil,
   Trash2,
@@ -40,6 +53,10 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Shield,
+  AlertTriangle,
+  Settings,
+  Calculator,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -53,10 +70,20 @@ interface LoanProduct {
   min_term_months: number;
   max_term_months: number;
   interest_rate: number;
+  interest_type: string;
   processing_fee_percent: number | null;
   is_active: boolean;
   employment_types: string[] | null;
   requirements: string[] | null;
+  grace_period_days: number;
+  late_payment_penalty_percent: number;
+  early_repayment_allowed: boolean;
+  early_repayment_fee_percent: number;
+  insurance_required: boolean;
+  insurance_percent: number;
+  collateral_required: boolean;
+  max_dti_ratio: number;
+  min_credit_score: number;
   created_at: string;
 }
 
@@ -72,9 +99,20 @@ const AdminLoanProducts = () => {
     min_term_months: 1,
     max_term_months: 24,
     interest_rate: 15,
+    interest_type: "flat",
     processing_fee_percent: 2,
     is_active: true,
     requirements: "",
+    employment_types: ["employed", "self_employed", "contract"],
+    grace_period_days: 0,
+    late_payment_penalty_percent: 0,
+    early_repayment_allowed: true,
+    early_repayment_fee_percent: 0,
+    insurance_required: false,
+    insurance_percent: 0,
+    collateral_required: false,
+    max_dti_ratio: 50,
+    min_credit_score: 0,
   });
 
   const { toast } = useToast();
@@ -93,18 +131,7 @@ const AdminLoanProducts = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: {
-      name: string;
-      description: string | null;
-      min_amount: number;
-      max_amount: number;
-      min_term_months: number;
-      max_term_months: number;
-      interest_rate: number;
-      processing_fee_percent: number;
-      is_active: boolean;
-      requirements: string[];
-    }) => {
+    mutationFn: async (data: any) => {
       const { error } = await supabase.from("loan_products").insert(data);
       if (error) throw error;
     },
@@ -159,9 +186,20 @@ const AdminLoanProducts = () => {
       min_term_months: 1,
       max_term_months: 24,
       interest_rate: 15,
+      interest_type: "flat",
       processing_fee_percent: 2,
       is_active: true,
       requirements: "",
+      employment_types: ["employed", "self_employed", "contract"],
+      grace_period_days: 0,
+      late_payment_penalty_percent: 0,
+      early_repayment_allowed: true,
+      early_repayment_fee_percent: 0,
+      insurance_required: false,
+      insurance_percent: 0,
+      collateral_required: false,
+      max_dti_ratio: 50,
+      min_credit_score: 0,
     });
   };
 
@@ -175,9 +213,20 @@ const AdminLoanProducts = () => {
       min_term_months: product.min_term_months,
       max_term_months: product.max_term_months,
       interest_rate: product.interest_rate,
+      interest_type: product.interest_type || "flat",
       processing_fee_percent: product.processing_fee_percent || 2,
       is_active: product.is_active,
       requirements: product.requirements?.join("\n") || "",
+      employment_types: product.employment_types || ["employed", "self_employed", "contract"],
+      grace_period_days: product.grace_period_days || 0,
+      late_payment_penalty_percent: product.late_payment_penalty_percent || 0,
+      early_repayment_allowed: product.early_repayment_allowed ?? true,
+      early_repayment_fee_percent: product.early_repayment_fee_percent || 0,
+      insurance_required: product.insurance_required || false,
+      insurance_percent: product.insurance_percent || 0,
+      collateral_required: product.collateral_required || false,
+      max_dti_ratio: product.max_dti_ratio || 50,
+      min_credit_score: product.min_credit_score || 0,
     });
     setIsDialogOpen(true);
   };
@@ -191,9 +240,20 @@ const AdminLoanProducts = () => {
       min_term_months: formData.min_term_months,
       max_term_months: formData.max_term_months,
       interest_rate: formData.interest_rate,
+      interest_type: formData.interest_type,
       processing_fee_percent: formData.processing_fee_percent,
       is_active: formData.is_active,
       requirements: formData.requirements.split("\n").filter(r => r.trim()),
+      employment_types: formData.employment_types,
+      grace_period_days: formData.grace_period_days,
+      late_payment_penalty_percent: formData.late_payment_penalty_percent,
+      early_repayment_allowed: formData.early_repayment_allowed,
+      early_repayment_fee_percent: formData.early_repayment_fee_percent,
+      insurance_required: formData.insurance_required,
+      insurance_percent: formData.insurance_percent,
+      collateral_required: formData.collateral_required,
+      max_dti_ratio: formData.max_dti_ratio,
+      min_credit_score: formData.min_credit_score,
     };
 
     if (editingProduct) {
@@ -208,6 +268,15 @@ const AdminLoanProducts = () => {
       id: product.id,
       data: { is_active: !product.is_active },
     });
+  };
+
+  const toggleEmploymentType = (type: string) => {
+    const current = formData.employment_types;
+    if (current.includes(type)) {
+      setFormData({ ...formData, employment_types: current.filter(t => t !== type) });
+    } else {
+      setFormData({ ...formData, employment_types: [...current, type] });
+    }
   };
 
   const filteredProducts = products?.filter((p) =>
@@ -227,7 +296,7 @@ const AdminLoanProducts = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Loan Products</h1>
-            <p className="text-muted-foreground">Manage your loan product offerings</p>
+            <p className="text-muted-foreground">Manage your loan product offerings with advanced configurations</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
@@ -242,110 +311,262 @@ const AdminLoanProducts = () => {
                 Add Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingProduct ? "Edit Loan Product" : "Create Loan Product"}
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 space-y-2">
-                    <Label>Product Name *</Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="e.g., Personal Loan"
-                    />
+              <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="basic">
+                    <Package size={14} className="mr-2" />
+                    Basic
+                  </TabsTrigger>
+                  <TabsTrigger value="interest">
+                    <Calculator size={14} className="mr-2" />
+                    Interest & Fees
+                  </TabsTrigger>
+                  <TabsTrigger value="risk">
+                    <Shield size={14} className="mr-2" />
+                    Risk Controls
+                  </TabsTrigger>
+                  <TabsTrigger value="requirements">
+                    <Settings size={14} className="mr-2" />
+                    Requirements
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="basic" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2 space-y-2">
+                      <Label>Product Name *</Label>
+                      <Input
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="e.g., Personal Loan, Salary Advance"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        placeholder="Brief description of the loan product"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Min Amount (K)</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_amount}
+                        onChange={(e) => setFormData({ ...formData, min_amount: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max Amount (K)</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_amount}
+                        onChange={(e) => setFormData({ ...formData, max_amount: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Min Term (months)</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_term_months}
+                        onChange={(e) => setFormData({ ...formData, min_term_months: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max Term (months)</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_term_months}
+                        onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-3">
+                      <Switch
+                        checked={formData.is_active}
+                        onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                      />
+                      <Label>Active (visible to borrowers)</Label>
+                    </div>
                   </div>
-                  <div className="col-span-2 space-y-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Brief description of the loan product"
-                      rows={2}
-                    />
+                </TabsContent>
+
+                <TabsContent value="interest" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Interest Type</Label>
+                      <Select
+                        value={formData.interest_type}
+                        onValueChange={(v) => setFormData({ ...formData, interest_type: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flat">Flat Rate</SelectItem>
+                          <SelectItem value="reducing_balance">Reducing Balance</SelectItem>
+                          <SelectItem value="compound">Compound</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {formData.interest_type === "flat" && "Interest calculated on original principal"}
+                        {formData.interest_type === "reducing_balance" && "Interest calculated on outstanding balance"}
+                        {formData.interest_type === "compound" && "Interest calculated on principal + accrued interest"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Interest Rate (% per month)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.interest_rate}
+                        onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Processing Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.processing_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, processing_fee_percent: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Grace Period (days)</Label>
+                      <Input
+                        type="number"
+                        value={formData.grace_period_days}
+                        onChange={(e) => setFormData({ ...formData, grace_period_days: Number(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">Days after due date before late fees apply</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Late Payment Penalty (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.late_payment_penalty_percent}
+                        onChange={(e) => setFormData({ ...formData, late_payment_penalty_percent: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Early Repayment Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.early_repayment_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, early_repayment_fee_percent: Number(e.target.value) })}
+                        disabled={!formData.early_repayment_allowed}
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-3">
+                      <Switch
+                        checked={formData.early_repayment_allowed}
+                        onCheckedChange={(checked) => setFormData({ ...formData, early_repayment_allowed: checked })}
+                      />
+                      <Label>Allow Early Repayment</Label>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Min Amount (K)</Label>
-                    <Input
-                      type="number"
-                      value={formData.min_amount}
-                      onChange={(e) => setFormData({ ...formData, min_amount: Number(e.target.value) })}
-                    />
+                </TabsContent>
+
+                <TabsContent value="risk" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Maximum DTI Ratio (%)</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_dti_ratio}
+                        onChange={(e) => setFormData({ ...formData, max_dti_ratio: Number(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">Max debt-to-income ratio allowed</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Minimum Credit Score</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_credit_score}
+                        onChange={(e) => setFormData({ ...formData, min_credit_score: Number(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">0 = no minimum requirement</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Insurance Premium (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.insurance_percent}
+                        onChange={(e) => setFormData({ ...formData, insurance_percent: Number(e.target.value) })}
+                        disabled={!formData.insurance_required}
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={formData.collateral_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, collateral_required: checked })}
+                        />
+                        <Label>Collateral Required</Label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={formData.insurance_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, insurance_required: checked })}
+                        />
+                        <Label>Insurance Required</Label>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Max Amount (K)</Label>
-                    <Input
-                      type="number"
-                      value={formData.max_amount}
-                      onChange={(e) => setFormData({ ...formData, max_amount: Number(e.target.value) })}
-                    />
+                </TabsContent>
+
+                <TabsContent value="requirements" className="space-y-4 pt-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Eligible Employment Types</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {["employed", "self_employed", "contract", "other"].map((type) => (
+                          <Badge
+                            key={type}
+                            variant={formData.employment_types.includes(type) ? "default" : "outline"}
+                            className="cursor-pointer capitalize"
+                            onClick={() => toggleEmploymentType(type)}
+                          >
+                            {type.replace("_", " ")}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Document Requirements (one per line)</Label>
+                      <Textarea
+                        value={formData.requirements}
+                        onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
+                        placeholder="Valid NRC (front & back)&#10;Latest payslip&#10;3 months bank statement&#10;Proof of residence"
+                        rows={6}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Min Term (months)</Label>
-                    <Input
-                      type="number"
-                      value={formData.min_term_months}
-                      onChange={(e) => setFormData({ ...formData, min_term_months: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Max Term (months)</Label>
-                    <Input
-                      type="number"
-                      value={formData.max_term_months}
-                      onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Interest Rate (%)</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={formData.interest_rate}
-                      onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Processing Fee (%)</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={formData.processing_fee_percent}
-                      onChange={(e) => setFormData({ ...formData, processing_fee_percent: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-2">
-                    <Label>Requirements (one per line)</Label>
-                    <Textarea
-                      value={formData.requirements}
-                      onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                      placeholder="Valid NRC&#10;Proof of income&#10;Bank statement"
-                      rows={4}
-                    />
-                  </div>
-                  <div className="col-span-2 flex items-center gap-3">
-                    <Switch
-                      checked={formData.is_active}
-                      onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                    />
-                    <Label>Active (visible to borrowers)</Label>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    className="gradient-primary"
-                    onClick={handleSubmit}
-                    disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-                  >
-                    {editingProduct ? "Update Product" : "Create Product"}
-                  </Button>
-                </div>
+                </TabsContent>
+              </Tabs>
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="gradient-primary"
+                  onClick={handleSubmit}
+                  disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
+                >
+                  {editingProduct ? "Update Product" : "Create Product"}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -422,6 +643,7 @@ const AdminLoanProducts = () => {
                     <TableHead>Amount Range</TableHead>
                     <TableHead>Term</TableHead>
                     <TableHead>Interest</TableHead>
+                    <TableHead>Features</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -450,9 +672,27 @@ const AdminLoanProducts = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Percent size={14} className="text-muted-foreground" />
-                          {product.interest_rate}%
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm">
+                            <Percent size={14} className="text-muted-foreground" />
+                            {product.interest_rate}% <span className="text-xs text-muted-foreground">({product.interest_type || "flat"})</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {product.collateral_required && (
+                            <Badge variant="outline" className="text-xs">Collateral</Badge>
+                          )}
+                          {product.insurance_required && (
+                            <Badge variant="outline" className="text-xs">Insurance</Badge>
+                          )}
+                          {product.grace_period_days > 0 && (
+                            <Badge variant="outline" className="text-xs">{product.grace_period_days}d Grace</Badge>
+                          )}
+                          {product.late_payment_penalty_percent > 0 && (
+                            <Badge variant="outline" className="text-xs text-destructive">{product.late_payment_penalty_percent}% Penalty</Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -484,13 +724,6 @@ const AdminLoanProducts = () => {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!filteredProducts?.length && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No loan products found
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             )}

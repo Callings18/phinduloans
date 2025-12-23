@@ -53,6 +53,63 @@ export type Database = {
         }
         Relationships: []
       }
+      collection_activities: {
+        Row: {
+          activity_type: string
+          created_at: string
+          follow_up_date: string | null
+          id: string
+          loan_id: string
+          notes: string | null
+          outcome: string | null
+          promise_amount: number | null
+          promise_date: string | null
+          repayment_id: string | null
+          staff_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          loan_id: string
+          notes?: string | null
+          outcome?: string | null
+          promise_amount?: number | null
+          promise_date?: string | null
+          repayment_id?: string | null
+          staff_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          loan_id?: string
+          notes?: string | null
+          outcome?: string | null
+          promise_amount?: number | null
+          promise_date?: string | null
+          repayment_id?: string | null
+          staff_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_activities_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_activities_repayment_id_fkey"
+            columns: ["repayment_id"]
+            isOneToOne: false
+            referencedRelation: "loan_repayments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       disbursements: {
         Row: {
           account_number: string | null
@@ -279,15 +336,25 @@ export type Database = {
       }
       loan_products: {
         Row: {
+          collateral_required: boolean | null
           created_at: string
           description: string | null
+          early_repayment_allowed: boolean | null
+          early_repayment_fee_percent: number | null
           employment_types: string[] | null
+          grace_period_days: number | null
           id: string
+          insurance_percent: number | null
+          insurance_required: boolean | null
           interest_rate: number
+          interest_type: string | null
           is_active: boolean | null
+          late_payment_penalty_percent: number | null
           max_amount: number
+          max_dti_ratio: number | null
           max_term_months: number
           min_amount: number
+          min_credit_score: number | null
           min_term_months: number
           name: string
           processing_fee_percent: number | null
@@ -295,15 +362,25 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          collateral_required?: boolean | null
           created_at?: string
           description?: string | null
+          early_repayment_allowed?: boolean | null
+          early_repayment_fee_percent?: number | null
           employment_types?: string[] | null
+          grace_period_days?: number | null
           id?: string
+          insurance_percent?: number | null
+          insurance_required?: boolean | null
           interest_rate?: number
+          interest_type?: string | null
           is_active?: boolean | null
+          late_payment_penalty_percent?: number | null
           max_amount?: number
+          max_dti_ratio?: number | null
           max_term_months?: number
           min_amount?: number
+          min_credit_score?: number | null
           min_term_months?: number
           name: string
           processing_fee_percent?: number | null
@@ -311,15 +388,25 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          collateral_required?: boolean | null
           created_at?: string
           description?: string | null
+          early_repayment_allowed?: boolean | null
+          early_repayment_fee_percent?: number | null
           employment_types?: string[] | null
+          grace_period_days?: number | null
           id?: string
+          insurance_percent?: number | null
+          insurance_required?: boolean | null
           interest_rate?: number
+          interest_type?: string | null
           is_active?: boolean | null
+          late_payment_penalty_percent?: number | null
           max_amount?: number
+          max_dti_ratio?: number | null
           max_term_months?: number
           min_amount?: number
+          min_credit_score?: number | null
           min_term_months?: number
           name?: string
           processing_fee_percent?: number | null
