@@ -207,6 +207,7 @@ export type Database = {
           contract_url: string | null
           created_at: string
           date_of_birth: string | null
+          early_settlement_fee: number | null
           email: string
           employer_id: string | null
           employer_letter_url: string | null
@@ -232,7 +233,10 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           selfie_url: string | null
+          settlement_date: string | null
+          settlement_type: string | null
           status: Database["public"]["Enums"]["loan_status"]
+          total_penalties: number | null
           total_repayment: number | null
           updated_at: string
           user_id: string
@@ -247,6 +251,7 @@ export type Database = {
           contract_url?: string | null
           created_at?: string
           date_of_birth?: string | null
+          early_settlement_fee?: number | null
           email: string
           employer_id?: string | null
           employer_letter_url?: string | null
@@ -272,7 +277,10 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           selfie_url?: string | null
+          settlement_date?: string | null
+          settlement_type?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
+          total_penalties?: number | null
           total_repayment?: number | null
           updated_at?: string
           user_id: string
@@ -287,6 +295,7 @@ export type Database = {
           contract_url?: string | null
           created_at?: string
           date_of_birth?: string | null
+          early_settlement_fee?: number | null
           email?: string
           employer_id?: string | null
           employer_letter_url?: string | null
@@ -312,7 +321,10 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           selfie_url?: string | null
+          settlement_date?: string | null
+          settlement_type?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
+          total_penalties?: number | null
           total_repayment?: number | null
           updated_at?: string
           user_id?: string
@@ -422,9 +434,18 @@ export type Database = {
           due_date: string
           id: string
           installment_number: number | null
+          interest_paid: number | null
+          is_reversed: boolean | null
           loan_id: string
+          original_amount: number | null
           paid_date: string | null
           payment_method: string | null
+          penalty_amount: number | null
+          penalty_paid: number | null
+          principal_paid: number | null
+          reversal_reason: string | null
+          reversed_at: string | null
+          reversed_by: string | null
           status: string | null
           transaction_reference: string | null
           updated_at: string
@@ -436,9 +457,18 @@ export type Database = {
           due_date: string
           id?: string
           installment_number?: number | null
+          interest_paid?: number | null
+          is_reversed?: boolean | null
           loan_id: string
+          original_amount?: number | null
           paid_date?: string | null
           payment_method?: string | null
+          penalty_amount?: number | null
+          penalty_paid?: number | null
+          principal_paid?: number | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
           status?: string | null
           transaction_reference?: string | null
           updated_at?: string
@@ -450,9 +480,18 @@ export type Database = {
           due_date?: string
           id?: string
           installment_number?: number | null
+          interest_paid?: number | null
+          is_reversed?: boolean | null
           loan_id?: string
+          original_amount?: number | null
           paid_date?: string | null
           payment_method?: string | null
+          penalty_amount?: number | null
+          penalty_paid?: number | null
+          principal_paid?: number | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
           status?: string | null
           transaction_reference?: string | null
           updated_at?: string
@@ -682,6 +721,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_loan_penalties: { Args: { p_loan_id: string }; Returns: number }
+      calculate_early_settlement: {
+        Args: { p_loan_id: string }
+        Returns: {
+          early_settlement_fee: number
+          outstanding_interest: number
+          outstanding_principal: number
+          total_payoff_amount: number
+          total_penalties: number
+        }[]
+      }
+      calculate_repayment_penalty: {
+        Args: { p_repayment_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
