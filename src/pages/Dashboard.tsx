@@ -85,11 +85,11 @@ const Dashboard = () => {
     setIsGenerating(loan.id);
     try {
       const { data: repayments, error } = await supabase
-        .from('repayments')
+        .from('loan_repayments')
         .select('*')
         .eq('loan_id', loan.id)
-        .eq('status', 'completed')
-        .order('payment_date', { ascending: true });
+        .eq('status', 'paid')
+        .order('paid_date', { ascending: true });
 
       if (error) throw error;
 
