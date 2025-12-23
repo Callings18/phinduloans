@@ -22,18 +22,15 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { format, differenceInDays, addMonths } from "date-fns";
+import { format, addMonths } from "date-fns";
 import {
   CreditCard,
   Search,
   CheckCircle,
-  Clock,
   AlertTriangle,
   XCircle,
   Loader2,
   Eye,
-  DollarSign,
-  Calendar,
   User,
   Wallet,
   TrendingUp,
@@ -41,7 +38,6 @@ import {
   Plus,
   UserPlus,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -50,7 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
+import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 
 interface Loan {
   id: string;
@@ -590,137 +586,12 @@ const AdminLoans = () => {
           </CardContent>
         </Card>
 
-        {/* Loan Details Dialog */}
-        <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Loan Details</DialogTitle>
-              <DialogDescription>
-                Complete loan information and repayment schedule
-              </DialogDescription>
-            </DialogHeader>
-            {selectedLoan && (
-              <div className="space-y-6">
-                {/* Loan Summary */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Principal</p>
-                    <p className="text-xl font-bold text-foreground">K{Number(selectedLoan.loan_amount).toLocaleString()}</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Total Repayment</p>
-                    <p className="text-xl font-bold text-foreground">K{Number(selectedLoan.total_repayment).toLocaleString()}</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Monthly Payment</p>
-                    <p className="text-xl font-bold text-foreground">K{Number(selectedLoan.monthly_payment || 0).toLocaleString()}</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Interest Rate</p>
-                    <p className="text-xl font-bold text-foreground">{selectedLoan.interest_rate}%</p>
-                  </div>
-                </div>
-
-                {/* Progress */}
-                {loanRepayments && loanRepayments.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm font-medium text-foreground">Repayment Progress</p>
-                      <p className="text-sm text-muted-foreground">
-                        {calculateLoanProgress(selectedLoan, loanRepayments).paidCount} of {calculateLoanProgress(selectedLoan, loanRepayments).totalCount} payments
-                      </p>
-                    </div>
-                    <Progress value={calculateLoanProgress(selectedLoan, loanRepayments).percentage} className="h-3" />
-                    <div className="flex justify-between text-sm">
-                      <span className="text-success">Paid: K{calculateLoanProgress(selectedLoan, loanRepayments).totalPaid.toLocaleString()}</span>
-                      <span className="text-muted-foreground">Remaining: K{calculateLoanProgress(selectedLoan, loanRepayments).remaining.toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Next Due & Overdue Alert */}
-                {loanRepayments && (
-                  <div className="flex gap-4">
-                    {getNextDueDate(loanRepayments) && (
-                      <div className="flex items-center gap-2 p-3 rounded-lg bg-info/10 border border-info/20">
-                        <Calendar className="text-info" size={18} />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Next Due Date</p>
-                          <p className="font-medium text-foreground">{format(new Date(getNextDueDate(loanRepayments)!), "MMM dd, yyyy")}</p>
-                        </div>
-                      </div>
-                    )}
-                    {getOverdueCount(loanRepayments) > 0 && (
-                      <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                        <AlertTriangle className="text-destructive" size={18} />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Overdue Payments</p>
-                          <p className="font-medium text-destructive">{getOverdueCount(loanRepayments)} installments</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Repayment Schedule */}
-                <div>
-                  <h4 className="font-semibold text-foreground mb-3">Repayment Schedule</h4>
-                  {loanRepayments && loanRepayments.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>#</TableHead>
-                          <TableHead>Due Date</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Paid Date</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {loanRepayments.map((rep) => {
-                          const isOverdue = rep.status === "pending" && new Date(rep.due_date) < new Date();
-                          return (
-                            <TableRow key={rep.id} className={isOverdue ? "bg-destructive/5" : ""}>
-                              <TableCell>{rep.installment_number || "-"}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  {format(new Date(rep.due_date), "MMM dd, yyyy")}
-                                  {isOverdue && <AlertTriangle className="text-destructive" size={14} />}
-                                </div>
-                              </TableCell>
-                              <TableCell>K{Number(rep.amount).toLocaleString()}</TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline" 
-                                  className={
-                                    rep.status === "paid" 
-                                      ? "bg-success/20 text-success border-success/30" 
-                                      : isOverdue 
-                                        ? "bg-destructive/20 text-destructive border-destructive/30"
-                                        : "bg-warning/20 text-warning border-warning/30"
-                                  }
-                                >
-                                  {isOverdue ? "Overdue" : rep.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy") : "-"}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-6">
-                      No repayment schedule generated yet
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Loan Details Modal */}
+        <LoanDetailsModal 
+          loan={selectedLoan} 
+          open={isDetailsOpen} 
+          onOpenChange={setIsDetailsOpen} 
+        />
 
         {/* Add Loan Dialog */}
         <Dialog open={isAddLoanOpen} onOpenChange={setIsAddLoanOpen}>
