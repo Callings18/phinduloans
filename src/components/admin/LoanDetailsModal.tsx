@@ -71,8 +71,12 @@ import {
   Calculator,
   AlertCircle,
   ArrowRight,
+  Shield,
+  FolderCheck,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import DocumentVerificationTab from "./DocumentVerificationTab";
+import GuarantorTab from "./GuarantorTab";
 
 interface Loan {
   id: string;
@@ -739,20 +743,26 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-5 w-full">
-              <TabsTrigger value="overview" className="text-xs sm:text-sm">
+            <TabsList className="grid grid-cols-7 w-full">
+              <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
-              <TabsTrigger value="repayments" className="text-xs sm:text-sm">
+              <TabsTrigger value="repayments" className="text-xs">
                 <Receipt size={14} className="mr-1 hidden sm:inline" /> Repayments
               </TabsTrigger>
-              <TabsTrigger value="borrower" className="text-xs sm:text-sm">
+              <TabsTrigger value="documents" className="text-xs">
+                <FolderCheck size={14} className="mr-1 hidden sm:inline" /> Documents
+              </TabsTrigger>
+              <TabsTrigger value="guarantors" className="text-xs">
+                <Shield size={14} className="mr-1 hidden sm:inline" /> Guarantors
+              </TabsTrigger>
+              <TabsTrigger value="borrower" className="text-xs">
                 <User size={14} className="mr-1 hidden sm:inline" /> Borrower
               </TabsTrigger>
-              <TabsTrigger value="actions" className="text-xs sm:text-sm">
+              <TabsTrigger value="actions" className="text-xs">
                 <Settings size={14} className="mr-1 hidden sm:inline" /> Actions
               </TabsTrigger>
-              <TabsTrigger value="history" className="text-xs sm:text-sm">
+              <TabsTrigger value="history" className="text-xs">
                 <History size={14} className="mr-1 hidden sm:inline" /> History
               </TabsTrigger>
             </TabsList>
@@ -1025,6 +1035,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </Button>
                   </div>
                 )}
+              </TabsContent>
+
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="m-0">
+                <DocumentVerificationTab loanId={loan.id} />
+              </TabsContent>
+
+              {/* Guarantors Tab */}
+              <TabsContent value="guarantors" className="m-0">
+                <GuarantorTab loanId={loan.id} />
               </TabsContent>
 
               {/* Borrower Tab */}

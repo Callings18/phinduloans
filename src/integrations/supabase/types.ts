@@ -312,6 +312,72 @@ export type Database = {
           },
         ]
       }
+      document_checklists: {
+        Row: {
+          created_at: string
+          document_name: string
+          document_type: string
+          file_url: string | null
+          id: string
+          is_required: boolean | null
+          is_submitted: boolean | null
+          is_verified: boolean | null
+          loan_id: string
+          notes: string | null
+          rejection_reason: string | null
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_name: string
+          document_type: string
+          file_url?: string | null
+          id?: string
+          is_required?: boolean | null
+          is_submitted?: boolean | null
+          is_verified?: boolean | null
+          loan_id: string
+          notes?: string | null
+          rejection_reason?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_name?: string
+          document_type?: string
+          file_url?: string | null
+          id?: string
+          is_required?: boolean | null
+          is_submitted?: boolean | null
+          is_verified?: boolean | null
+          loan_id?: string
+          notes?: string | null
+          rejection_reason?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_checklists_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_checklists_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       employers: {
         Row: {
           address: string | null
@@ -501,6 +567,96 @@ export type Database = {
           },
         ]
       }
+      loan_guarantors: {
+        Row: {
+          address: string | null
+          city: string | null
+          consent_date: string | null
+          consent_signed: boolean | null
+          created_at: string
+          email: string | null
+          employer_name: string | null
+          employment_status: string | null
+          full_name: string
+          id: string
+          is_verified: boolean | null
+          loan_id: string
+          monthly_income: number | null
+          nrc_back_url: string | null
+          nrc_front_url: string | null
+          nrc_number: string | null
+          phone: string
+          relationship: string
+          updated_at: string
+          verification_notes: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          consent_date?: string | null
+          consent_signed?: boolean | null
+          created_at?: string
+          email?: string | null
+          employer_name?: string | null
+          employment_status?: string | null
+          full_name: string
+          id?: string
+          is_verified?: boolean | null
+          loan_id: string
+          monthly_income?: number | null
+          nrc_back_url?: string | null
+          nrc_front_url?: string | null
+          nrc_number?: string | null
+          phone: string
+          relationship: string
+          updated_at?: string
+          verification_notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          consent_date?: string | null
+          consent_signed?: boolean | null
+          created_at?: string
+          email?: string | null
+          employer_name?: string | null
+          employment_status?: string | null
+          full_name?: string
+          id?: string
+          is_verified?: boolean | null
+          loan_id?: string
+          monthly_income?: number | null
+          nrc_back_url?: string | null
+          nrc_front_url?: string | null
+          nrc_number?: string | null
+          phone?: string
+          relationship?: string
+          updated_at?: string
+          verification_notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_guarantors_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_guarantors_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       loan_products: {
         Row: {
           collateral_required: boolean | null
@@ -664,6 +820,66 @@ export type Database = {
             foreignKeyName: "loan_repayments_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
+      loan_writeoffs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          id: string
+          loan_id: string
+          reason: string
+          recovery_amount: number | null
+          recovery_notes: string | null
+          status: string | null
+          updated_at: string
+          writeoff_amount: number
+          writeoff_date: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          loan_id: string
+          reason: string
+          recovery_amount?: number | null
+          recovery_notes?: string | null
+          status?: string | null
+          updated_at?: string
+          writeoff_amount: number
+          writeoff_date?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          loan_id?: string
+          reason?: string
+          recovery_amount?: number | null
+          recovery_notes?: string | null
+          status?: string | null
+          updated_at?: string
+          writeoff_amount?: number
+          writeoff_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_writeoffs_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: true
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_writeoffs_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: true
             referencedRelation: "overdue_loans_view"
             referencedColumns: ["loan_id"]
           },
