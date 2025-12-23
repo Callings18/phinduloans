@@ -29,6 +29,7 @@ const menuItems = [
   { icon: Package, label: "Loan Products", path: "/admin/loan-products" },
   { icon: CreditCard, label: "Loans", path: "/admin/loans" },
   { icon: Banknote, label: "Repayments", path: "/admin/repayments" },
+  { icon: FileText, label: "Collections", path: "/admin/collections" },
   { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
   { icon: Shield, label: "Staff", path: "/admin/staff" },

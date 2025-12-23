@@ -6,9 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { CreditCard, Eye, EyeOff, Save, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  CreditCard,
+  Eye,
+  EyeOff,
+  Save,
+  Loader2,
+  Settings as SettingsIcon,
+  Globe,
+  Building2,
+  ShieldCheck,
+  BellRing
+} from "lucide-react";
 
 interface PaymentSettings {
   id: string;
@@ -20,13 +33,48 @@ interface PaymentSettings {
 }
 
 const AdminSettings = () => {
-  const [settings, setSettings] = useState<PaymentSettings | null>(null);
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Payment Gateway State
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
 
-  const [formData, setFormData] = useState({
+  // System Settings States
+  const [generalConfig, setGeneralConfig] = useState({
+    currency: "ZMW",
+    country: "ZM",
+    date_format: "DD/MM/YYYY"
+  });
+
+  const [companyInfo, setCompanyInfo] = useState({
+    name: "LoanSphere Microfinance",
+    address: "Lusaka, Zambia",
+    support_email: "support@loansphere.com",
+    support_phone: "+260 XXXXXXXX",
+    tax_id: ""
+  });
+
+  const [lendingRules, setLendingRules] = useState({
+    default_interest_rate: 15.0,
+    max_loan_amount: 50000,
+    min_loan_amount: 500,
+    late_penalty_percent: 5.0,
+    grace_period_days: 3
+  });
+
+  const [notificationConfig, setNotificationConfig] = useState({
+    email_on_approval: true,
+    sms_on_approval: false,
+    email_on_disbursement: true,
+    sms_on_disbursement: false,
+    reminder_days_before: 3,
+    sms_provider: "twilio",
+  });
+
+  const [paymentFormData, setPaymentFormData] = useState({
     api_key: "",
     webhook_secret: "",
     is_active: false,
@@ -34,58 +82,85 @@ const AdminSettings = () => {
   });
 
   useEffect(() => {
-    fetchSettings();
+    fetchAllSettings();
   }, []);
 
-  const fetchSettings = async () => {
+  const fetchAllSettings = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Fetch Payment Settings
+      const { data: pData } = await supabase
         .from("payment_gateway_settings")
         .select("*")
         .eq("gateway_name", "lenco")
         .single();
 
-      if (error) throw error;
-
-      if (data) {
-        setSettings(data);
-        setFormData({
-          api_key: data.api_key || "",
-          webhook_secret: data.webhook_secret || "",
-          is_active: data.is_active || false,
-          environment: data.environment || "sandbox",
+      if (pData) {
+        setPaymentSettings(pData);
+        setPaymentFormData({
+          api_key: pData.api_key || "",
+          webhook_secret: pData.webhook_secret || "",
+          is_active: pData.is_active || false,
+          environment: pData.environment || "sandbox",
         });
       }
+
+      // 2. Fetch System Settings
+      const { data: sData } = await supabase.from("system_settings").select("*");
+
+      if (sData) {
+        sData.forEach(setting => {
+          if (setting.key === 'general_config') setGeneralConfig(setting.value as any);
+          if (setting.key === 'company_info') setCompanyInfo(setting.value as any);
+          if (setting.key === 'lending_rules') setLendingRules(setting.value as any);
+          if (setting.key === 'notification_config') setNotificationConfig(setting.value as any);
+        });
+      }
+
     } catch (error: any) {
       console.error("Error fetching settings:", error);
-      toast.error("Failed to load payment settings");
+      toast({ title: "Error", description: "Failed to load settings", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!settings) return;
+  const saveSystemSetting = async (key: string, value: any) => {
+    const { error } = await supabase
+      .from("system_settings")
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
 
+    if (error) throw error;
+  };
+
+  const handleSaveAll = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("payment_gateway_settings")
-        .update({
-          api_key: formData.api_key || null,
-          webhook_secret: formData.webhook_secret || null,
-          is_active: formData.is_active,
-          environment: formData.environment,
-        })
-        .eq("id", settings.id);
+      // Save System Settings
+      await saveSystemSetting('general_config', generalConfig);
+      await saveSystemSetting('company_info', companyInfo);
+      await saveSystemSetting('lending_rules', lendingRules);
+      await saveSystemSetting('notification_config', notificationConfig);
 
-      if (error) throw error;
+      // Save Payment Gateway Settings
+      if (paymentSettings) {
+        const { error } = await supabase
+          .from("payment_gateway_settings")
+          .update({
+            api_key: paymentFormData.api_key || null,
+            webhook_secret: paymentFormData.webhook_secret || null,
+            is_active: paymentFormData.is_active,
+            environment: paymentFormData.environment,
+          })
+          .eq("id", paymentSettings.id);
 
-      toast.success("Payment settings saved successfully");
-      fetchSettings();
+        if (error) throw error;
+      }
+
+      toast({ title: "Success", description: "All settings saved successfully" });
     } catch (error: any) {
       console.error("Error saving settings:", error);
-      toast.error("Failed to save payment settings");
+      toast({ title: "Error", description: "Failed to save settings", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -104,143 +179,352 @@ const AdminSettings = () => {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground mt-1">
-            Configure payment gateways and system settings
-          </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+            <p className="text-muted-foreground mt-1">
+              Configure system-wide parameters, company info, and integrations
+            </p>
+          </div>
+          <Button onClick={handleSaveAll} disabled={saving} className="gradient-primary">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save All Changes
+          </Button>
         </div>
 
-        {/* Payment Gateway Settings */}
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                <CreditCard className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <CardTitle>LENCO Payment Gateway</CardTitle>
-                <CardDescription>
-                  Configure LENCO API credentials for disbursements and repayments
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Environment Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
-              <div>
-                <Label className="text-base font-medium">Environment</Label>
-                <p className="text-sm text-muted-foreground">
-                  Switch between sandbox and production mode
-                </p>
-              </div>
-              <Select
-                value={formData.environment}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, environment: value })
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sandbox">Sandbox</SelectItem>
-                  <SelectItem value="production">Production</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <Tabs defaultValue="general" className="space-y-6">
+          <TabsList className="bg-muted/50 p-1">
+            <TabsTrigger value="general" className="gap-2">
+              <Globe size={16} /> General
+            </TabsTrigger>
+            <TabsTrigger value="company" className="gap-2">
+              <Building2 size={16} /> Company
+            </TabsTrigger>
+            <TabsTrigger value="lending" className="gap-2">
+              <ShieldCheck size={16} /> Lending
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="gap-2">
+              <CreditCard size={16} /> Payments
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2">
+              <BellRing size={16} /> Notifications
+            </TabsTrigger>
+          </TabsList>
 
-            {/* Active Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
-              <div>
-                <Label className="text-base font-medium">Enable Gateway</Label>
-                <p className="text-sm text-muted-foreground">
-                  Activate LENCO for processing payments
-                </p>
-              </div>
-              <Switch
-                checked={formData.is_active}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, is_active: checked })
-                }
-              />
-            </div>
+          {/* General Settings */}
+          <TabsContent value="general">
+            <Card className="glass border-border/50">
+              <CardHeader>
+                <CardTitle>Global Configuration</CardTitle>
+                <CardDescription>Localization and regional preferences</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Default Currency</Label>
+                    <Select
+                      value={generalConfig.currency}
+                      onValueChange={(v) => setGeneralConfig({ ...generalConfig, currency: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ZMW">ZMW - Zambian Kwacha</SelectItem>
+                        <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date Format</Label>
+                    <Select
+                      value={generalConfig.date_format}
+                      onValueChange={(v) => setGeneralConfig({ ...generalConfig, date_format: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-            {/* API Key */}
-            <div className="space-y-2">
-              <Label htmlFor="api_key">API Key</Label>
-              <div className="relative">
-                <Input
-                  id="api_key"
-                  type={showApiKey ? "text" : "password"}
-                  value={formData.api_key}
-                  onChange={(e) =>
-                    setFormData({ ...formData, api_key: e.target.value })
-                  }
-                  placeholder="Enter your LENCO API key"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Find your API key in the LENCO dashboard under API Settings
-              </p>
-            </div>
+          {/* Company Settings */}
+          <TabsContent value="company">
+            <Card className="glass border-border/50">
+              <CardHeader>
+                <CardTitle>Company Profile</CardTitle>
+                <CardDescription>Details used for reports, emails, and invoices</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Organization Name</Label>
+                    <Input
+                      value={companyInfo.name}
+                      onChange={(e) => setCompanyInfo({ ...companyInfo, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tax ID / TPIN</Label>
+                    <Input
+                      value={companyInfo.tax_id}
+                      onChange={(e) => setCompanyInfo({ ...companyInfo, tax_id: e.target.value })}
+                      placeholder="Enter registration number"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Support Email</Label>
+                    <Input
+                      value={companyInfo.support_email}
+                      onChange={(e) => setCompanyInfo({ ...companyInfo, support_email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Support Phone</Label>
+                    <Input
+                      value={companyInfo.support_phone}
+                      onChange={(e) => setCompanyInfo({ ...companyInfo, support_phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-full space-y-2">
+                    <Label>Head Office Address</Label>
+                    <Textarea
+                      value={companyInfo.address}
+                      onChange={(e) => setCompanyInfo({ ...companyInfo, address: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-            {/* Webhook Secret */}
-            <div className="space-y-2">
-              <Label htmlFor="webhook_secret">Webhook Secret</Label>
-              <div className="relative">
-                <Input
-                  id="webhook_secret"
-                  type={showWebhookSecret ? "text" : "password"}
-                  value={formData.webhook_secret}
-                  onChange={(e) =>
-                    setFormData({ ...formData, webhook_secret: e.target.value })
-                  }
-                  placeholder="Enter your webhook secret"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowWebhookSecret(!showWebhookSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showWebhookSecret ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Used to verify webhook callbacks from LENCO
-              </p>
-            </div>
+          {/* Lending Rules */}
+          <TabsContent value="lending">
+            <Card className="glass border-border/50">
+              <CardHeader>
+                <CardTitle>Lending Parameters</CardTitle>
+                <CardDescription>Define global limits and penalty rules</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label>Default Interest Rate (%)</Label>
+                    <Input
+                      type="number"
+                      value={lendingRules.default_interest_rate}
+                      onChange={(e) => setLendingRules({ ...lendingRules, default_interest_rate: parseFloat(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Min Loan Amount (K)</Label>
+                    <Input
+                      type="number"
+                      value={lendingRules.min_loan_amount}
+                      onChange={(e) => setLendingRules({ ...lendingRules, min_loan_amount: parseFloat(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Max Loan Amount (K)</Label>
+                    <Input
+                      type="number"
+                      value={lendingRules.max_loan_amount}
+                      onChange={(e) => setLendingRules({ ...lendingRules, max_loan_amount: parseFloat(e.target.value) })}
+                    />
+                  </div>
+                </div>
 
-            {/* Save Button */}
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full gradient-primary text-primary-foreground shadow-button"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Settings
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+                <div className="pt-4 border-t border-border/50">
+                  <h4 className="font-semibold mb-4">Late Payment & Penalties</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label>One-time Penalty Rate (%)</Label>
+                      <Input
+                        type="number"
+                        value={lendingRules.late_penalty_percent}
+                        onChange={(e) => setLendingRules({ ...lendingRules, late_penalty_percent: parseFloat(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">Charged on the overdue installment amount</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Grace Period (Days)</Label>
+                      <Input
+                        type="number"
+                        value={lendingRules.grace_period_days}
+                        onChange={(e) => setLendingRules({ ...lendingRules, grace_period_days: parseInt(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">Days before penalty is applied</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payment Gateway */}
+          <TabsContent value="payments">
+            <Card className="glass border-border/50">
+              <CardHeader>
+                <CardTitle>Payment Integrations</CardTitle>
+                <CardDescription>Configure LENCO API for disbursements and collections</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Environment</Label>
+                    <p className="text-sm text-muted-foreground">Switch between test and live modes</p>
+                  </div>
+                  <Select
+                    value={paymentFormData.environment}
+                    onValueChange={(v) => setPaymentFormData({ ...paymentFormData, environment: v })}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sandbox">Sandbox</SelectItem>
+                      <SelectItem value="production">Production</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Enable LENCO Gateway</Label>
+                    <p className="text-sm text-muted-foreground">Use this gateway for transaction processing</p>
+                  </div>
+                  <Switch
+                    checked={paymentFormData.is_active}
+                    onCheckedChange={(checked) => setPaymentFormData({ ...paymentFormData, is_active: checked })}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>LENCO API Key</Label>
+                    <div className="relative">
+                      <Input
+                        type={showApiKey ? "text" : "password"}
+                        value={paymentFormData.api_key}
+                        onChange={(e) => setPaymentFormData({ ...paymentFormData, api_key: e.target.value })}
+                        placeholder="sk_test_..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      >
+                        {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Webhook Secret</Label>
+                    <div className="relative">
+                      <Input
+                        type={showWebhookSecret ? "text" : "password"}
+                        value={paymentFormData.webhook_secret}
+                        onChange={(e) => setPaymentFormData({ ...paymentFormData, webhook_secret: e.target.value })}
+                        placeholder="whsec_..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      >
+                        {showWebhookSecret ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Notifications */}
+          <TabsContent value="notifications">
+            <Card className="glass border-border/50">
+              <CardHeader>
+                <CardTitle>Automated Notifications</CardTitle>
+                <CardDescription>Configure when and how borrowers are notified</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Event Triggers</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                      <Label>Email on Loan Approval</Label>
+                      <Switch
+                        checked={notificationConfig.email_on_approval}
+                        onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, email_on_approval: v })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                      <Label>SMS on Loan Approval</Label>
+                      <Switch
+                        checked={notificationConfig.sms_on_approval}
+                        onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, sms_on_approval: v })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                      <Label>Email on Disbursement</Label>
+                      <Switch
+                        checked={notificationConfig.email_on_disbursement}
+                        onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, email_on_disbursement: v })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                      <Label>SMS on Disbursement</Label>
+                      <Switch
+                        checked={notificationConfig.sms_on_disbursement}
+                        onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, sms_on_disbursement: v })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/50 space-y-4">
+                  <h4 className="font-semibold">Payment Reminders</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Send Reminder Before Due Date (Days)</Label>
+                      <Input
+                        type="number"
+                        value={notificationConfig.reminder_days_before}
+                        onChange={(e) => setNotificationConfig({ ...notificationConfig, reminder_days_before: parseInt(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>SMS Provider</Label>
+                      <Select
+                        value={notificationConfig.sms_provider}
+                        onValueChange={(v) => setNotificationConfig({ ...notificationConfig, sms_provider: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="twilio">Twilio</SelectItem>
+                          <SelectItem value="africastalking">Africa's Talking (Regional)</SelectItem>
+                          <SelectItem value="bulksms">BulkSMS Zambia</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AdminLayout>
   );
