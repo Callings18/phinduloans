@@ -71,7 +71,16 @@ const AdminSettings = () => {
     email_on_disbursement: true,
     sms_on_disbursement: false,
     reminder_days_before: 3,
-    sms_provider: "twilio",
+    sms_provider: "africastalking",
+    whatsapp_provider: "twilio",
+    email_provider: "gmail",
+    africastalking_api_key: "",
+    africastalking_username: "",
+    twilio_sid: "",
+    twilio_token: "",
+    twilio_whatsapp_number: "",
+    tumeny_api_key: "",
+    gmail_app_password: "",
   });
 
   const [paymentFormData, setPaymentFormData] = useState({
@@ -503,6 +512,12 @@ const AdminSettings = () => {
                         onChange={(e) => setNotificationConfig({ ...notificationConfig, reminder_days_before: parseInt(e.target.value) })}
                       />
                     </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/50 space-y-4">
+                  <h4 className="font-semibold">Provider Settings</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>SMS Provider</Label>
                       <Select
@@ -513,12 +528,128 @@ const AdminSettings = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="twilio">Twilio</SelectItem>
-                          <SelectItem value="africastalking">Africa's Talking (Regional)</SelectItem>
-                          <SelectItem value="bulksms">BulkSMS Zambia</SelectItem>
+                          <SelectItem value="africastalking">Africa's Talking</SelectItem>
+                          <SelectItem value="tumeny">Tumeny</SelectItem>
+                          <SelectItem value="twilio">Twilio SMS</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>WhatsApp Provider</Label>
+                      <Select
+                        value={notificationConfig.whatsapp_provider}
+                        onValueChange={(v) => setNotificationConfig({ ...notificationConfig, whatsapp_provider: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="twilio">Twilio WhatsApp</SelectItem>
+                          <SelectItem value="none">Disabled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email Provider</Label>
+                      <Select
+                        value={notificationConfig.email_provider}
+                        onValueChange={(v) => setNotificationConfig({ ...notificationConfig, email_provider: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gmail">Gmail (SMTP)</SelectItem>
+                          <SelectItem value="none">Disabled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    {/* Africa's Talking Credentials */}
+                    {notificationConfig.sms_provider === 'africastalking' && (
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
+                        <Label className="text-sm font-bold uppercase opacity-70">Africa's Talking Credentials</Label>
+                        <div className="space-y-2">
+                          <Label>Username</Label>
+                          <Input
+                            value={notificationConfig.africastalking_username}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, africastalking_username: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>API Key</Label>
+                          <Input
+                            type="password"
+                            value={notificationConfig.africastalking_api_key}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, africastalking_api_key: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tumeny Credentials */}
+                    {notificationConfig.sms_provider === 'tumeny' && (
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
+                        <Label className="text-sm font-bold uppercase opacity-70">Tumeny Credentials</Label>
+                        <div className="space-y-2">
+                          <Label>API Key</Label>
+                          <Input
+                            type="password"
+                            value={notificationConfig.tumeny_api_key}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, tumeny_api_key: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Twilio Credentials */}
+                    {(notificationConfig.sms_provider === 'twilio' || notificationConfig.whatsapp_provider === 'twilio') && (
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
+                        <Label className="text-sm font-bold uppercase opacity-70">Twilio Credentials</Label>
+                        <div className="space-y-2">
+                          <Label>Account SID</Label>
+                          <Input
+                            value={notificationConfig.twilio_sid}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, twilio_sid: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Auth Token</Label>
+                          <Input
+                            type="password"
+                            value={notificationConfig.twilio_token}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, twilio_token: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Gmail Credentials */}
+                    {notificationConfig.email_provider === 'gmail' && (
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
+                        <Label className="text-sm font-bold uppercase opacity-70">Gmail SMTP Settings</Label>
+                        <div className="space-y-2">
+                          <Label>Gmail Address</Label>
+                          <Input
+                            placeholder="your-email@gmail.com"
+                            value={companyInfo.support_email}
+                            disabled
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>App Password</Label>
+                          <Input
+                            type="password"
+                            placeholder="xxxx xxxx xxxx xxxx"
+                            value={notificationConfig.gmail_app_password}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, gmail_app_password: e.target.value })}
+                          />
+                          <p className="text-[10px] text-muted-foreground">Requires 2FA enabled in Google Account</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
