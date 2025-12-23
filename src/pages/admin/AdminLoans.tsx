@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, addMonths } from "date-fns";
 import {
   CreditCard,
   Search,
@@ -37,6 +38,8 @@ import {
   Wallet,
   TrendingUp,
   Activity,
+  Plus,
+  UserPlus,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -47,6 +50,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Loan {
   id: string;
@@ -63,6 +67,7 @@ interface Loan {
   created_at: string;
   loan_purpose: string;
   employment_type: string;
+  nrc_number: string;
 }
 
 interface Repayment {
@@ -75,11 +80,42 @@ interface Repayment {
   installment_number: number | null;
 }
 
+interface Borrower {
+  id: string;
+  full_name: string | null;
+  email: string;
+  phone: string | null;
+  nrc_number: string | null;
+  address: string | null;
+  city: string | null;
+}
+
+interface LoanProduct {
+  id: string;
+  name: string;
+  interest_rate: number;
+  min_amount: number;
+  max_amount: number;
+  min_term_months: number;
+  max_term_months: number;
+  processing_fee_percent: number | null;
+}
+
 const AdminLoans = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isAddLoanOpen, setIsAddLoanOpen] = useState(false);
+  
+  // Add Loan Form State
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string>("");
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [loanAmount, setLoanAmount] = useState<string>("");
+  const [loanTermMonths, setLoanTermMonths] = useState<string>("");
+  const [loanPurpose, setLoanPurpose] = useState<string>("");
+  const [employmentType, setEmploymentType] = useState<string>("employed");
+  const [monthlyIncome, setMonthlyIncome] = useState<string>("");
 
   const queryClient = useQueryClient();
 
@@ -114,6 +150,154 @@ const AdminLoans = () => {
     },
     enabled: !!selectedLoan,
   });
+
+  // Fetch borrowers for the add loan dialog
+  const { data: borrowers } = useQuery({
+    queryKey: ["admin-borrowers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("full_name", { ascending: true });
+
+      if (error) throw error;
+      return data as Borrower[];
+    },
+  });
+
+  // Fetch loan products for the add loan dialog
+  const { data: loanProducts } = useQuery({
+    queryKey: ["admin-loan-products"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("*")
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return data as LoanProduct[];
+    },
+  });
+
+  // Get selected borrower and product details
+  const selectedBorrower = borrowers?.find(b => b.id === selectedBorrowerId);
+  const selectedProduct = loanProducts?.find(p => p.id === selectedProductId);
+
+  // Calculate loan details based on inputs
+  const calculateLoanDetails = () => {
+    if (!selectedProduct || !loanAmount || !loanTermMonths) return null;
+    
+    const principal = Number(loanAmount);
+    const rate = selectedProduct.interest_rate;
+    const months = Number(loanTermMonths);
+    const processingFee = selectedProduct.processing_fee_percent ? principal * (selectedProduct.processing_fee_percent / 100) : 0;
+    
+    const interest = principal * (rate / 100) * months;
+    const totalRepayment = principal + interest + processingFee;
+    const monthlyPayment = totalRepayment / months;
+    
+    return {
+      principal,
+      interest,
+      processingFee,
+      totalRepayment,
+      monthlyPayment,
+      rate,
+    };
+  };
+
+  const loanDetails = calculateLoanDetails();
+
+  // Create loan mutation
+  const createLoanMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedBorrower || !selectedProduct || !loanDetails) {
+        throw new Error("Please fill in all required fields");
+      }
+
+      // Create loan application
+      const { data: loanApp, error: loanError } = await supabase
+        .from("loan_applications")
+        .insert({
+          user_id: selectedBorrowerId,
+          full_name: selectedBorrower.full_name || "",
+          email: selectedBorrower.email,
+          phone: selectedBorrower.phone || "",
+          nrc_number: selectedBorrower.nrc_number || "",
+          address: selectedBorrower.address,
+          city: selectedBorrower.city,
+          loan_amount: loanDetails.principal,
+          loan_term_months: Number(loanTermMonths),
+          interest_rate: loanDetails.rate,
+          monthly_payment: loanDetails.monthlyPayment,
+          total_repayment: loanDetails.totalRepayment,
+          monthly_income: Number(monthlyIncome) || 0,
+          employment_type: employmentType as "employed" | "self_employed" | "contract" | "other",
+          loan_purpose: loanPurpose,
+          loan_product_id: selectedProductId,
+          status: "disbursed", // Directly disbursed since admin is creating
+        })
+        .select()
+        .single();
+
+      if (loanError) throw loanError;
+
+      // Generate repayment schedule
+      const repayments = [];
+      const startDate = new Date();
+      for (let i = 1; i <= Number(loanTermMonths); i++) {
+        repayments.push({
+          loan_id: loanApp.id,
+          user_id: selectedBorrowerId,
+          amount: loanDetails.monthlyPayment,
+          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
+          installment_number: i,
+          status: "pending",
+        });
+      }
+
+      const { error: repError } = await supabase
+        .from("loan_repayments")
+        .insert(repayments);
+
+      if (repError) throw repError;
+
+      // Create disbursement record
+      const { error: disbError } = await supabase
+        .from("disbursements")
+        .insert({
+          loan_id: loanApp.id,
+          amount: loanDetails.principal,
+          disbursement_method: "bank_transfer",
+          status: "completed",
+          disbursed_at: new Date().toISOString(),
+        });
+
+      if (disbError) throw disbError;
+
+      return loanApp;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      toast.success("Loan created successfully with repayment schedule");
+      setIsAddLoanOpen(false);
+      resetAddLoanForm();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to create loan");
+    },
+  });
+
+  const resetAddLoanForm = () => {
+    setSelectedBorrowerId("");
+    setSelectedProductId("");
+    setLoanAmount("");
+    setLoanTermMonths("");
+    setLoanPurpose("");
+    setEmploymentType("employed");
+    setMonthlyIncome("");
+  };
 
   // Update loan status mutation
   const updateLoanStatusMutation = useMutation({
@@ -197,11 +381,17 @@ const AdminLoans = () => {
     <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Loan Management</h1>
-          <p className="text-muted-foreground mt-1">
-            Track and manage active loans and repayments
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Loan Management</h1>
+            <p className="text-muted-foreground mt-1">
+              Track and manage active loans and repayments
+            </p>
+          </div>
+          <Button onClick={() => setIsAddLoanOpen(true)}>
+            <Plus size={18} className="mr-2" />
+            Add Loan
+          </Button>
         </div>
 
         {/* Stats */}
@@ -529,6 +719,201 @@ const AdminLoans = () => {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Loan Dialog */}
+        <Dialog open={isAddLoanOpen} onOpenChange={setIsAddLoanOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus size={20} />
+                Add New Loan
+              </DialogTitle>
+              <DialogDescription>
+                Create a loan for an existing borrower
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {/* Borrower Selection */}
+              <div className="space-y-2">
+                <Label>Select Borrower *</Label>
+                <Select value={selectedBorrowerId} onValueChange={setSelectedBorrowerId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a borrower..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {borrowers?.map((borrower) => (
+                      <SelectItem key={borrower.id} value={borrower.id}>
+                        <div className="flex items-center gap-2">
+                          <User size={14} />
+                          {borrower.full_name || "Unknown"} - {borrower.email}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedBorrower && (
+                  <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                    <p><strong>Phone:</strong> {selectedBorrower.phone || "N/A"}</p>
+                    <p><strong>NRC:</strong> {selectedBorrower.nrc_number || "N/A"}</p>
+                    <p><strong>Address:</strong> {selectedBorrower.address || "N/A"}, {selectedBorrower.city || "N/A"}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Loan Product Selection */}
+              <div className="space-y-2">
+                <Label>Loan Product *</Label>
+                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a loan product..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loanProducts?.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.name} - {product.interest_rate}% interest
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProduct && (
+                  <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                    <p><strong>Interest Rate:</strong> {selectedProduct.interest_rate}%</p>
+                    <p><strong>Amount Range:</strong> K{selectedProduct.min_amount.toLocaleString()} - K{selectedProduct.max_amount.toLocaleString()}</p>
+                    <p><strong>Term Range:</strong> {selectedProduct.min_term_months} - {selectedProduct.max_term_months} months</p>
+                    {selectedProduct.processing_fee_percent && (
+                      <p><strong>Processing Fee:</strong> {selectedProduct.processing_fee_percent}%</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Loan Amount & Term */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Loan Amount (K) *</Label>
+                  <Input
+                    type="number"
+                    placeholder={selectedProduct ? `${selectedProduct.min_amount} - ${selectedProduct.max_amount}` : "Enter amount"}
+                    value={loanAmount}
+                    onChange={(e) => setLoanAmount(e.target.value)}
+                    min={selectedProduct?.min_amount}
+                    max={selectedProduct?.max_amount}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Term (Months) *</Label>
+                  <Input
+                    type="number"
+                    placeholder={selectedProduct ? `${selectedProduct.min_term_months} - ${selectedProduct.max_term_months}` : "Enter term"}
+                    value={loanTermMonths}
+                    onChange={(e) => setLoanTermMonths(e.target.value)}
+                    min={selectedProduct?.min_term_months}
+                    max={selectedProduct?.max_term_months}
+                  />
+                </div>
+              </div>
+
+              {/* Employment & Income */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employment Type *</Label>
+                  <Select value={employmentType} onValueChange={setEmploymentType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employed">Employed</SelectItem>
+                      <SelectItem value="self_employed">Self Employed</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Monthly Income (K)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Enter monthly income"
+                    value={monthlyIncome}
+                    onChange={(e) => setMonthlyIncome(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Loan Purpose */}
+              <div className="space-y-2">
+                <Label>Loan Purpose *</Label>
+                <Select value={loanPurpose} onValueChange={setLoanPurpose}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select purpose..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="personal">Personal</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                    <SelectItem value="education">Education</SelectItem>
+                    <SelectItem value="medical">Medical</SelectItem>
+                    <SelectItem value="home_improvement">Home Improvement</SelectItem>
+                    <SelectItem value="debt_consolidation">Debt Consolidation</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Loan Summary */}
+              {loanDetails && (
+                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
+                  <h4 className="font-semibold text-foreground">Loan Summary</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Principal</p>
+                      <p className="font-bold text-foreground">K{loanDetails.principal.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Interest ({loanDetails.rate}%)</p>
+                      <p className="font-bold text-foreground">K{loanDetails.interest.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Processing Fee</p>
+                      <p className="font-bold text-foreground">K{loanDetails.processingFee.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Total Repayment</p>
+                      <p className="font-bold text-primary">K{loanDetails.totalRepayment.toLocaleString()}</p>
+                    </div>
+                    <div className="col-span-2 pt-2 border-t border-border">
+                      <p className="text-muted-foreground">Monthly Payment</p>
+                      <p className="text-xl font-bold text-primary">K{loanDetails.monthlyPayment.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => setIsAddLoanOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => createLoanMutation.mutate()}
+                  disabled={!selectedBorrowerId || !selectedProductId || !loanAmount || !loanTermMonths || !loanPurpose || createLoanMutation.isPending}
+                >
+                  {createLoanMutation.isPending ? (
+                    <>
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} className="mr-2" />
+                      Create Loan
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
