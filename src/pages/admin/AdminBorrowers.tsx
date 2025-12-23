@@ -15,6 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -57,8 +64,15 @@ const emptyForm: BorrowerForm = {
   phone: "",
   nrc_number: "",
   address: "",
-  city: "",
+  city: "Lusaka",
 };
+
+const zambianCities = [
+  "Lusaka", "Kitwe", "Ndola", "Kabwe", "Chingola", "Mufulira", "Luanshya",
+  "Livingstone", "Kasama", "Chipata", "Chinsali", "Mansa", "Solwezi",
+  "Mongu", "Mazabuka", "Monze", "Kalomo", "Choma", "Kafue",
+  "Chililabombwe", "Kapiri Mposhi", "Nakonde", "Mbala", "Mpika", "Petauke"
+].sort();
 
 const AdminBorrowers = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,7 +93,7 @@ const AdminBorrowers = () => {
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data;
     },
@@ -91,9 +105,9 @@ const AdminBorrowers = () => {
       const { data, error } = await supabase
         .from('loan_applications')
         .select('user_id');
-      
+
       if (error) throw error;
-      
+
       const counts: Record<string, number> = {};
       data.forEach(loan => {
         counts[loan.user_id] = (counts[loan.user_id] || 0) + 1;
@@ -111,7 +125,7 @@ const AdminBorrowers = () => {
         .select('*')
         .eq('user_id', selectedBorrower.id)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data;
     },
@@ -132,7 +146,7 @@ const AdminBorrowers = () => {
         address: data.address || null,
         city: data.city || null,
       });
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -159,7 +173,7 @@ const AdminBorrowers = () => {
           city: data.city || null,
         })
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -357,17 +371,17 @@ const AdminBorrowers = () => {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="flex-1"
                       onClick={() => openViewDialog(borrower)}
                     >
                       <Eye size={14} className="mr-1" />
                       View
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => openEditDialog(borrower)}
                     >
@@ -436,11 +450,19 @@ const AdminBorrowers = () => {
             </div>
             <div className="space-y-2">
               <Label>City</Label>
-              <Input
+              <Select
                 value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                placeholder="Lusaka"
-              />
+                onValueChange={(value) => setFormData({ ...formData, city: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zambianCities.map(city => (
+                    <SelectItem key={city} value={city}>{city}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Address</Label>
@@ -510,11 +532,19 @@ const AdminBorrowers = () => {
             </div>
             <div className="space-y-2">
               <Label>City</Label>
-              <Input
+              <Select
                 value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                placeholder="Lusaka"
-              />
+                onValueChange={(value) => setFormData({ ...formData, city: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zambianCities.map(city => (
+                    <SelectItem key={city} value={city}>{city}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Address</Label>
