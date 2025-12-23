@@ -73,10 +73,12 @@ import {
   ArrowRight,
   Shield,
   FolderCheck,
+  XCircle as XCircleIcon,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
 import GuarantorTab from "./GuarantorTab";
+import WriteOffTab from "./WriteOffTab";
 
 interface Loan {
   id: string;
@@ -743,7 +745,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-7 w-full">
+            <TabsList className="grid grid-cols-8 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
@@ -755,6 +757,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </TabsTrigger>
               <TabsTrigger value="guarantors" className="text-xs">
                 <Shield size={14} className="mr-1 hidden sm:inline" /> Guarantors
+              </TabsTrigger>
+              <TabsTrigger value="writeoff" className="text-xs">
+                <XCircleIcon size={14} className="mr-1 hidden sm:inline" /> Write-Off
               </TabsTrigger>
               <TabsTrigger value="borrower" className="text-xs">
                 <User size={14} className="mr-1 hidden sm:inline" /> Borrower
@@ -1045,6 +1050,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               {/* Guarantors Tab */}
               <TabsContent value="guarantors" className="m-0">
                 <GuarantorTab loanId={loan.id} />
+              </TabsContent>
+
+              {/* Write-Off Tab */}
+              <TabsContent value="writeoff" className="m-0">
+                <WriteOffTab 
+                  loan={loan} 
+                  totalPaid={totalPaid}
+                  totalPending={loan.total_repayment - totalPaid}
+                />
               </TabsContent>
 
               {/* Borrower Tab */}
