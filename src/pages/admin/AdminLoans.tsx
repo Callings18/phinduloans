@@ -182,7 +182,7 @@ const AdminLoans = () => {
   const { user } = useAuth();
 
   // Fetch all loans
-  const { data: loans, isLoading } = useQuery({
+  const { data: loans, isLoading, refetch } = useQuery({
     queryKey: ["admin-all-loans"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -193,6 +193,8 @@ const AdminLoans = () => {
       if (error) throw error;
       return data as Loan[];
     },
+    refetchOnWindowFocus: true,
+    staleTime: 10000, // 10 seconds
   });
 
   // Fetch loan repayments for selected loan
@@ -363,13 +365,18 @@ const AdminLoans = () => {
 
       return loanApp;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      await refetch();
       toast.success(createWithDisbursement
         ? "Loan created and disbursed with repayment schedule"
         : "Loan application created - proceed to review and approval");
       setIsAddLoanOpen(false);
       resetAddLoanForm();
+      // Switch to applications tab if created as pending
+      if (!createWithDisbursement) {
+        setActiveTab("applications");
+      }
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create loan");
