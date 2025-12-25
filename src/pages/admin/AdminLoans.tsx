@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -22,7 +23,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, parseISO } from "date-fns";
 import {
   CreditCard,
   Search,
@@ -37,6 +38,9 @@ import {
   Activity,
   Plus,
   UserPlus,
+  Edit,
+  Calendar,
+  CalendarPlus,
 } from "lucide-react";
 import {
   Table,
@@ -47,6 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Loan {
   id: string;
@@ -64,6 +69,13 @@ interface Loan {
   loan_purpose: string;
   employment_type: string;
   nrc_number: string;
+  monthly_income: number;
+  employer_name: string | null;
+  job_title: string | null;
+  collateral_description: string | null;
+  collateral_value: number | null;
+  admin_notes: string | null;
+  loan_product_id: string | null;
 }
 
 interface Repayment {
@@ -103,6 +115,8 @@ const AdminLoans = () => {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isAddLoanOpen, setIsAddLoanOpen] = useState(false);
+  const [isEditLoanOpen, setIsEditLoanOpen] = useState(false);
+  const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   
   // Add Loan Form State
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string>("");
@@ -112,8 +126,22 @@ const AdminLoans = () => {
   const [loanPurpose, setLoanPurpose] = useState<string>("");
   const [employmentType, setEmploymentType] = useState<string>("employed");
   const [monthlyIncome, setMonthlyIncome] = useState<string>("");
+  const [adminNotes, setAdminNotes] = useState<string>("");
+  const [disbursementDate, setDisbursementDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [firstRepaymentDate, setFirstRepaymentDate] = useState<string>(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
+  const [createWithDisbursement, setCreateWithDisbursement] = useState<boolean>(false);
+
+  // Edit Loan Form State
+  const [editLoanAmount, setEditLoanAmount] = useState<string>("");
+  const [editLoanTermMonths, setEditLoanTermMonths] = useState<string>("");
+  const [editInterestRate, setEditInterestRate] = useState<string>("");
+  const [editMonthlyIncome, setEditMonthlyIncome] = useState<string>("");
+  const [editLoanPurpose, setEditLoanPurpose] = useState<string>("");
+  const [editAdminNotes, setEditAdminNotes] = useState<string>("");
+  const [editEmploymentType, setEditEmploymentType] = useState<string>("");
 
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Fetch active/disbursed loans
   const { data: loans, isLoading } = useQuery({
@@ -122,7 +150,7 @@ const AdminLoans = () => {
       const { data, error } = await supabase
         .from("loan_applications")
         .select("*")
-        .in("status", ["active", "disbursed", "completed", "defaulted"])
+        .in("status", ["active", "disbursed", "completed", "defaulted", "pending", "approved"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -205,14 +233,14 @@ const AdminLoans = () => {
 
   const loanDetails = calculateLoanDetails();
 
-  // Create loan mutation
+  // Create loan mutation - now creates with PENDING status by default
   const createLoanMutation = useMutation({
     mutationFn: async () => {
       if (!selectedBorrower || !selectedProduct || !loanDetails) {
         throw new Error("Please fill in all required fields");
       }
 
-      // Create loan application
+      // Create loan application with PENDING status (proper flow)
       const { data: loanApp, error: loanError } = await supabase
         .from("loan_applications")
         .insert({
@@ -232,56 +260,105 @@ const AdminLoans = () => {
           employment_type: employmentType as "employed" | "self_employed" | "contract" | "other",
           loan_purpose: loanPurpose,
           loan_product_id: selectedProductId,
-          status: "disbursed", // Directly disbursed since admin is creating
+          admin_notes: adminNotes || null,
+          status: createWithDisbursement ? "active" : "pending", // Start with pending unless quick disbursement
         })
         .select()
         .single();
 
       if (loanError) throw loanError;
 
-      // Generate repayment schedule
-      const repayments = [];
-      const startDate = new Date();
-      for (let i = 1; i <= Number(loanTermMonths); i++) {
-        repayments.push({
-          loan_id: loanApp.id,
-          user_id: selectedBorrowerId,
-          amount: loanDetails.monthlyPayment,
-          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
-          installment_number: i,
-          status: "pending",
-        });
+      // If creating with immediate disbursement (for backdating or quick loans)
+      if (createWithDisbursement) {
+        // Create disbursement record
+        const { error: disbError } = await supabase
+          .from("disbursements")
+          .insert({
+            loan_id: loanApp.id,
+            amount: loanDetails.principal,
+            disbursement_method: "bank_transfer",
+            status: "completed",
+            disbursed_at: new Date(disbursementDate).toISOString(),
+            transaction_reference: `ADMIN-${Date.now()}`,
+          });
+
+        if (disbError) throw disbError;
+
+        // Generate repayment schedule with custom first repayment date
+        const repayments = [];
+        const firstRepayment = parseISO(firstRepaymentDate);
+        for (let i = 0; i < Number(loanTermMonths); i++) {
+          repayments.push({
+            loan_id: loanApp.id,
+            user_id: selectedBorrowerId,
+            amount: loanDetails.monthlyPayment,
+            due_date: format(addMonths(firstRepayment, i), "yyyy-MM-dd"),
+            installment_number: i + 1,
+            status: "pending",
+          });
+        }
+
+        const { error: repError } = await supabase
+          .from("loan_repayments")
+          .insert(repayments);
+
+        if (repError) throw repError;
       }
-
-      const { error: repError } = await supabase
-        .from("loan_repayments")
-        .insert(repayments);
-
-      if (repError) throw repError;
-
-      // Create disbursement record
-      const { error: disbError } = await supabase
-        .from("disbursements")
-        .insert({
-          loan_id: loanApp.id,
-          amount: loanDetails.principal,
-          disbursement_method: "bank_transfer",
-          status: "completed",
-          disbursed_at: new Date().toISOString(),
-        });
-
-      if (disbError) throw disbError;
 
       return loanApp;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      toast.success("Loan created successfully with repayment schedule");
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      toast.success(createWithDisbursement 
+        ? "Loan created and disbursed with repayment schedule" 
+        : "Loan application created - proceed to review and approval");
       setIsAddLoanOpen(false);
       resetAddLoanForm();
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create loan");
+    },
+  });
+
+  // Edit loan mutation
+  const editLoanMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingLoan) throw new Error("No loan selected");
+
+      const principal = Number(editLoanAmount);
+      const rate = Number(editInterestRate);
+      const months = Number(editLoanTermMonths);
+      
+      const interest = principal * (rate / 100) * months;
+      const totalRepayment = principal + interest;
+      const monthlyPayment = totalRepayment / months;
+
+      const { error } = await supabase
+        .from("loan_applications")
+        .update({
+          loan_amount: principal,
+          loan_term_months: months,
+          interest_rate: rate,
+          monthly_payment: monthlyPayment,
+          total_repayment: totalRepayment,
+          monthly_income: Number(editMonthlyIncome) || editingLoan.monthly_income,
+          loan_purpose: editLoanPurpose,
+          employment_type: editEmploymentType as "employed" | "self_employed" | "contract" | "other",
+          admin_notes: editAdminNotes || null,
+        })
+        .eq("id", editingLoan.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      toast.success("Loan updated successfully");
+      setIsEditLoanOpen(false);
+      setEditingLoan(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to update loan");
     },
   });
 
@@ -293,6 +370,22 @@ const AdminLoans = () => {
     setLoanPurpose("");
     setEmploymentType("employed");
     setMonthlyIncome("");
+    setAdminNotes("");
+    setDisbursementDate(format(new Date(), "yyyy-MM-dd"));
+    setFirstRepaymentDate(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
+    setCreateWithDisbursement(false);
+  };
+
+  const openEditDialog = (loan: Loan) => {
+    setEditingLoan(loan);
+    setEditLoanAmount(loan.loan_amount.toString());
+    setEditLoanTermMonths(loan.loan_term_months.toString());
+    setEditInterestRate(loan.interest_rate.toString());
+    setEditMonthlyIncome(loan.monthly_income?.toString() || "");
+    setEditLoanPurpose(loan.loan_purpose);
+    setEditEmploymentType(loan.employment_type);
+    setEditAdminNotes(loan.admin_notes || "");
+    setIsEditLoanOpen(true);
   };
 
   // Update loan status mutation
@@ -316,45 +409,20 @@ const AdminLoans = () => {
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { color: string; icon: any }> = {
-      active: { color: "bg-success/20 text-success border-success/30", icon: Activity },
-      disbursed: { color: "bg-info/20 text-info border-info/30", icon: Wallet },
+      pending: { color: "bg-warning/20 text-warning border-warning/30", icon: AlertTriangle },
+      approved: { color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
+      active: { color: "bg-info/20 text-info border-info/30", icon: Activity },
+      disbursed: { color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Wallet },
       completed: { color: "bg-primary/20 text-primary border-primary/30", icon: CheckCircle },
       defaulted: { color: "bg-destructive/20 text-destructive border-destructive/30", icon: XCircle },
     };
-    const { color, icon: Icon } = config[status] || config.active;
+    const { color, icon: Icon } = config[status] || config.pending;
     return (
       <Badge variant="outline" className={`${color} capitalize`}>
         <Icon size={12} className="mr-1" />
         {status}
       </Badge>
     );
-  };
-
-  const calculateLoanProgress = (loan: Loan, repayments: Repayment[]) => {
-    const paidRepayments = repayments.filter(r => r.status === "paid");
-    const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-    const percentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
-    return {
-      totalPaid,
-      remaining: loan.total_repayment - totalPaid,
-      percentage: Math.min(percentage, 100),
-      paidCount: paidRepayments.length,
-      totalCount: repayments.length,
-    };
-  };
-
-  const getNextDueDate = (repayments: Repayment[]) => {
-    const pendingRepayments = repayments
-      .filter(r => r.status === "pending")
-      .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-    return pendingRepayments[0]?.due_date;
-  };
-
-  const getOverdueCount = (repayments: Repayment[]) => {
-    const today = new Date();
-    return repayments.filter(r => 
-      r.status === "pending" && new Date(r.due_date) < today
-    ).length;
   };
 
   const filteredLoans = loans?.filter((loan) => {
@@ -367,6 +435,7 @@ const AdminLoans = () => {
 
   const stats = {
     total: loans?.length || 0,
+    pending: loans?.filter((l) => l.status === "pending").length || 0,
     active: loans?.filter((l) => l.status === "active").length || 0,
     completed: loans?.filter((l) => l.status === "completed").length || 0,
     defaulted: loans?.filter((l) => l.status === "defaulted").length || 0,
@@ -381,7 +450,7 @@ const AdminLoans = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Loan Management</h1>
             <p className="text-muted-foreground mt-1">
-              Track and manage active loans and repayments
+              Create, track and manage loans
             </p>
           </div>
           <Button onClick={() => setIsAddLoanOpen(true)}>
@@ -391,7 +460,7 @@ const AdminLoans = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
@@ -405,8 +474,19 @@ const AdminLoans = () => {
           </Card>
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
-                <Activity className="text-success" size={24} />
+              <div className="w-12 h-12 rounded-xl bg-warning/20 flex items-center justify-center">
+                <AlertTriangle className="text-warning" size={24} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground">{stats.pending}</p>
+                <p className="text-sm text-muted-foreground">Pending</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-info/20 flex items-center justify-center">
+                <Activity className="text-info" size={24} />
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">{stats.active}</p>
@@ -416,8 +496,8 @@ const AdminLoans = () => {
           </Card>
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                <CheckCircle className="text-primary" size={24} />
+              <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
+                <CheckCircle className="text-success" size={24} />
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">{stats.completed}</p>
@@ -428,7 +508,7 @@ const AdminLoans = () => {
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-destructive/20 flex items-center justify-center">
-                <AlertTriangle className="text-destructive" size={24} />
+                <XCircle className="text-destructive" size={24} />
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">{stats.defaulted}</p>
@@ -443,7 +523,7 @@ const AdminLoans = () => {
               </div>
               <div>
                 <p className="text-2xl font-bold text-foreground">K{stats.totalPortfolio.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">Portfolio Value</p>
+                <p className="text-sm text-muted-foreground">Portfolio</p>
               </div>
             </CardContent>
           </Card>
@@ -468,8 +548,10 @@ const AdminLoans = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="defaulted">Defaulted</SelectItem>
                 </SelectContent>
@@ -481,8 +563,8 @@ const AdminLoans = () => {
         {/* Loans Table */}
         <Card className="border-border/50 bg-card/50">
           <CardHeader>
-            <CardTitle>Active Loans</CardTitle>
-            <CardDescription>All disbursed and active loan accounts</CardDescription>
+            <CardTitle>All Loans</CardTitle>
+            <CardDescription>Manage loan applications and active loans</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -496,7 +578,7 @@ const AdminLoans = () => {
                 <p className="text-muted-foreground">
                   {searchTerm || statusFilter !== "all"
                     ? "Try adjusting your filters"
-                    : "Disbursed loans will appear here"}
+                    : "Create your first loan to get started"}
                 </p>
               </div>
             ) : (
@@ -508,7 +590,7 @@ const AdminLoans = () => {
                     <TableHead>Term</TableHead>
                     <TableHead>Monthly Payment</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Purpose</TableHead>
+                    <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -539,9 +621,9 @@ const AdminLoans = () => {
                       </TableCell>
                       <TableCell>{getStatusBadge(loan.status)}</TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground capitalize">
-                          {loan.loan_purpose?.replace(/_/g, " ")}
-                        </span>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(loan.created_at), "MMM dd, yyyy")}
+                        </p>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -556,6 +638,16 @@ const AdminLoans = () => {
                             <Eye size={16} className="mr-1" />
                             View
                           </Button>
+                          {["pending", "approved"].includes(loan.status) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditDialog(loan)}
+                            >
+                              <Edit size={14} className="mr-1" />
+                              Edit
+                            </Button>
+                          )}
                           {loan.status === "active" && (
                             <>
                               <Button
@@ -602,7 +694,7 @@ const AdminLoans = () => {
                 Add New Loan
               </DialogTitle>
               <DialogDescription>
-                Create a loan for an existing borrower
+                Create a loan application for an existing borrower. The loan will go through the approval workflow unless you enable quick disbursement.
               </DialogDescription>
             </DialogHeader>
             
@@ -733,6 +825,63 @@ const AdminLoans = () => {
                 </Select>
               </div>
 
+              {/* Admin Notes */}
+              <div className="space-y-2">
+                <Label>Admin Notes</Label>
+                <Textarea
+                  placeholder="Add any internal notes about this loan..."
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              {/* Quick Disbursement Option */}
+              <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="quickDisburse"
+                    checked={createWithDisbursement}
+                    onChange={(e) => setCreateWithDisbursement(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <Label htmlFor="quickDisburse" className="cursor-pointer">
+                    <span className="font-medium">Quick Disbursement</span>
+                    <span className="text-muted-foreground text-sm block">
+                      Skip approval workflow and immediately create active loan with repayment schedule (for backdating or walk-in customers)
+                    </span>
+                  </Label>
+                </div>
+
+                {createWithDisbursement && (
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Calendar size={14} />
+                        Disbursement Date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={disbursementDate}
+                        onChange={(e) => setDisbursementDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <CalendarPlus size={14} />
+                        First Repayment Date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={firstRepaymentDate}
+                        onChange={(e) => setFirstRepaymentDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Loan Summary */}
               {loanDetails && (
                 <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
@@ -779,8 +928,137 @@ const AdminLoans = () => {
                   ) : (
                     <>
                       <Plus size={16} className="mr-2" />
-                      Create Loan
+                      {createWithDisbursement ? "Create & Disburse" : "Create Application"}
                     </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Loan Dialog */}
+        <Dialog open={isEditLoanOpen} onOpenChange={setIsEditLoanOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit size={20} />
+                Edit Loan
+              </DialogTitle>
+              <DialogDescription>
+                Update loan details for {editingLoan?.full_name}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Loan Amount (K) *</Label>
+                  <Input
+                    type="number"
+                    value={editLoanAmount}
+                    onChange={(e) => setEditLoanAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Term (Months) *</Label>
+                  <Input
+                    type="number"
+                    value={editLoanTermMonths}
+                    onChange={(e) => setEditLoanTermMonths(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Interest Rate (%) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editInterestRate}
+                    onChange={(e) => setEditInterestRate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Monthly Income (K)</Label>
+                  <Input
+                    type="number"
+                    value={editMonthlyIncome}
+                    onChange={(e) => setEditMonthlyIncome(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Employment Type</Label>
+                <Select value={editEmploymentType} onValueChange={setEditEmploymentType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employed">Employed</SelectItem>
+                    <SelectItem value="self_employed">Self Employed</SelectItem>
+                    <SelectItem value="contract">Contract</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Loan Purpose</Label>
+                <Select value={editLoanPurpose} onValueChange={setEditLoanPurpose}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="personal">Personal</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                    <SelectItem value="education">Education</SelectItem>
+                    <SelectItem value="medical">Medical</SelectItem>
+                    <SelectItem value="home_improvement">Home Improvement</SelectItem>
+                    <SelectItem value="debt_consolidation">Debt Consolidation</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Admin Notes</Label>
+                <Textarea
+                  value={editAdminNotes}
+                  onChange={(e) => setEditAdminNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              {/* Calculated Summary */}
+              {editLoanAmount && editLoanTermMonths && editInterestRate && (
+                <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                  <p><strong>Monthly Payment:</strong> K{(
+                    (Number(editLoanAmount) * (1 + (Number(editInterestRate) / 100) * Number(editLoanTermMonths))) / Number(editLoanTermMonths)
+                  ).toLocaleString()}</p>
+                  <p><strong>Total Repayment:</strong> K{(
+                    Number(editLoanAmount) * (1 + (Number(editInterestRate) / 100) * Number(editLoanTermMonths))
+                  ).toLocaleString()}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => setIsEditLoanOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => editLoanMutation.mutate()}
+                  disabled={!editLoanAmount || !editLoanTermMonths || !editInterestRate || editLoanMutation.isPending}
+                >
+                  {editLoanMutation.isPending ? (
+                    <>
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
                   )}
                 </Button>
               </div>
