@@ -11,7 +11,6 @@ import About from "./pages/About";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminApplications from "./pages/admin/AdminApplications";
 import AdminBorrowers from "./pages/admin/AdminBorrowers";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminEmployers from "./pages/admin/AdminEmployers";
@@ -42,7 +41,6 @@ const App = () => (
             <Route path="/login" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/applications" element={<AdminApplications />} />
             <Route path="/admin/borrowers" element={<AdminBorrowers />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/employers" element={<AdminEmployers />} />
