@@ -18,14 +18,17 @@ import {
   MoreHorizontal,
   TrendingUp,
   Calendar,
+  HelpCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format } from "date-fns";
+import { useState } from "react";
 
 const AdminDashboard = () => {
+  const [runTour, setRunTour] = useState(false);
   const tourSteps: Step[] = [
     {
       target: ".tour-admin-header",
@@ -115,7 +118,12 @@ const AdminDashboard = () => {
 
   return (
     <AdminLayout>
-      <GuidedTour steps={tourSteps} tourKey="admin-dashboard" />
+      <GuidedTour
+        steps={tourSteps}
+        tourKey="admin-dashboard"
+        externalRun={runTour}
+        onFinish={() => setRunTour(false)}
+      />
       <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 tour-admin-header">
@@ -127,6 +135,15 @@ const AdminDashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-border/50"
+              onClick={() => setRunTour(true)}
+            >
+              <HelpCircle size={16} className="mr-2 text-primary" />
+              Tour
+            </Button>
             <Button variant="outline" size="sm" className="border-border/50">
               <Activity size={16} className="mr-2" />
               Live Updates

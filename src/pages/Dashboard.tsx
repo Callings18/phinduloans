@@ -20,7 +20,8 @@ import {
   Wallet,
   Calendar,
   Loader2,
-  Download
+  Download,
+  HelpCircle
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +42,7 @@ const Dashboard = () => {
   const { user, isLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
+  const [runTour, setRunTour] = useState(false);
 
   const tourSteps: Step[] = [
     {
@@ -142,18 +144,34 @@ const Dashboard = () => {
   const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <Navbar />
-      <GuidedTour steps={tourSteps} tourKey="borrower-dashboard" />
+      <GuidedTour
+        steps={tourSteps}
+        tourKey="borrower-dashboard"
+        externalRun={runTour}
+        onFinish={() => setRunTour(false)}
+      />
 
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Header */}
-          <div className="mb-8 tour-welcome">
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-              Welcome back, <span className="text-gradient">{profile?.full_name || 'User'}</span>
-            </h1>
-            <p className="text-muted-foreground">Manage your loans and track your repayments</p>
+          <div className="mb-8 tour-welcome flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+                Welcome back, <span className="text-gradient">{profile?.full_name || 'User'}</span>
+              </h1>
+              <p className="text-muted-foreground">Manage your loans and track your repayments</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="glass border-border/50"
+              onClick={() => setRunTour(true)}
+            >
+              <HelpCircle size={18} className="mr-2 text-primary" />
+              How it works
+            </Button>
           </div>
 
           {/* Stats Grid */}

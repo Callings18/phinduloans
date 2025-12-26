@@ -6,28 +6,41 @@ import { useAuth } from "@/hooks/useAuth";
 interface GuidedTourProps {
     steps: Step[];
     tourKey: string;
+    externalRun?: boolean;
+    onFinish?: () => void;
 }
 
-const GuidedTour: React.FC<GuidedTourProps> = ({ steps, tourKey }) => {
+const GuidedTour: React.FC<GuidedTourProps> = ({ steps, tourKey, externalRun, onFinish }) => {
     const [run, setRun] = useState(false);
-    const { user } = useAuth();
+    const { user, isLoading } = useAuth();
 
     useEffect(() => {
-        const hasSeenTour = localStorage.getItem(`tour_${tourKey}_${user?.id}`);
-        if (!hasSeenTour && user) {
-            setTimeout(() => {
-                setRun(true);
-            }, 1500);
+        if (externalRun) {
+            setRun(true);
+            return;
         }
-    }, [user, tourKey]);
+
+        if (!isLoading && user) {
+            const hasSeenTour = localStorage.getItem(`tour_${tourKey}_${user.id}`);
+            if (!hasSeenTour) {
+                const timer = setTimeout(() => {
+                    setRun(true);
+                }, 1500);
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [user, isLoading, tourKey, externalRun]);
 
     const handleJoyrideCallback = (data: CallBackProps) => {
-        const { status, type } = data;
+        const { status } = data;
         const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
         if (finishedStatuses.includes(status)) {
             setRun(false);
-            localStorage.setItem(`tour_${tourKey}_${user?.id}`, "true");
+            if (user) {
+                localStorage.setItem(`tour_${tourKey}_${user.id}`, "true");
+            }
+            if (onFinish) onFinish();
         }
     };
 
