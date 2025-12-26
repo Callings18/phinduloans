@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, X, User, LogOut, LayoutDashboard, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,7 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { user, isAdmin, signOut, isLoading } = useAuth();
+  const { data: settings } = useSystemSettings();
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -25,6 +27,10 @@ const Navbar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  const companyName = settings?.companyInfo?.name || "PHINDU";
+  const nameParts = companyName.split(" ");
+  const firstLetter = companyName.charAt(0);
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass">
       <div className="container mx-auto px-4">
@@ -32,11 +38,15 @@ const Navbar = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center group-hover:shadow-glow transition-shadow duration-300">
-              <span className="text-primary-foreground font-bold text-xl">P</span>
+              <span className="text-primary-foreground font-bold text-xl">{firstLetter}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-foreground font-bold text-lg leading-tight">PHINDU</span>
-              <span className="text-muted-foreground text-xs tracking-wider">CREDIT SOLUTIONS</span>
+              <span className="text-foreground font-bold text-lg leading-tight uppercase">{nameParts[0]}</span>
+              {nameParts.length > 1 && (
+                <span className="text-muted-foreground text-xs tracking-wider uppercase">
+                  {nameParts.slice(1).join(" ")}
+                </span>
+              )}
             </div>
           </Link>
 
@@ -46,16 +56,14 @@ const Navbar = () => {
               <Link
                 key={link.href}
                 to={link.href}
-                className={`text-sm font-medium transition-colors duration-200 relative group ${
-                  isActive(link.href)
+                className={`text-sm font-medium transition-colors duration-200 relative group ${isActive(link.href)
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 {link.label}
-                <span className={`absolute -bottom-1 left-0 h-0.5 gradient-primary transition-all duration-300 ${
-                  isActive(link.href) ? "w-full" : "w-0 group-hover:w-full"
-                }`} />
+                <span className={`absolute -bottom-1 left-0 h-0.5 gradient-primary transition-all duration-300 ${isActive(link.href) ? "w-full" : "w-0 group-hover:w-full"
+                  }`} />
               </Link>
             ))}
           </div>
@@ -118,11 +126,10 @@ const Navbar = () => {
                 <Link
                   key={link.href}
                   to={link.href}
-                  className={`text-sm font-medium py-3 px-4 rounded-lg transition-colors ${
-                    isActive(link.href)
+                  className={`text-sm font-medium py-3 px-4 rounded-lg transition-colors ${isActive(link.href)
                       ? "text-primary bg-primary/10"
                       : "text-muted-foreground hover:bg-secondary"
-                  }`}
+                    }`}
                   onClick={() => setIsOpen(false)}
                 >
                   {link.label}

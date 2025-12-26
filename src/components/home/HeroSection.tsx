@@ -1,8 +1,48 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Shield, Clock, CheckCircle } from "lucide-react";
+import { ArrowRight, Shield, Clock, CheckCircle, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const HeroSection = () => {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["landing-stats"],
+    queryFn: async () => {
+      const [disbursements, applications, profiles] = await Promise.all([
+        supabase.from("disbursements").select("amount").eq("status", "completed"),
+        supabase.from("loan_applications").select("status"),
+        supabase.from("profiles").select("id", { count: "exact", head: true }),
+      ]);
+
+      const totalDisbursed = disbursements.data?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
+      const totalApps = applications.data?.length || 0;
+      const approvedApps = applications.data?.filter(l =>
+        ['approved', 'disbursed', 'active', 'completed'].includes(l.status)
+      ).length || 0;
+
+      const approvalRate = totalApps > 0 ? Math.round((approvedApps / totalApps) * 100) : 98;
+
+      // Formatting total disbursed
+      let formattedDisbursed = "K0";
+      if (totalDisbursed >= 1000000) {
+        formattedDisbursed = `K${(totalDisbursed / 1000000).toFixed(1)}M+`;
+      } else if (totalDisbursed >= 1000) {
+        formattedDisbursed = `K${(totalDisbursed / 1000).toFixed(0)}K+`;
+      } else {
+        formattedDisbursed = `K${totalDisbursed}+`;
+      }
+
+      return [
+        { value: formattedDisbursed, label: "Loans Disbursed" },
+        { value: `${profiles.count || 0}+`, label: "Happy Customers" },
+        { value: "24hrs", label: "Avg. Approval Time" },
+        { value: `${approvalRate}%`, label: "Approval Rate" },
+      ];
+    },
+    // Refresh every 5 minutes to keep it "real-time" enough without over-fetching
+    staleTime: 1000 * 60 * 5,
+  });
+
   return (
     <section className="relative min-h-screen gradient-hero overflow-hidden">
       {/* Background decorations */}
@@ -27,7 +67,7 @@ const HeroSection = () => {
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-slide-up" style={{ animationDelay: "0.1s" }}>
-            Get quick, hassle-free personal and salary loans with competitive rates. 
+            Get quick, hassle-free personal and salary loans with competitive rates.
             Apply online in minutes and receive funds directly to your mobile money.
           </p>
 
@@ -74,17 +114,18 @@ const HeroSection = () => {
 
         {/* Stats */}
         <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-          {[
-            { value: "K50M+", label: "Loans Disbursed" },
-            { value: "5000+", label: "Happy Customers" },
-            { value: "24hrs", label: "Avg. Approval Time" },
-            { value: "98%", label: "Approval Rate" },
-          ].map((stat, index) => (
-            <div key={index} className="text-center animate-slide-up" style={{ animationDelay: `${0.4 + index * 0.1}s` }}>
-              <p className="text-3xl md:text-4xl font-bold text-gradient">{stat.value}</p>
-              <p className="text-muted-foreground text-sm mt-1">{stat.label}</p>
+          {isLoading ? (
+            <div className="col-span-4 flex justify-center">
+              <Loader2 className="animate-spin text-primary" size={32} />
             </div>
-          ))}
+          ) : (
+            stats?.map((stat, index) => (
+              <div key={index} className="text-center animate-slide-up" style={{ animationDelay: `${0.4 + index * 0.1}s` }}>
+                <p className="text-3xl md:text-4xl font-bold text-gradient">{stat.value}</p>
+                <p className="text-muted-foreground text-sm mt-1">{stat.label}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </section>
@@ -92,3 +133,4 @@ const HeroSection = () => {
 };
 
 export default HeroSection;
+

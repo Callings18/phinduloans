@@ -3,8 +3,12 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ArrowRight, Target, Eye, Users, Award } from "lucide-react";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 
 const About = () => {
+  const { data: settings } = useSystemSettings();
+  const companyName = settings?.companyInfo?.name || "Phindu Credit Solutions";
+
   const values = [
     {
       icon: Target,
@@ -31,7 +35,7 @@ const About = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="pt-24 pb-16">
         {/* Hero */}
         <section className="gradient-hero py-20 relative overflow-hidden">
@@ -43,10 +47,10 @@ const About = () => {
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-3xl mx-auto text-center">
               <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-                About <span className="text-gradient">Phindu Credit Solutions</span>
+                About <span className="text-gradient">{companyName}</span>
               </h1>
               <p className="text-lg text-muted-foreground">
-                We're on a mission to make financial services accessible to every Zambian. 
+                We're on a mission to make financial services accessible to every Zambian.
                 Founded with the belief that everyone deserves access to quick, fair, and transparent loans.
               </p>
             </div>
@@ -63,21 +67,21 @@ const About = () => {
                 </h2>
                 <div className="space-y-4 text-muted-foreground">
                   <p>
-                    Phindu Credit Solutions is a customer-focused money-lending institution committed to providing 
-                    accessible, reliable, and responsible financial solutions to individuals and small businesses. 
-                    We exist to bridge the gap between financial need and opportunity by offering timely credit 
+                    Phindu Credit Solutions is a customer-focused money-lending institution committed to providing
+                    accessible, reliable, and responsible financial solutions to individuals and small businesses.
+                    We exist to bridge the gap between financial need and opportunity by offering timely credit
                     services that empower our clients to grow, stabilize, and achieve their financial goals.
                   </p>
                   <p>
-                    At Phindu Credit Solutions, we understand that access to credit is essential for economic 
-                    participation and personal advancement. Our products are designed to be flexible, transparent, 
-                    and tailored to meet the diverse needs of our clients, whether for business expansion, 
+                    At Phindu Credit Solutions, we understand that access to credit is essential for economic
+                    participation and personal advancement. Our products are designed to be flexible, transparent,
+                    and tailored to meet the diverse needs of our clients, whether for business expansion,
                     emergency needs, or personal development.
                   </p>
                   <p>
-                    Phindu Credit Solutions leverages modern technology and sound risk management practices to 
-                    deliver efficient loan processing and effective portfolio management. Our team is dedicated 
-                    to maintaining high professional and ethical standards while complying with all applicable 
+                    Phindu Credit Solutions leverages modern technology and sound risk management practices to
+                    deliver efficient loan processing and effective portfolio management. Our team is dedicated
+                    to maintaining high professional and ethical standards while complying with all applicable
                     laws and regulatory requirements.
                   </p>
                 </div>

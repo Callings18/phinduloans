@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Link } from "react-router-dom";
-import { ArrowRight, Briefcase, Wallet, User, Check, Percent, Calendar, BadgeDollarSign } from "lucide-react";
+import { ArrowRight, Briefcase, Wallet, User, Check, Percent, Calendar, BadgeDollarSign, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 interface LoanProduct {
   id: string;
@@ -26,28 +27,34 @@ const getProductIcon = (name: string) => {
 };
 
 const LoanCalculator = () => {
-  const [products, setProducts] = useState<LoanProduct[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
   const [loanAmount, setLoanAmount] = useState(5000);
   const [loanTerm, setLoanTerm] = useState(6);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const { data } = await supabase
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ["loan-products-public"],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from("loan_products")
         .select("*")
         .eq("is_active", true)
         .order("interest_rate", { ascending: true });
-      
-      if (data && data.length > 0) {
-        setProducts(data);
-        setSelectedProduct(data[0]);
-        setLoanAmount(data[0].min_amount);
-        setLoanTerm(data[0].min_term_months);
-      }
-    };
-    fetchProducts();
-  }, []);
+
+      if (error) throw error;
+      return data as LoanProduct[];
+    },
+    // Keep it relatively fresh
+    staleTime: 1000 * 60 * 5,
+  });
+
+  useEffect(() => {
+    if (products.length > 0 && !selectedProduct) {
+      const defaultProduct = products[0];
+      setSelectedProduct(defaultProduct);
+      setLoanAmount(defaultProduct.min_amount);
+      setLoanTerm(defaultProduct.min_term_months);
+    }
+  }, [products]);
 
   useEffect(() => {
     if (selectedProduct) {
@@ -84,12 +91,16 @@ const LoanCalculator = () => {
 
         <div className="max-w-6xl mx-auto">
           {/* Loan Products Cards */}
-          {products.length > 0 && (
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+          ) : products.length > 0 ? (
             <div className="grid md:grid-cols-3 gap-6 mb-10">
               {products.map((product) => {
                 const IconComponent = getProductIcon(product.name);
                 const isSelected = selectedProduct?.id === product.id;
-                
+
                 return (
                   <button
                     key={product.id}
@@ -106,22 +117,22 @@ const LoanCalculator = () => {
                         <Check size={14} className="text-primary-foreground" />
                       </div>
                     )}
-                    
+
                     <div className={cn(
                       "w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors",
                       isSelected ? "gradient-primary" : "bg-secondary"
                     )}>
                       <IconComponent size={24} className={isSelected ? "text-primary-foreground" : "text-primary"} />
                     </div>
-                    
+
                     <h3 className="text-xl font-bold text-foreground mb-2">{product.name}</h3>
-                    
+
                     {product.description && (
                       <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
                         {product.description}
                       </p>
                     )}
-                    
+
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center gap-2 text-sm">
                         <Percent size={14} className="text-primary" />
@@ -137,13 +148,13 @@ const LoanCalculator = () => {
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar size={14} className="text-primary" />
                         <span className="text-muted-foreground">
-                          {product.min_term_months === product.max_term_months 
-                            ? `${product.max_term_months} month${product.max_term_months > 1 ? 's' : ''}` 
+                          {product.min_term_months === product.max_term_months
+                            ? `${product.max_term_months} month${product.max_term_months > 1 ? 's' : ''}`
                             : `${product.min_term_months} - ${product.max_term_months} months`}
                         </span>
                       </div>
                     </div>
-                    
+
                     {product.requirements && product.requirements.length > 0 && (
                       <div className="pt-4 border-t border-border">
                         <p className="text-xs font-medium text-muted-foreground mb-2">Requirements:</p>
@@ -165,7 +176,7 @@ const LoanCalculator = () => {
                 );
               })}
             </div>
-          )}
+          ) : null}
 
           {/* Calculator */}
           <div className="glass rounded-3xl p-8 md:p-12">
@@ -176,7 +187,7 @@ const LoanCalculator = () => {
                 </span>
               </div>
             )}
-            
+
             <div className="grid md:grid-cols-2 gap-12">
               {/* Inputs */}
               <div className="space-y-10">
