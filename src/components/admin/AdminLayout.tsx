@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import AdminSidebar from "./AdminSidebar";
+import PhinduAI from "../common/PhinduAI";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -41,6 +42,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           {children}
         </div>
       </main>
+      <PhinduAI />
     </div>
   );
 };

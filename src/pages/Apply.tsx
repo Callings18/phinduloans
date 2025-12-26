@@ -14,6 +14,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import GuidedTour from "@/components/common/GuidedTour";
+import { Step } from "react-joyride";
+import { HelpCircle } from "lucide-react";
 
 interface LoanProduct {
   id: string;
@@ -72,8 +75,32 @@ const Apply = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loanProducts, setLoanProducts] = useState<LoanProduct[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
+  const [runTour, setRunTour] = useState(false);
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
+
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-apply-header",
+      content: "Let's get you started! The application is divided into 4 quick steps. We'll guide you through each one.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-apply-steps",
+      content: "Track your progress here. You'll need to complete Personal Info, Employment, Loan Details, and Document uploads.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-apply-form",
+      content: "Fill in your details accurately. This helps our credit team process your application faster!",
+      placement: "top",
+    },
+    {
+      target: ".tour-apply-ai",
+      content: "Need help mid-application? PHINDU AI is always here in the corner to answer your questions!",
+      placement: "left",
+    }
+  ];
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -334,22 +361,37 @@ const Apply = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <Navbar />
+      <GuidedTour
+        steps={tourSteps}
+        tourKey="loan-application"
+        externalRun={runTour}
+        onFinish={() => setRunTour(false)}
+      />
 
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Header */}
-          <div className="text-center max-w-2xl mx-auto mb-12">
+          <div className="text-center max-w-2xl mx-auto mb-12 tour-apply-header">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
               <Sparkles className="text-primary-foreground" size={28} />
             </div>
             <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
               Apply for a <span className="text-gradient">Loan</span>
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mr-2 inline">
               Complete the form below to apply for your loan. It only takes a few minutes.
             </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground hover:text-primary p-0 h-auto"
+              onClick={() => setRunTour(true)}
+            >
+              <HelpCircle size={14} className="mr-1" />
+              Tour
+            </Button>
             {!user && !isLoading && (
               <p className="text-primary text-sm mt-2">
                 Already have an account? <a href="/auth" className="underline font-medium">Login</a> to auto-fill your details
@@ -358,15 +400,15 @@ const Apply = () => {
           </div>
 
           {/* Progress Steps */}
-          <div className="max-w-3xl mx-auto mb-12">
+          <div className="max-w-3xl mx-auto mb-12 tour-apply-steps">
             <div className="flex justify-between items-center">
               {steps.map((step, index) => (
                 <div key={step.id} className="flex-1 flex items-center">
                   <div className="flex flex-col items-center w-full">
                     <div
                       className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${currentStep >= step.id
-                          ? "gradient-primary shadow-glow scale-110"
-                          : "bg-secondary border border-border"
+                        ? "gradient-primary shadow-glow scale-110"
+                        : "bg-secondary border border-border"
                         }`}
                     >
                       {currentStep > step.id ? (
@@ -397,7 +439,7 @@ const Apply = () => {
           </div>
 
           {/* Form */}
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto tour-apply-form">
             <div className="glass rounded-3xl p-8 md:p-12 shadow-card">
               {/* Step 1: Personal Info */}
               {currentStep === 1 && (
@@ -769,10 +811,10 @@ const Apply = () => {
                         <Label className={errors[doc.field] ? "text-destructive" : ""}>{doc.label}</Label>
                         <label
                           className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
-                              ? "border-primary bg-primary/10 shadow-glow"
-                              : errors[doc.field]
-                                ? "border-destructive bg-destructive/5"
-                                : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                            ? "border-primary bg-primary/10 shadow-glow"
+                            : errors[doc.field]
+                              ? "border-destructive bg-destructive/5"
+                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
                             }`}
                         >
                           <input

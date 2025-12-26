@@ -48,6 +48,9 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import GuidedTour from "@/components/common/GuidedTour";
+import { Step } from "react-joyride";
+import { HelpCircle } from "lucide-react";
 
 interface BorrowerForm {
   full_name: string;
@@ -82,6 +85,30 @@ const AdminBorrowers = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedBorrower, setSelectedBorrower] = useState<any>(null);
   const [formData, setFormData] = useState<BorrowerForm>(emptyForm);
+  const [runTour, setRunTour] = useState(false);
+
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-borrowers-header",
+      content: "This is your borrower database. You can manage all registered clients from here.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-borrowers-search",
+      content: "Instantly find a borrower by their name, email, or NRC number.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-borrowers-list",
+      content: "View detailed profiles, contact info, and manage accounts for each borrower.",
+      placement: "top",
+    },
+    {
+      target: ".tour-borrowers-add",
+      content: "Manually register a new borrower if they are applying in-person at your office.",
+      placement: "left",
+    }
+  ];
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -153,7 +180,7 @@ const AdminBorrowers = () => {
 
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.error);
-      
+
       return response.data;
     },
     onSuccess: () => {
@@ -266,14 +293,31 @@ const AdminBorrowers = () => {
 
   return (
     <AdminLayout>
+      <GuidedTour
+        steps={tourSteps}
+        tourKey="admin-borrowers"
+        externalRun={runTour}
+        onFinish={() => setRunTour(false)}
+      />
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 tour-borrowers-header">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground">Borrowers</h1>
-            <p className="text-muted-foreground mt-1">Manage your borrower profiles</p>
+            <div className="flex items-center gap-3">
+              <p className="text-muted-foreground mt-1">Manage your borrower profiles</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-primary h-6 px-2"
+                onClick={() => setRunTour(true)}
+              >
+                <HelpCircle size={14} className="mr-1" />
+                Tour
+              </Button>
+            </div>
           </div>
-          <Button onClick={() => { setFormData(emptyForm); setIsAddOpen(true); }} className="gap-2">
+          <Button onClick={() => { setFormData(emptyForm); setIsAddOpen(true); }} className="gap-2 tour-borrowers-add">
             <Plus size={16} />
             Add Borrower
           </Button>
@@ -318,7 +362,7 @@ const AdminBorrowers = () => {
         </div>
 
         {/* Search */}
-        <Card className="glass border-border/50">
+        <Card className="glass border-border/50 tour-borrowers-search">
           <CardContent className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
@@ -338,7 +382,7 @@ const AdminBorrowers = () => {
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredBorrowers && filteredBorrowers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 tour-borrowers-list">
             {filteredBorrowers.map((borrower) => (
               <Card key={borrower.id} className="glass border-border/50 hover:border-primary/30 transition-colors">
                 <CardContent className="p-6">

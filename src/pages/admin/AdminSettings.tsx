@@ -10,6 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import GuidedTour from "@/components/common/GuidedTour";
+import { Step } from "react-joyride";
+import { HelpCircle } from "lucide-react";
 import {
   CreditCard,
   Eye,
@@ -89,6 +92,26 @@ const AdminSettings = () => {
     is_active: false,
     environment: "sandbox",
   });
+
+  const [runTour, setRunTour] = useState(false);
+
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-settings-header",
+      content: "This is the brain of your LMS. Configure how the system behaves here.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-settings-tabs",
+      content: "Switch between General, Company, Lending rules, and API settings.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-settings-save",
+      content: "Don't forget to save your changes! Updates apply instantly across the platform.",
+      placement: "top",
+    }
+  ];
 
   useEffect(() => {
     fetchAllSettings();
@@ -187,21 +210,39 @@ const AdminSettings = () => {
 
   return (
     <AdminLayout>
+      <GuidedTour
+        steps={tourSteps}
+        tourKey="admin-settings"
+        externalRun={runTour}
+        onFinish={() => setRunTour(false)}
+      />
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 tour-settings-header">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-            <p className="text-muted-foreground mt-1">
-              Configure system-wide parameters, company info, and integrations
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-muted-foreground mt-1">
+                Configure system-wide parameters, company info, and integrations
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-primary h-6 px-2"
+                onClick={() => setRunTour(true)}
+              >
+                <HelpCircle size={14} className="mr-1" />
+                Tour
+              </Button>
+            </div>
           </div>
-          <Button onClick={handleSaveAll} disabled={saving} className="gradient-primary">
+          <Button onClick={handleSaveAll} disabled={saving} className="gradient-primary tour-settings-save">
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save All Changes
           </Button>
         </div>
 
-        <Tabs defaultValue="general" className="space-y-6">
+        <Tabs defaultValue="general" className="space-y-6 tour-settings-tabs">
           <TabsList className="bg-muted/50 p-1">
             <TabsTrigger value="general" className="gap-2">
               <Globe size={16} /> General

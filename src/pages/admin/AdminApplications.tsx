@@ -62,6 +62,9 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp } from "@/utils/generateLoanContract";
 import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
+import GuidedTour from "@/components/common/GuidedTour";
+import { Step } from "react-joyride";
+import { HelpCircle } from "lucide-react";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -84,6 +87,30 @@ const AdminApplications = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-apps-header",
+      content: "Welcome to Applications Management. This is where you process all incoming loan requests.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-apps-filters",
+      content: "Filter applications by status or search for specific borrowers to speed up your workflow.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-apps-list",
+      content: "Review application details, attachments, and perform risk assessments directly from this list.",
+      placement: "top",
+    },
+    {
+      target: ".tour-apps-add",
+      content: "Need to manually add a loan? Use this button to create a new application for an existing borrower.",
+      placement: "left",
+    }
+  ];
 
   // Add loan form state
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string>("");
@@ -472,21 +499,38 @@ const AdminApplications = () => {
 
   return (
     <AdminLayout>
+      <GuidedTour
+        steps={tourSteps}
+        tourKey="admin-applications"
+        externalRun={runTour}
+        onFinish={() => setRunTour(false)}
+      />
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 tour-apps-header">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground">Loan Applications</h1>
-            <p className="text-muted-foreground mt-1">Review, add, and manage loan applications</p>
+            <div className="flex items-center gap-3">
+              <p className="text-muted-foreground mt-1">Review, add, and manage loan applications</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-primary h-6 px-2"
+                onClick={() => setRunTour(true)}
+              >
+                <HelpCircle size={14} className="mr-1" />
+                Tour
+              </Button>
+            </div>
           </div>
-          <Button onClick={() => setIsAddOpen(true)} className="gap-2">
+          <Button onClick={() => setIsAddOpen(true)} className="gap-2 tour-apps-add">
             <Plus size={16} />
             Add Loan
           </Button>
         </div>
 
         {/* Filters */}
-        <Card className="glass border-border/50">
+        <Card className="glass border-border/50 tour-apps-filters">
           <CardContent className="p-4">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
@@ -523,7 +567,7 @@ const AdminApplications = () => {
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredApps && filteredApps.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-4 tour-apps-list">
             {filteredApps.map((app) => {
               const config = statusConfig[app.status as keyof typeof statusConfig];
 
