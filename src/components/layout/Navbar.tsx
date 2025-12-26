@@ -22,7 +22,7 @@ const Navbar = () => {
     { href: "/", label: "Home" },
     { href: "/apply", label: "Apply Now" },
     { href: "/calculator", label: "Calculator" },
-    { href: "/about", label: "About" },
+    { href: "/about-us", label: "About" },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -57,8 +57,8 @@ const Navbar = () => {
                 key={link.href}
                 to={link.href}
                 className={`text-sm font-medium transition-colors duration-200 relative group ${isActive(link.href)
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
                   }`}
               >
                 {link.label}
@@ -127,8 +127,8 @@ const Navbar = () => {
                   key={link.href}
                   to={link.href}
                   className={`text-sm font-medium py-3 px-4 rounded-lg transition-colors ${isActive(link.href)
-                      ? "text-primary bg-primary/10"
-                      : "text-muted-foreground hover:bg-secondary"
+                    ? "text-primary bg-primary/10"
+                    : "text-muted-foreground hover:bg-secondary"
                     }`}
                   onClick={() => setIsOpen(false)}
                 >
