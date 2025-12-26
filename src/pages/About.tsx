@@ -67,19 +67,24 @@ const About = () => {
                 </h2>
                 <div className="space-y-4 text-muted-foreground">
                   <p>
-                    Phindu Credit Solutions is a customer-focused money-lending institution committed to providing
+                    {companyName} is a customer-focused money-lending institution committed to providing
                     accessible, reliable, and responsible financial solutions to individuals and small businesses.
                     We exist to bridge the gap between financial need and opportunity by offering timely credit
                     services that empower our clients to grow, stabilize, and achieve their financial goals.
                   </p>
                   <p>
-                    At Phindu Credit Solutions, we understand that access to credit is essential for economic
+                    At {companyName}, we understand that access to credit is essential for economic
                     participation and personal advancement. Our products are designed to be flexible, transparent,
                     and tailored to meet the diverse needs of our clients, whether for business expansion,
                     emergency needs, or personal development.
                   </p>
                   <p>
-                    Phindu Credit Solutions leverages modern technology and sound risk management practices to
+                    We are guided by the principles of integrity, transparency, financial inclusion, and customer dignity.
+                    Our lending processes are straightforward and fair, ensuring that clients clearly understand their
+                    obligations while benefiting from competitive terms and responsive service.
+                  </p>
+                  <p>
+                    {companyName} leverages modern technology and sound risk management practices to
                     deliver efficient loan processing and effective portfolio management. Our team is dedicated
                     to maintaining high professional and ethical standards while complying with all applicable
                     laws and regulatory requirements.

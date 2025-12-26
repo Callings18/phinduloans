@@ -34,13 +34,18 @@ const Footer = () => {
           <div className="space-y-4">
             <h4 className="text-foreground font-semibold">Quick Links</h4>
             <ul className="space-y-2">
-              {["Home", "Apply Now", "Calculator", "About Us", "FAQs"].map((link) => (
-                <li key={link}>
+              {[
+                { name: "Home", path: "/" },
+                { name: "Apply Now", path: "/apply" },
+                { name: "Calculator", path: "/calculator" },
+                { name: "About Us", path: "/about" },
+              ].map((link) => (
+                <li key={link.name}>
                   <Link
-                    to={link === "Home" ? "/" : `/${link.toLowerCase().replace(" ", "-")}`}
+                    to={link.path}
                     className="text-muted-foreground text-sm hover:text-primary transition-colors"
                   >
-                    {link}
+                    {link.name}
                   </Link>
                 </li>
               ))}
@@ -54,7 +59,7 @@ const Footer = () => {
               {["Privacy Policy", "Terms of Service", "Loan Agreement", "Data Protection"].map((link) => (
                 <li key={link}>
                   <Link
-                    to={`/${link.toLowerCase().replace(" ", "-")}`}
+                    to="#"
                     className="text-muted-foreground text-sm hover:text-primary transition-colors"
                   >
                     {link}
@@ -70,7 +75,7 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
                 <Phone size={16} className="text-primary" />
-                {companyInfo?.support_phone || "+260 XXX XXX XXX"}
+                {companyInfo?.support_phone || "+260 970 000 000"}
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
                 <Mail size={16} className="text-primary" />
@@ -78,7 +83,7 @@ const Footer = () => {
               </li>
               <li className="flex items-start gap-3 text-muted-foreground text-sm">
                 <MapPin size={16} className="text-primary mt-0.5" />
-                {companyInfo?.address || "Lusaka, Zambia"}
+                {companyInfo?.address || "Plot 123, Cairo Road, Lusaka, Zambia"}
               </li>
             </ul>
           </div>
@@ -86,7 +91,7 @@ const Footer = () => {
 
         <div className="border-t border-border mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-muted-foreground text-sm">
-            © {new Date().getFullYear()} Phindu Credit Solutions. All rights reserved.
+            © {new Date().getFullYear()} {companyInfo?.name || "Phindu Credit Solutions"}. All rights reserved.
           </p>
           <p className="text-muted-foreground text-xs">
             Licensed by the Bank of Zambia
