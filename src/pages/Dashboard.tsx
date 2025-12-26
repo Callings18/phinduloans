@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
@@ -6,6 +6,8 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import GuidedTour from "@/components/common/GuidedTour";
+import { Step } from "react-joyride";
 import {
   CreditCard,
   Clock,
@@ -16,13 +18,13 @@ import {
   Plus,
   ArrowRight,
   Wallet,
-  Calendar
+  Calendar,
+  Loader2,
+  Download
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
-import { useState } from "react";
-import { Loader2, Download } from "lucide-react";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
@@ -39,6 +41,29 @@ const Dashboard = () => {
   const { user, isLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
+
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-welcome",
+      content: "Welcome to your Phindu dashboard! Here you can manage your loans and track your financial progress at a glance.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-stats",
+      content: "Quickly view your active loans, total amount borrowed, and see how many applications are currently under review.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-apply",
+      content: "Need quick funds? Use this section to start a new loan application. The process is fast and fully transparent.",
+      placement: "top",
+    },
+    {
+      target: ".tour-applications",
+      content: "Track the real-time status of all your applications here. You can also download account statements for disbursed loans.",
+      placement: "top",
+    },
+  ];
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -119,11 +144,12 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <GuidedTour steps={tourSteps} tourKey="borrower-dashboard" />
 
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-8 tour-welcome">
             <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
               Welcome back, <span className="text-gradient">{profile?.full_name || 'User'}</span>
             </h1>
@@ -131,7 +157,7 @@ const Dashboard = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 tour-stats">
             <Card className="glass border-border/50">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -176,7 +202,7 @@ const Dashboard = () => {
           </div>
 
           {/* Quick Actions */}
-          <div className="mb-8">
+          <div className="mb-8 tour-apply">
             <Card className="glass border-border/50 overflow-hidden">
               <div className="gradient-primary p-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -196,7 +222,7 @@ const Dashboard = () => {
           </div>
 
           {/* Recent Applications */}
-          <div>
+          <div className="tour-applications">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-foreground">Your Loan Applications</h2>
               <Button variant="ghost" className="text-muted-foreground hover:text-foreground">

@@ -2,6 +2,8 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import GuidedTour from "@/components/common/GuidedTour";
+import { Step } from "react-joyride";
 import {
   FileText,
   Users,
@@ -24,6 +26,34 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format } from "date-fns";
 
 const AdminDashboard = () => {
+  const tourSteps: Step[] = [
+    {
+      target: ".tour-admin-header",
+      content: "Welcome to the Admin Command Center! Here you have a bird's-eye view of your entire lending operation.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-admin-stats",
+      content: "Monitor key metrics like total applications, pending reviews, and your active loan portfolio in real-time.",
+      placement: "bottom",
+    },
+    {
+      target: ".tour-admin-charts",
+      content: "Visualize your growth trends with advanced analytics for applications and disbursements.",
+      placement: "top",
+    },
+    {
+      target: ".tour-admin-recent",
+      content: "Review the latest activities. Access application details directly to perform risk assessments or approve disbursements.",
+      placement: "top",
+    },
+    {
+      target: ".tour-admin-nav",
+      content: "Use the sidebar to navigate between borrowers, applications, repayments, and system settings.",
+      placement: "right",
+    },
+  ];
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
@@ -36,7 +66,7 @@ const AdminDashboard = () => {
       const loans = applications.data || [];
       const totalDisbursed = (disbursements.data || []).reduce((sum, d) => sum + Number(d.amount), 0);
       const totalLoanAmount = loans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
-      
+
       return {
         totalApplications: loans.length,
         pendingApplications: loans.filter(l => l.status === 'pending').length,
@@ -85,9 +115,10 @@ const AdminDashboard = () => {
 
   return (
     <AdminLayout>
+      <GuidedTour steps={tourSteps} tourKey="admin-dashboard" />
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 tour-admin-header">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2">
@@ -110,7 +141,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 tour-admin-stats">
           <Card className="relative overflow-hidden border-border/50 bg-gradient-to-br from-primary/10 via-card to-card group hover:border-primary/50 transition-all duration-300">
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2" />
             <CardContent className="p-6 relative">
@@ -195,7 +226,7 @@ const AdminDashboard = () => {
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Chart */}
-          <Card className="border-border/50 bg-card/80 backdrop-blur-sm lg:col-span-2">
+          <Card className="border-border/50 bg-card/80 backdrop-blur-sm lg:col-span-2 tour-admin-charts">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -272,9 +303,9 @@ const AdminDashboard = () => {
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={weeklyData}>
-                    <Bar 
-                      dataKey="count" 
-                      fill="hsl(var(--primary))" 
+                    <Bar
+                      dataKey="count"
+                      fill="hsl(var(--primary))"
                       radius={[6, 6, 0, 0]}
                       opacity={0.9}
                     />
@@ -319,7 +350,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Recent Applications */}
-        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+        <Card className="border-border/50 bg-card/80 backdrop-blur-sm tour-admin-recent">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <div>
