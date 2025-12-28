@@ -60,25 +60,61 @@ const AdminDashboard = () => {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const [applications, profiles, disbursements] = await Promise.all([
+      const [applications, profiles, disbursements, repayments] = await Promise.all([
         supabase.from('loan_applications').select('*').order('created_at', { ascending: false }),
         supabase.from('profiles').select('id'),
         supabase.from('disbursements').select('*').eq('status', 'completed'),
+        supabase.from('loan_repayments').select('*'),
       ]);
 
       const loans = applications.data || [];
-      const totalDisbursed = (disbursements.data || []).reduce((sum, d) => sum + Number(d.amount), 0);
-      const totalLoanAmount = loans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
+      const allRepayments = repayments.data || [];
+      const completedDisbursements = disbursements.data || [];
+      
+      // Financial calculations
+      const totalDisbursed = completedDisbursements.reduce((sum, d) => sum + Number(d.amount), 0);
+      const activeLoans = loans.filter(l => ['active', 'disbursed'].includes(l.status));
+      
+      // Expected returns (total_repayment from all active/disbursed loans)
+      const expectedReturns = activeLoans.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0);
+      
+      // Total principal from active loans
+      const totalPrincipal = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0);
+      
+      // Expected interest (total_repayment - loan_amount)
+      const expectedInterest = activeLoans.reduce((sum, l) => 
+        sum + (Number(l.total_repayment || 0) - Number(l.loan_amount || 0)), 0);
+      
+      // Amount recovered (paid repayments)
+      const paidRepayments = allRepayments.filter(r => r.status === 'paid');
+      const amountRecovered = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+      
+      // Outstanding balance (pending repayments)
+      const pendingRepayments = allRepayments.filter(r => r.status === 'pending');
+      const outstandingBalance = pendingRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+      
+      // Overdue amount
+      const today = new Date();
+      const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
+      const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
       return {
         totalApplications: loans.length,
         pendingApplications: loans.filter(l => l.status === 'pending').length,
         approvedApplications: loans.filter(l => l.status === 'approved').length,
         rejectedApplications: loans.filter(l => l.status === 'rejected').length,
-        activeLoans: loans.filter(l => ['active', 'disbursed'].includes(l.status)).length,
+        activeLoans: activeLoans.length,
+        completedLoans: loans.filter(l => l.status === 'completed').length,
+        defaultedLoans: loans.filter(l => l.status === 'defaulted').length,
         totalBorrowers: profiles.data?.length || 0,
         totalDisbursed,
-        totalLoanAmount,
+        expectedReturns,
+        expectedInterest,
+        totalPrincipal,
+        amountRecovered,
+        outstandingBalance,
+        overdueAmount,
+        overdueCount: overdueRepayments.length,
         recentApplications: loans.slice(0, 6),
       };
     },
@@ -173,8 +209,7 @@ const AdminDashboard = () => {
               </div>
               <div className="flex items-center gap-1 mt-4 text-sm text-success">
                 <TrendingUp size={14} />
-                <span className="font-medium">+12%</span>
-                <span className="text-muted-foreground">vs last month</span>
+                <span className="font-medium">{stats?.pendingApplications || 0} pending</span>
               </div>
             </CardContent>
           </Card>
@@ -184,16 +219,16 @@ const AdminDashboard = () => {
             <CardContent className="p-6 relative">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-muted-foreground text-sm font-medium">Pending Review</p>
-                  <p className="text-4xl font-bold text-foreground">{stats?.pendingApplications || 0}</p>
+                  <p className="text-muted-foreground text-sm font-medium">Active Loans</p>
+                  <p className="text-4xl font-bold text-foreground">{stats?.activeLoans || 0}</p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-warning to-orange-600 flex items-center justify-center shadow-lg">
                   <Clock className="text-white" size={24} />
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-4 text-sm">
-                <span className="px-2 py-1 rounded-full bg-warning/20 text-warning font-medium text-xs">
-                  {stats?.pendingApplications || 0} awaiting
+                <span className="px-2 py-1 rounded-full bg-success/20 text-success font-medium text-xs">
+                  {stats?.completedLoans || 0} completed
                 </span>
               </div>
             </CardContent>
@@ -213,8 +248,7 @@ const AdminDashboard = () => {
               </div>
               <div className="flex items-center gap-1 mt-4 text-sm text-success">
                 <TrendingUp size={14} />
-                <span className="font-medium">+8%</span>
-                <span className="text-muted-foreground">new users</span>
+                <span className="font-medium">Active portfolio</span>
               </div>
             </CardContent>
           </Card>
@@ -225,17 +259,55 @@ const AdminDashboard = () => {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-muted-foreground text-sm font-medium">Total Disbursed</p>
-                  <p className="text-4xl font-bold text-foreground">K{(stats?.totalDisbursed || 0).toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-foreground">K{(stats?.totalDisbursed || 0).toLocaleString()}</p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
                   <Wallet className="text-white" size={24} />
                 </div>
               </div>
-              <div className="flex items-center gap-1 mt-4 text-sm text-success">
+              <div className="flex items-center gap-1 mt-4 text-sm text-muted-foreground">
                 <Banknote size={14} />
-                <span className="font-medium">+15%</span>
-                <span className="text-muted-foreground">this quarter</span>
+                <span className="font-medium">Principal released</span>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Portfolio Summary */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4">
+              <p className="text-muted-foreground text-xs font-medium mb-1">Expected Returns</p>
+              <p className="text-2xl font-bold text-foreground">K{(stats?.expectedReturns || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Principal + Interest</p>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4">
+              <p className="text-muted-foreground text-xs font-medium mb-1">Amount Recovered</p>
+              <p className="text-2xl font-bold text-success">K{(stats?.amountRecovered || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Payments received</p>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4">
+              <p className="text-muted-foreground text-xs font-medium mb-1">Outstanding Balance</p>
+              <p className="text-2xl font-bold text-warning">K{(stats?.outstandingBalance || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Pending payments</p>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4">
+              <p className="text-muted-foreground text-xs font-medium mb-1">Expected Interest</p>
+              <p className="text-2xl font-bold text-primary">K{(stats?.expectedInterest || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Revenue from interest</p>
+            </CardContent>
+          </Card>
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="p-4">
+              <p className="text-destructive text-xs font-medium mb-1">Overdue Amount</p>
+              <p className="text-2xl font-bold text-destructive">K{(stats?.overdueAmount || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">{stats?.overdueCount || 0} overdue payments</p>
             </CardContent>
           </Card>
         </div>

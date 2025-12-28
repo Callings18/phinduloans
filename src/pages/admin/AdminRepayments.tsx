@@ -41,6 +41,8 @@ import {
   Phone,
   Building,
   Banknote,
+  Download,
+  FileText,
 } from "lucide-react";
 import {
   Table,
@@ -50,6 +52,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 
 interface Repayment {
   id: string;
@@ -71,6 +75,7 @@ interface Repayment {
 }
 
 const AdminRepayments = () => {
+  const { data: settings } = useSystemSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
@@ -134,6 +139,51 @@ const AdminRepayments = () => {
   const handleRecordPayment = (repayment: Repayment) => {
     setSelectedRepayment(repayment);
     setIsRecordPaymentOpen(true);
+  };
+
+  const handleDownloadReceipt = async (repayment: Repayment) => {
+    try {
+      // Get loan details and calculate totals
+      const { data: allRepayments } = await supabase
+        .from('loan_repayments')
+        .select('amount, status')
+        .eq('loan_id', repayment.loan_id);
+
+      const { data: loan } = await supabase
+        .from('loan_applications')
+        .select('loan_amount, total_repayment, loan_term_months')
+        .eq('id', repayment.loan_id)
+        .single();
+
+      const totalPaid = allRepayments
+        ?.filter(r => r.status === 'paid')
+        .reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+
+      const outstandingBalance = (loan?.total_repayment || 0) - totalPaid;
+
+      downloadRepaymentReceipt({
+        borrowerName: repayment.loan_applications?.full_name || 'Unknown',
+        borrowerPhone: repayment.loan_applications?.phone || '',
+        borrowerEmail: repayment.loan_applications?.email || '',
+        loanReference: `LOAN-${repayment.loan_id.substring(0, 8).toUpperCase()}`,
+        loanAmount: loan?.loan_amount || 0,
+        repaymentAmount: Number(repayment.amount),
+        paymentDate: repayment.paid_date || new Date().toISOString(),
+        paymentMethod: repayment.payment_method || 'cash',
+        transactionReference: repayment.transaction_reference || `TXN-${Date.now()}`,
+        installmentNumber: repayment.installment_number || 1,
+        totalInstallments: loan?.loan_term_months || 1,
+        totalPaid,
+        outstandingBalance,
+        companyName: settings?.companyInfo?.name || 'PHINDU Finance',
+        companyAddress: settings?.companyInfo?.address || 'Lusaka, Zambia',
+        companyPhone: settings?.companyInfo?.support_phone || '+260 97 1234567',
+      });
+
+      toast.success('Receipt downloaded successfully');
+    } catch (error: any) {
+      toast.error('Failed to generate receipt');
+    }
   };
 
   const submitPayment = (e: React.FormEvent) => {
@@ -395,21 +445,33 @@ const AdminRepayments = () => {
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          {rep.status === "pending" && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleRecordPayment(rep)}
-                              className="gradient-primary"
-                            >
-                              <Plus size={14} className="mr-1" />
-                              Record Payment
-                            </Button>
-                          )}
-                          {rep.status === "paid" && (
-                            <span className="text-sm text-muted-foreground">
-                              Paid on {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd") : "-"}
-                            </span>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {rep.status === "pending" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleRecordPayment(rep)}
+                                className="gradient-primary"
+                              >
+                                <Plus size={14} className="mr-1" />
+                                Record Payment
+                              </Button>
+                            )}
+                            {rep.status === "paid" && (
+                              <>
+                                <span className="text-sm text-muted-foreground">
+                                  {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd") : "-"}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDownloadReceipt(rep)}
+                                  title="Download Receipt"
+                                >
+                                  <Download size={14} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
