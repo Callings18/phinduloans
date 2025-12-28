@@ -74,11 +74,20 @@ import {
   Shield,
   FolderCheck,
   XCircle as XCircleIcon,
+  Download,
+  Share2,
+  Send,
+  FileDown,
+  Edit,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
 import GuarantorTab from "./GuarantorTab";
 import WriteOffTab from "./WriteOffTab";
+import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
+import { downloadLoanContract, shareContractViaWhatsApp, emailContract } from "@/utils/generateLoanContract";
+import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 
 interface Loan {
   id: string;
@@ -164,8 +173,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isEarlySettlementOpen, setIsEarlySettlementOpen] = useState(false);
   const [earlySettlement, setEarlySettlement] = useState<EarlySettlement | null>(null);
   const [isApplyPenaltiesOpen, setIsApplyPenaltiesOpen] = useState(false);
+  const [isContractEditOpen, setIsContractEditOpen] = useState(false);
+  const [contractNotes, setContractNotes] = useState("");
 
   const queryClient = useQueryClient();
+  const { data: settings } = useSystemSettings();
 
   // Fetch repayments with new columns
   const { data: repayments, isLoading: repaymentsLoading } = useQuery({
@@ -700,6 +712,92 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const progressPercentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
   const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
+
+  // Helper functions for schedule and contract
+  const handleDownloadSchedule = () => {
+    const scheduleData = {
+      borrowerName: loan.full_name,
+      borrowerPhone: loan.phone,
+      borrowerEmail: loan.email,
+      loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+      loanAmount: loan.loan_amount,
+      interestRate: loan.interest_rate,
+      interestPeriod: 'monthly',
+      termMonths: loan.loan_term_months,
+      monthlyPayment: loan.monthly_payment || (loan.total_repayment / loan.loan_term_months),
+      totalRepayment: loan.total_repayment,
+      disbursementDate: disbursement?.disbursed_at || new Date().toISOString(),
+      firstRepaymentDate: repayments?.[0]?.due_date || format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
+      repayments: (repayments || []).map(r => ({
+        installmentNumber: r.installment_number || 0,
+        dueDate: r.due_date,
+        amount: r.amount,
+        status: r.status,
+        paidDate: r.paid_date || undefined,
+      })),
+      companyName: settings?.companyInfo?.name || 'PHINDU Finance',
+      companyAddress: settings?.companyInfo?.address || 'Lusaka, Zambia',
+      companyPhone: settings?.companyInfo?.support_phone || '+260 97 1234567',
+    };
+    downloadLoanSchedule(scheduleData);
+    toast.success('Loan schedule downloaded');
+  };
+
+  const handleShareScheduleWhatsApp = () => {
+    // First download the schedule
+    handleDownloadSchedule();
+    
+    // Then open WhatsApp with message
+    const message = encodeURIComponent(
+      `Hello ${loan.full_name},\n\n` +
+      `Please find your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
+      `Loan Details:\n` +
+      `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
+      `- Amount: K${loan.loan_amount.toLocaleString()}\n` +
+      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- Term: ${loan.loan_term_months} months\n\n` +
+      `Please contact us if you have any questions.\n\n` +
+      `${settings?.companyInfo?.name || 'PHINDU Finance'}`
+    );
+    
+    const phone = loan.phone.replace(/\s+/g, '').replace(/^0/, '260');
+    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+  };
+
+  const handleEmailSchedule = () => {
+    handleDownloadSchedule();
+    
+    const subject = encodeURIComponent(`Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`);
+    const body = encodeURIComponent(
+      `Dear ${loan.full_name},\n\n` +
+      `Please find attached your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
+      `Loan Details:\n` +
+      `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
+      `- Principal: K${loan.loan_amount.toLocaleString()}\n` +
+      `- Interest Rate: ${loan.interest_rate}%\n` +
+      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- Term: ${loan.loan_term_months} months\n` +
+      `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
+      `Please contact us if you have any questions.\n\n` +
+      `Best regards,\n` +
+      `${settings?.companyInfo?.name || 'PHINDU Finance'}`
+    );
+    
+    window.location.href = `mailto:${loan.email}?subject=${subject}&body=${body}`;
+  };
+
+  const handleDownloadContract = () => {
+    downloadLoanContract(loan as any);
+    toast.success('Contract downloaded');
+  };
+
+  const handleContractWhatsApp = () => {
+    shareContractViaWhatsApp(loan as any);
+  };
+
+  const handleContractEmail = () => {
+    emailContract(loan as any);
+  };
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { color: string; icon: any }> = {
@@ -1241,6 +1339,58 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </CardContent>
                   </Card>
 
+                  {/* Contract Management */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <FileText size={16} /> Contract Management
+                      </CardTitle>
+                      <CardDescription>Download, share or update loan contract</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={handleDownloadContract}>
+                          <Download size={14} className="mr-1" /> Download Contract
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleContractWhatsApp}>
+                          <Share2 size={14} className="mr-1" /> WhatsApp
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleContractEmail}>
+                          <Send size={14} className="mr-1" /> Email
+                        </Button>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-xs"
+                        onClick={() => setIsContractEditOpen(true)}
+                      >
+                        <Edit size={12} className="mr-1" /> Add Contract Notes
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Loan Schedule */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Calendar size={16} /> Loan Schedule
+                      </CardTitle>
+                      <CardDescription>Download or share repayment schedule</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={handleDownloadSchedule} disabled={!repayments?.length}>
+                        <FileDown size={14} className="mr-1" /> Download PDF
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleShareScheduleWhatsApp} disabled={!repayments?.length}>
+                        <Share2 size={14} className="mr-1" /> WhatsApp
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleEmailSchedule} disabled={!repayments?.length}>
+                        <Send size={14} className="mr-1" /> Email
+                      </Button>
+                    </CardContent>
+                  </Card>
+
                   {/* Payment Reversals Info */}
                   {reversedRepayments.length > 0 && (
                     <Card>
@@ -1728,6 +1878,67 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Contract Notes Dialog */}
+      <Dialog open={isContractEditOpen} onOpenChange={setIsContractEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit size={20} /> Contract Notes
+            </DialogTitle>
+            <DialogDescription>
+              Add amendments or notes to the loan contract
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-muted/50 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Contract No</span>
+                <span className="font-medium">PCS-{loan.id.slice(0, 8).toUpperCase()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Borrower</span>
+                <span className="font-medium">{loan.full_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Loan Amount</span>
+                <span className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Contract Amendment/Notes</Label>
+              <Textarea
+                value={contractNotes}
+                onChange={(e) => setContractNotes(e.target.value)}
+                placeholder="Enter any contract amendments, modifications or notes here. These will be saved to the admin notes..."
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">
+                These notes will be appended to the admin notes and can be referenced when generating new contracts.
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsContractEditOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={() => {
+                  const newNote = `[CONTRACT NOTE ${format(new Date(), "yyyy-MM-dd")}]: ${contractNotes}`;
+                  setAdminNotes((prev) => `${prev}\n\n${newNote}`);
+                  saveNotesMutation.mutate();
+                  setIsContractEditOpen(false);
+                  setContractNotes("");
+                  toast.success("Contract notes saved");
+                }}
+                disabled={!contractNotes.trim() || saveNotesMutation.isPending}
+              >
+                {saveNotesMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
+                Save Notes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

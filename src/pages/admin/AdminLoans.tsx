@@ -57,6 +57,10 @@ import {
   DollarSign,
   FileText,
   UserCheck,
+  Receipt,
+  Phone,
+  Building,
+  Banknote,
 } from "lucide-react";
 import {
   Table,
@@ -177,6 +181,16 @@ const AdminLoans = () => {
     mobile_money_number: "",
     transaction_reference: "",
   });
+
+  // Quick Payment State
+  const [isQuickPaymentOpen, setIsQuickPaymentOpen] = useState(false);
+  const [quickPaymentLoan, setQuickPaymentLoan] = useState<Loan | null>(null);
+  const [quickPaymentData, setQuickPaymentData] = useState({
+    payment_method: "mobile_money",
+    transaction_reference: "",
+    amount: "",
+  });
+  const [nextRepayment, setNextRepayment] = useState<any>(null);
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -618,6 +632,75 @@ const AdminLoans = () => {
     disburseMutation.mutate(disbursement);
   };
 
+  // Open quick payment dialog
+  const openQuickPayment = async (loan: Loan) => {
+    setQuickPaymentLoan(loan);
+    setQuickPaymentData({
+      payment_method: "mobile_money",
+      transaction_reference: "",
+      amount: "",
+    });
+    
+    // Fetch next pending repayment for this loan
+    const { data: repayment } = await supabase
+      .from("loan_repayments")
+      .select("*")
+      .eq("loan_id", loan.id)
+      .eq("status", "pending")
+      .order("due_date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    
+    setNextRepayment(repayment);
+    if (repayment) {
+      setQuickPaymentData(prev => ({ ...prev, amount: repayment.amount.toString() }));
+    }
+    setIsQuickPaymentOpen(true);
+  };
+
+  // Quick payment mutation
+  const quickPaymentMutation = useMutation({
+    mutationFn: async () => {
+      if (!quickPaymentLoan || !nextRepayment) throw new Error("No repayment selected");
+      
+      const { error } = await supabase
+        .from("loan_repayments")
+        .update({
+          status: "paid",
+          paid_date: new Date().toISOString().split("T")[0],
+          payment_method: quickPaymentData.payment_method,
+          transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
+        })
+        .eq("id", nextRepayment.id);
+
+      if (error) throw error;
+
+      // Check if all repayments are paid
+      const { data: remainingPending } = await supabase
+        .from("loan_repayments")
+        .select("id")
+        .eq("loan_id", quickPaymentLoan.id)
+        .eq("status", "pending");
+
+      if (remainingPending && remainingPending.length === 0) {
+        await supabase
+          .from("loan_applications")
+          .update({ status: "completed" })
+          .eq("id", quickPaymentLoan.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      toast.success("Payment recorded successfully");
+      setIsQuickPaymentOpen(false);
+      setQuickPaymentLoan(null);
+      setNextRepayment(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to record payment");
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     const config = statusConfig[status] || statusConfig.pending;
     const Icon = config.icon;
@@ -864,6 +947,16 @@ const AdminLoans = () => {
                             {["pending", "approved"].includes(loan.status) && (
                               <Button variant="ghost" size="icon" onClick={() => openEditDialog(loan)}>
                                 <Edit size={16} />
+                              </Button>
+                            )}
+                            {["active", "disbursed"].includes(loan.status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openQuickPayment(loan)}
+                              >
+                                <Receipt size={14} className="mr-1" />
+                                Pay
                               </Button>
                             )}
                             <Button
@@ -1292,6 +1385,117 @@ const AdminLoans = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Quick Payment Dialog */}
+      <Dialog open={isQuickPaymentOpen} onOpenChange={setIsQuickPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt size={20} className="text-primary" />
+              Record Payment
+            </DialogTitle>
+            <DialogDescription>
+              Quick payment for {quickPaymentLoan?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {nextRepayment ? (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Installment</span>
+                  <span className="font-medium">#{nextRepayment.installment_number}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Due Date</span>
+                  <span className="font-medium">{format(new Date(nextRepayment.due_date), "MMM dd, yyyy")}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2 mt-2">
+                  <span className="font-semibold">Amount Due</span>
+                  <span className="text-xl font-bold text-primary">K{Number(nextRepayment.amount).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select
+                    value={quickPaymentData.payment_method}
+                    onValueChange={(v) => setQuickPaymentData({ ...quickPaymentData, payment_method: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mobile_money">
+                        <div className="flex items-center gap-2">
+                          <Phone size={14} />
+                          Mobile Money
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="bank_transfer">
+                        <div className="flex items-center gap-2">
+                          <Building size={14} />
+                          Bank Transfer
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="cash">
+                        <div className="flex items-center gap-2">
+                          <Banknote size={14} />
+                          Cash
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Transaction Reference (Optional)</Label>
+                  <Input
+                    value={quickPaymentData.transaction_reference}
+                    onChange={(e) => setQuickPaymentData({ ...quickPaymentData, transaction_reference: e.target.value })}
+                    placeholder="Enter reference number"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 mt-4">
+                <Button variant="outline" onClick={() => setIsQuickPaymentOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => quickPaymentMutation.mutate()}
+                  disabled={quickPaymentMutation.isPending}
+                  className="gradient-primary"
+                >
+                  {quickPaymentMutation.isPending ? (
+                    <Loader2 className="animate-spin mr-2" size={16} />
+                  ) : (
+                    <CheckCircle size={16} className="mr-2" />
+                  )}
+                  Confirm Payment
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No pending repayments found for this loan</p>
+              <Button 
+                variant="outline" 
+                className="mt-4" 
+                onClick={() => {
+                  setIsQuickPaymentOpen(false);
+                  setSelectedLoan(quickPaymentLoan);
+                  setIsDetailsOpen(true);
+                }}
+              >
+                View Loan Details
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 };
