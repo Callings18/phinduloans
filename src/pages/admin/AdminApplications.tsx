@@ -285,22 +285,21 @@ const AdminApplications = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
 
-      // Trigger notification
+      // Trigger SMS notification
       if (variables.status === 'approved' && selectedApp) {
         notificationService.sendLoanApproval(
           selectedApp.user_id,
           selectedApp.full_name,
           selectedApp.loan_amount,
-          selectedApp.email
+          selectedApp.phone
         );
       } else if (variables.status === 'rejected' && selectedApp) {
-        notificationService.send({
-          userId: selectedApp.user_id,
-          type: 'email',
-          recipient: selectedApp.email,
-          title: 'Loan Application Update',
-          message: `Hello ${selectedApp.full_name}, unfortunately your loan application has been rejected. Reason: ${variables.reason || 'Not disclosed'}.`
-        });
+        notificationService.sendLoanRejection(
+          selectedApp.user_id,
+          selectedApp.full_name,
+          selectedApp.phone,
+          variables.reason
+        );
       }
 
       toast({ title: "Application updated successfully" });
@@ -345,15 +344,15 @@ const AdminApplications = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       queryClient.invalidateQueries({ queryKey: ['disbursements'] });
 
-      // Trigger Disbursement notification
+      // Trigger Disbursement SMS notification
       if (selectedApp) {
-        notificationService.send({
-          userId: selectedApp.user_id,
-          type: 'sms',
-          recipient: selectedApp.phone,
-          title: 'Loan Disbursed',
-          message: `Hello ${selectedApp.full_name}, your loan of K${Number(selectedApp.loan_amount).toLocaleString()} has been disbursed. Please check your account.`
-        });
+        notificationService.sendDisbursementConfirmation(
+          selectedApp.user_id,
+          selectedApp.full_name,
+          selectedApp.loan_amount,
+          disbursement.transaction_reference || `TXN-${Date.now()}`,
+          selectedApp.phone
+        );
       }
 
       toast({ title: "Loan disbursed successfully" });
