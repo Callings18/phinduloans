@@ -27,6 +27,7 @@ import {
   Download,
   Eye,
   Users,
+  Bot,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +59,7 @@ import {
 } from "@/components/ui/table";
 import { format, differenceInDays, isToday, isTomorrow, isPast, addDays } from "date-fns";
 import { downloadDemandLetter } from "@/utils/generateDemandLetter";
+import CollectionsAutomation from "@/components/admin/CollectionsAutomation";
 
 interface OverdueItem {
   id: string;
@@ -524,6 +526,12 @@ const AdminCollections = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Automation Panel */}
+        <CollectionsAutomation 
+          overdueRepayments={overdueRepayments || []} 
+          ptpItems={ptpItems || []} 
+        />
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
