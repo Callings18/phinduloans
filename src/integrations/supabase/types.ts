@@ -456,6 +456,7 @@ export type Database = {
           selfie_url: string | null
           settlement_date: string | null
           settlement_type: string | null
+          source: string | null
           status: Database["public"]["Enums"]["loan_status"]
           total_penalties: number | null
           total_repayment: number | null
@@ -500,6 +501,7 @@ export type Database = {
           selfie_url?: string | null
           settlement_date?: string | null
           settlement_type?: string | null
+          source?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
           total_penalties?: number | null
           total_repayment?: number | null
@@ -544,6 +546,7 @@ export type Database = {
           selfie_url?: string | null
           settlement_date?: string | null
           settlement_type?: string | null
+          source?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
           total_penalties?: number | null
           total_repayment?: number | null
@@ -665,10 +668,12 @@ export type Database = {
           early_repayment_allowed: boolean | null
           early_repayment_fee_percent: number | null
           employment_types: string[] | null
+          enforcement_fee_percent: number | null
           grace_period_days: number | null
           id: string
           insurance_percent: number | null
           insurance_required: boolean | null
+          interest_period: string | null
           interest_rate: number
           interest_type: string | null
           is_active: boolean | null
@@ -680,6 +685,7 @@ export type Database = {
           min_credit_score: number | null
           min_term_months: number
           name: string
+          penalty_frequency: string | null
           processing_fee_percent: number | null
           requirements: string[] | null
           updated_at: string
@@ -691,10 +697,12 @@ export type Database = {
           early_repayment_allowed?: boolean | null
           early_repayment_fee_percent?: number | null
           employment_types?: string[] | null
+          enforcement_fee_percent?: number | null
           grace_period_days?: number | null
           id?: string
           insurance_percent?: number | null
           insurance_required?: boolean | null
+          interest_period?: string | null
           interest_rate?: number
           interest_type?: string | null
           is_active?: boolean | null
@@ -706,6 +714,7 @@ export type Database = {
           min_credit_score?: number | null
           min_term_months?: number
           name: string
+          penalty_frequency?: string | null
           processing_fee_percent?: number | null
           requirements?: string[] | null
           updated_at?: string
@@ -717,10 +726,12 @@ export type Database = {
           early_repayment_allowed?: boolean | null
           early_repayment_fee_percent?: number | null
           employment_types?: string[] | null
+          enforcement_fee_percent?: number | null
           grace_period_days?: number | null
           id?: string
           insurance_percent?: number | null
           insurance_required?: boolean | null
+          interest_period?: string | null
           interest_rate?: number
           interest_type?: string | null
           is_active?: boolean | null
@@ -732,6 +743,7 @@ export type Database = {
           min_credit_score?: number | null
           min_term_months?: number
           name?: string
+          penalty_frequency?: string | null
           processing_fee_percent?: number | null
           requirements?: string[] | null
           updated_at?: string
@@ -961,11 +973,15 @@ export type Database = {
         Row: {
           address: string | null
           avatar_url: string | null
+          blacklist_reason: string | null
+          blacklisted_at: string | null
+          blacklisted_by: string | null
           city: string | null
           created_at: string
           email: string
           full_name: string | null
           id: string
+          is_blacklisted: boolean | null
           nrc_number: string | null
           phone: string | null
           updated_at: string
@@ -973,11 +989,15 @@ export type Database = {
         Insert: {
           address?: string | null
           avatar_url?: string | null
+          blacklist_reason?: string | null
+          blacklisted_at?: string | null
+          blacklisted_by?: string | null
           city?: string | null
           created_at?: string
           email: string
           full_name?: string | null
           id: string
+          is_blacklisted?: boolean | null
           nrc_number?: string | null
           phone?: string | null
           updated_at?: string
@@ -985,11 +1005,15 @@ export type Database = {
         Update: {
           address?: string | null
           avatar_url?: string | null
+          blacklist_reason?: string | null
+          blacklisted_at?: string | null
+          blacklisted_by?: string | null
           city?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
+          is_blacklisted?: boolean | null
           nrc_number?: string | null
           phone?: string | null
           updated_at?: string

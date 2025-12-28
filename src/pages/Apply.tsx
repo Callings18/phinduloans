@@ -252,8 +252,11 @@ const Apply = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
+  // Calculate interest based on interest period (default to monthly if not specified)
+  // Interest rate from product is per month by default
   const interestRate = selectedProduct ? selectedProduct.interest_rate / 100 : 0.15;
-  const totalInterest = formData.loanAmount * interestRate * (formData.loanTerm / 12);
+  // For monthly rate: total interest = principal × rate × term
+  const totalInterest = formData.loanAmount * interestRate * formData.loanTerm;
   const totalRepayment = formData.loanAmount + totalInterest;
   const monthlyPayment = totalRepayment / formData.loanTerm;
 
@@ -312,7 +315,7 @@ const Apply = () => {
         "self-employed": "self_employed",
       };
 
-      // 3. Insert Application
+      // 3. Insert Application with source tag
       const { error } = await supabase.from('loan_applications').insert({
         user_id: user.id,
         full_name: `${formData.firstName} ${formData.lastName}`,
@@ -339,6 +342,7 @@ const Apply = () => {
         payslip_url: payslipUrl,
         selfie_url: selfieUrl,
         status: 'pending',
+        source: 'website',
       });
 
       if (error) throw error;

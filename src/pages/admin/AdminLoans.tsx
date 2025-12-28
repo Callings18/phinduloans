@@ -274,15 +274,16 @@ const AdminLoans = () => {
   const selectedBorrower = borrowers?.find(b => b.id === selectedBorrowerId);
   const selectedProduct = loanProducts?.find(p => p.id === selectedProductId);
 
-  // Calculate loan details
+  // Calculate loan details - Fixed calculation
   const calculateLoanDetails = () => {
     if (!selectedProduct || !loanAmount || !loanTermMonths) return null;
 
     const principal = Number(loanAmount);
-    const rate = selectedProduct.interest_rate;
+    const rate = selectedProduct.interest_rate; // Already monthly rate
     const months = Number(loanTermMonths);
     const processingFee = selectedProduct.processing_fee_percent ? principal * (selectedProduct.processing_fee_percent / 100) : 0;
 
+    // Interest = principal × (rate/100) × months (for monthly rate)
     const interest = principal * (rate / 100) * months;
     const totalRepayment = principal + interest + processingFee;
     const monthlyPayment = totalRepayment / months;
@@ -324,6 +325,7 @@ const AdminLoans = () => {
           collateral_value: collateralValue ? parseFloat(collateralValue) : null,
           admin_notes: adminNotes || null,
           status: createWithDisbursement ? "active" : "pending",
+          source: "internal",
         })
         .select()
         .single();
