@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { notificationService } from "@/utils/notifications";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,6 +113,9 @@ const AdminRepayments = () => {
   // Record payment mutation
   const recordPaymentMutation = useMutation({
     mutationFn: async ({ repaymentId, paymentMethod, transactionRef }: { repaymentId: string; paymentMethod: string; transactionRef: string }) => {
+      // Get the repayment to find loan details
+      const repayment = repayments?.find(r => r.id === repaymentId);
+      
       const { error } = await supabase
         .from("loan_repayments")
         .update({
@@ -123,10 +127,41 @@ const AdminRepayments = () => {
         .eq("id", repaymentId);
 
       if (error) throw error;
+      
+      return repayment;
     },
-    onSuccess: () => {
+    onSuccess: async (repayment) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
       toast.success("Payment recorded successfully");
+      
+      // Send SMS confirmation
+      if (repayment?.loan_applications) {
+        // Calculate remaining balance
+        const loanRepayments = repayments?.filter(r => r.loan_id === repayment.loan_id) || [];
+        const totalPaid = loanRepayments
+          .filter(r => r.status === 'paid' || r.id === repayment.id)
+          .reduce((sum, r) => sum + Number(r.amount), 0);
+        const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+        const remainingBalance = totalDue - totalPaid;
+        
+        await notificationService.sendPaymentConfirmation(
+          repayment.user_id,
+          repayment.loan_applications.full_name,
+          Number(repayment.amount),
+          remainingBalance,
+          repayment.loan_applications.phone
+        );
+        
+        // Check if loan is fully paid
+        if (remainingBalance <= 0) {
+          await notificationService.sendLoanCompletion(
+            repayment.user_id,
+            repayment.loan_applications.full_name,
+            repayment.loan_applications.phone
+          );
+        }
+      }
+      
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
       setPaymentData({ payment_method: "mobile_money", transaction_reference: "" });

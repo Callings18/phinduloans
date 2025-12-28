@@ -1,1 +1,7 @@
 project_id = "yqrfheavftgybhcafzpt"
+
+[functions.send-sms]
+verify_jwt = false
+
+[functions.create-borrower]
+verify_jwt = false
