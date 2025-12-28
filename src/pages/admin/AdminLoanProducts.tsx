@@ -71,7 +71,10 @@ interface LoanProduct {
   max_term_months: number;
   interest_rate: number;
   interest_type: string;
+  interest_period: string;
   processing_fee_percent: number | null;
+  enforcement_fee_percent: number;
+  penalty_frequency: string;
   is_active: boolean;
   employment_types: string[] | null;
   requirements: string[] | null;
@@ -100,12 +103,15 @@ const AdminLoanProducts = () => {
     max_term_months: 24,
     interest_rate: 15,
     interest_type: "flat",
+    interest_period: "monthly",
     processing_fee_percent: 2,
+    enforcement_fee_percent: 10,
+    penalty_frequency: "monthly",
     is_active: true,
     requirements: "",
     employment_types: ["employed", "self_employed", "contract"],
     grace_period_days: 0,
-    late_payment_penalty_percent: 0,
+    late_payment_penalty_percent: 5,
     early_repayment_allowed: true,
     early_repayment_fee_percent: 0,
     insurance_required: false,
@@ -187,12 +193,15 @@ const AdminLoanProducts = () => {
       max_term_months: 24,
       interest_rate: 15,
       interest_type: "flat",
+      interest_period: "monthly",
       processing_fee_percent: 2,
+      enforcement_fee_percent: 10,
+      penalty_frequency: "monthly",
       is_active: true,
       requirements: "",
       employment_types: ["employed", "self_employed", "contract"],
       grace_period_days: 0,
-      late_payment_penalty_percent: 0,
+      late_payment_penalty_percent: 5,
       early_repayment_allowed: true,
       early_repayment_fee_percent: 0,
       insurance_required: false,
@@ -214,12 +223,15 @@ const AdminLoanProducts = () => {
       max_term_months: product.max_term_months,
       interest_rate: product.interest_rate,
       interest_type: product.interest_type || "flat",
+      interest_period: product.interest_period || "monthly",
       processing_fee_percent: product.processing_fee_percent || 2,
+      enforcement_fee_percent: product.enforcement_fee_percent || 0,
+      penalty_frequency: product.penalty_frequency || "monthly",
       is_active: product.is_active,
       requirements: product.requirements?.join("\n") || "",
       employment_types: product.employment_types || ["employed", "self_employed", "contract"],
       grace_period_days: product.grace_period_days || 0,
-      late_payment_penalty_percent: product.late_payment_penalty_percent || 0,
+      late_payment_penalty_percent: product.late_payment_penalty_percent || 5,
       early_repayment_allowed: product.early_repayment_allowed ?? true,
       early_repayment_fee_percent: product.early_repayment_fee_percent || 0,
       insurance_required: product.insurance_required || false,
@@ -241,7 +253,10 @@ const AdminLoanProducts = () => {
       max_term_months: formData.max_term_months,
       interest_rate: formData.interest_rate,
       interest_type: formData.interest_type,
+      interest_period: formData.interest_period,
       processing_fee_percent: formData.processing_fee_percent,
+      enforcement_fee_percent: formData.enforcement_fee_percent,
+      penalty_frequency: formData.penalty_frequency,
       is_active: formData.is_active,
       requirements: formData.requirements.split("\n").filter(r => r.trim()),
       employment_types: formData.employment_types,
@@ -422,13 +437,32 @@ const AdminLoanProducts = () => {
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label>Interest Rate (% per month)</Label>
+                      <Label>Interest Period</Label>
+                      <Select
+                        value={formData.interest_period}
+                        onValueChange={(v) => setFormData({ ...formData, interest_period: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Per Day</SelectItem>
+                          <SelectItem value="weekly">Per Week</SelectItem>
+                          <SelectItem value="monthly">Per Month</SelectItem>
+                          <SelectItem value="yearly">Per Year</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Time period the interest rate applies to</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Interest Rate (%)</Label>
                       <Input
                         type="number"
                         step="0.1"
                         value={formData.interest_rate}
                         onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
                       />
+                      <p className="text-xs text-muted-foreground">Rate per {formData.interest_period}</p>
                     </div>
                     <div className="space-y-2">
                       <Label>Processing Fee (%)</Label>
@@ -438,6 +472,21 @@ const AdminLoanProducts = () => {
                         value={formData.processing_fee_percent}
                         onChange={(e) => setFormData({ ...formData, processing_fee_percent: Number(e.target.value) })}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        Enforcement/Legal Fee (%)
+                        <Badge variant="outline" className="text-xs">Deducted before disbursement</Badge>
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.enforcement_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, enforcement_fee_percent: Number(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        E.g., K10,000 loan with 10% fee = K9,000 disbursed, K10,000 repayable
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label>Grace Period (days)</Label>
@@ -456,6 +505,23 @@ const AdminLoanProducts = () => {
                         value={formData.late_payment_penalty_percent}
                         onChange={(e) => setFormData({ ...formData, late_payment_penalty_percent: Number(e.target.value) })}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Penalty Frequency</Label>
+                      <Select
+                        value={formData.penalty_frequency}
+                        onValueChange={(v) => setFormData({ ...formData, penalty_frequency: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">How often penalty is applied on overdue</p>
                     </div>
                     <div className="space-y-2">
                       <Label>Early Repayment Fee (%)</Label>
