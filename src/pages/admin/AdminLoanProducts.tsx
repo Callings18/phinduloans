@@ -171,12 +171,39 @@ const AdminLoanProducts = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("loan_products").delete().eq("id", id);
-      if (error) throw error;
+      // First check if there are any loan applications using this product
+      const { count, error: countError } = await supabase
+        .from("loan_applications")
+        .select("*", { count: "exact", head: true })
+        .eq("loan_product_id", id);
+      
+      if (countError) throw countError;
+      
+      if (count && count > 0) {
+        // Has linked applications - deactivate instead of delete
+        const { error } = await supabase
+          .from("loan_products")
+          .update({ is_active: false })
+          .eq("id", id);
+        if (error) throw error;
+        return { deactivated: true, count };
+      } else {
+        // No linked applications - safe to delete
+        const { error } = await supabase.from("loan_products").delete().eq("id", id);
+        if (error) throw error;
+        return { deactivated: false };
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-products"] });
-      toast({ title: "Loan product deleted successfully" });
+      if (result?.deactivated) {
+        toast({ 
+          title: "Product deactivated", 
+          description: `This product has ${result.count} linked loan(s) and was deactivated instead of deleted. It will no longer appear on the website calculator.`
+        });
+      } else {
+        toast({ title: "Loan product deleted successfully" });
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
