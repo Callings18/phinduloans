@@ -6,6 +6,8 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import GuidedTour from "@/components/common/GuidedTour";
 import { Step } from "react-joyride";
 import {
@@ -21,11 +23,23 @@ import {
   Calendar,
   Loader2,
   Download,
-  HelpCircle
+  HelpCircle,
+  Receipt,
+  AlertTriangle,
+  Eye,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
+import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
+import { format, isAfter, differenceInDays } from "date-fns";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
@@ -43,6 +57,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [runTour, setRunTour] = useState(false);
+  const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
 
   const tourSteps: Step[] = [
     {
@@ -62,7 +77,7 @@ const Dashboard = () => {
     },
     {
       target: ".tour-applications",
-      content: "Track the real-time status of all your applications here. You can also download account statements for disbursed loans.",
+      content: "Track the real-time status of all your applications here. Expand any loan to see your repayment schedule.",
       placement: "top",
     },
   ];
@@ -92,6 +107,22 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
+  const { data: repayments } = useQuery({
+    queryKey: ['user-repayments', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from('loan_repayments')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('due_date', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   const { data: profile } = useQuery({
     queryKey: ['user-profile', user?.id],
     queryFn: async () => {
@@ -111,24 +142,70 @@ const Dashboard = () => {
   const downloadStatement = async (loan: any) => {
     setIsGenerating(loan.id);
     try {
-      const { data: repayments, error } = await supabase
-        .from('loan_repayments')
-        .select('*')
-        .eq('loan_id', loan.id)
-        .eq('status', 'paid')
-        .order('paid_date', { ascending: true });
-
-      if (error) throw error;
-
+      const loanRepayments = repayments?.filter(r => r.loan_id === loan.id && r.status === 'paid') || [];
       generateAccountStatement({
         ...loan,
-        repayments: repayments || []
+        repayments: loanRepayments
       });
     } catch (error) {
       console.error("Failed to generate statement", error);
     } finally {
       setIsGenerating(null);
     }
+  };
+
+  const downloadSchedule = async (loan: any) => {
+    setIsGenerating(`schedule-${loan.id}`);
+    try {
+      const loanRepayments = repayments?.filter(r => r.loan_id === loan.id) || [];
+      downloadLoanSchedule({
+        borrowerName: loan.full_name,
+        borrowerPhone: loan.phone || '',
+        borrowerEmail: loan.email || '',
+        loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+        loanAmount: loan.loan_amount,
+        interestRate: loan.interest_rate || 15,
+        interestPeriod: 'monthly',
+        termMonths: loan.loan_term_months,
+        monthlyPayment: loan.monthly_payment || 0,
+        totalRepayment: loan.total_repayment || 0,
+        disbursementDate: loan.created_at,
+        firstRepaymentDate: loanRepayments[0]?.due_date || loan.created_at,
+        repayments: loanRepayments.map((r: any) => ({
+          installmentNumber: r.installment_number || 1,
+          dueDate: r.due_date,
+          amount: Number(r.amount),
+          status: r.status,
+          paidDate: r.paid_date || undefined,
+        })),
+      });
+    } catch (error) {
+      console.error("Failed to generate schedule", error);
+    } finally {
+      setIsGenerating(null);
+    }
+  };
+
+  const getLoanProgress = (loanId: string) => {
+    const loanRepayments = repayments?.filter(r => r.loan_id === loanId) || [];
+    const paid = loanRepayments.filter(r => r.status === 'paid').length;
+    const total = loanRepayments.length;
+    return total > 0 ? (paid / total) * 100 : 0;
+  };
+
+  const getRepaymentStatus = (repayment: any) => {
+    const today = new Date();
+    const dueDate = new Date(repayment.due_date);
+    const isOverdue = repayment.status === 'pending' && isAfter(today, dueDate);
+    const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
+
+    if (repayment.status === 'paid') {
+      return { label: 'Paid', color: 'bg-success/20 text-success border-success/30', icon: CheckCircle };
+    }
+    if (isOverdue) {
+      return { label: `${daysOverdue}d overdue`, color: 'bg-destructive/20 text-destructive border-destructive/30', icon: AlertTriangle };
+    }
+    return { label: 'Pending', color: 'bg-warning/20 text-warning border-warning/30', icon: Clock };
   };
 
   if (isLoading) {
@@ -140,8 +217,17 @@ const Dashboard = () => {
   }
 
   const activeLoans = loans?.filter(l => ['active', 'disbursed'].includes(l.status)) || [];
+  const completedLoans = loans?.filter(l => l.status === 'completed') || [];
   const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
   const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
+  
+  // Calculate upcoming payment
+  const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= new Date()) || [];
+  const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+  
+  // Calculate overdue amount
+  const overdueRepayments = repayments?.filter(r => r.status === 'pending' && isAfter(new Date(), new Date(r.due_date))) || [];
+  const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -175,7 +261,7 @@ const Dashboard = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 tour-stats">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 tour-stats">
             <Card className="glass border-border/50">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -208,11 +294,37 @@ const Dashboard = () => {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-muted-foreground text-sm">Pending Applications</p>
-                    <p className="text-3xl font-bold text-foreground">{pendingApps.length}</p>
+                    <p className="text-muted-foreground text-sm">Next Payment</p>
+                    {nextPayment ? (
+                      <>
+                        <p className="text-2xl font-bold text-foreground">K{Number(nextPayment.amount).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(nextPayment.due_date), 'MMM dd, yyyy')}</p>
+                      </>
+                    ) : (
+                      <p className="text-lg font-medium text-muted-foreground">No upcoming</p>
+                    )}
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-                    <Clock className="text-yellow-400" size={24} />
+                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Calendar className="text-blue-400" size={24} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={`glass border-border/50 ${totalOverdue > 0 ? 'border-destructive/50' : ''}`}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-muted-foreground text-sm">Overdue Amount</p>
+                    <p className={`text-3xl font-bold ${totalOverdue > 0 ? 'text-destructive' : 'text-foreground'}`}>
+                      K{totalOverdue.toLocaleString()}
+                    </p>
+                    {totalOverdue > 0 && (
+                      <p className="text-xs text-destructive">{overdueRepayments.length} payment(s)</p>
+                    )}
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${totalOverdue > 0 ? 'bg-destructive/20' : 'bg-gray-500/20'}`}>
+                    <AlertTriangle className={totalOverdue > 0 ? 'text-destructive' : 'text-gray-400'} size={24} />
                   </div>
                 </div>
               </CardContent>
@@ -239,82 +351,256 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {/* Recent Applications */}
+          {/* Loan Tabs */}
           <div className="tour-applications">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Your Loan Applications</h2>
-              <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
-                View All <ArrowRight size={16} className="ml-1" />
-              </Button>
-            </div>
+            <Tabs defaultValue="active" className="w-full">
+              <TabsList className="grid w-full grid-cols-3 mb-6">
+                <TabsTrigger value="active" className="flex items-center gap-2">
+                  <TrendingUp size={16} />
+                  Active ({activeLoans.length})
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="flex items-center gap-2">
+                  <Clock size={16} />
+                  Pending ({pendingApps.length})
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  Completed ({completedLoans.length})
+                </TabsTrigger>
+              </TabsList>
 
-            {loansLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : loans && loans.length > 0 ? (
-              <div className="space-y-4">
-                {loans.slice(0, 5).map((loan) => {
-                  const config = statusConfig[loan.status as keyof typeof statusConfig];
-                  const StatusIcon = config?.icon || Clock;
+              {/* Active Loans Tab */}
+              <TabsContent value="active" className="space-y-4">
+                {activeLoans.length === 0 ? (
+                  <Card className="glass border-border/50">
+                    <CardContent className="p-12 text-center">
+                      <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
+                        <CreditCard className="text-muted-foreground" size={32} />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">No Active Loans</h3>
+                      <p className="text-muted-foreground mb-6">You don't have any active loans at the moment</p>
+                      <Button variant="hero" asChild>
+                        <Link to="/apply">Apply for a Loan</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  activeLoans.map((loan) => {
+                    const config = statusConfig[loan.status as keyof typeof statusConfig];
+                    const StatusIcon = config?.icon || Clock;
+                    const loanRepayments = repayments?.filter(r => r.loan_id === loan.id) || [];
+                    const progress = getLoanProgress(loan.id);
+                    const isExpanded = expandedLoan === loan.id;
+                    const paidAmount = loanRepayments.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.amount), 0);
+                    const remainingAmount = Number(loan.total_repayment || 0) - paidAmount;
 
-                  return (
-                    <Card key={loan.id} className="glass border-border/50 hover:border-primary/30 transition-colors">
+                    return (
+                      <Collapsible key={loan.id} open={isExpanded} onOpenChange={() => setExpandedLoan(isExpanded ? null : loan.id)}>
+                        <Card className="glass border-border/50">
+                          <CardContent className="p-6">
+                            <div className="flex flex-col gap-4">
+                              {/* Loan Header */}
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-start gap-4">
+                                  <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+                                    <StatusIcon className="text-primary" size={24} />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold text-foreground">K{Number(loan.loan_amount).toLocaleString()}</h4>
+                                    <p className="text-muted-foreground text-sm">{loan.loan_purpose} • {loan.loan_term_months} months</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge className={`${config?.color} border text-xs`}>
+                                        {config?.label}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => downloadSchedule(loan)}
+                                    disabled={isGenerating === `schedule-${loan.id}`}
+                                  >
+                                    {isGenerating === `schedule-${loan.id}` ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Receipt size={14} className="mr-1" />
+                                    )}
+                                    Schedule
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => downloadStatement(loan)}
+                                    disabled={isGenerating === loan.id}
+                                  >
+                                    {isGenerating === loan.id ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Download size={14} className="mr-1" />
+                                    )}
+                                    Statement
+                                  </Button>
+                                  <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                      {isExpanded ? 'Hide' : 'View'} Schedule
+                                    </Button>
+                                  </CollapsibleTrigger>
+                                </div>
+                              </div>
+
+                              {/* Progress Bar */}
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Repayment Progress</span>
+                                  <span className="text-foreground font-medium">{Math.round(progress)}%</span>
+                                </div>
+                                <Progress value={progress} className="h-2" />
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>Paid: K{paidAmount.toLocaleString()}</span>
+                                  <span>Remaining: K{remainingAmount.toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              {/* Repayment Schedule */}
+                              <CollapsibleContent>
+                                <div className="mt-4 border-t border-border/50 pt-4">
+                                  <h5 className="font-medium text-foreground mb-3">Repayment Schedule</h5>
+                                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                                    {loanRepayments.length === 0 ? (
+                                      <p className="text-muted-foreground text-sm">No repayments scheduled yet</p>
+                                    ) : (
+                                      loanRepayments.map((rep) => {
+                                        const status = getRepaymentStatus(rep);
+                                        const StatusIcon = status.icon;
+                                        return (
+                                          <div key={rep.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-medium">
+                                                #{rep.installment_number}
+                                              </div>
+                                              <div>
+                                                <p className="font-medium text-foreground">K{Number(rep.amount).toLocaleString()}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  Due: {format(new Date(rep.due_date), 'MMM dd, yyyy')}
+                                                  {rep.paid_date && ` • Paid: ${format(new Date(rep.paid_date), 'MMM dd, yyyy')}`}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            <Badge className={`${status.color} border text-xs`}>
+                                              <StatusIcon size={10} className="mr-1" />
+                                              {status.label}
+                                            </Badge>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Collapsible>
+                    );
+                  })
+                )}
+              </TabsContent>
+
+              {/* Pending Tab */}
+              <TabsContent value="pending" className="space-y-4">
+                {pendingApps.length === 0 ? (
+                  <Card className="glass border-border/50">
+                    <CardContent className="p-12 text-center">
+                      <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
+                        <Clock className="text-muted-foreground" size={32} />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">No Pending Applications</h3>
+                      <p className="text-muted-foreground">All your applications have been processed</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  pendingApps.map((loan) => {
+                    const config = statusConfig[loan.status as keyof typeof statusConfig];
+                    const StatusIcon = config?.icon || Clock;
+
+                    return (
+                      <Card key={loan.id} className="glass border-border/50">
+                        <CardContent className="p-6">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+                                <StatusIcon className="text-primary" size={24} />
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-foreground">K{Number(loan.loan_amount).toLocaleString()}</h4>
+                                <p className="text-muted-foreground text-sm">{loan.loan_purpose} • {loan.loan_term_months} months</p>
+                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                  <Calendar size={12} />
+                                  Applied: {format(new Date(loan.created_at), 'MMM dd, yyyy')}
+                                </div>
+                              </div>
+                            </div>
+                            <Badge className={`${config?.color} border`}>
+                              {config?.label}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
+              </TabsContent>
+
+              {/* Completed Tab */}
+              <TabsContent value="completed" className="space-y-4">
+                {completedLoans.length === 0 ? (
+                  <Card className="glass border-border/50">
+                    <CardContent className="p-12 text-center">
+                      <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
+                        <CheckCircle className="text-muted-foreground" size={32} />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">No Completed Loans</h3>
+                      <p className="text-muted-foreground">Completed loans will appear here</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  completedLoans.map((loan) => (
+                    <Card key={loan.id} className="glass border-border/50">
                       <CardContent className="p-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                              <StatusIcon className="text-primary" size={24} />
+                            <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
+                              <CheckCircle className="text-success" size={24} />
                             </div>
                             <div>
                               <h4 className="font-semibold text-foreground">K{Number(loan.loan_amount).toLocaleString()}</h4>
                               <p className="text-muted-foreground text-sm">{loan.loan_purpose} • {loan.loan_term_months} months</p>
-                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                <Calendar size={12} />
-                                {new Date(loan.created_at).toLocaleDateString()}
-                              </div>
+                              <p className="text-xs text-success mt-1">Successfully completed</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Badge className={`${config?.color} border`}>
-                              {config?.label}
-                            </Badge>
-                            {['active', 'disbursed', 'completed'].includes(loan.status) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => downloadStatement(loan)}
-                                disabled={isGenerating === loan.id}
-                              >
-                                {isGenerating === loan.id ? (
-                                  <Loader2 size={16} className="animate-spin" />
-                                ) : (
-                                  <Download size={16} className="mr-1" />
-                                )}
-                                Statement
-                              </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => downloadStatement(loan)}
+                            disabled={isGenerating === loan.id}
+                          >
+                            {isGenerating === loan.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Download size={14} className="mr-1" />
                             )}
-                          </div>
+                            Statement
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
-                  );
-                })}
-              </div>
-            ) : (
-              <Card className="glass border-border/50">
-                <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
-                    <FileText className="text-muted-foreground" size={32} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2">No Applications Yet</h3>
-                  <p className="text-muted-foreground mb-6">Start your financial journey by applying for a loan</p>
-                  <Button variant="hero" asChild>
-                    <Link to="/apply">Apply for a Loan</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+                  ))
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </main>
