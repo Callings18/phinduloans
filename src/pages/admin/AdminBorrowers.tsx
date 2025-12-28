@@ -44,6 +44,9 @@ import {
   Mail,
   MapPin,
   IdCard,
+  Ban,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,6 +62,10 @@ interface BorrowerForm {
   nrc_number: string;
   address: string;
   city: string;
+}
+
+interface BlacklistData {
+  reason: string;
 }
 
 const emptyForm: BorrowerForm = {
@@ -83,8 +90,10 @@ const AdminBorrowers = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isBlacklistOpen, setIsBlacklistOpen] = useState(false);
   const [selectedBorrower, setSelectedBorrower] = useState<any>(null);
   const [formData, setFormData] = useState<BorrowerForm>(emptyForm);
+  const [blacklistData, setBlacklistData] = useState<BlacklistData>({ reason: "" });
   const [runTour, setRunTour] = useState(false);
 
   const tourSteps: Step[] = [
@@ -240,6 +249,40 @@ const AdminBorrowers = () => {
     },
   });
 
+  // Blacklist mutation
+  const blacklistMutation = useMutation({
+    mutationFn: async ({ id, blacklist, reason }: { id: string; blacklist: boolean; reason?: string }) => {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session?.session?.user?.id;
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_blacklisted: blacklist,
+          blacklist_reason: blacklist ? reason : null,
+          blacklisted_at: blacklist ? new Date().toISOString() : null,
+          blacklisted_by: blacklist ? userId : null,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-borrowers'] });
+      toast({ 
+        title: variables.blacklist ? "Borrower blacklisted" : "Borrower removed from blacklist",
+        description: variables.blacklist 
+          ? "This borrower will no longer qualify for new loans" 
+          : "This borrower can now apply for loans again"
+      });
+      setIsBlacklistOpen(false);
+      setBlacklistData({ reason: "" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error updating blacklist status", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleCreate = () => {
     if (!formData.full_name?.trim() || !formData.email?.trim()) {
       toast({ title: "Please fill in required fields (Name and Email)", variant: "destructive" });
@@ -384,16 +427,25 @@ const AdminBorrowers = () => {
         ) : filteredBorrowers && filteredBorrowers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 tour-borrowers-list">
             {filteredBorrowers.map((borrower) => (
-              <Card key={borrower.id} className="glass border-border/50 hover:border-primary/30 transition-colors">
+              <Card key={borrower.id} className={`glass border-border/50 hover:border-primary/30 transition-colors ${borrower.is_blacklisted ? 'border-destructive/50 bg-destructive/5' : ''}`}>
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                      <User className="text-primary-foreground" size={24} />
+                    <div className={`w-12 h-12 rounded-xl ${borrower.is_blacklisted ? 'bg-destructive/20' : 'gradient-primary'} flex items-center justify-center`}>
+                      {borrower.is_blacklisted ? (
+                        <Ban className="text-destructive" size={24} />
+                      ) : (
+                        <User className="text-primary-foreground" size={24} />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-foreground truncate">
-                        {borrower.full_name || 'Unknown'}
-                      </h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-foreground truncate">
+                          {borrower.full_name || 'Unknown'}
+                        </h4>
+                        {borrower.is_blacklisted && (
+                          <Badge variant="destructive" className="text-xs">Blacklisted</Badge>
+                        )}
+                      </div>
                       <p className="text-muted-foreground text-sm truncate">{borrower.email}</p>
                     </div>
                   </div>
@@ -707,6 +759,65 @@ const AdminBorrowers = () => {
                 )}
               </div>
 
+              {/* Blacklist Section */}
+              <Card className={selectedBorrower.is_blacklisted ? "bg-warning/10 border-warning/30" : "bg-muted/30 border-border/50"}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    {selectedBorrower.is_blacklisted ? (
+                      <AlertTriangle className="text-warning" size={18} />
+                    ) : (
+                      <Ban className="text-muted-foreground" size={18} />
+                    )}
+                    <h4 className="font-semibold text-foreground">Blacklist Status</h4>
+                  </div>
+                  {selectedBorrower.is_blacklisted ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-warning">
+                        This borrower is currently blacklisted and cannot apply for new loans.
+                      </p>
+                      {selectedBorrower.blacklist_reason && (
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Reason:</strong> {selectedBorrower.blacklist_reason}
+                        </p>
+                      )}
+                      {selectedBorrower.blacklisted_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Blacklisted on: {new Date(selectedBorrower.blacklisted_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => blacklistMutation.mutate({ id: selectedBorrower.id, blacklist: false })}
+                        disabled={blacklistMutation.isPending}
+                      >
+                        <CheckCircle size={14} className="mr-1" />
+                        Remove from Blacklist
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        This borrower is in good standing. You can blacklist them to prevent future loan applications.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={() => {
+                          setBlacklistData({ reason: "" });
+                          setIsBlacklistOpen(true);
+                        }}
+                      >
+                        <Ban size={14} className="mr-1" />
+                        Add to Blacklist
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Danger Zone */}
               <Card className="bg-destructive/10 border-destructive/30">
                 <CardContent className="p-4">
@@ -761,6 +872,58 @@ const AdminBorrowers = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Blacklist Dialog */}
+      <Dialog open={isBlacklistOpen} onOpenChange={setIsBlacklistOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <Ban size={20} />
+              Blacklist Borrower
+            </DialogTitle>
+            <DialogDescription>
+              Add <span className="font-semibold">{selectedBorrower?.full_name}</span> to the blacklist. 
+              They will no longer be able to apply for loans.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Reason for Blacklisting *</Label>
+              <Textarea
+                value={blacklistData.reason}
+                onChange={(e) => setBlacklistData({ reason: e.target.value })}
+                placeholder="Enter the reason for blacklisting this borrower (e.g., fraud, non-payment, etc.)"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsBlacklistOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!blacklistData.reason.trim()) {
+                  toast({ title: "Please provide a reason for blacklisting", variant: "destructive" });
+                  return;
+                }
+                blacklistMutation.mutate({
+                  id: selectedBorrower.id,
+                  blacklist: true,
+                  reason: blacklistData.reason,
+                });
+              }}
+              disabled={blacklistMutation.isPending}
+            >
+              <Ban size={14} className="mr-1" />
+              Confirm Blacklist
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 };
