@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import GuidedTour from "@/components/common/GuidedTour";
+import QuickActions from "@/components/admin/QuickActions";
+import ModuleWidgets from "@/components/admin/ModuleWidgets";
 import { Step } from "react-joyride";
 import {
   FileText,
@@ -191,6 +193,18 @@ const AdminDashboard = () => {
               </Link>
             </Button>
           </div>
+        </div>
+
+        {/* Quick Actions */}
+        <QuickActions />
+
+        {/* Module Widgets - Action Required */}
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Activity size={18} className="text-primary" />
+            Needs Attention
+          </h2>
+          <ModuleWidgets />
         </div>
 
         {/* Stats Grid */}
