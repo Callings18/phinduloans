@@ -35,6 +35,7 @@ interface LoanProduct {
   vat_percent: number | null;
   platform_fee_percent: number | null;
   requirements: string[] | null;
+  collateral_required: boolean | null;
 }
 
 const steps = [
@@ -131,9 +132,16 @@ const Apply = () => {
     loanPurpose: "",
     loanTerm: 6,
     repaymentMethod: "",
+    collateralDescription: "",
+    collateralValue: "",
     nrcFront: null as File | null,
     nrcBack: null as File | null,
     payslip: null as File | null,
+    payslip2: null as File | null,
+    payslip3: null as File | null,
+    bankStatement: null as File | null,
+    employerLetter: null as File | null,
+    collateralImage: null as File | null,
     selfie: null as File | null,
     termsAccepted: false,
     dataConsent: false,
@@ -319,11 +327,21 @@ const Apply = () => {
         return publicUrl;
       };
 
+      // Upload required documents
       const [nrcFrontUrl, nrcBackUrl, payslipUrl, selfieUrl] = await Promise.all([
         uploadFile(formData.nrcFront!, 'nrc_front'),
         uploadFile(formData.nrcBack!, 'nrc_back'),
         uploadFile(formData.payslip!, 'payslip'),
         uploadFile(formData.selfie!, 'selfie'),
+      ]);
+
+      // Upload optional documents
+      const [payslip2Url, payslip3Url, bankStatementUrl, employerLetterUrl, collateralImageUrl] = await Promise.all([
+        formData.payslip2 ? uploadFile(formData.payslip2, 'payslip_2') : Promise.resolve(null),
+        formData.payslip3 ? uploadFile(formData.payslip3, 'payslip_3') : Promise.resolve(null),
+        formData.bankStatement ? uploadFile(formData.bankStatement, 'bank_statement') : Promise.resolve(null),
+        formData.employerLetter ? uploadFile(formData.employerLetter, 'employer_letter') : Promise.resolve(null),
+        formData.collateralImage ? uploadFile(formData.collateralImage, 'collateral') : Promise.resolve(null),
       ]);
 
       // 2. Map employment type to enum
@@ -358,6 +376,13 @@ const Apply = () => {
         nrc_front_url: nrcFrontUrl,
         nrc_back_url: nrcBackUrl,
         payslip_url: payslipUrl,
+        payslip_2_url: payslip2Url,
+        payslip_3_url: payslip3Url,
+        bank_statement_url: bankStatementUrl,
+        employer_letter_url: employerLetterUrl,
+        collateral_description: formData.collateralDescription || null,
+        collateral_value: formData.collateralValue ? parseFloat(formData.collateralValue) : null,
+        collateral_image_url: collateralImageUrl,
         selfie_url: selfieUrl,
         status: 'pending',
         source: 'website',
@@ -822,41 +847,129 @@ const Apply = () => {
                 <div className="space-y-6 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Upload Documents</h2>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[
-                      { field: "nrcFront", label: "NRC (Front) *", description: "Clear photo of front" },
-                      { field: "nrcBack", label: "NRC (Back) *", description: "Clear photo of back" },
-                      { field: "payslip", label: "Latest Payslip *", description: "Most recent payslip" },
-                      { field: "selfie", label: "Selfie *", description: "Clear photo of your face" },
-                    ].map((doc) => (
-                      <div key={doc.field} className="space-y-2">
-                        <Label className={errors[doc.field] ? "text-destructive" : ""}>{doc.label}</Label>
-                        <label
-                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
-                            ? "border-primary bg-primary/10 shadow-glow"
-                            : errors[doc.field]
-                              ? "border-destructive bg-destructive/5"
+                  {/* Required Documents */}
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Required Documents</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {[
+                        { field: "nrcFront", label: "NRC (Front) *", description: "Clear photo of front" },
+                        { field: "nrcBack", label: "NRC (Back) *", description: "Clear photo of back" },
+                        { field: "payslip", label: "Latest Payslip *", description: "Most recent payslip" },
+                        { field: "selfie", label: "Selfie *", description: "Clear photo of your face" },
+                      ].map((doc) => (
+                        <div key={doc.field} className="space-y-2">
+                          <Label className={errors[doc.field] ? "text-destructive" : ""}>{doc.label}</Label>
+                          <label
+                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
+                              ? "border-primary bg-primary/10 shadow-glow"
+                              : errors[doc.field]
+                                ? "border-destructive bg-destructive/5"
+                                : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                              }`}
+                          >
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(doc.field, e.target.files?.[0] || null)}
+                            />
+                            {formData[doc.field as keyof typeof formData] ? (
+                              <CheckCircle className="text-primary mb-2" size={32} />
+                            ) : (
+                              <Upload className={errors[doc.field] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                            )}
+                            <span className={`text-sm ${errors[doc.field] ? "text-destructive" : "text-muted-foreground"}`}>
+                              {errors[doc.field] || doc.description}
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Additional Payslips & Bank Statement */}
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Additional Documents (Recommended)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {[
+                        { field: "payslip2", label: "2nd Payslip", description: "Previous month payslip" },
+                        { field: "payslip3", label: "3rd Payslip", description: "Two months ago payslip" },
+                        { field: "bankStatement", label: "Bank Statement", description: "Last 3 months statement" },
+                        { field: "employerLetter", label: "Employer Letter", description: "Employment confirmation" },
+                      ].map((doc) => (
+                        <div key={doc.field} className="space-y-2">
+                          <Label>{doc.label}</Label>
+                          <label
+                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
+                              ? "border-primary bg-primary/10 shadow-glow"
                               : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                              }`}
+                          >
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(doc.field, e.target.files?.[0] || null)}
+                            />
+                            {formData[doc.field as keyof typeof formData] ? (
+                              <CheckCircle className="text-primary mb-2" size={32} />
+                            ) : (
+                              <Upload className="text-muted-foreground mb-2" size={32} />
+                            )}
+                            <span className="text-sm text-muted-foreground">{doc.description}</span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Collateral Image - Show if product requires collateral */}
+                  {selectedProduct?.collateral_required && (
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Collateral Documentation</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                        <div className="space-y-2">
+                          <Label>Collateral Description</Label>
+                          <Input
+                            placeholder="Describe the collateral (e.g., 2020 Toyota Corolla)"
+                            value={formData.collateralDescription}
+                            onChange={(e) => updateFormData("collateralDescription", e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Estimated Value (K)</Label>
+                          <Input
+                            type="number"
+                            placeholder="e.g., 50000"
+                            value={formData.collateralValue}
+                            onChange={(e) => updateFormData("collateralValue", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Collateral Image</Label>
+                        <label
+                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData.collateralImage
+                            ? "border-primary bg-primary/10 shadow-glow"
+                            : "border-border hover:border-primary/50 hover:bg-secondary/50"
                             }`}
                         >
                           <input
                             type="file"
-                            accept="image/*,.pdf"
+                            accept="image/*"
                             className="hidden"
-                            onChange={(e) => handleFileUpload(doc.field, e.target.files?.[0] || null)}
+                            onChange={(e) => handleFileUpload("collateralImage", e.target.files?.[0] || null)}
                           />
-                          {formData[doc.field as keyof typeof formData] ? (
+                          {formData.collateralImage ? (
                             <CheckCircle className="text-primary mb-2" size={32} />
                           ) : (
-                            <Upload className={errors[doc.field] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                            <Upload className="text-muted-foreground mb-2" size={32} />
                           )}
-                          <span className={`text-sm ${errors[doc.field] ? "text-destructive" : "text-muted-foreground"}`}>
-                            {errors[doc.field] || doc.description}
-                          </span>
+                          <span className="text-sm text-muted-foreground">Upload photo of collateral</span>
                         </label>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
 
                   <div className="space-y-4 pt-6 border-t border-border">
                     <div className="flex items-start space-x-3">
