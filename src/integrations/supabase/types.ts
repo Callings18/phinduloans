@@ -662,15 +662,24 @@ export type Database = {
       }
       loan_products: {
         Row: {
+          amount_logic: string | null
+          auto_disbursement: boolean | null
+          blacklist_check_required: boolean | null
+          channels: string[] | null
           collateral_required: boolean | null
+          contract_template_url: string | null
           created_at: string
+          default_threshold_days: number | null
           description: string | null
+          digital_signature_required: boolean | null
           early_repayment_allowed: boolean | null
           early_repayment_fee_percent: number | null
+          employer_whitelist_enabled: boolean | null
           employment_types: string[] | null
           enforcement_fee_percent: number | null
           grace_period_days: number | null
           id: string
+          installment_structure: string | null
           insurance_percent: number | null
           insurance_required: boolean | null
           interest_period: string | null
@@ -678,28 +687,54 @@ export type Database = {
           interest_type: string | null
           is_active: boolean | null
           late_payment_penalty_percent: number | null
+          legal_escalation_days: number | null
+          max_age: number | null
           max_amount: number
+          max_concurrent_loans: number | null
           max_dti_ratio: number | null
+          max_salary_percent: number | null
           max_term_months: number
+          min_age: number | null
           min_amount: number
           min_credit_score: number | null
+          min_salary: number | null
           min_term_months: number
+          mou_required: boolean | null
           name: string
+          parent_product_id: string | null
+          partial_disbursement: boolean | null
           penalty_frequency: string | null
+          platform_fee_percent: number | null
+          platform_fee_type: string | null
           processing_fee_percent: number | null
+          product_code: string | null
+          repayment_frequency: string | null
+          repayment_methods: string[] | null
           requirements: string[] | null
+          status: string | null
           updated_at: string
+          vat_percent: number | null
+          version: number | null
         }
         Insert: {
+          amount_logic?: string | null
+          auto_disbursement?: boolean | null
+          blacklist_check_required?: boolean | null
+          channels?: string[] | null
           collateral_required?: boolean | null
+          contract_template_url?: string | null
           created_at?: string
+          default_threshold_days?: number | null
           description?: string | null
+          digital_signature_required?: boolean | null
           early_repayment_allowed?: boolean | null
           early_repayment_fee_percent?: number | null
+          employer_whitelist_enabled?: boolean | null
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
           grace_period_days?: number | null
           id?: string
+          installment_structure?: string | null
           insurance_percent?: number | null
           insurance_required?: boolean | null
           interest_period?: string | null
@@ -707,28 +742,54 @@ export type Database = {
           interest_type?: string | null
           is_active?: boolean | null
           late_payment_penalty_percent?: number | null
+          legal_escalation_days?: number | null
+          max_age?: number | null
           max_amount?: number
+          max_concurrent_loans?: number | null
           max_dti_ratio?: number | null
+          max_salary_percent?: number | null
           max_term_months?: number
+          min_age?: number | null
           min_amount?: number
           min_credit_score?: number | null
+          min_salary?: number | null
           min_term_months?: number
+          mou_required?: boolean | null
           name: string
+          parent_product_id?: string | null
+          partial_disbursement?: boolean | null
           penalty_frequency?: string | null
+          platform_fee_percent?: number | null
+          platform_fee_type?: string | null
           processing_fee_percent?: number | null
+          product_code?: string | null
+          repayment_frequency?: string | null
+          repayment_methods?: string[] | null
           requirements?: string[] | null
+          status?: string | null
           updated_at?: string
+          vat_percent?: number | null
+          version?: number | null
         }
         Update: {
+          amount_logic?: string | null
+          auto_disbursement?: boolean | null
+          blacklist_check_required?: boolean | null
+          channels?: string[] | null
           collateral_required?: boolean | null
+          contract_template_url?: string | null
           created_at?: string
+          default_threshold_days?: number | null
           description?: string | null
+          digital_signature_required?: boolean | null
           early_repayment_allowed?: boolean | null
           early_repayment_fee_percent?: number | null
+          employer_whitelist_enabled?: boolean | null
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
           grace_period_days?: number | null
           id?: string
+          installment_structure?: string | null
           insurance_percent?: number | null
           insurance_required?: boolean | null
           interest_period?: string | null
@@ -736,19 +797,44 @@ export type Database = {
           interest_type?: string | null
           is_active?: boolean | null
           late_payment_penalty_percent?: number | null
+          legal_escalation_days?: number | null
+          max_age?: number | null
           max_amount?: number
+          max_concurrent_loans?: number | null
           max_dti_ratio?: number | null
+          max_salary_percent?: number | null
           max_term_months?: number
+          min_age?: number | null
           min_amount?: number
           min_credit_score?: number | null
+          min_salary?: number | null
           min_term_months?: number
+          mou_required?: boolean | null
           name?: string
+          parent_product_id?: string | null
+          partial_disbursement?: boolean | null
           penalty_frequency?: string | null
+          platform_fee_percent?: number | null
+          platform_fee_type?: string | null
           processing_fee_percent?: number | null
+          product_code?: string | null
+          repayment_frequency?: string | null
+          repayment_methods?: string[] | null
           requirements?: string[] | null
+          status?: string | null
           updated_at?: string
+          vat_percent?: number | null
+          version?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "loan_products_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       loan_repayments: {
         Row: {
