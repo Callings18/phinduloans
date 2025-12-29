@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import GuidedTour from "@/components/common/GuidedTour";
+import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStatusTracker";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -29,6 +30,7 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  Activity,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -353,8 +355,12 @@ const Dashboard = () => {
 
           {/* Loan Tabs */}
           <div className="tour-applications">
-            <Tabs defaultValue="active" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-6">
+            <Tabs defaultValue="tracker" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-6">
+                <TabsTrigger value="tracker" className="flex items-center gap-2">
+                  <Activity size={16} />
+                  Status Tracker
+                </TabsTrigger>
                 <TabsTrigger value="active" className="flex items-center gap-2">
                   <TrendingUp size={16} />
                   Active ({activeLoans.length})
@@ -368,6 +374,11 @@ const Dashboard = () => {
                   Completed ({completedLoans.length})
                 </TabsTrigger>
               </TabsList>
+
+              {/* Real-time Status Tracker Tab */}
+              <TabsContent value="tracker">
+                {user?.id && <ApplicationStatusTracker userId={user.id} />}
+              </TabsContent>
 
               {/* Active Loans Tab */}
               <TabsContent value="active" className="space-y-4">
