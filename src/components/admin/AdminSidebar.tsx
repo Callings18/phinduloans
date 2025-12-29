@@ -18,6 +18,7 @@ import {
   Banknote,
   Receipt,
   History,
+  FileX,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ const menuItems = [
   { icon: FileText, label: "Collections", path: "/admin/collections" },
   { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
+  { icon: FileX, label: "Write-Offs", path: "/admin/write-offs" },
   { icon: History, label: "Audit Logs", path: "/admin/audit-logs" },
   { icon: Shield, label: "Staff", path: "/admin/staff" },
   { icon: Settings, label: "Settings", path: "/admin/settings" },

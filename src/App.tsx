@@ -26,7 +26,6 @@ import AdminStaff from "./pages/admin/AdminStaff";
 import AdminCollections from "./pages/admin/AdminCollections";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminWriteOffs from "./pages/admin/AdminWriteOffs";
-import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
