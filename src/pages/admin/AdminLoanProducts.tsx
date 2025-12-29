@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Card,
   CardContent,
@@ -54,9 +65,13 @@ import {
   CheckCircle,
   XCircle,
   Shield,
+  Copy,
+  Archive,
+  Users,
+  FileText,
+  Wallet,
   AlertTriangle,
-  Settings,
-  Calculator,
+  Link2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -65,6 +80,9 @@ interface LoanProduct {
   id: string;
   name: string;
   description: string | null;
+  product_code: string | null;
+  channels: string[] | null;
+  status: string | null;
   min_amount: number;
   max_amount: number;
   min_term_months: number;
@@ -87,39 +105,91 @@ interface LoanProduct {
   collateral_required: boolean;
   max_dti_ratio: number;
   min_credit_score: number;
+  // New fields
+  min_age: number | null;
+  max_age: number | null;
+  min_salary: number | null;
+  max_salary_percent: number | null;
+  max_concurrent_loans: number | null;
+  blacklist_check_required: boolean | null;
+  mou_required: boolean | null;
+  employer_whitelist_enabled: boolean | null;
+  amount_logic: string | null;
+  vat_percent: number | null;
+  platform_fee_percent: number | null;
+  platform_fee_type: string | null;
+  repayment_frequency: string | null;
+  repayment_methods: string[] | null;
+  installment_structure: string | null;
+  auto_disbursement: boolean | null;
+  partial_disbursement: boolean | null;
+  default_threshold_days: number | null;
+  legal_escalation_days: number | null;
+  contract_template_url: string | null;
+  digital_signature_required: boolean | null;
+  parent_product_id: string | null;
+  version: number | null;
   created_at: string;
 }
+
+const defaultFormData = {
+  name: "",
+  description: "",
+  product_code: "",
+  channels: ["website", "admin"],
+  status: "active",
+  min_amount: 500,
+  max_amount: 50000,
+  min_term_months: 1,
+  max_term_months: 24,
+  interest_rate: 15,
+  interest_type: "flat",
+  interest_period: "monthly",
+  processing_fee_percent: 2,
+  enforcement_fee_percent: 10,
+  penalty_frequency: "monthly",
+  is_active: true,
+  requirements: "",
+  employment_types: ["employed", "self_employed", "contract"],
+  grace_period_days: 0,
+  late_payment_penalty_percent: 5,
+  early_repayment_allowed: true,
+  early_repayment_fee_percent: 0,
+  insurance_required: false,
+  insurance_percent: 0,
+  collateral_required: false,
+  max_dti_ratio: 50,
+  min_credit_score: 0,
+  // New fields
+  min_age: 18,
+  max_age: 65,
+  min_salary: 0,
+  max_salary_percent: 50,
+  max_concurrent_loans: 1,
+  blacklist_check_required: true,
+  mou_required: false,
+  employer_whitelist_enabled: false,
+  amount_logic: "fixed",
+  vat_percent: 0,
+  platform_fee_percent: 0,
+  platform_fee_type: "percentage",
+  repayment_frequency: "monthly",
+  repayment_methods: ["bank_transfer", "mobile_money", "payroll_deduction"],
+  installment_structure: "equal",
+  auto_disbursement: false,
+  partial_disbursement: false,
+  default_threshold_days: 90,
+  legal_escalation_days: 120,
+  contract_template_url: "",
+  digital_signature_required: false,
+};
 
 const AdminLoanProducts = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<LoanProduct | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    min_amount: 500,
-    max_amount: 50000,
-    min_term_months: 1,
-    max_term_months: 24,
-    interest_rate: 15,
-    interest_type: "flat",
-    interest_period: "monthly",
-    processing_fee_percent: 2,
-    enforcement_fee_percent: 10,
-    penalty_frequency: "monthly",
-    is_active: true,
-    requirements: "",
-    employment_types: ["employed", "self_employed", "contract"],
-    grace_period_days: 0,
-    late_payment_penalty_percent: 5,
-    early_repayment_allowed: true,
-    early_repayment_fee_percent: 0,
-    insurance_required: false,
-    insurance_percent: 0,
-    collateral_required: false,
-    max_dti_ratio: 50,
-    min_credit_score: 0,
-  });
+  const [deleteConfirmProduct, setDeleteConfirmProduct] = useState<LoanProduct | null>(null);
+  const [formData, setFormData] = useState(defaultFormData);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -133,6 +203,25 @@ const AdminLoanProducts = () => {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as LoanProduct[];
+    },
+  });
+
+  // Get linked loan counts for each product
+  const { data: linkedLoansCounts } = useQuery({
+    queryKey: ["loan-products-linked-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("loan_product_id");
+      if (error) throw error;
+      
+      const counts: Record<string, number> = {};
+      data?.forEach((app) => {
+        if (app.loan_product_id) {
+          counts[app.loan_product_id] = (counts[app.loan_product_id] || 0) + 1;
+        }
+      });
+      return counts;
     },
   });
 
@@ -171,35 +260,30 @@ const AdminLoanProducts = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      // First check if there are any loan applications using this product
-      const { count, error: countError } = await supabase
-        .from("loan_applications")
-        .select("*", { count: "exact", head: true })
-        .eq("loan_product_id", id);
+      const linkedCount = linkedLoansCounts?.[id] || 0;
       
-      if (countError) throw countError;
-      
-      if (count && count > 0) {
-        // Has linked applications - deactivate instead of delete
+      if (linkedCount > 0) {
+        // Has linked applications - archive instead of delete
         const { error } = await supabase
           .from("loan_products")
-          .update({ is_active: false })
+          .update({ is_active: false, status: "archived" })
           .eq("id", id);
         if (error) throw error;
-        return { deactivated: true, count };
+        return { archived: true, count: linkedCount };
       } else {
         // No linked applications - safe to delete
         const { error } = await supabase.from("loan_products").delete().eq("id", id);
         if (error) throw error;
-        return { deactivated: false };
+        return { archived: false };
       }
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-products"] });
-      if (result?.deactivated) {
+      setDeleteConfirmProduct(null);
+      if (result?.archived) {
         toast({ 
-          title: "Product deactivated", 
-          description: `This product has ${result.count} linked loan(s) and was deactivated instead of deleted. It will no longer appear on the website calculator.`
+          title: "Product archived", 
+          description: `This product has ${result.count} linked loan(s) and was archived instead of deleted.`
         });
       } else {
         toast({ title: "Loan product deleted successfully" });
@@ -210,33 +294,75 @@ const AdminLoanProducts = () => {
     },
   });
 
+  const cloneMutation = useMutation({
+    mutationFn: async (product: LoanProduct) => {
+      const clonedData = {
+        name: `${product.name} (Copy)`,
+        description: product.description,
+        product_code: null,
+        channels: product.channels,
+        status: "inactive",
+        min_amount: product.min_amount,
+        max_amount: product.max_amount,
+        min_term_months: product.min_term_months,
+        max_term_months: product.max_term_months,
+        interest_rate: product.interest_rate,
+        interest_type: product.interest_type,
+        interest_period: product.interest_period,
+        processing_fee_percent: product.processing_fee_percent,
+        enforcement_fee_percent: product.enforcement_fee_percent,
+        penalty_frequency: product.penalty_frequency,
+        is_active: false,
+        requirements: product.requirements,
+        employment_types: product.employment_types,
+        grace_period_days: product.grace_period_days,
+        late_payment_penalty_percent: product.late_payment_penalty_percent,
+        early_repayment_allowed: product.early_repayment_allowed,
+        early_repayment_fee_percent: product.early_repayment_fee_percent,
+        insurance_required: product.insurance_required,
+        insurance_percent: product.insurance_percent,
+        collateral_required: product.collateral_required,
+        max_dti_ratio: product.max_dti_ratio,
+        min_credit_score: product.min_credit_score,
+        min_age: product.min_age,
+        max_age: product.max_age,
+        min_salary: product.min_salary,
+        max_salary_percent: product.max_salary_percent,
+        max_concurrent_loans: product.max_concurrent_loans,
+        blacklist_check_required: product.blacklist_check_required,
+        mou_required: product.mou_required,
+        employer_whitelist_enabled: product.employer_whitelist_enabled,
+        amount_logic: product.amount_logic,
+        vat_percent: product.vat_percent,
+        platform_fee_percent: product.platform_fee_percent,
+        platform_fee_type: product.platform_fee_type,
+        repayment_frequency: product.repayment_frequency,
+        repayment_methods: product.repayment_methods,
+        installment_structure: product.installment_structure,
+        auto_disbursement: product.auto_disbursement,
+        partial_disbursement: product.partial_disbursement,
+        default_threshold_days: product.default_threshold_days,
+        legal_escalation_days: product.legal_escalation_days,
+        contract_template_url: product.contract_template_url,
+        digital_signature_required: product.digital_signature_required,
+        parent_product_id: product.id,
+        version: (product.version || 1) + 1,
+      };
+      
+      const { error } = await supabase.from("loan_products").insert(clonedData);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["loan-products"] });
+      toast({ title: "Product cloned successfully", description: "The copy is set to inactive by default." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error cloning product", description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetForm = () => {
-    setFormData({
-      name: "",
-      description: "",
-      min_amount: 500,
-      max_amount: 50000,
-      min_term_months: 1,
-      max_term_months: 24,
-      interest_rate: 15,
-      interest_type: "flat",
-      interest_period: "monthly",
-      processing_fee_percent: 2,
-      enforcement_fee_percent: 10,
-      penalty_frequency: "monthly",
-      is_active: true,
-      requirements: "",
-      employment_types: ["employed", "self_employed", "contract"],
-      grace_period_days: 0,
-      late_payment_penalty_percent: 5,
-      early_repayment_allowed: true,
-      early_repayment_fee_percent: 0,
-      insurance_required: false,
-      insurance_percent: 0,
-      collateral_required: false,
-      max_dti_ratio: 50,
-      min_credit_score: 0,
-    });
+    setFormData(defaultFormData);
   };
 
   const handleEdit = (product: LoanProduct) => {
@@ -244,6 +370,9 @@ const AdminLoanProducts = () => {
     setFormData({
       name: product.name,
       description: product.description || "",
+      product_code: product.product_code || "",
+      channels: product.channels || ["website", "admin"],
+      status: product.status || "active",
       min_amount: product.min_amount,
       max_amount: product.max_amount,
       min_term_months: product.min_term_months,
@@ -266,6 +395,27 @@ const AdminLoanProducts = () => {
       collateral_required: product.collateral_required || false,
       max_dti_ratio: product.max_dti_ratio || 50,
       min_credit_score: product.min_credit_score || 0,
+      min_age: product.min_age ?? 18,
+      max_age: product.max_age ?? 65,
+      min_salary: product.min_salary ?? 0,
+      max_salary_percent: product.max_salary_percent ?? 50,
+      max_concurrent_loans: product.max_concurrent_loans ?? 1,
+      blacklist_check_required: product.blacklist_check_required ?? true,
+      mou_required: product.mou_required ?? false,
+      employer_whitelist_enabled: product.employer_whitelist_enabled ?? false,
+      amount_logic: product.amount_logic || "fixed",
+      vat_percent: product.vat_percent ?? 0,
+      platform_fee_percent: product.platform_fee_percent ?? 0,
+      platform_fee_type: product.platform_fee_type || "percentage",
+      repayment_frequency: product.repayment_frequency || "monthly",
+      repayment_methods: product.repayment_methods || ["bank_transfer", "mobile_money", "payroll_deduction"],
+      installment_structure: product.installment_structure || "equal",
+      auto_disbursement: product.auto_disbursement ?? false,
+      partial_disbursement: product.partial_disbursement ?? false,
+      default_threshold_days: product.default_threshold_days ?? 90,
+      legal_escalation_days: product.legal_escalation_days ?? 120,
+      contract_template_url: product.contract_template_url || "",
+      digital_signature_required: product.digital_signature_required ?? false,
     });
     setIsDialogOpen(true);
   };
@@ -274,6 +424,9 @@ const AdminLoanProducts = () => {
     const productData = {
       name: formData.name,
       description: formData.description || null,
+      product_code: formData.product_code || null,
+      channels: formData.channels,
+      status: formData.status,
       min_amount: formData.min_amount,
       max_amount: formData.max_amount,
       min_term_months: formData.min_term_months,
@@ -296,6 +449,27 @@ const AdminLoanProducts = () => {
       collateral_required: formData.collateral_required,
       max_dti_ratio: formData.max_dti_ratio,
       min_credit_score: formData.min_credit_score,
+      min_age: formData.min_age,
+      max_age: formData.max_age,
+      min_salary: formData.min_salary,
+      max_salary_percent: formData.max_salary_percent,
+      max_concurrent_loans: formData.max_concurrent_loans,
+      blacklist_check_required: formData.blacklist_check_required,
+      mou_required: formData.mou_required,
+      employer_whitelist_enabled: formData.employer_whitelist_enabled,
+      amount_logic: formData.amount_logic,
+      vat_percent: formData.vat_percent,
+      platform_fee_percent: formData.platform_fee_percent,
+      platform_fee_type: formData.platform_fee_type,
+      repayment_frequency: formData.repayment_frequency,
+      repayment_methods: formData.repayment_methods,
+      installment_structure: formData.installment_structure,
+      auto_disbursement: formData.auto_disbursement,
+      partial_disbursement: formData.partial_disbursement,
+      default_threshold_days: formData.default_threshold_days,
+      legal_escalation_days: formData.legal_escalation_days,
+      contract_template_url: formData.contract_template_url || null,
+      digital_signature_required: formData.digital_signature_required,
     };
 
     if (editingProduct) {
@@ -308,7 +482,10 @@ const AdminLoanProducts = () => {
   const toggleActive = (product: LoanProduct) => {
     updateMutation.mutate({
       id: product.id,
-      data: { is_active: !product.is_active },
+      data: { 
+        is_active: !product.is_active,
+        status: !product.is_active ? "active" : "inactive"
+      },
     });
   };
 
@@ -321,14 +498,34 @@ const AdminLoanProducts = () => {
     }
   };
 
+  const toggleChannel = (channel: string) => {
+    const current = formData.channels;
+    if (current.includes(channel)) {
+      setFormData({ ...formData, channels: current.filter(c => c !== channel) });
+    } else {
+      setFormData({ ...formData, channels: [...current, channel] });
+    }
+  };
+
+  const toggleRepaymentMethod = (method: string) => {
+    const current = formData.repayment_methods;
+    if (current.includes(method)) {
+      setFormData({ ...formData, repayment_methods: current.filter(m => m !== method) });
+    } else {
+      setFormData({ ...formData, repayment_methods: [...current, method] });
+    }
+  };
+
   const filteredProducts = products?.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.product_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const stats = {
     total: products?.length || 0,
-    active: products?.filter((p) => p.is_active).length || 0,
-    inactive: products?.filter((p) => !p.is_active).length || 0,
+    active: products?.filter((p) => p.is_active && p.status !== "archived").length || 0,
+    inactive: products?.filter((p) => !p.is_active && p.status !== "archived").length || 0,
+    archived: products?.filter((p) => p.status === "archived").length || 0,
   };
 
   return (
@@ -338,7 +535,7 @@ const AdminLoanProducts = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Loan Products</h1>
-            <p className="text-muted-foreground">Manage your loan product offerings with advanced configurations</p>
+            <p className="text-muted-foreground">Configure loan product templates and rules</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
@@ -353,40 +550,61 @@ const AdminLoanProducts = () => {
                 Add Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingProduct ? "Edit Loan Product" : "Create Loan Product"}
                 </DialogTitle>
               </DialogHeader>
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="basic">
-                    <Package size={14} className="mr-2" />
+                <TabsList className="grid w-full grid-cols-7 h-auto">
+                  <TabsTrigger value="basic" className="text-xs px-2 py-2">
+                    <Package size={12} className="mr-1" />
                     Basic
                   </TabsTrigger>
-                  <TabsTrigger value="interest">
-                    <Calculator size={14} className="mr-2" />
-                    Interest & Fees
+                  <TabsTrigger value="eligibility" className="text-xs px-2 py-2">
+                    <Users size={12} className="mr-1" />
+                    Eligibility
                   </TabsTrigger>
-                  <TabsTrigger value="risk">
-                    <Shield size={14} className="mr-2" />
-                    Risk Controls
+                  <TabsTrigger value="amount" className="text-xs px-2 py-2">
+                    <DollarSign size={12} className="mr-1" />
+                    Amount
                   </TabsTrigger>
-                  <TabsTrigger value="requirements">
-                    <Settings size={14} className="mr-2" />
-                    Requirements
+                  <TabsTrigger value="interest" className="text-xs px-2 py-2">
+                    <Percent size={12} className="mr-1" />
+                    Fees
+                  </TabsTrigger>
+                  <TabsTrigger value="penalties" className="text-xs px-2 py-2">
+                    <AlertTriangle size={12} className="mr-1" />
+                    Penalties
+                  </TabsTrigger>
+                  <TabsTrigger value="repayment" className="text-xs px-2 py-2">
+                    <Wallet size={12} className="mr-1" />
+                    Repayment
+                  </TabsTrigger>
+                  <TabsTrigger value="documents" className="text-xs px-2 py-2">
+                    <FileText size={12} className="mr-1" />
+                    Docs
                   </TabsTrigger>
                 </TabsList>
 
+                {/* Tab 1: Basic Info */}
                 <TabsContent value="basic" className="space-y-4 pt-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2 space-y-2">
+                    <div className="space-y-2">
                       <Label>Product Name *</Label>
                       <Input
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="e.g., Personal Loan, Salary Advance"
+                        placeholder="e.g., Salary Advance, Payroll Loan"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Product Code</Label>
+                      <Input
+                        value={formData.product_code}
+                        onChange={(e) => setFormData({ ...formData, product_code: e.target.value })}
+                        placeholder="e.g., SAL-ADV-001"
                       />
                     </div>
                     <div className="col-span-2 space-y-2">
@@ -396,6 +614,161 @@ const AdminLoanProducts = () => {
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         placeholder="Brief description of the loan product"
                         rows={2}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(v) => setFormData({ ...formData, status: v, is_active: v === "active" })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="archived">Archived</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Distribution Channels</Label>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {["website", "admin", "ussd", "partner"].map((channel) => (
+                          <Badge
+                            key={channel}
+                            variant={formData.channels.includes(channel) ? "default" : "outline"}
+                            className="cursor-pointer capitalize"
+                            onClick={() => toggleChannel(channel)}
+                          >
+                            {channel}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 2: Eligibility Rules */}
+                <TabsContent value="eligibility" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Minimum Age</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_age}
+                        onChange={(e) => setFormData({ ...formData, min_age: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Maximum Age</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_age}
+                        onChange={(e) => setFormData({ ...formData, max_age: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Minimum Salary (K)</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_salary}
+                        onChange={(e) => setFormData({ ...formData, min_salary: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Minimum Credit Score</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_credit_score}
+                        onChange={(e) => setFormData({ ...formData, min_credit_score: Number(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">0 = no minimum</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Maximum DTI Ratio (%)</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_dti_ratio}
+                        onChange={(e) => setFormData({ ...formData, max_dti_ratio: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max Concurrent Loans</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_concurrent_loans}
+                        onChange={(e) => setFormData({ ...formData, max_concurrent_loans: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label>Eligible Employment Types</Label>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {["employed", "self_employed", "contract", "other"].map((type) => (
+                          <Badge
+                            key={type}
+                            variant={formData.employment_types.includes(type) ? "default" : "outline"}
+                            className="cursor-pointer capitalize"
+                            onClick={() => toggleEmploymentType(type)}
+                          >
+                            {type.replace("_", " ")}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-span-2 grid grid-cols-3 gap-4 pt-2">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.blacklist_check_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, blacklist_check_required: !!checked })}
+                        />
+                        <Label className="text-sm">Blacklist Check Required</Label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.mou_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, mou_required: !!checked })}
+                        />
+                        <Label className="text-sm">Employer MOU Required</Label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.employer_whitelist_enabled}
+                          onCheckedChange={(checked) => setFormData({ ...formData, employer_whitelist_enabled: !!checked })}
+                        />
+                        <Label className="text-sm">Employer Whitelist Only</Label>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 3: Amount & Term */}
+                <TabsContent value="amount" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Amount Logic</Label>
+                      <Select
+                        value={formData.amount_logic}
+                        onValueChange={(v) => setFormData({ ...formData, amount_logic: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixed Range</SelectItem>
+                          <SelectItem value="salary_based">Salary Based (%)</SelectItem>
+                          <SelectItem value="vendor_based">Vendor Based (BNPL)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max % of Salary (if salary-based)</Label>
+                      <Input
+                        type="number"
+                        value={formData.max_salary_percent}
+                        onChange={(e) => setFormData({ ...formData, max_salary_percent: Number(e.target.value) })}
+                        disabled={formData.amount_logic !== "salary_based"}
                       />
                     </div>
                     <div className="space-y-2">
@@ -430,16 +803,10 @@ const AdminLoanProducts = () => {
                         onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
                       />
                     </div>
-                    <div className="col-span-2 flex items-center gap-3">
-                      <Switch
-                        checked={formData.is_active}
-                        onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                      />
-                      <Label>Active (visible to borrowers)</Label>
-                    </div>
                   </div>
                 </TabsContent>
 
+                {/* Tab 4: Interest & Fees */}
                 <TabsContent value="interest" className="space-y-4 pt-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -457,11 +824,6 @@ const AdminLoanProducts = () => {
                           <SelectItem value="compound">Compound</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {formData.interest_type === "flat" && "Interest calculated on original principal"}
-                        {formData.interest_type === "reducing_balance" && "Interest calculated on outstanding balance"}
-                        {formData.interest_type === "compound" && "Interest calculated on principal + accrued interest"}
-                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label>Interest Period</Label>
@@ -479,7 +841,6 @@ const AdminLoanProducts = () => {
                           <SelectItem value="yearly">Per Year</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">Time period the interest rate applies to</p>
                     </div>
                     <div className="space-y-2">
                       <Label>Interest Rate (%)</Label>
@@ -501,20 +862,64 @@ const AdminLoanProducts = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        Enforcement/Legal Fee (%)
-                        <Badge variant="outline" className="text-xs">Deducted before disbursement</Badge>
-                      </Label>
+                      <Label>Enforcement/Legal Fee (%)</Label>
                       <Input
                         type="number"
                         step="0.1"
                         value={formData.enforcement_fee_percent}
                         onChange={(e) => setFormData({ ...formData, enforcement_fee_percent: Number(e.target.value) })}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        E.g., K10,000 loan with 10% fee = K9,000 disbursed, K10,000 repayable
-                      </p>
+                      <p className="text-xs text-muted-foreground">Deducted before disbursement</p>
                     </div>
+                    <div className="space-y-2">
+                      <Label>Insurance Premium (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.insurance_percent}
+                        onChange={(e) => setFormData({ ...formData, insurance_percent: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>VAT (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.vat_percent}
+                        onChange={(e) => setFormData({ ...formData, vat_percent: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Platform Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.platform_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, platform_fee_percent: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.insurance_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, insurance_required: !!checked })}
+                        />
+                        <Label className="text-sm">Insurance Required</Label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.collateral_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, collateral_required: !!checked })}
+                        />
+                        <Label className="text-sm">Collateral Required</Label>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 5: Penalties & Default */}
+                <TabsContent value="penalties" className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Grace Period (days)</Label>
                       <Input
@@ -548,7 +953,6 @@ const AdminLoanProducts = () => {
                           <SelectItem value="monthly">Monthly</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">How often penalty is applied on overdue</p>
                     </div>
                     <div className="space-y-2">
                       <Label>Early Repayment Fee (%)</Label>
@@ -560,81 +964,112 @@ const AdminLoanProducts = () => {
                         disabled={!formData.early_repayment_allowed}
                       />
                     </div>
-                    <div className="col-span-2 flex items-center gap-3">
-                      <Switch
-                        checked={formData.early_repayment_allowed}
-                        onCheckedChange={(checked) => setFormData({ ...formData, early_repayment_allowed: checked })}
+                    <div className="space-y-2">
+                      <Label>Default Threshold (days)</Label>
+                      <Input
+                        type="number"
+                        value={formData.default_threshold_days}
+                        onChange={(e) => setFormData({ ...formData, default_threshold_days: Number(e.target.value) })}
                       />
-                      <Label>Allow Early Repayment</Label>
+                      <p className="text-xs text-muted-foreground">Days overdue to mark as defaulted</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Legal Escalation (days)</Label>
+                      <Input
+                        type="number"
+                        value={formData.legal_escalation_days}
+                        onChange={(e) => setFormData({ ...formData, legal_escalation_days: Number(e.target.value) })}
+                      />
+                      <p className="text-xs text-muted-foreground">Days overdue for legal action trigger</p>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-3 pt-2">
+                      <Checkbox
+                        checked={formData.early_repayment_allowed}
+                        onCheckedChange={(checked) => setFormData({ ...formData, early_repayment_allowed: !!checked })}
+                      />
+                      <Label className="text-sm">Allow Early Repayment</Label>
                     </div>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="risk" className="space-y-4 pt-4">
+                {/* Tab 6: Repayment Rules */}
+                <TabsContent value="repayment" className="space-y-4 pt-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Maximum DTI Ratio (%)</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_dti_ratio}
-                        onChange={(e) => setFormData({ ...formData, max_dti_ratio: Number(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground">Max debt-to-income ratio allowed</p>
+                      <Label>Repayment Frequency</Label>
+                      <Select
+                        value={formData.repayment_frequency}
+                        onValueChange={(v) => setFormData({ ...formData, repayment_frequency: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Minimum Credit Score</Label>
-                      <Input
-                        type="number"
-                        value={formData.min_credit_score}
-                        onChange={(e) => setFormData({ ...formData, min_credit_score: Number(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground">0 = no minimum requirement</p>
+                      <Label>Installment Structure</Label>
+                      <Select
+                        value={formData.installment_structure}
+                        onValueChange={(v) => setFormData({ ...formData, installment_structure: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="equal">Equal Installments</SelectItem>
+                          <SelectItem value="balloon">Balloon Payment</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Insurance Premium (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.insurance_percent}
-                        onChange={(e) => setFormData({ ...formData, insurance_percent: Number(e.target.value) })}
-                        disabled={!formData.insurance_required}
-                      />
-                    </div>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          checked={formData.collateral_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, collateral_required: checked })}
-                        />
-                        <Label>Collateral Required</Label>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          checked={formData.insurance_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, insurance_required: checked })}
-                        />
-                        <Label>Insurance Required</Label>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="requirements" className="space-y-4 pt-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Eligible Employment Types</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {["employed", "self_employed", "contract", "other"].map((type) => (
+                    <div className="col-span-2 space-y-2">
+                      <Label>Repayment Methods</Label>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {["bank_transfer", "mobile_money", "payroll_deduction", "cash"].map((method) => (
                           <Badge
-                            key={type}
-                            variant={formData.employment_types.includes(type) ? "default" : "outline"}
+                            key={method}
+                            variant={formData.repayment_methods.includes(method) ? "default" : "outline"}
                             className="cursor-pointer capitalize"
-                            onClick={() => toggleEmploymentType(type)}
+                            onClick={() => toggleRepaymentMethod(method)}
                           >
-                            {type.replace("_", " ")}
+                            {method.replace("_", " ")}
                           </Badge>
                         ))}
                       </div>
+                    </div>
+                    <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.auto_disbursement}
+                          onCheckedChange={(checked) => setFormData({ ...formData, auto_disbursement: !!checked })}
+                        />
+                        <Label className="text-sm">Auto Disbursement</Label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={formData.partial_disbursement}
+                          onCheckedChange={(checked) => setFormData({ ...formData, partial_disbursement: !!checked })}
+                        />
+                        <Label className="text-sm">Allow Partial Disbursement</Label>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 7: Documents & Contracts */}
+                <TabsContent value="documents" className="space-y-4 pt-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Contract Template URL</Label>
+                      <Input
+                        value={formData.contract_template_url}
+                        onChange={(e) => setFormData({ ...formData, contract_template_url: e.target.value })}
+                        placeholder="https://storage.example.com/templates/contract.pdf"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Document Requirements (one per line)</Label>
@@ -644,6 +1079,13 @@ const AdminLoanProducts = () => {
                         placeholder="Valid NRC (front & back)&#10;Latest payslip&#10;3 months bank statement&#10;Proof of residence"
                         rows={6}
                       />
+                    </div>
+                    <div className="flex items-center gap-3 pt-2">
+                      <Checkbox
+                        checked={formData.digital_signature_required}
+                        onCheckedChange={(checked) => setFormData({ ...formData, digital_signature_required: !!checked })}
+                      />
+                      <Label className="text-sm">Digital Signature Required</Label>
                     </div>
                   </div>
                 </TabsContent>
@@ -666,7 +1108,7 @@ const AdminLoanProducts = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="glass border-border/50">
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
@@ -706,13 +1148,26 @@ const AdminLoanProducts = () => {
               </div>
             </CardContent>
           </Card>
+          <Card className="glass border-border/50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-warning/10">
+                  <Archive className="text-warning" size={24} />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Archived</p>
+                  <p className="text-2xl font-bold text-foreground">{stats.archived}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Search */}
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <Input
-            placeholder="Search products..."
+            placeholder="Search by name or code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -723,7 +1178,7 @@ const AdminLoanProducts = () => {
         <Card className="glass border-border/50">
           <CardHeader>
             <CardTitle>All Products</CardTitle>
-            <CardDescription>Configure loan types available to borrowers</CardDescription>
+            <CardDescription>Configure loan product templates and rules</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -736,20 +1191,25 @@ const AdminLoanProducts = () => {
                     <TableHead>Amount Range</TableHead>
                     <TableHead>Term</TableHead>
                     <TableHead>Interest</TableHead>
-                    <TableHead>Features</TableHead>
+                    <TableHead>Linked Loans</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProducts?.map((product) => (
-                    <TableRow key={product.id}>
+                    <TableRow key={product.id} className={product.status === "archived" ? "opacity-60" : ""}>
                       <TableCell>
                         <div>
                           <p className="font-medium text-foreground">{product.name}</p>
-                          <p className="text-sm text-muted-foreground line-clamp-1">
-                            {product.description}
-                          </p>
+                          {product.product_code && (
+                            <p className="text-xs text-muted-foreground font-mono">{product.product_code}</p>
+                          )}
+                          <div className="flex gap-1 mt-1">
+                            {product.channels?.map((ch) => (
+                              <Badge key={ch} variant="outline" className="text-[10px] capitalize">{ch}</Badge>
+                            ))}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -768,40 +1228,48 @@ const AdminLoanProducts = () => {
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-sm">
                             <Percent size={14} className="text-muted-foreground" />
-                            {product.interest_rate}% <span className="text-xs text-muted-foreground">({product.interest_type || "flat"})</span>
+                            {product.interest_rate}% <span className="text-xs text-muted-foreground">/{product.interest_period?.charAt(0)}</span>
                           </div>
+                          <p className="text-xs text-muted-foreground capitalize">{product.interest_type}</p>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {product.collateral_required && (
-                            <Badge variant="outline" className="text-xs">Collateral</Badge>
-                          )}
-                          {product.insurance_required && (
-                            <Badge variant="outline" className="text-xs">Insurance</Badge>
-                          )}
-                          {product.grace_period_days > 0 && (
-                            <Badge variant="outline" className="text-xs">{product.grace_period_days}d Grace</Badge>
-                          )}
-                          {product.late_payment_penalty_percent > 0 && (
-                            <Badge variant="outline" className="text-xs text-destructive">{product.late_payment_penalty_percent}% Penalty</Badge>
-                          )}
+                        <div className="flex items-center gap-1 text-sm">
+                          <Link2 size={14} className="text-muted-foreground" />
+                          {linkedLoansCounts?.[product.id] || 0}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={product.is_active ? "default" : "secondary"}
-                          className={product.is_active ? "bg-success/10 text-success border-success/20" : ""}
-                        >
-                          {product.is_active ? "Active" : "Inactive"}
-                        </Badge>
+                        {product.status === "archived" ? (
+                          <Badge variant="secondary" className="bg-warning/10 text-warning">
+                            <Archive size={12} className="mr-1" />
+                            Archived
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant={product.is_active ? "default" : "secondary"}
+                            className={product.is_active ? "bg-success/10 text-success border-success/20" : ""}
+                          >
+                            {product.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Switch
-                            checked={product.is_active}
-                            onCheckedChange={() => toggleActive(product)}
-                          />
+                        <div className="flex items-center justify-end gap-1">
+                          {product.status !== "archived" && (
+                            <Switch
+                              checked={product.is_active}
+                              onCheckedChange={() => toggleActive(product)}
+                            />
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => cloneMutation.mutate(product)}
+                            title="Clone product"
+                          >
+                            <Copy size={16} />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(product)}>
                             <Pencil size={16} />
                           </Button>
@@ -809,7 +1277,7 @@ const AdminLoanProducts = () => {
                             variant="ghost"
                             size="icon"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => deleteMutation.mutate(product.id)}
+                            onClick={() => setDeleteConfirmProduct(product)}
                           >
                             <Trash2 size={16} />
                           </Button>
@@ -822,6 +1290,34 @@ const AdminLoanProducts = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deleteConfirmProduct} onOpenChange={() => setDeleteConfirmProduct(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Loan Product?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {(linkedLoansCounts?.[deleteConfirmProduct?.id || ""] || 0) > 0 ? (
+                  <>
+                    This product has <strong>{linkedLoansCounts?.[deleteConfirmProduct?.id || ""]}</strong> linked loan(s).
+                    It will be <strong>archived</strong> instead of deleted to preserve history.
+                  </>
+                ) : (
+                  <>This product has no linked loans and will be permanently deleted.</>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => deleteConfirmProduct && deleteMutation.mutate(deleteConfirmProduct.id)}
+              >
+                {(linkedLoansCounts?.[deleteConfirmProduct?.id || ""] || 0) > 0 ? "Archive" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AdminLayout>
   );
