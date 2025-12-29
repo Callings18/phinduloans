@@ -21,6 +21,8 @@ import {
   History,
   FileX,
   AlertTriangle,
+  Layers,
+  FileSignature,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -68,6 +70,7 @@ const menuGroups: MenuGroup[] = [
     defaultOpen: true,
     items: [
       { icon: Banknote, label: "Repayments", path: "/admin/repayments" },
+      { icon: Layers, label: "Bulk Repayments", path: "/admin/bulk-repayments" },
     ],
   },
   {
@@ -91,6 +94,7 @@ const menuGroups: MenuGroup[] = [
     defaultOpen: false,
     items: [
       { icon: Shield, label: "Staff", path: "/admin/staff", adminOnly: true },
+      { icon: FileSignature, label: "Contracts", path: "/admin/contract-templates", adminOnly: true },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
     ],
   },
