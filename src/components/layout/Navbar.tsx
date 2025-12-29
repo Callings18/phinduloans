@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Menu, X, User, LogOut, LayoutDashboard, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useSystemSettings } from "@/hooks/useSystemSettings";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,12 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PhinduAI from "../common/PhinduAI";
+import phinduLogo from "@/assets/phindu-logo.jpg";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { user, isAdmin, signOut, isLoading } = useAuth();
-  const { data: settings } = useSystemSettings();
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -28,10 +27,6 @@ const Navbar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const companyName = settings?.companyInfo?.name || "PHINDU";
-  const nameParts = companyName.split(" ");
-  const firstLetter = companyName.charAt(0);
-
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 glass">
@@ -39,16 +34,14 @@ const Navbar = () => {
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center group-hover:shadow-glow transition-shadow duration-300">
-                <span className="text-primary-foreground font-bold text-xl">{firstLetter}</span>
-              </div>
+              <img 
+                src={phinduLogo} 
+                alt="Phindu Loans" 
+                className="w-10 h-10 rounded-lg object-cover group-hover:shadow-glow transition-shadow duration-300"
+              />
               <div className="flex flex-col">
-                <span className="text-foreground font-bold text-lg leading-tight uppercase">{nameParts[0]}</span>
-                {nameParts.length > 1 && (
-                  <span className="text-muted-foreground text-xs tracking-wider uppercase">
-                    {nameParts.slice(1).join(" ")}
-                  </span>
-                )}
+                <span className="text-foreground font-bold text-lg leading-tight uppercase">PHINDU</span>
+                <span className="text-muted-foreground text-xs tracking-wider uppercase">LOANS</span>
               </div>
             </Link>
 
