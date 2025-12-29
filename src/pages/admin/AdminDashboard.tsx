@@ -7,6 +7,12 @@ import QuickActions from "@/components/admin/QuickActions";
 import ModuleWidgets from "@/components/admin/ModuleWidgets";
 import { Step } from "react-joyride";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   FileText,
   Users,
   Clock,
@@ -21,15 +27,21 @@ import {
   TrendingUp,
   Calendar,
   HelpCircle,
+  DollarSign,
+  AlertTriangle,
+  Receipt,
+  User,
+  CreditCard,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { useState } from "react";
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [runTour, setRunTour] = useState(false);
   const tourSteps: Step[] = [
     {
@@ -100,6 +112,21 @@ const AdminDashboard = () => {
       const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
       const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
+      // Get funding pool from system settings
+      const { data: fundingPoolSetting } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'funding_pool')
+        .single();
+      
+      const fundingPool = fundingPoolSetting?.value as number || 500000; // Default 500k
+      const outstandingPrincipal = activeLoans.reduce((sum, l) => {
+        const paidForLoan = allRepayments.filter(r => r.loan_id === l.id && r.status === 'paid')
+          .reduce((s, r) => s + Number(r.principal_paid || 0), 0);
+        return sum + (Number(l.loan_amount || 0) - paidForLoan);
+      }, 0);
+      const availableBalance = Math.max(0, fundingPool - outstandingPrincipal);
+
       return {
         totalApplications: loans.length,
         pendingApplications: loans.filter(l => l.status === 'pending').length,
@@ -118,7 +145,36 @@ const AdminDashboard = () => {
         overdueAmount,
         overdueCount: overdueRepayments.length,
         recentApplications: loans.slice(0, 6),
+        availableBalance,
+        fundingPool,
       };
+    },
+  });
+
+  // Query for upcoming payments (nearest loans due)
+  const { data: upcomingPayments } = useQuery({
+    queryKey: ['upcoming-payments'],
+    queryFn: async () => {
+      const today = new Date();
+      const { data, error } = await supabase
+        .from('loan_repayments')
+        .select(`
+          *,
+          loan:loan_applications (
+            id,
+            full_name,
+            phone,
+            email,
+            loan_amount
+          )
+        `)
+        .eq('status', 'pending')
+        .gte('due_date', format(today, 'yyyy-MM-dd'))
+        .order('due_date', { ascending: true })
+        .limit(5);
+
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -288,7 +344,18 @@ const AdminDashboard = () => {
         </div>
 
         {/* Portfolio Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          {/* Available Balance - New */}
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-card">
+            <CardContent className="p-4">
+              <p className="text-primary text-xs font-medium mb-1 flex items-center gap-1">
+                <DollarSign size={12} />
+                Available Balance
+              </p>
+              <p className="text-2xl font-bold text-primary">K{(stats?.availableBalance || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">of K{(stats?.fundingPool || 0).toLocaleString()} pool</p>
+            </CardContent>
+          </Card>
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
               <p className="text-muted-foreground text-xs font-medium mb-1">Expected Returns</p>
@@ -325,6 +392,70 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Upcoming Payments Widget - New */}
+        <Card className="border-border/50 bg-card/80">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-foreground text-lg flex items-center gap-2">
+                  <Calendar size={18} className="text-primary" />
+                  Upcoming Payments
+                </CardTitle>
+                <CardDescription>Next payments due</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary">
+                <Link to="/admin/repayments">
+                  View All
+                  <ArrowUpRight size={14} className="ml-1" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {upcomingPayments && upcomingPayments.length > 0 ? (
+              <div className="space-y-3">
+                {upcomingPayments.map((payment: any) => {
+                  const daysUntil = differenceInDays(new Date(payment.due_date), new Date());
+                  const urgencyClass = daysUntil === 0 ? 'text-destructive bg-destructive/10 border-destructive/30' :
+                    daysUntil <= 3 ? 'text-warning bg-warning/10 border-warning/30' :
+                    'text-success bg-success/10 border-success/30';
+                  
+                  return (
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/admin/loans?id=${payment.loan_id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                          <User size={18} className="text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{payment.loan?.full_name || 'Unknown'}</p>
+                          <p className="text-xs text-muted-foreground">K{Number(payment.amount).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className={urgencyClass}>
+                          {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`}
+                        </Badge>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(payment.due_date), 'MMM d')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar size={32} className="mx-auto mb-2 opacity-50" />
+                <p>No upcoming payments</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -521,9 +652,27 @@ const AdminDashboard = () => {
                                 <Eye size={16} />
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal size={16} />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal size={16} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-popover border-border">
+                                <DropdownMenuItem onClick={() => navigate(`/admin/loans?id=${app.id}`)}>
+                                  <CreditCard size={14} className="mr-2" />
+                                  Loan Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate(`/admin/repayments?loan_id=${app.id}`)}>
+                                  <Receipt size={14} className="mr-2" />
+                                  Payment Schedule
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate(`/admin/borrowers?id=${app.user_id}`)}>
+                                  <User size={14} className="mr-2" />
+                                  Borrower Profile
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
                       </tr>

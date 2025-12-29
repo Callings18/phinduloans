@@ -422,8 +422,10 @@ export type Database = {
           address: string | null
           admin_notes: string | null
           assigned_to: string | null
+          bank_statement_url: string | null
           city: string | null
           collateral_description: string | null
+          collateral_image_url: string | null
           collateral_value: number | null
           contract_url: string | null
           created_at: string
@@ -448,6 +450,8 @@ export type Database = {
           nrc_back_url: string | null
           nrc_front_url: string | null
           nrc_number: string
+          payslip_2_url: string | null
+          payslip_3_url: string | null
           payslip_url: string | null
           phone: string
           rejection_reason: string | null
@@ -467,8 +471,10 @@ export type Database = {
           address?: string | null
           admin_notes?: string | null
           assigned_to?: string | null
+          bank_statement_url?: string | null
           city?: string | null
           collateral_description?: string | null
+          collateral_image_url?: string | null
           collateral_value?: number | null
           contract_url?: string | null
           created_at?: string
@@ -493,6 +499,8 @@ export type Database = {
           nrc_back_url?: string | null
           nrc_front_url?: string | null
           nrc_number: string
+          payslip_2_url?: string | null
+          payslip_3_url?: string | null
           payslip_url?: string | null
           phone: string
           rejection_reason?: string | null
@@ -512,8 +520,10 @@ export type Database = {
           address?: string | null
           admin_notes?: string | null
           assigned_to?: string | null
+          bank_statement_url?: string | null
           city?: string | null
           collateral_description?: string | null
+          collateral_image_url?: string | null
           collateral_value?: number | null
           contract_url?: string | null
           created_at?: string
@@ -538,6 +548,8 @@ export type Database = {
           nrc_back_url?: string | null
           nrc_front_url?: string | null
           nrc_number?: string
+          payslip_2_url?: string | null
+          payslip_3_url?: string | null
           payslip_url?: string | null
           phone?: string
           rejection_reason?: string | null

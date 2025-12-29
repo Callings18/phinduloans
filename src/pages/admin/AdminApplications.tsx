@@ -544,9 +544,12 @@ const AdminApplications = () => {
   };
 
   const filteredApps = applications?.filter(app => {
-    const matchesSearch = app.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.nrc_number.toLowerCase().includes(searchQuery.toLowerCase());
+    const query = searchQuery.toLowerCase().trim();
+    const matchesSearch = !query || 
+      (app.full_name?.toLowerCase() || '').includes(query) ||
+      (app.email?.toLowerCase() || '').includes(query) ||
+      (app.nrc_number?.toLowerCase() || '').includes(query) ||
+      (app.phone?.toLowerCase() || '').includes(query);
     
     const matchesSource = sourceFilter === 'all' || (app as any).source === sourceFilter;
     

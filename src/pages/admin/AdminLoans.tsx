@@ -122,6 +122,7 @@ interface LoanProduct {
   min_term_months: number;
   max_term_months: number;
   processing_fee_percent: number | null;
+  enforcement_fee_percent?: number | null;
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -210,6 +211,29 @@ const AdminLoans = () => {
     },
     refetchOnWindowFocus: true,
     staleTime: 10000, // 10 seconds
+  });
+
+  // Fetch next due dates for all active loans
+  const { data: loanDueDates } = useQuery({
+    queryKey: ["loan-due-dates"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_repayments")
+        .select("loan_id, due_date")
+        .eq("status", "pending")
+        .order("due_date", { ascending: true });
+
+      if (error) throw error;
+      
+      // Get earliest due date per loan
+      const dueDateMap: Record<string, string> = {};
+      data.forEach((r) => {
+        if (!dueDateMap[r.loan_id]) {
+          dueDateMap[r.loan_id] = r.due_date;
+        }
+      });
+      return dueDateMap;
+    },
   });
 
   // Fetch loan repayments for selected loan
@@ -926,66 +950,90 @@ const AdminLoans = () => {
                       <TableHead>Term</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Date</TableHead>
+                      <TableHead>Due Date</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLoans.map((loan) => (
-                      <TableRow key={loan.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                              <User size={18} className="text-muted-foreground" />
+                    {filteredLoans.map((loan) => {
+                      const dueDate = loanDueDates?.[loan.id];
+                      const isOverdue = dueDate && new Date(dueDate) < new Date();
+                      
+                      // Calculate disbursed amount (after fees)
+                      const product = loanProducts?.find(p => p.id === loan.loan_product_id);
+                      const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
+                      const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;
+                      const disbursedAmount = Number(loan.loan_amount) - processingFee - legalFee;
+                      
+                      return (
+                        <TableRow key={loan.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                                <User size={18} className="text-muted-foreground" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-foreground">{loan.full_name}</p>
+                                <p className="text-sm text-muted-foreground">{loan.email}</p>
+                              </div>
                             </div>
+                          </TableCell>
+                          <TableCell>
                             <div>
-                              <p className="font-medium text-foreground">{loan.full_name}</p>
-                              <p className="text-sm text-muted-foreground">{loan.email}</p>
+                              <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
+                              {(processingFee > 0 || legalFee > 0) && (
+                                <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
+                              )}
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">{loan.interest_rate}% interest</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>{loan.loan_term_months} months</TableCell>
-                        <TableCell>{getStatusBadge(loan.status)}</TableCell>
-                        <TableCell>
-                          <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {["pending", "approved"].includes(loan.status) && (
-                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(loan)}>
-                                <Edit size={16} />
-                              </Button>
+                          </TableCell>
+                          <TableCell>{loan.loan_term_months} months</TableCell>
+                          <TableCell>{getStatusBadge(loan.status)}</TableCell>
+                          <TableCell>
+                            <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
+                          </TableCell>
+                          <TableCell>
+                            {dueDate ? (
+                              <p className={`text-sm ${isOverdue ? 'text-destructive font-medium' : 'text-foreground'}`}>
+                                {format(new Date(dueDate), "MMM dd, yyyy")}
+                                {isOverdue && <span className="text-xs block text-destructive">Overdue</span>}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">-</p>
                             )}
-                            {["active", "disbursed"].includes(loan.status) && (
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              {["pending", "approved"].includes(loan.status) && (
+                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(loan)}>
+                                  <Edit size={16} />
+                                </Button>
+                              )}
+                              {["active", "disbursed"].includes(loan.status) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openQuickPayment(loan)}
+                                >
+                                  <Receipt size={14} className="mr-1" />
+                                  Pay
+                                </Button>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => openQuickPayment(loan)}
+                                onClick={() => {
+                                  setSelectedLoan(loan);
+                                  setIsDetailsOpen(true);
+                                }}
                               >
-                                <Receipt size={14} className="mr-1" />
-                                Pay
+                                <Eye size={16} className="mr-1" />
+                                View
                               </Button>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedLoan(loan);
-                                setIsDetailsOpen(true);
-                              }}
-                            >
-                              <Eye size={16} className="mr-1" />
-                              View
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Card>
