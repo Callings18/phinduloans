@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { calculateLoan } from "@/utils/loanCalculations";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
@@ -77,9 +78,17 @@ const statusConfig = {
   defaulted: { label: "Defaulted", color: "bg-red-600/20 text-red-500 border-red-600/30" },
 };
 
+const sourceConfig = {
+  website: { label: "Website", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: "🌐" },
+  internal: { label: "Internal", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: "🏢" },
+  ussd: { label: "USSD", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: "📱" },
+  mobile_app: { label: "Mobile App", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: "📲" },
+};
+
 const AdminApplications = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -220,12 +229,23 @@ const AdminApplications = () => {
       const interestRate = parseFloat(data.loanData.interest_rate);
       const termMonths = parseInt(data.loanData.loan_term_months);
 
-      const totalRepayment = loanAmount * (1 + (interestRate / 100) * (termMonths / 12));
-      const monthlyPayment = totalRepayment / termMonths;
+      // Get the selected product to use its interest period/type
+      const selectedProduct = loanProducts?.find(p => p.id === data.loanData.product_id);
+      
+      // Use unified calculation utility
+      const loanCalc = calculateLoan(loanAmount, termMonths, {
+        interest_rate: interestRate,
+        interest_period: (selectedProduct as any)?.interest_period || 'monthly',
+        interest_type: (selectedProduct as any)?.interest_type || 'flat',
+        processing_fee_percent: (selectedProduct as any)?.processing_fee_percent || 0,
+        insurance_percent: (selectedProduct as any)?.insurance_percent || 0,
+        vat_percent: (selectedProduct as any)?.vat_percent || 0,
+        platform_fee_percent: (selectedProduct as any)?.platform_fee_percent || 0,
+      });
 
       const { error } = await supabase.from('loan_applications').insert({
         user_id: borrower.id,
-        product_id: data.loanData.product_id || null,
+        loan_product_id: data.loanData.product_id || null,
         full_name: borrower.full_name || borrower.email,
         email: borrower.email,
         phone: borrower.phone || '',
@@ -241,12 +261,13 @@ const AdminApplications = () => {
         loan_term_months: termMonths,
         loan_purpose: data.loanData.loan_purpose,
         interest_rate: interestRate,
-        monthly_payment: monthlyPayment,
-        total_repayment: totalRepayment,
+        monthly_payment: loanCalc.monthlyPayment,
+        total_repayment: loanCalc.totalRepayment,
         collateral_description: data.loanData.collateral_description || null,
         collateral_value: data.loanData.collateral_value ? parseFloat(data.loanData.collateral_value) : null,
         admin_notes: data.loanData.admin_notes || null,
         status: 'pending',
+        source: 'internal',
       });
 
       if (error) throw error;
@@ -443,6 +464,38 @@ const AdminApplications = () => {
 
   const handleApprove = async () => {
     if (!selectedApp) return;
+    
+    // Check minimum credit score requirement from loan product
+    const product = loanProducts?.find(p => p.id === selectedApp.loan_product_id);
+    const minCreditScore = (product as any)?.min_credit_score || 0;
+    
+    if (minCreditScore > 0) {
+      // Check if risk assessment exists with sufficient credit score
+      const { data: riskAssessment } = await supabase
+        .from('risk_assessments')
+        .select('credit_score')
+        .eq('loan_application_id', selectedApp.id)
+        .maybeSingle();
+      
+      if (!riskAssessment) {
+        toast({ 
+          title: "Risk Assessment Required", 
+          description: `This product requires a credit score of at least ${minCreditScore}. Please complete the risk assessment first.`,
+          variant: "destructive" 
+        });
+        return;
+      }
+      
+      if ((riskAssessment.credit_score || 0) < minCreditScore) {
+        toast({ 
+          title: "Credit Score Below Minimum", 
+          description: `Borrower's credit score (${riskAssessment.credit_score}) is below the required ${minCreditScore} for this product.`,
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+    
     setIsProcessing(true);
     await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'approved' });
     setIsProcessing(false);
@@ -490,11 +543,15 @@ const AdminApplications = () => {
     disburseMutation.mutate(disbursement);
   };
 
-  const filteredApps = applications?.filter(app =>
-    app.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    app.nrc_number.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredApps = applications?.filter(app => {
+    const matchesSearch = app.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.nrc_number.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesSource = sourceFilter === 'all' || (app as any).source === sourceFilter;
+    
+    return matchesSearch && matchesSource;
+  });
 
   return (
     <AdminLayout>
@@ -542,7 +599,7 @@ const AdminApplications = () => {
                 />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-48">
+                <SelectTrigger className="w-full md:w-40">
                   <Filter size={16} className="mr-2" />
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
@@ -554,6 +611,18 @@ const AdminApplications = () => {
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-full md:w-40">
+                  <SelectValue placeholder="Filter by source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  <SelectItem value="website">🌐 Website</SelectItem>
+                  <SelectItem value="internal">🏢 Internal</SelectItem>
+                  <SelectItem value="ussd">📱 USSD</SelectItem>
+                  <SelectItem value="mobile_app">📲 Mobile App</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -602,7 +671,18 @@ const AdminApplications = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        {/* Source Badge */}
+                        {(() => {
+                          const src = (app as any).source as keyof typeof sourceConfig;
+                          const srcConfig = sourceConfig[src] || sourceConfig.website;
+                          return (
+                            <Badge variant="outline" className={`${srcConfig.color} border text-xs`}>
+                              {srcConfig.icon} {srcConfig.label}
+                            </Badge>
+                          );
+                        })()}
+                        {/* Status Badge */}
                         <Badge className={`${config?.color} border`}>
                           {config?.label}
                         </Badge>

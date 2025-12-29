@@ -12,6 +12,7 @@ import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { calculateLoan, getInterestPeriodLabel, type LoanProduct as CalcLoanProduct } from "@/utils/loanCalculations";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import GuidedTour from "@/components/common/GuidedTour";
@@ -27,7 +28,12 @@ interface LoanProduct {
   min_term_months: number;
   max_term_months: number;
   interest_rate: number;
+  interest_period: string | null;
+  interest_type: string | null;
   processing_fee_percent: number | null;
+  insurance_percent: number | null;
+  vat_percent: number | null;
+  platform_fee_percent: number | null;
   requirements: string[] | null;
 }
 
@@ -252,13 +258,25 @@ const Apply = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
-  // Calculate interest based on interest period (default to monthly if not specified)
-  // Interest rate from product is per month by default
-  const interestRate = selectedProduct ? selectedProduct.interest_rate / 100 : 0.15;
-  // For monthly rate: total interest = principal × rate × term
-  const totalInterest = formData.loanAmount * interestRate * formData.loanTerm;
-  const totalRepayment = formData.loanAmount + totalInterest;
-  const monthlyPayment = totalRepayment / formData.loanTerm;
+  // Calculate loan using unified calculation utility
+  const loanCalc = selectedProduct 
+    ? calculateLoan(formData.loanAmount, formData.loanTerm, {
+        interest_rate: selectedProduct.interest_rate,
+        interest_period: selectedProduct.interest_period as any,
+        interest_type: selectedProduct.interest_type as any,
+        processing_fee_percent: selectedProduct.processing_fee_percent,
+        insurance_percent: selectedProduct.insurance_percent,
+        vat_percent: selectedProduct.vat_percent,
+        platform_fee_percent: selectedProduct.platform_fee_percent,
+      })
+    : null;
+
+  const totalInterest = loanCalc?.totalInterest ?? 0;
+  const totalRepayment = loanCalc?.totalRepayment ?? formData.loanAmount;
+  const monthlyPayment = loanCalc?.monthlyPayment ?? 0;
+  const interestPeriodLabel = selectedProduct 
+    ? getInterestPeriodLabel(selectedProduct.interest_period as any) 
+    : 'per month';
 
   const handleSubmit = async () => {
     if (!user) {

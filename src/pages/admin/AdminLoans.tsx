@@ -37,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format, addMonths, parseISO } from "date-fns";
+import { calculateLoan, getInterestPeriodLabel } from "@/utils/loanCalculations";
 import {
   CreditCard,
   Search,
@@ -288,21 +289,32 @@ const AdminLoans = () => {
   const selectedBorrower = borrowers?.find(b => b.id === selectedBorrowerId);
   const selectedProduct = loanProducts?.find(p => p.id === selectedProductId);
 
-  // Calculate loan details - Fixed calculation
+  // Calculate loan details using unified calculation utility
   const calculateLoanDetails = () => {
     if (!selectedProduct || !loanAmount || !loanTermMonths) return null;
 
     const principal = Number(loanAmount);
-    const rate = selectedProduct.interest_rate; // Already monthly rate
     const months = Number(loanTermMonths);
-    const processingFee = selectedProduct.processing_fee_percent ? principal * (selectedProduct.processing_fee_percent / 100) : 0;
+    
+    const loanCalc = calculateLoan(principal, months, {
+      interest_rate: selectedProduct.interest_rate,
+      interest_period: (selectedProduct as any).interest_period,
+      interest_type: (selectedProduct as any).interest_type,
+      processing_fee_percent: selectedProduct.processing_fee_percent,
+      insurance_percent: (selectedProduct as any).insurance_percent,
+      vat_percent: (selectedProduct as any).vat_percent,
+      platform_fee_percent: (selectedProduct as any).platform_fee_percent,
+    });
 
-    // Interest = principal × (rate/100) × months (for monthly rate)
-    const interest = principal * (rate / 100) * months;
-    const totalRepayment = principal + interest + processingFee;
-    const monthlyPayment = totalRepayment / months;
-
-    return { principal, interest, processingFee, totalRepayment, monthlyPayment, rate };
+    return { 
+      principal, 
+      interest: loanCalc.totalInterest, 
+      processingFee: loanCalc.processingFee, 
+      totalRepayment: loanCalc.totalRepayment, 
+      monthlyPayment: loanCalc.monthlyPayment, 
+      rate: selectedProduct.interest_rate,
+      interestPeriod: getInterestPeriodLabel((selectedProduct as any).interest_period),
+    };
   };
 
   const loanDetails = calculateLoanDetails();
