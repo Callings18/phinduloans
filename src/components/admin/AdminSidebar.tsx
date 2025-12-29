@@ -59,7 +59,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { icon: FileText, label: "Applications", path: "/admin/applications" },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers" },
-      { icon: Building2, label: "Employers", path: "/admin/employers" },
+      { icon: Building2, label: "Employees", path: "/admin/employers" },
       { icon: Package, label: "Loan Products", path: "/admin/loan-products", adminOnly: true },
       { icon: CreditCard, label: "Loans", path: "/admin/loans" },
       { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
