@@ -72,6 +72,7 @@ import {
   Wallet,
   AlertTriangle,
   Link2,
+  ShieldAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -130,6 +131,15 @@ interface LoanProduct {
   parent_product_id: string | null;
   version: number | null;
   created_at: string;
+  // CRB & Guarantee fields
+  crb_check_required: boolean | null;
+  crb_auto_decline_score: number | null;
+  crb_manual_review_score: number | null;
+  crb_auto_approve_score: number | null;
+  guarantee_required: boolean | null;
+  guarantee_provider: string | null;
+  max_guarantee_percent: number | null;
+  guarantee_fee_percent: number | null;
 }
 
 const defaultFormData = {
@@ -182,6 +192,15 @@ const defaultFormData = {
   legal_escalation_days: 120,
   contract_template_url: "",
   digital_signature_required: false,
+  // CRB & Guarantee fields
+  crb_check_required: false,
+  crb_auto_decline_score: 0,
+  crb_manual_review_score: 300,
+  crb_auto_approve_score: 600,
+  guarantee_required: false,
+  guarantee_provider: "",
+  max_guarantee_percent: 80,
+  guarantee_fee_percent: 0,
 };
 
 const AdminLoanProducts = () => {
@@ -347,6 +366,15 @@ const AdminLoanProducts = () => {
         digital_signature_required: product.digital_signature_required,
         parent_product_id: product.id,
         version: (product.version || 1) + 1,
+        // CRB & Guarantee fields
+        crb_check_required: product.crb_check_required,
+        crb_auto_decline_score: product.crb_auto_decline_score,
+        crb_manual_review_score: product.crb_manual_review_score,
+        crb_auto_approve_score: product.crb_auto_approve_score,
+        guarantee_required: product.guarantee_required,
+        guarantee_provider: product.guarantee_provider,
+        max_guarantee_percent: product.max_guarantee_percent,
+        guarantee_fee_percent: product.guarantee_fee_percent,
       };
       
       const { error } = await supabase.from("loan_products").insert(clonedData);
@@ -416,6 +444,15 @@ const AdminLoanProducts = () => {
       legal_escalation_days: product.legal_escalation_days ?? 120,
       contract_template_url: product.contract_template_url || "",
       digital_signature_required: product.digital_signature_required ?? false,
+      // CRB & Guarantee fields
+      crb_check_required: product.crb_check_required ?? false,
+      crb_auto_decline_score: product.crb_auto_decline_score ?? 0,
+      crb_manual_review_score: product.crb_manual_review_score ?? 300,
+      crb_auto_approve_score: product.crb_auto_approve_score ?? 600,
+      guarantee_required: product.guarantee_required ?? false,
+      guarantee_provider: product.guarantee_provider || "",
+      max_guarantee_percent: product.max_guarantee_percent ?? 80,
+      guarantee_fee_percent: product.guarantee_fee_percent ?? 0,
     });
     setIsDialogOpen(true);
   };
@@ -470,6 +507,15 @@ const AdminLoanProducts = () => {
       legal_escalation_days: formData.legal_escalation_days,
       contract_template_url: formData.contract_template_url || null,
       digital_signature_required: formData.digital_signature_required,
+      // CRB & Guarantee fields
+      crb_check_required: formData.crb_check_required,
+      crb_auto_decline_score: formData.crb_auto_decline_score,
+      crb_manual_review_score: formData.crb_manual_review_score,
+      crb_auto_approve_score: formData.crb_auto_approve_score,
+      guarantee_required: formData.guarantee_required,
+      guarantee_provider: formData.guarantee_provider || null,
+      max_guarantee_percent: formData.max_guarantee_percent,
+      guarantee_fee_percent: formData.guarantee_fee_percent,
     };
 
     if (editingProduct) {
@@ -557,7 +603,7 @@ const AdminLoanProducts = () => {
                 </DialogTitle>
               </DialogHeader>
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-7 h-auto">
+                <TabsList className="grid w-full grid-cols-8 h-auto">
                   <TabsTrigger value="basic" className="text-xs px-2 py-2">
                     <Package size={12} className="mr-1" />
                     Basic
@@ -581,6 +627,10 @@ const AdminLoanProducts = () => {
                   <TabsTrigger value="repayment" className="text-xs px-2 py-2">
                     <Wallet size={12} className="mr-1" />
                     Repayment
+                  </TabsTrigger>
+                  <TabsTrigger value="crb_guarantee" className="text-xs px-2 py-2">
+                    <ShieldAlert size={12} className="mr-1" />
+                    CRB/Guarantee
                   </TabsTrigger>
                   <TabsTrigger value="documents" className="text-xs px-2 py-2">
                     <FileText size={12} className="mr-1" />
@@ -1086,6 +1136,111 @@ const AdminLoanProducts = () => {
                         onCheckedChange={(checked) => setFormData({ ...formData, digital_signature_required: !!checked })}
                       />
                       <Label className="text-sm">Digital Signature Required</Label>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 8: CRB & Credit Guarantee */}
+                <TabsContent value="crb_guarantee" className="space-y-4 pt-4">
+                  <div className="space-y-6">
+                    {/* CRB Settings */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold">Credit Reference Bureau (CRB)</h4>
+                          <p className="text-sm text-muted-foreground">Require credit check before loan approval</p>
+                        </div>
+                        <Switch
+                          checked={formData.crb_check_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, crb_check_required: checked })}
+                        />
+                      </div>
+                      
+                      {formData.crb_check_required && (
+                        <div className="grid grid-cols-3 gap-4 pl-4 border-l-2 border-primary/30">
+                          <div className="space-y-2">
+                            <Label>Auto-Decline Score</Label>
+                            <Input
+                              type="number"
+                              value={formData.crb_auto_decline_score}
+                              onChange={(e) => setFormData({ ...formData, crb_auto_decline_score: Number(e.target.value) })}
+                            />
+                            <p className="text-xs text-muted-foreground">Below this = auto reject</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Manual Review Score</Label>
+                            <Input
+                              type="number"
+                              value={formData.crb_manual_review_score}
+                              onChange={(e) => setFormData({ ...formData, crb_manual_review_score: Number(e.target.value) })}
+                            />
+                            <p className="text-xs text-muted-foreground">Between decline & approve = manual</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Auto-Approve Score</Label>
+                            <Input
+                              type="number"
+                              value={formData.crb_auto_approve_score}
+                              onChange={(e) => setFormData({ ...formData, crb_auto_approve_score: Number(e.target.value) })}
+                            />
+                            <p className="text-xs text-muted-foreground">Above this = auto approve</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Guarantee Settings */}
+                    <div className="space-y-4 pt-4 border-t border-border/50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold">Credit Guarantee</h4>
+                          <p className="text-sm text-muted-foreground">Require PMIC/ZCGS guarantee coverage</p>
+                        </div>
+                        <Switch
+                          checked={formData.guarantee_required}
+                          onCheckedChange={(checked) => setFormData({ ...formData, guarantee_required: checked })}
+                        />
+                      </div>
+                      
+                      {formData.guarantee_required && (
+                        <div className="grid grid-cols-3 gap-4 pl-4 border-l-2 border-primary/30">
+                          <div className="space-y-2">
+                            <Label>Guarantee Provider</Label>
+                            <Select
+                              value={formData.guarantee_provider}
+                              onValueChange={(v) => setFormData({ ...formData, guarantee_provider: v })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select provider" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pmic">PMIC</SelectItem>
+                                <SelectItem value="zcgs">ZCGS</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Max Guarantee %</Label>
+                            <Input
+                              type="number"
+                              value={formData.max_guarantee_percent}
+                              onChange={(e) => setFormData({ ...formData, max_guarantee_percent: Number(e.target.value) })}
+                            />
+                            <p className="text-xs text-muted-foreground">Coverage percentage</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Guarantee Fee %</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={formData.guarantee_fee_percent}
+                              onChange={(e) => setFormData({ ...formData, guarantee_fee_percent: Number(e.target.value) })}
+                            />
+                            <p className="text-xs text-muted-foreground">Fee charged to borrower</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </TabsContent>
