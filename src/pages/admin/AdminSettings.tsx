@@ -23,8 +23,10 @@ import {
   Globe,
   Building2,
   ShieldCheck,
-  BellRing
+  BellRing,
+  Shield
 } from "lucide-react";
+import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 
 interface PaymentSettings {
   id: string;
@@ -698,6 +700,11 @@ const AdminSettings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Integrations Settings (CRB & Guarantee) */}
+          <TabsContent value="integrations">
+            <IntegrationsSettings />
           </TabsContent>
         </Tabs>
       </div>
