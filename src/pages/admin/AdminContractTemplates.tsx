@@ -518,14 +518,14 @@ const AdminContractTemplates = () => {
               <div className="space-y-2">
                 <Label>Link to Loan Product (Optional)</Label>
                 <Select 
-                  value={formData.loan_product_id} 
-                  onValueChange={(v) => setFormData({ ...formData, loan_product_id: v })}
+                  value={formData.loan_product_id || "none"} 
+                  onValueChange={(v) => setFormData({ ...formData, loan_product_id: v === "none" ? "" : v })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select product (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No specific product</SelectItem>
+                    <SelectItem value="none">No specific product</SelectItem>
                     {loanProducts?.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
