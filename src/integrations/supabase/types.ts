@@ -189,6 +189,81 @@ export type Database = {
           },
         ]
       }
+      crb_requests: {
+        Row: {
+          blacklist_flag: boolean | null
+          borrower_id: string
+          consent_obtained: boolean | null
+          consent_timestamp: string | null
+          created_at: string | null
+          created_by: string | null
+          credit_score: number | null
+          error_message: string | null
+          id: string
+          loan_application_id: string | null
+          nrc_number: string
+          provider: string | null
+          request_payload: Json | null
+          request_type: string
+          response_payload: Json | null
+          risk_rating: string | null
+          status: string | null
+        }
+        Insert: {
+          blacklist_flag?: boolean | null
+          borrower_id: string
+          consent_obtained?: boolean | null
+          consent_timestamp?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          credit_score?: number | null
+          error_message?: string | null
+          id?: string
+          loan_application_id?: string | null
+          nrc_number: string
+          provider?: string | null
+          request_payload?: Json | null
+          request_type: string
+          response_payload?: Json | null
+          risk_rating?: string | null
+          status?: string | null
+        }
+        Update: {
+          blacklist_flag?: boolean | null
+          borrower_id?: string
+          consent_obtained?: boolean | null
+          consent_timestamp?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          credit_score?: number | null
+          error_message?: string | null
+          id?: string
+          loan_application_id?: string | null
+          nrc_number?: string
+          provider?: string | null
+          request_payload?: Json | null
+          request_type?: string
+          response_payload?: Json | null
+          risk_rating?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crb_requests_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crb_requests_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       demand_letters: {
         Row: {
           amount_demanded: number | null
@@ -417,6 +492,87 @@ export type Database = {
         }
         Relationships: []
       }
+      guarantees: {
+        Row: {
+          admin_override: boolean | null
+          approval_date: string | null
+          approved_by: string | null
+          conditions: Json | null
+          created_at: string | null
+          eligibility_code: string | null
+          guarantee_fee: number | null
+          guarantee_provider: string
+          guaranteed_amount: number | null
+          guaranteed_percentage: number | null
+          id: string
+          loan_id: string
+          override_reason: string | null
+          reference_code: string | null
+          response_payload: Json | null
+          status: string | null
+          updated_at: string | null
+          validity_end: string | null
+          validity_start: string | null
+        }
+        Insert: {
+          admin_override?: boolean | null
+          approval_date?: string | null
+          approved_by?: string | null
+          conditions?: Json | null
+          created_at?: string | null
+          eligibility_code?: string | null
+          guarantee_fee?: number | null
+          guarantee_provider: string
+          guaranteed_amount?: number | null
+          guaranteed_percentage?: number | null
+          id?: string
+          loan_id: string
+          override_reason?: string | null
+          reference_code?: string | null
+          response_payload?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          validity_end?: string | null
+          validity_start?: string | null
+        }
+        Update: {
+          admin_override?: boolean | null
+          approval_date?: string | null
+          approved_by?: string | null
+          conditions?: Json | null
+          created_at?: string | null
+          eligibility_code?: string | null
+          guarantee_fee?: number | null
+          guarantee_provider?: string
+          guaranteed_amount?: number | null
+          guaranteed_percentage?: number | null
+          id?: string
+          loan_id?: string
+          override_reason?: string | null
+          reference_code?: string | null
+          response_payload?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          validity_end?: string | null
+          validity_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guarantees_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guarantees_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       loan_applications: {
         Row: {
           address: string | null
@@ -428,6 +584,8 @@ export type Database = {
           collateral_image_url: string | null
           collateral_value: number | null
           contract_url: string | null
+          crb_consent: boolean | null
+          crb_consent_timestamp: string | null
           created_at: string
           date_of_birth: string | null
           early_settlement_fee: number | null
@@ -477,6 +635,8 @@ export type Database = {
           collateral_image_url?: string | null
           collateral_value?: number | null
           contract_url?: string | null
+          crb_consent?: boolean | null
+          crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
           early_settlement_fee?: number | null
@@ -526,6 +686,8 @@ export type Database = {
           collateral_image_url?: string | null
           collateral_value?: number | null
           contract_url?: string | null
+          crb_consent?: boolean | null
+          crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
           early_settlement_fee?: number | null
@@ -680,6 +842,10 @@ export type Database = {
           channels: string[] | null
           collateral_required: boolean | null
           contract_template_url: string | null
+          crb_auto_approve_score: number | null
+          crb_auto_decline_score: number | null
+          crb_check_required: boolean | null
+          crb_manual_review_score: number | null
           created_at: string
           default_threshold_days: number | null
           description: string | null
@@ -690,6 +856,9 @@ export type Database = {
           employment_types: string[] | null
           enforcement_fee_percent: number | null
           grace_period_days: number | null
+          guarantee_fee_percent: number | null
+          guarantee_provider: string | null
+          guarantee_required: boolean | null
           id: string
           installment_structure: string | null
           insurance_percent: number | null
@@ -704,6 +873,7 @@ export type Database = {
           max_amount: number
           max_concurrent_loans: number | null
           max_dti_ratio: number | null
+          max_guarantee_percent: number | null
           max_salary_percent: number | null
           max_term_months: number
           min_age: number | null
@@ -735,6 +905,10 @@ export type Database = {
           channels?: string[] | null
           collateral_required?: boolean | null
           contract_template_url?: string | null
+          crb_auto_approve_score?: number | null
+          crb_auto_decline_score?: number | null
+          crb_check_required?: boolean | null
+          crb_manual_review_score?: number | null
           created_at?: string
           default_threshold_days?: number | null
           description?: string | null
@@ -745,6 +919,9 @@ export type Database = {
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
           grace_period_days?: number | null
+          guarantee_fee_percent?: number | null
+          guarantee_provider?: string | null
+          guarantee_required?: boolean | null
           id?: string
           installment_structure?: string | null
           insurance_percent?: number | null
@@ -759,6 +936,7 @@ export type Database = {
           max_amount?: number
           max_concurrent_loans?: number | null
           max_dti_ratio?: number | null
+          max_guarantee_percent?: number | null
           max_salary_percent?: number | null
           max_term_months?: number
           min_age?: number | null
@@ -790,6 +968,10 @@ export type Database = {
           channels?: string[] | null
           collateral_required?: boolean | null
           contract_template_url?: string | null
+          crb_auto_approve_score?: number | null
+          crb_auto_decline_score?: number | null
+          crb_check_required?: boolean | null
+          crb_manual_review_score?: number | null
           created_at?: string
           default_threshold_days?: number | null
           description?: string | null
@@ -800,6 +982,9 @@ export type Database = {
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
           grace_period_days?: number | null
+          guarantee_fee_percent?: number | null
+          guarantee_provider?: string | null
+          guarantee_required?: boolean | null
           id?: string
           installment_structure?: string | null
           insurance_percent?: number | null
@@ -814,6 +999,7 @@ export type Database = {
           max_amount?: number
           max_concurrent_loans?: number | null
           max_dti_ratio?: number | null
+          max_guarantee_percent?: number | null
           max_salary_percent?: number | null
           max_term_months?: number
           min_age?: number | null
