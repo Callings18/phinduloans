@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Layers,
   FileSignature,
+  Landmark,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { icon: Banknote, label: "Repayments", path: "/admin/repayments" },
       { icon: Layers, label: "Bulk Repayments", path: "/admin/bulk-repayments" },
+      { icon: Landmark, label: "PMIC", path: "/admin/pmic" },
     ],
   },
   {
