@@ -1253,6 +1253,285 @@ export type Database = {
         }
         Relationships: []
       }
+      pmic_borrower_enrollments: {
+        Row: {
+          available_deduction_capacity: number | null
+          borrower_id: string
+          created_at: string | null
+          department: string | null
+          employee_number: string
+          employer_id: string | null
+          enrolled_at: string | null
+          enrollment_status: string | null
+          existing_deductions: number | null
+          gross_salary: number | null
+          id: string
+          net_salary: number | null
+          updated_at: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          available_deduction_capacity?: number | null
+          borrower_id: string
+          created_at?: string | null
+          department?: string | null
+          employee_number: string
+          employer_id?: string | null
+          enrolled_at?: string | null
+          enrollment_status?: string | null
+          existing_deductions?: number | null
+          gross_salary?: number | null
+          id?: string
+          net_salary?: number | null
+          updated_at?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          available_deduction_capacity?: number | null
+          borrower_id?: string
+          created_at?: string | null
+          department?: string | null
+          employee_number?: string
+          employer_id?: string | null
+          enrolled_at?: string | null
+          enrollment_status?: string | null
+          existing_deductions?: number | null
+          gross_salary?: number | null
+          id?: string
+          net_salary?: number | null
+          updated_at?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pmic_borrower_enrollments_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pmic_borrower_enrollments_employer_id_fkey"
+            columns: ["employer_id"]
+            isOneToOne: false
+            referencedRelation: "pmic_employers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pmic_config: {
+        Row: {
+          created_at: string | null
+          deduction_code: string | null
+          deduction_code_assigned_date: string | null
+          default_loan_term_months: number | null
+          id: string
+          is_active: boolean | null
+          max_concurrent_loans: number | null
+          max_deduction_percent: number | null
+          max_loan_multiplier: number | null
+          min_net_pay_percent: number | null
+          payroll_authority: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          deduction_code?: string | null
+          deduction_code_assigned_date?: string | null
+          default_loan_term_months?: number | null
+          id?: string
+          is_active?: boolean | null
+          max_concurrent_loans?: number | null
+          max_deduction_percent?: number | null
+          max_loan_multiplier?: number | null
+          min_net_pay_percent?: number | null
+          payroll_authority?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          deduction_code?: string | null
+          deduction_code_assigned_date?: string | null
+          default_loan_term_months?: number | null
+          id?: string
+          is_active?: boolean | null
+          max_concurrent_loans?: number | null
+          max_deduction_percent?: number | null
+          max_loan_multiplier?: number | null
+          min_net_pay_percent?: number | null
+          payroll_authority?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pmic_employers: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string | null
+          employer_code: string
+          employer_name: string
+          employer_type: string
+          id: string
+          is_verified: boolean | null
+          payroll_cycle: string
+          updated_at: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          employer_code: string
+          employer_name: string
+          employer_type: string
+          id?: string
+          is_verified?: boolean | null
+          payroll_cycle: string
+          updated_at?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          employer_code?: string
+          employer_name?: string
+          employer_type?: string
+          id?: string
+          is_verified?: boolean | null
+          payroll_cycle?: string
+          updated_at?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: []
+      }
+      pmic_exceptions: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          enrollment_id: string | null
+          exception_status: string | null
+          exception_type: string
+          id: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          submission_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          enrollment_id?: string | null
+          exception_status?: string | null
+          exception_type: string
+          id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          submission_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          enrollment_id?: string | null
+          exception_status?: string | null
+          exception_type?: string
+          id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          submission_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pmic_exceptions_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "pmic_borrower_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pmic_exceptions_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "pmic_payroll_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pmic_payroll_submissions: {
+        Row: {
+          created_at: string | null
+          file_url: string | null
+          id: string
+          notes: string | null
+          payroll_period_end: string
+          payroll_period_start: string
+          processed_at: string | null
+          response_file_url: string | null
+          status: string | null
+          submission_reference: string
+          submission_type: string
+          submitted_at: string | null
+          submitted_by: string | null
+          total_amount: number | null
+          total_records: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          file_url?: string | null
+          id?: string
+          notes?: string | null
+          payroll_period_end: string
+          payroll_period_start: string
+          processed_at?: string | null
+          response_file_url?: string | null
+          status?: string | null
+          submission_reference: string
+          submission_type: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          total_amount?: number | null
+          total_records?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          file_url?: string | null
+          id?: string
+          notes?: string | null
+          payroll_period_end?: string
+          payroll_period_start?: string
+          processed_at?: string | null
+          response_file_url?: string | null
+          status?: string | null
+          submission_reference?: string
+          submission_type?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          total_amount?: number | null
+          total_records?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
