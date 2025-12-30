@@ -14,12 +14,14 @@ import {
   Settings,
   CheckCircle,
   Clock,
+  Calculator,
 } from "lucide-react";
 import PMICConfigSettings from "@/components/admin/pmic/PMICConfigSettings";
 import PMICEmployerList from "@/components/admin/pmic/PMICEmployerList";
 import PMICEnrollmentList from "@/components/admin/pmic/PMICEnrollmentList";
 import PMICSubmissionList from "@/components/admin/pmic/PMICSubmissionList";
 import PMICExceptionList from "@/components/admin/pmic/PMICExceptionList";
+import PMICEligibilityCalculator from "@/components/admin/pmic/PMICEligibilityCalculator";
 
 const AdminPMIC = () => {
   const {
@@ -143,10 +145,14 @@ const AdminPMIC = () => {
         <Card>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <CardHeader className="pb-0">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="enrollments" className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
                   <span className="hidden sm:inline">Enrollments</span>
+                </TabsTrigger>
+                <TabsTrigger value="calculator" className="flex items-center gap-2">
+                  <Calculator className="h-4 w-4" />
+                  <span className="hidden sm:inline">Eligibility</span>
                 </TabsTrigger>
                 <TabsTrigger value="submissions" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
@@ -170,6 +176,10 @@ const AdminPMIC = () => {
             <CardContent className="pt-6">
               <TabsContent value="enrollments" className="mt-0">
                 <PMICEnrollmentList />
+              </TabsContent>
+
+              <TabsContent value="calculator" className="mt-0">
+                <PMICEligibilityCalculator />
               </TabsContent>
 
               <TabsContent value="submissions" className="mt-0">
