@@ -8,6 +8,7 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowUpRight,
+  Building2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -86,11 +87,14 @@ const ModuleWidgets = () => {
     queryKey: ["module-stats"],
     queryFn: async () => {
       const today = new Date();
-      const [applications, repayments, collections, disbursements] = await Promise.all([
+      const [applications, repayments, collections, disbursements, pmicEnrollments, pmicSubmissions, pmicExceptions] = await Promise.all([
         supabase.from("loan_applications").select("status", { count: "exact" }),
         supabase.from("loan_repayments").select("status, due_date, amount"),
         supabase.from("collection_activities").select("id", { count: "exact" }),
         supabase.from("disbursements").select("status", { count: "exact" }).eq("status", "pending"),
+        supabase.from("pmic_borrower_enrollments").select("enrollment_status", { count: "exact" }),
+        supabase.from("pmic_payroll_submissions").select("status", { count: "exact" }),
+        supabase.from("pmic_exceptions").select("exception_status", { count: "exact" }),
       ]);
 
       const allRepayments = repayments.data || [];
@@ -102,6 +106,12 @@ const ModuleWidgets = () => {
       const pendingApps = (applications.data || []).filter((a) => a.status === "pending").length;
       const underReviewApps = (applications.data || []).filter((a) => a.status === "under_review").length;
 
+      // PMIC stats
+      const activeEnrollments = (pmicEnrollments.data || []).filter((e) => e.enrollment_status === "active").length;
+      const pendingEnrollments = (pmicEnrollments.data || []).filter((e) => e.enrollment_status === "pending").length;
+      const pendingSubmissions = (pmicSubmissions.data || []).filter((s) => s.status === "pending" || s.status === "draft").length;
+      const openExceptions = (pmicExceptions.data || []).filter((e) => e.exception_status === "open" || e.exception_status === "investigating").length;
+
       return {
         pendingApplications: pendingApps,
         underReviewApplications: underReviewApps,
@@ -109,6 +119,11 @@ const ModuleWidgets = () => {
         overdueCount: overdueRepayments.length,
         overdueAmount,
         totalCollectionActivities: collections.count || 0,
+        // PMIC
+        pmicActiveEnrollments: activeEnrollments,
+        pmicPendingEnrollments: pendingEnrollments,
+        pmicPendingSubmissions: pendingSubmissions,
+        pmicOpenExceptions: openExceptions,
       };
     },
   });
@@ -149,10 +164,21 @@ const ModuleWidgets = () => {
       path: "/admin/collections",
       color: "from-warning to-orange-600",
     },
+    {
+      title: "PMIC Payroll",
+      icon: Building2,
+      value: moduleStats?.pmicActiveEnrollments || 0,
+      subValue: `${moduleStats?.pmicPendingEnrollments || 0} pending, ${moduleStats?.pmicOpenExceptions || 0} exceptions`,
+      trend: (moduleStats?.pmicOpenExceptions || 0) > 0 ? "down" : "neutral",
+      trendValue: (moduleStats?.pmicOpenExceptions || 0) > 0 ? "Exceptions need attention" : `${moduleStats?.pmicPendingSubmissions || 0} submissions pending`,
+      path: "/admin/pmic",
+      color: "from-teal-500 to-cyan-600",
+      alert: (moduleStats?.pmicOpenExceptions || 0) > 0,
+    },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {widgets.map((widget) => (
         <ModuleWidget key={widget.title} {...widget} />
       ))}
