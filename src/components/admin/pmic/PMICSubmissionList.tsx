@@ -36,15 +36,22 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { usePMIC, PMICSubmission } from "@/hooks/usePMIC";
-import { Plus, Search, MoreHorizontal, Send, CheckCircle, XCircle, FileText, CalendarIcon } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Send, CheckCircle, XCircle, FileText, CalendarIcon, Download, FileSpreadsheet } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { downloadPMICExport } from "@/utils/generatePMICExport";
+import { toast } from "@/hooks/use-toast";
 
 const PMICSubmissionList = () => {
   const { 
     submissions, 
     stats,
-    fetchSubmissions, 
+    enrollments,
+    employers,
+    fetchSubmissions,
+    fetchEnrollments,
+    fetchEmployers,
     createSubmission, 
     processSubmission 
   } = usePMIC();
@@ -52,6 +59,9 @@ const PMICSubmissionList = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportSubmission, setExportSubmission] = useState<PMICSubmission | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [formData, setFormData] = useState({
     submission_type: 'deduction_request' as PMICSubmission['submission_type'],
     payroll_period_start: null as Date | null,
@@ -63,7 +73,9 @@ const PMICSubmissionList = () => {
 
   useEffect(() => {
     fetchSubmissions();
-  }, [fetchSubmissions]);
+    fetchEnrollments();
+    fetchEmployers();
+  }, [fetchSubmissions, fetchEnrollments, fetchEmployers]);
 
   const filteredSubmissions = submissions.filter(s => {
     const matchesSearch = s.submission_reference.toLowerCase().includes(search.toLowerCase());
@@ -88,6 +100,53 @@ const PMICSubmissionList = () => {
       total_records: 0,
       notes: '',
     });
+  };
+
+  const handleExport = async (submission: PMICSubmission, exportFormat: 'csv' | 'xlsx' = 'csv') => {
+    setExporting(true);
+    try {
+      // Fetch repayments and loans for the period
+      const [repaymentsRes, loansRes] = await Promise.all([
+        supabase
+          .from('loan_repayments')
+          .select('id, loan_id, amount, due_date, status, installment_number')
+          .gte('due_date', submission.payroll_period_start)
+          .lte('due_date', submission.payroll_period_end),
+        supabase
+          .from('loan_applications')
+          .select('id, full_name, nrc_number, phone, loan_amount, monthly_payment')
+          .in('status', ['active', 'disbursed']),
+      ]);
+
+      const exportData = {
+        enrollments: enrollments.filter(e => e.enrollment_status === 'active'),
+        employers,
+        repayments: repaymentsRes.data || [],
+        loans: loansRes.data || [],
+        periodStart: submission.payroll_period_start,
+        periodEnd: submission.payroll_period_end,
+        submissionType: submission.submission_type,
+      };
+
+      const filename = `PMIC_${submission.submission_type}_${submission.submission_reference}_${format(new Date(), 'yyyyMMdd')}`;
+      downloadPMICExport(exportData, filename, exportFormat);
+
+      toast({
+        title: "Export Successful",
+        description: `${submission.submission_type.replace('_', ' ')} file has been downloaded.`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate export file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+      setExportDialogOpen(false);
+      setExportSubmission(null);
+    }
   };
 
   const formatCurrency = (amount: number | null) => {
@@ -240,6 +299,13 @@ const PMICSubmissionList = () => {
                             </DropdownMenuItem>
                           </>
                         )}
+                        <DropdownMenuItem onClick={() => {
+                          setExportSubmission(submission);
+                          setExportDialogOpen(true);
+                        }}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Export File
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -378,6 +444,52 @@ const PMICSubmissionList = () => {
               disabled={!formData.payroll_period_start || !formData.payroll_period_end}
             >
               Create Submission
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Export Submission</DialogTitle>
+            <DialogDescription>
+              Generate a file to send to employers for payroll processing.
+            </DialogDescription>
+          </DialogHeader>
+
+          {exportSubmission && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg space-y-1">
+                <div className="text-sm font-medium">{exportSubmission.submission_reference}</div>
+                <div className="text-xs text-muted-foreground">
+                  {format(new Date(exportSubmission.payroll_period_start), 'dd MMM')} - {format(new Date(exportSubmission.payroll_period_end), 'dd MMM yyyy')}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Type: {exportSubmission.submission_type.replace('_', ' ')}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Button 
+                  onClick={() => handleExport(exportSubmission, 'csv')}
+                  disabled={exporting}
+                  className="w-full justify-start"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  {exporting ? 'Generating...' : 'Download CSV'}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  CSV format is compatible with most payroll systems
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
