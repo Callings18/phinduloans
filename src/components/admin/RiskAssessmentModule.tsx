@@ -9,11 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { ShieldCheck, AlertCircle, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ShieldCheck, AlertCircle, CheckCircle, XCircle, Loader2, CreditCard, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CRBCheckModule } from "./CRBCheckModule";
+import { GuaranteeCheckModule } from "./GuaranteeCheckModule";
 
 interface RiskAssessmentModuleProps {
     applicationId: string;
+    borrowerId?: string;
+    nrcNumber?: string;
+    fullName?: string;
+    dateOfBirth?: string;
+    consentObtained?: boolean;
+    loanAmount?: number;
+    loanTermMonths?: number;
+    loanProductId?: string;
+    employerName?: string;
+    monthlyIncome?: number;
 }
 
 interface RiskAssessment {
@@ -28,7 +41,26 @@ interface RiskAssessment {
     created_at: string;
 }
 
-const RiskAssessmentModule = ({ applicationId }: RiskAssessmentModuleProps) => {
+interface LoanProduct {
+    crb_check_required?: boolean;
+    guarantee_required?: boolean;
+    guarantee_provider?: string;
+    max_guarantee_percent?: number;
+}
+
+const RiskAssessmentModule = ({ 
+    applicationId, 
+    borrowerId,
+    nrcNumber,
+    fullName,
+    dateOfBirth,
+    consentObtained,
+    loanAmount,
+    loanTermMonths,
+    loanProductId,
+    employerName,
+    monthlyIncome
+}: RiskAssessmentModuleProps) => {
     const { user, hasRole, isAdmin } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -44,7 +76,25 @@ const RiskAssessmentModule = ({ applicationId }: RiskAssessmentModuleProps) => {
             employment_verified: false,
             income_verified: false,
             collateral_verified: false,
+            crb_check_passed: false,
+            guarantee_obtained: false,
         }
+    });
+
+    // Fetch loan product settings
+    const { data: loanProduct } = useQuery({
+        queryKey: ['loan-product-settings', loanProductId],
+        queryFn: async () => {
+            if (!loanProductId) return null;
+            const { data, error } = await supabase
+                .from('loan_products')
+                .select('crb_check_required, guarantee_required, guarantee_provider, max_guarantee_percent')
+                .eq('id', loanProductId)
+                .maybeSingle();
+            if (error) throw error;
+            return data as LoanProduct | null;
+        },
+        enabled: !!loanProductId
     });
 
     const { data: assessment, isLoading } = useQuery({
@@ -69,6 +119,8 @@ const RiskAssessmentModule = ({ applicationId }: RiskAssessmentModuleProps) => {
                         employment_verified: false,
                         income_verified: false,
                         collateral_verified: false,
+                        crb_check_passed: false,
+                        guarantee_obtained: false,
                     }
                 });
             }
@@ -124,147 +176,206 @@ const RiskAssessmentModule = ({ applicationId }: RiskAssessmentModuleProps) => {
 
     if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
 
+    const showCRBModule = loanProduct?.crb_check_required || true; // Show by default for flexibility
+    const showGuaranteeModule = loanProduct?.guarantee_required || true;
+
     return (
         <div className="space-y-6">
-            <Card className="bg-secondary/10 border-border/50">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div className="space-y-1">
-                        <CardTitle className="text-xl flex items-center gap-2">
-                            <ShieldCheck className="text-primary" />
-                            Risk Analysis
-                        </CardTitle>
-                        <CardDescription>Credit score and risk categorization</CardDescription>
-                    </div>
-                    {canEdit && !isEditing && (
-                        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                            {assessment ? "Update Assessment" : "Start Review"}
-                        </Button>
-                    )}
-                </CardHeader>
-                <CardContent>
-                    {!isEditing && assessment ? (
-                        <div className="grid grid-cols-2 gap-6 mt-4">
-                            <div className="space-y-4">
-                                <div>
-                                    <Label className="text-muted-foreground text-xs">Credit Score</Label>
-                                    <p className="text-2xl font-bold text-foreground">{assessment.credit_score || 'N/A'}</p>
-                                </div>
-                                <div>
-                                    <Label className="text-muted-foreground text-xs">Risk Rating</Label>
-                                    <div className="mt-1">
-                                        <Badge className={
-                                            assessment.risk_rating === 'low' ? "bg-green-500/20 text-green-400" :
-                                                assessment.risk_rating === 'medium' ? "bg-yellow-500/20 text-yellow-400" :
-                                                    "bg-red-500/20 text-red-400"
-                                        }>
-                                            {assessment.risk_rating?.toUpperCase()} RISK
-                                        </Badge>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-4">
-                                <div>
-                                    <Label className="text-muted-foreground text-xs">Current Decision</Label>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        {assessment.decision === 'approve' ? <CheckCircle className="text-green-500" size={18} /> :
-                                            assessment.decision === 'reject' ? <XCircle className="text-red-500" size={18} /> :
-                                                <AlertCircle className="text-yellow-500" size={18} />}
-                                        <span className="font-medium capitalize">{assessment.decision?.replace('_', ' ')}</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <Label className="text-muted-foreground text-xs">Notes</Label>
-                                    <p className="text-sm text-foreground italic">"{assessment.admin_notes || 'No notes added'}"</p>
-                                </div>
-                            </div>
-                        </div>
-                    ) : isEditing ? (
-                        <div className="space-y-6 mt-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Credit Score (Internal)</Label>
-                                    <Input
-                                        type="number"
-                                        value={formData.credit_score}
-                                        onChange={(e) => setFormData({ ...formData, credit_score: e.target.value })}
-                                        placeholder="0 - 1000"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Risk Rating</Label>
-                                    <Select value={formData.risk_rating} onValueChange={(v) => setFormData({ ...formData, risk_rating: v })}>
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="low">Low Risk</SelectItem>
-                                            <SelectItem value="medium">Medium Risk</SelectItem>
-                                            <SelectItem value="high">High Risk</SelectItem>
-                                            <SelectItem value="critical">Critical Risk</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
+            <Tabs defaultValue="assessment" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="assessment" className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        Risk Analysis
+                    </TabsTrigger>
+                    <TabsTrigger value="crb" className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" />
+                        CRB Check
+                        {loanProduct?.crb_check_required && (
+                            <Badge variant="outline" className="ml-1 text-xs">Required</Badge>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="guarantee" className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        Guarantee
+                        {loanProduct?.guarantee_required && (
+                            <Badge variant="outline" className="ml-1 text-xs">Required</Badge>
+                        )}
+                    </TabsTrigger>
+                </TabsList>
 
-                            <div className="space-y-3">
-                                <Label>Verification Checklist</Label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {Object.entries(formData.items).map(([key, val]) => (
-                                        <div key={key} className="flex items-center gap-2 p-2 rounded border border-border/50 bg-background/50">
-                                            <input
-                                                type="checkbox"
-                                                checked={val as boolean}
-                                                onChange={(e) => setFormData({
-                                                    ...formData,
-                                                    items: { ...formData.items, [key]: e.target.checked }
-                                                })}
-                                                id={key}
-                                            />
-                                            <Label htmlFor={key} className="text-xs uppercase cursor-pointer">{key.replace('_', ' ')}</Label>
-                                        </div>
-                                    ))}
-                                </div>
+                <TabsContent value="assessment" className="mt-4">
+                    <Card className="bg-secondary/10 border-border/50">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <div className="space-y-1">
+                                <CardTitle className="text-xl flex items-center gap-2">
+                                    <ShieldCheck className="text-primary" />
+                                    Risk Analysis
+                                </CardTitle>
+                                <CardDescription>Credit score and risk categorization</CardDescription>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label>Recommended Decision</Label>
-                                <Select value={formData.decision} onValueChange={(v) => setFormData({ ...formData, decision: v })}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="approve">Recommend Approval</SelectItem>
-                                        <SelectItem value="more_info">Need More Info</SelectItem>
-                                        <SelectItem value="reject">Recommend Rejection</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Admin Notes</Label>
-                                <Textarea
-                                    value={formData.admin_notes}
-                                    onChange={(e) => setFormData({ ...formData, admin_notes: e.target.value })}
-                                    placeholder="Detailed findings..."
-                                />
-                            </div>
-
-                            <div className="flex gap-2">
-                                <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>Cancel</Button>
-                                <Button className="flex-1" onClick={() => saveMutation.mutate(formData)} disabled={saveMutation.isPending}>
-                                    {saveMutation.isPending && <Loader2 className="animate-spin mr-2" />}
-                                    Save Assessment
+                            {canEdit && !isEditing && (
+                                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                                    {assessment ? "Update Assessment" : "Start Review"}
                                 </Button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="py-12 text-center text-muted-foreground">
-                            <ShieldCheck className="mx-auto mb-3 opacity-20" size={48} />
-                            <p>No risk assessment has been performed for this application.</p>
-                        </div>
+                            )}
+                        </CardHeader>
+                        <CardContent>
+                            {!isEditing && assessment ? (
+                                <div className="grid grid-cols-2 gap-6 mt-4">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <Label className="text-muted-foreground text-xs">Credit Score</Label>
+                                            <p className="text-2xl font-bold text-foreground">{assessment.credit_score || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <Label className="text-muted-foreground text-xs">Risk Rating</Label>
+                                            <div className="mt-1">
+                                                <Badge className={
+                                                    assessment.risk_rating === 'low' ? "bg-green-500/20 text-green-400" :
+                                                        assessment.risk_rating === 'medium' ? "bg-yellow-500/20 text-yellow-400" :
+                                                            "bg-red-500/20 text-red-400"
+                                                }>
+                                                    {assessment.risk_rating?.toUpperCase()} RISK
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <Label className="text-muted-foreground text-xs">Current Decision</Label>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {assessment.decision === 'approve' ? <CheckCircle className="text-green-500" size={18} /> :
+                                                    assessment.decision === 'reject' ? <XCircle className="text-red-500" size={18} /> :
+                                                        <AlertCircle className="text-yellow-500" size={18} />}
+                                                <span className="font-medium capitalize">{assessment.decision?.replace('_', ' ')}</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label className="text-muted-foreground text-xs">Notes</Label>
+                                            <p className="text-sm text-foreground italic">"{assessment.admin_notes || 'No notes added'}"</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : isEditing ? (
+                                <div className="space-y-6 mt-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Credit Score (Internal)</Label>
+                                            <Input
+                                                type="number"
+                                                value={formData.credit_score}
+                                                onChange={(e) => setFormData({ ...formData, credit_score: e.target.value })}
+                                                placeholder="0 - 1000"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Risk Rating</Label>
+                                            <Select value={formData.risk_rating} onValueChange={(v) => setFormData({ ...formData, risk_rating: v })}>
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="low">Low Risk</SelectItem>
+                                                    <SelectItem value="medium">Medium Risk</SelectItem>
+                                                    <SelectItem value="high">High Risk</SelectItem>
+                                                    <SelectItem value="critical">Critical Risk</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <Label>Verification Checklist</Label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {Object.entries(formData.items).map(([key, val]) => (
+                                                <div key={key} className="flex items-center gap-2 p-2 rounded border border-border/50 bg-background/50">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={val as boolean}
+                                                        onChange={(e) => setFormData({
+                                                            ...formData,
+                                                            items: { ...formData.items, [key]: e.target.checked }
+                                                        })}
+                                                        id={key}
+                                                    />
+                                                    <Label htmlFor={key} className="text-xs uppercase cursor-pointer">{key.replace(/_/g, ' ')}</Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Recommended Decision</Label>
+                                        <Select value={formData.decision} onValueChange={(v) => setFormData({ ...formData, decision: v })}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="approve">Recommend Approval</SelectItem>
+                                                <SelectItem value="more_info">Need More Info</SelectItem>
+                                                <SelectItem value="reject">Recommend Rejection</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Admin Notes</Label>
+                                        <Textarea
+                                            value={formData.admin_notes}
+                                            onChange={(e) => setFormData({ ...formData, admin_notes: e.target.value })}
+                                            placeholder="Detailed findings..."
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>Cancel</Button>
+                                        <Button className="flex-1" onClick={() => saveMutation.mutate(formData)} disabled={saveMutation.isPending}>
+                                            {saveMutation.isPending && <Loader2 className="animate-spin mr-2" />}
+                                            Save Assessment
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="py-12 text-center text-muted-foreground">
+                                    <ShieldCheck className="mx-auto mb-3 opacity-20" size={48} />
+                                    <p>No risk assessment has been performed for this application.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="crb" className="mt-4">
+                    {showCRBModule && (
+                        <CRBCheckModule
+                            applicationId={applicationId}
+                            borrowerId={borrowerId || ''}
+                            nrcNumber={nrcNumber || ''}
+                            fullName={fullName || ''}
+                            dateOfBirth={dateOfBirth || ''}
+                            consentObtained={consentObtained || false}
+                            productCrbRequired={loanProduct?.crb_check_required || false}
+                        />
                     )}
-                </CardContent>
-            </Card>
+                </TabsContent>
+
+                <TabsContent value="guarantee" className="mt-4">
+                    {showGuaranteeModule && (
+                        <GuaranteeCheckModule
+                            applicationId={applicationId}
+                            borrowerId={borrowerId || ''}
+                            borrowerNrc={nrcNumber || ''}
+                            borrowerName={fullName || ''}
+                            employerName={employerName}
+                            monthlyIncome={monthlyIncome}
+                            loanAmount={loanAmount || 0}
+                            loanTermMonths={loanTermMonths || 12}
+                            guaranteeProvider={loanProduct?.guarantee_provider || 'pmic'}
+                            guaranteeRequired={loanProduct?.guarantee_required || false}
+                        />
+                    )}
+                </TabsContent>
+            </Tabs>
         </div>
     );
 };
