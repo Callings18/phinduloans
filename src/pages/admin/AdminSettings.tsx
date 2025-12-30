@@ -243,7 +243,7 @@ const AdminSettings = () => {
         </div>
 
         <Tabs defaultValue="general" className="space-y-6 tour-settings-tabs">
-          <TabsList className="bg-muted/50 p-1">
+          <TabsList className="bg-muted/50 p-1 flex-wrap">
             <TabsTrigger value="general" className="gap-2">
               <Globe size={16} /> General
             </TabsTrigger>
@@ -258,6 +258,9 @@ const AdminSettings = () => {
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2">
               <BellRing size={16} /> Notifications
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="gap-2">
+              <Shield size={16} /> Integrations
             </TabsTrigger>
           </TabsList>
 
