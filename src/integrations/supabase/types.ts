@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          balance_after: number
+          balance_before: number
+          created_at: string
+          created_by: string | null
+          destination: string | null
+          id: string
+          notes: string | null
+          reference_id: string | null
+          reference_type: string | null
+          source: string | null
+          transaction_type: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          balance_after: number
+          balance_before: number
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          id?: string
+          notes?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          source?: string | null
+          transaction_type: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          balance_after?: number
+          balance_before?: number
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          id?: string
+          notes?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          source?: string | null
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts: {
+        Row: {
+          account_name: string
+          account_number: string | null
+          account_type: string
+          balance: number
+          created_at: string
+          currency: string
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          account_number?: string | null
+          account_type?: string
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string | null
+          account_type?: string
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -491,6 +586,91 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      expenses: {
+        Row: {
+          account_id: string | null
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          attachment_url: string | null
+          branch: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expense_category: string
+          expense_date: string
+          id: string
+          loan_id: string | null
+          paid_at: string | null
+          payment_method: string
+          status: string
+          updated_at: string
+          vendor_payee: string
+        }
+        Insert: {
+          account_id?: string | null
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          attachment_url?: string | null
+          branch?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_category: string
+          expense_date?: string
+          id?: string
+          loan_id?: string | null
+          paid_at?: string | null
+          payment_method?: string
+          status?: string
+          updated_at?: string
+          vendor_payee: string
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          attachment_url?: string | null
+          branch?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_category?: string
+          expense_date?: string
+          id?: string
+          loan_id?: string | null
+          paid_at?: string | null
+          payment_method?: string
+          status?: string
+          updated_at?: string
+          vendor_payee?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
       }
       guarantees: {
         Row: {
