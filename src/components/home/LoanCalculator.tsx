@@ -67,10 +67,13 @@ const LoanCalculator = () => {
   }, [selectedProduct]);
 
   const interestRate = selectedProduct ? selectedProduct.interest_rate / 100 : 0.15;
-  const processingFee = selectedProduct?.processing_fee_percent ? (loanAmount * selectedProduct.processing_fee_percent / 100) : 0;
-  const monthlyPayment = (loanAmount * (1 + interestRate * loanTerm)) / loanTerm;
-  const totalPayment = monthlyPayment * loanTerm;
-  const totalInterest = totalPayment - loanAmount;
+  const processingFeePercent = selectedProduct?.processing_fee_percent || 0;
+  const processingFee = loanAmount * (processingFeePercent / 100);
+  // Fees are deducted from disbursement, not added to repayment
+  const disbursementAmount = loanAmount - processingFee;
+  const totalInterest = loanAmount * interestRate * loanTerm;
+  const totalPayment = loanAmount + totalInterest; // Principal + Interest only
+  const monthlyPayment = totalPayment / loanTerm;
 
   return (
     <section className="py-24 gradient-hero relative overflow-hidden">
@@ -269,17 +272,27 @@ const LoanCalculator = () => {
                   </div>
                 </div>
 
+                {processingFee > 0 && (
+                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/30">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">Processing Fee ({processingFeePercent}%)</span>
+                      <span className="text-foreground font-medium">K{processingFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold">
+                      <span className="text-foreground">You will receive</span>
+                      <span className="text-primary">K{disbursementAmount.toFixed(2)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      *Processing fee is deducted before disbursement
+                    </p>
+                  </div>
+                )}
+
                 <div className="p-4 rounded-xl bg-secondary/30 border border-border">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Interest Rate</span>
                     <span className="text-foreground font-medium">{selectedProduct?.interest_rate || 15}%</span>
                   </div>
-                  {processingFee > 0 && (
-                    <div className="flex justify-between text-sm mt-2">
-                      <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent}%)</span>
-                      <span className="text-foreground font-medium">K{processingFee.toFixed(2)}</span>
-                    </div>
-                  )}
                 </div>
 
                 <Button variant="hero" size="lg" className="w-full" asChild>

@@ -31,6 +31,11 @@ export interface LoanCalculationResult {
   vatAmount: number;
   platformFee: number;
   totalFees: number;
+  /** Amount deducted before disbursement (processing fee, VAT, etc.) */
+  feesDeductedUpfront: number;
+  /** Actual amount borrower receives after fee deductions */
+  disbursementAmount: number;
+  /** Total amount borrower repays (principal + interest only, fees already deducted) */
   totalRepayment: number;
   monthlyPayment: number;
   effectiveAnnualRate: number;
@@ -148,7 +153,7 @@ export function calculateLoan(
     monthlyPayment = (principal + totalInterest) / termMonths;
   }
   
-  // Calculate fees
+  // Calculate fees - these are DEDUCTED from disbursement, not added to repayment
   const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
   const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
   const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
@@ -158,9 +163,15 @@ export function calculateLoan(
   const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
   
   const totalFees = processingFee + insuranceFee + platformFee + vatAmount;
-  const totalRepayment = principal + totalInterest + totalFees;
   
-  // Recalculate monthly payment to include fees spread across term
+  // Fees are deducted upfront from disbursement
+  const feesDeductedUpfront = processingFee + vatAmount + platformFee;
+  const disbursementAmount = principal - feesDeductedUpfront;
+  
+  // Total repayment is just principal + interest (fees already deducted from disbursement)
+  const totalRepayment = principal + totalInterest;
+  
+  // Monthly payment based on what borrower repays (principal + interest)
   const adjustedMonthlyPayment = totalRepayment / termMonths;
   
   return {
@@ -172,6 +183,8 @@ export function calculateLoan(
     vatAmount: Math.round(vatAmount * 100) / 100,
     platformFee: Math.round(platformFee * 100) / 100,
     totalFees: Math.round(totalFees * 100) / 100,
+    feesDeductedUpfront: Math.round(feesDeductedUpfront * 100) / 100,
+    disbursementAmount: Math.round(disbursementAmount * 100) / 100,
     totalRepayment: Math.round(totalRepayment * 100) / 100,
     monthlyPayment: Math.round(adjustedMonthlyPayment * 100) / 100,
     effectiveAnnualRate: Math.round(monthlyToAnnualRate(monthlyRate) * 100) / 100,
