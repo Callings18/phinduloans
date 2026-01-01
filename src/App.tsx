@@ -29,6 +29,8 @@ import AdminWriteOffs from "./pages/admin/AdminWriteOffs";
 import AdminBulkRepayments from "./pages/admin/AdminBulkRepayments";
 import AdminContractTemplates from "./pages/admin/AdminContractTemplates";
 import AdminPMIC from "./pages/admin/AdminPMIC";
+import AdminAccounts from "./pages/admin/AdminAccounts";
+import AdminExpenses from "./pages/admin/AdminExpenses";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +67,8 @@ const App = () => (
             <Route path="/admin/bulk-repayments" element={<AdminBulkRepayments />} />
             <Route path="/admin/contract-templates" element={<AdminContractTemplates />} />
             <Route path="/admin/pmic" element={<AdminPMIC />} />
+            <Route path="/admin/accounts" element={<AdminAccounts />} />
+            <Route path="/admin/expenses" element={<AdminExpenses />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
