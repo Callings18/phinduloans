@@ -67,6 +67,8 @@ interface Repayment {
   payment_method: string | null;
   transaction_reference: string | null;
   installment_number: number | null;
+  principal_paid?: number | null;
+  original_amount?: number | null;
   loan_applications?: {
     full_name: string;
     email: string;
@@ -84,6 +86,7 @@ const AdminRepayments = () => {
   const [paymentData, setPaymentData] = useState({
     payment_method: "mobile_money",
     transaction_reference: "",
+    amount: "",
   });
 
   const queryClient = useQueryClient();
@@ -110,49 +113,75 @@ const AdminRepayments = () => {
     },
   });
 
-  // Record payment mutation
+  // Record payment mutation - supports partial payments
   const recordPaymentMutation = useMutation({
-    mutationFn: async ({ repaymentId, paymentMethod, transactionRef }: { repaymentId: string; paymentMethod: string; transactionRef: string }) => {
-      // Get the repayment to find loan details
+    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
+      if (!repayment) throw new Error("Repayment not found");
       
-      const { error } = await supabase
-        .from("loan_repayments")
-        .update({
-          status: "paid",
-          paid_date: new Date().toISOString().split("T")[0],
-          payment_method: paymentMethod,
-          transaction_reference: transactionRef || `PAY-${Date.now()}`,
-        })
-        .eq("id", repaymentId);
+      const amountDue = Number(repayment.amount);
+      const isFullPayment = paidAmount >= amountDue;
+      const remainingAmount = amountDue - paidAmount;
+      
+      if (isFullPayment) {
+        // Full payment - mark as paid
+        const { error } = await supabase
+          .from("loan_repayments")
+          .update({
+            status: "paid",
+            paid_date: new Date().toISOString().split("T")[0],
+            payment_method: paymentMethod,
+            transaction_reference: transactionRef || `PAY-${Date.now()}`,
+            principal_paid: paidAmount,
+            original_amount: repayment.amount,
+          })
+          .eq("id", repaymentId);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Partial payment - reduce amount owed, keep pending
+        const { error } = await supabase
+          .from("loan_repayments")
+          .update({
+            amount: remainingAmount,
+            payment_method: paymentMethod,
+            transaction_reference: transactionRef || `PAY-${Date.now()}`,
+            principal_paid: (Number(repayment.principal_paid) || 0) + paidAmount,
+            original_amount: repayment.original_amount || repayment.amount,
+          })
+          .eq("id", repaymentId);
+
+        if (error) throw error;
+      }
       
-      return repayment;
+      return { repayment, paidAmount, isFullPayment };
     },
-    onSuccess: async (repayment) => {
+    onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
-      toast.success("Payment recorded successfully");
+      
+      if (isFullPayment) {
+        toast.success("Full payment recorded successfully");
+      } else {
+        toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+      }
       
       // Send SMS confirmation
       if (repayment?.loan_applications) {
-        // Calculate remaining balance
         const loanRepayments = repayments?.filter(r => r.loan_id === repayment.loan_id) || [];
         const totalPaid = loanRepayments
-          .filter(r => r.status === 'paid' || r.id === repayment.id)
-          .reduce((sum, r) => sum + Number(r.amount), 0);
-        const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+          .filter(r => r.status === 'paid')
+          .reduce((sum, r) => sum + Number(r.amount), 0) + paidAmount;
+        const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.original_amount || r.amount), 0);
         const remainingBalance = totalDue - totalPaid;
         
         await notificationService.sendPaymentConfirmation(
           repayment.user_id,
           repayment.loan_applications.full_name,
-          Number(repayment.amount),
+          paidAmount,
           remainingBalance,
           repayment.loan_applications.phone
         );
         
-        // Check if loan is fully paid
         if (remainingBalance <= 0) {
           await notificationService.sendLoanCompletion(
             repayment.user_id,
@@ -164,7 +193,7 @@ const AdminRepayments = () => {
       
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
-      setPaymentData({ payment_method: "mobile_money", transaction_reference: "" });
+      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "" });
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
@@ -225,10 +254,13 @@ const AdminRepayments = () => {
     e.preventDefault();
     if (!selectedRepayment) return;
     
+    const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
+    
     recordPaymentMutation.mutate({
       repaymentId: selectedRepayment.id,
       paymentMethod: paymentData.payment_method,
       transactionRef: paymentData.transaction_reference,
+      paidAmount,
     });
   };
 
@@ -541,6 +573,22 @@ const AdminRepayments = () => {
                     <span className="text-muted-foreground">Installment</span>
                     <span className="text-foreground">#{selectedRepayment.installment_number || "-"}</span>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Payment Amount *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    max={selectedRepayment.amount}
+                    value={paymentData.amount}
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                    placeholder={`Full amount: K${Number(selectedRepayment.amount).toLocaleString()}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter amount received. Leave empty to record full payment of K{Number(selectedRepayment.amount).toLocaleString()}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
