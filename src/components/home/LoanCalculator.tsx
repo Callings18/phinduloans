@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "react-router-dom";
-import { ArrowRight, Briefcase, Wallet, User, Check, Percent, Calendar, BadgeDollarSign, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { calculateLoan, LoanProduct as LoanProductCalc } from "@/utils/loanCalculations";
+import { format, addMonths } from "date-fns";
 
 interface LoanProduct {
   id: string;
@@ -16,20 +19,19 @@ interface LoanProduct {
   min_term_months: number;
   max_term_months: number;
   interest_rate: number;
+  interest_period: string | null;
+  interest_type: string | null;
   processing_fee_percent: number | null;
+  insurance_percent: number | null;
+  vat_percent: number | null;
+  platform_fee_percent: number | null;
   requirements: string[] | null;
 }
 
-const getProductIcon = (name: string) => {
-  if (name.toLowerCase().includes('business')) return Briefcase;
-  if (name.toLowerCase().includes('salary')) return Wallet;
-  return User;
-};
-
 const LoanCalculator = () => {
-  const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
-  const [loanAmount, setLoanAmount] = useState(5000);
-  const [loanTerm, setLoanTerm] = useState(6);
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [loanAmount, setLoanAmount] = useState<string>("5000");
+  const [loanTerm, setLoanTerm] = useState<string>("3");
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["loan-products-public"],
@@ -38,42 +40,69 @@ const LoanCalculator = () => {
         .from("loan_products")
         .select("*")
         .eq("is_active", true)
-        .order("interest_rate", { ascending: true });
+        .order("name", { ascending: true });
 
       if (error) throw error;
       return data as LoanProduct[];
     },
-    // Keep it relatively fresh
     staleTime: 1000 * 60 * 5,
   });
 
+  // Set default product when products load
   useEffect(() => {
-    if (products.length > 0 && !selectedProduct) {
+    if (products.length > 0 && !selectedProductId) {
       const defaultProduct = products[0];
-      setSelectedProduct(defaultProduct);
-      setLoanAmount(defaultProduct.min_amount);
-      setLoanTerm(defaultProduct.min_term_months);
+      setSelectedProductId(defaultProduct.id);
+      setLoanAmount(defaultProduct.min_amount.toString());
+      setLoanTerm(defaultProduct.min_term_months.toString());
     }
-  }, [products]);
+  }, [products, selectedProductId]);
 
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
+
+  // Clamp values when product changes
   useEffect(() => {
     if (selectedProduct) {
-      // Clamp values to product limits
-      if (loanAmount < selectedProduct.min_amount) setLoanAmount(selectedProduct.min_amount);
-      if (loanAmount > selectedProduct.max_amount) setLoanAmount(selectedProduct.max_amount);
-      if (loanTerm < selectedProduct.min_term_months) setLoanTerm(selectedProduct.min_term_months);
-      if (loanTerm > selectedProduct.max_term_months) setLoanTerm(selectedProduct.max_term_months);
+      const amount = parseInt(loanAmount) || 0;
+      const term = parseInt(loanTerm) || 0;
+
+      if (amount < selectedProduct.min_amount) {
+        setLoanAmount(selectedProduct.min_amount.toString());
+      } else if (amount > selectedProduct.max_amount) {
+        setLoanAmount(selectedProduct.max_amount.toString());
+      }
+
+      if (term < selectedProduct.min_term_months) {
+        setLoanTerm(selectedProduct.min_term_months.toString());
+      } else if (term > selectedProduct.max_term_months) {
+        setLoanTerm(selectedProduct.max_term_months.toString());
+      }
     }
   }, [selectedProduct]);
 
-  const interestRate = selectedProduct ? selectedProduct.interest_rate / 100 : 0.15;
-  const processingFeePercent = selectedProduct?.processing_fee_percent || 0;
-  const processingFee = loanAmount * (processingFeePercent / 100);
-  // Fees are deducted from disbursement, not added to repayment
-  const disbursementAmount = loanAmount - processingFee;
-  const totalInterest = loanAmount * interestRate * loanTerm;
-  const totalPayment = loanAmount + totalInterest; // Principal + Interest only
-  const monthlyPayment = totalPayment / loanTerm;
+  // Calculate loan details
+  const amount = parseInt(loanAmount) || 0;
+  const term = parseInt(loanTerm) || 1;
+
+  const productForCalc: LoanProductCalc = selectedProduct
+    ? {
+        interest_rate: selectedProduct.interest_rate,
+        interest_period: selectedProduct.interest_period as any,
+        interest_type: selectedProduct.interest_type as any,
+        processing_fee_percent: selectedProduct.processing_fee_percent,
+        insurance_percent: selectedProduct.insurance_percent,
+        vat_percent: selectedProduct.vat_percent,
+        platform_fee_percent: selectedProduct.platform_fee_percent,
+      }
+    : { interest_rate: 15 };
+
+  const calculation = calculateLoan(amount, term, productForCalc);
+  
+  // Calculate next payment date (1 month from today)
+  const nextPaymentDate = addMonths(new Date(), 1);
+
+  // Calculate total service fee (all fees deducted upfront)
+  const serviceFee = calculation.feesDeductedUpfront;
 
   return (
     <section className="py-24 gradient-hero relative overflow-hidden">
@@ -85,228 +114,128 @@ const LoanCalculator = () => {
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Choose Your <span className="text-gradient">Loan Product</span>
+            Calculate Your <span className="text-gradient">Loan</span>
           </h2>
           <p className="text-muted-foreground">
-            Select a loan type that suits your needs, then calculate your repayment.
+            Get an instant estimate for your loan. Select a product and see exactly what you'll receive.
           </p>
         </div>
 
-        <div className="max-w-6xl mx-auto">
-          {/* Loan Products Cards */}
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            </div>
-          ) : products.length > 0 ? (
-            <div className="grid md:grid-cols-3 gap-6 mb-10">
-              {products.map((product) => {
-                const IconComponent = getProductIcon(product.name);
-                const isSelected = selectedProduct?.id === product.id;
-
-                return (
-                  <button
-                    key={product.id}
-                    onClick={() => setSelectedProduct(product)}
-                    className={cn(
-                      "p-6 rounded-2xl border text-left transition-all duration-300 group relative overflow-hidden",
-                      isSelected
-                        ? "bg-primary/10 border-primary shadow-lg ring-2 ring-primary/20"
-                        : "glass border-border hover:border-primary/50 hover:shadow-md"
-                    )}
-                  >
-                    {isSelected && (
-                      <div className="absolute top-3 right-3 w-6 h-6 rounded-full gradient-primary flex items-center justify-center">
-                        <Check size={14} className="text-primary-foreground" />
-                      </div>
-                    )}
-
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors",
-                      isSelected ? "gradient-primary" : "bg-secondary"
-                    )}>
-                      <IconComponent size={24} className={isSelected ? "text-primary-foreground" : "text-primary"} />
-                    </div>
-
-                    <h3 className="text-xl font-bold text-foreground mb-2">{product.name}</h3>
-
-                    {product.description && (
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                        {product.description}
-                      </p>
-                    )}
-
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Percent size={14} className="text-primary" />
-                        <span className="text-foreground font-semibold">{product.interest_rate}%</span>
-                        <span className="text-muted-foreground">interest rate</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <BadgeDollarSign size={14} className="text-primary" />
-                        <span className="text-muted-foreground">
-                          K{product.min_amount.toLocaleString()} - K{product.max_amount.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar size={14} className="text-primary" />
-                        <span className="text-muted-foreground">
-                          {product.min_term_months === product.max_term_months
-                            ? `${product.max_term_months} month${product.max_term_months > 1 ? 's' : ''}`
-                            : `${product.min_term_months} - ${product.max_term_months} months`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {product.requirements && product.requirements.length > 0 && (
-                      <div className="pt-4 border-t border-border">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Requirements:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {product.requirements.slice(0, 3).map((req, idx) => (
-                            <span key={idx} className="text-xs px-2 py-1 rounded-full bg-secondary text-muted-foreground">
-                              {req}
-                            </span>
-                          ))}
-                          {product.requirements.length > 3 && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-secondary text-muted-foreground">
-                              +{product.requirements.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {/* Calculator */}
-          <div className="glass rounded-3xl p-8 md:p-12">
-            {selectedProduct && (
-              <div className="text-center mb-8">
-                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                  Calculating for: {selectedProduct.name}
-                </span>
+        <div className="max-w-lg mx-auto">
+          <div className="bg-card rounded-3xl p-8 shadow-xl border border-border">
+            {isLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
               </div>
-            )}
-
-            <div className="grid md:grid-cols-2 gap-12">
-              {/* Inputs */}
-              <div className="space-y-10">
-                <div>
-                  <div className="flex justify-between mb-4">
-                    <label className="text-foreground font-medium">Loan Amount</label>
-                    <span className="text-primary font-bold text-xl">K{loanAmount.toLocaleString()}</span>
-                  </div>
-                  <Slider
-                    value={[loanAmount]}
-                    onValueChange={(value) => setLoanAmount(value[0])}
+            ) : (
+              <div className="space-y-6">
+                {/* Loan Amount */}
+                <div className="space-y-2">
+                  <Label htmlFor="amount" className="text-foreground font-medium">
+                    How much would you like?
+                  </Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    value={loanAmount}
+                    onChange={(e) => setLoanAmount(e.target.value)}
                     min={selectedProduct?.min_amount || 500}
                     max={selectedProduct?.max_amount || 50000}
-                    step={100}
-                    className="w-full"
+                    className="text-lg h-12"
+                    placeholder="Enter amount"
                   />
-                  <div className="flex justify-between mt-2 text-muted-foreground text-sm">
-                    <span>K{(selectedProduct?.min_amount || 500).toLocaleString()}</span>
-                    <span>K{(selectedProduct?.max_amount || 50000).toLocaleString()}</span>
-                  </div>
+                  {selectedProduct && (
+                    <p className="text-xs text-muted-foreground">
+                      Min: K{selectedProduct.min_amount.toLocaleString()} - Max: K{selectedProduct.max_amount.toLocaleString()}
+                    </p>
+                  )}
                 </div>
 
-                <div>
-                  <div className="flex justify-between mb-4">
-                    <label className="text-foreground font-medium">Loan Term</label>
-                    <span className="text-primary font-bold text-xl">{loanTerm} month{loanTerm > 1 ? 's' : ''}</span>
-                  </div>
-                  <Slider
-                    value={[loanTerm]}
-                    onValueChange={(value) => setLoanTerm(value[0])}
+                {/* Loan Term */}
+                <div className="space-y-2">
+                  <Label htmlFor="term" className="text-foreground font-medium">
+                    For how many months?
+                  </Label>
+                  <Input
+                    id="term"
+                    type="number"
+                    value={loanTerm}
+                    onChange={(e) => setLoanTerm(e.target.value)}
                     min={selectedProduct?.min_term_months || 1}
                     max={selectedProduct?.max_term_months || 24}
-                    step={1}
-                    className="w-full"
+                    className="text-lg h-12"
+                    placeholder="Enter months"
                   />
-                  <div className="flex justify-between mt-2 text-muted-foreground text-sm">
-                    <span>{selectedProduct?.min_term_months || 1} month</span>
-                    <span>{selectedProduct?.max_term_months || 24} months</span>
-                  </div>
+                  {selectedProduct && (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedProduct.min_term_months} - {selectedProduct.max_term_months} months
+                    </p>
+                  )}
                 </div>
 
-                {/* Selected Product Requirements */}
-                {selectedProduct?.requirements && selectedProduct.requirements.length > 0 && (
-                  <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-                    <p className="text-sm font-medium text-foreground mb-3">Documents Required:</p>
-                    <ul className="space-y-2">
-                      {selectedProduct.requirements.map((req, idx) => (
-                        <li key={idx} className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Check size={14} className="text-primary flex-shrink-0" />
-                          {req}
-                        </li>
+                {/* Loan Product Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="product" className="text-foreground font-medium">
+                    What type of loan would you like?
+                  </Label>
+                  <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                    <SelectTrigger className="h-12 text-lg">
+                      <SelectValue placeholder="Select a loan product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name}
+                        </SelectItem>
                       ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Results */}
-              <div className="space-y-6">
-                <div className="p-6 rounded-2xl bg-secondary/50 border border-border">
-                  <p className="text-muted-foreground text-sm mb-1">Monthly Payment</p>
-                  <p className="text-4xl font-bold text-gradient">
-                    K{monthlyPayment.toFixed(2)}
-                  </p>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-                    <p className="text-muted-foreground text-xs mb-1">Total Interest</p>
-                    <p className="text-xl font-semibold text-foreground">
-                      K{totalInterest.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-                    <p className="text-muted-foreground text-xs mb-1">Total Repayment</p>
-                    <p className="text-xl font-semibold text-foreground">
-                      K{totalPayment.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                {processingFee > 0 && (
-                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/30">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Processing Fee ({processingFeePercent}%)</span>
-                      <span className="text-foreground font-medium">K{processingFee.toFixed(2)}</span>
+                {/* Loan Summary */}
+                <div className="bg-secondary/50 rounded-xl p-6 space-y-4">
+                  <h3 className="font-bold text-foreground text-lg">Loan Summary</h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Service Fee</span>
+                      <span className="font-semibold text-foreground">
+                        K{serviceFee.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
                     </div>
-                    <div className="flex justify-between text-sm font-bold">
-                      <span className="text-foreground">You will receive</span>
-                      <span className="text-primary">K{disbursementAmount.toFixed(2)}</span>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Amount You Receive</span>
+                      <span className="font-semibold text-foreground">
+                        K{calculation.disbursementAmount.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      *Processing fee is deducted before disbursement
-                    </p>
-                  </div>
-                )}
-
-                <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Interest Rate</span>
-                    <span className="text-foreground font-medium">{selectedProduct?.interest_rate || 15}%</span>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Monthly Repayment</span>
+                      <span className="font-semibold text-foreground">
+                        K{calculation.monthlyPayment.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Next Payment Date</span>
+                      <span className="font-semibold text-foreground">
+                        {format(nextPaymentDate, "MMM d, yyyy")}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
+                {/* Apply Button */}
                 <Button variant="hero" size="lg" className="w-full" asChild>
                   <Link to={`/apply${selectedProduct ? `?product=${selectedProduct.id}` : ''}`}>
-                    Apply for {selectedProduct?.name || 'Loan'}
+                    Apply
                     <ArrowRight size={20} />
                   </Link>
                 </Button>
-
-                <p className="text-muted-foreground text-xs text-center">
-                  *Flat rate. Terms and conditions apply.
-                </p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
