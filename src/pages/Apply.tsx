@@ -314,16 +314,12 @@ const Apply = () => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${prefix}_${Date.now()}.${fileExt}`;
         const { data, error } = await supabase.storage
-          .from('loan_documents')
+          .from('loan-documents')
           .upload(fileName, file);
 
         if (error) throw error;
 
-        // Get public URL or signed URL? 
-        // For private documents, we should ideally use signed URLs on fetch, 
-        // but for now let's store the path to get publicUrl if bucket is public,
-        // or just store the path and fetch later.
-        const { data: { publicUrl } } = supabase.storage.from('loan_documents').getPublicUrl(fileName);
+        const { data: { publicUrl } } = supabase.storage.from('loan-documents').getPublicUrl(fileName);
         return publicUrl;
       };
 
@@ -389,6 +385,17 @@ const Apply = () => {
       });
 
       if (error) throw error;
+
+      // 4. Update user profile with application data (creates borrower record)
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        email: formData.email,
+        full_name: `${formData.firstName} ${formData.lastName}`,
+        phone: formData.phone,
+        nrc_number: formData.nrc,
+        address: formData.address,
+        city: formData.city || null,
+      });
 
       toast({
         title: "Application Submitted!",
@@ -822,15 +829,28 @@ const Apply = () => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Interest Rate</span>
-                        <span className="text-foreground font-medium">{selectedProduct?.interest_rate || 15}% p.a.</span>
+                        <span className="text-foreground font-medium">{selectedProduct?.interest_rate || 15}% {interestPeriodLabel}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Loan Term</span>
                         <span className="text-foreground font-medium">{formData.loanTerm} months</span>
                       </div>
+                      {loanCalc && loanCalc.feesDeductedUpfront > 0 && (
+                        <>
+                          <div className="h-px bg-border my-3" />
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Service Fees (deducted)</span>
+                            <span className="text-destructive">-K{loanCalc.feesDeductedUpfront.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-foreground font-medium">You Will Receive</span>
+                            <span className="text-primary font-bold text-lg">K{loanCalc.disbursementAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="h-px bg-border my-3" />
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Monthly Payment</span>
+                        <span className="text-muted-foreground">Monthly Repayment</span>
                         <span className="text-primary font-bold text-lg">K{monthlyPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between">

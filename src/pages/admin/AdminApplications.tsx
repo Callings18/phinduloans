@@ -1009,33 +1009,51 @@ const AdminApplications = () => {
                   </Select>
                 </div>
               </div>
-              {newLoan.loan_amount && newLoan.loan_term_months && newLoan.interest_rate && (
-                <Card className="bg-secondary/50 border-border/50">
-                  <CardContent className="p-4">
-                    <h4 className="font-semibold mb-2 text-foreground">Loan Summary</h4>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Total Repayment</p>
-                        <p className="font-medium text-foreground">
-                          K{(parseFloat(newLoan.loan_amount) * (1 + (parseFloat(newLoan.interest_rate) / 100) * (parseInt(newLoan.loan_term_months) / 12))).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </p>
+              {newLoan.loan_amount && newLoan.loan_term_months && newLoan.interest_rate && (() => {
+                const selectedProduct = loanProducts?.find(p => p.id === newLoan.product_id);
+                const loanCalc = calculateLoan(
+                  parseFloat(newLoan.loan_amount),
+                  parseInt(newLoan.loan_term_months),
+                  {
+                    interest_rate: parseFloat(newLoan.interest_rate),
+                    interest_period: selectedProduct?.interest_period as any,
+                    interest_type: selectedProduct?.interest_type as any,
+                    processing_fee_percent: selectedProduct?.processing_fee_percent,
+                    insurance_percent: selectedProduct?.insurance_percent,
+                    vat_percent: selectedProduct?.vat_percent,
+                    platform_fee_percent: selectedProduct?.platform_fee_percent,
+                  }
+                );
+                return (
+                  <Card className="bg-secondary/50 border-border/50">
+                    <CardContent className="p-4">
+                      <h4 className="font-semibold mb-3 text-foreground">Loan Summary</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Principal</p>
+                          <p className="font-medium text-foreground">K{parseFloat(newLoan.loan_amount).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Service Fees (deducted)</p>
+                          <p className="font-medium text-destructive">-K{loanCalc.feesDeductedUpfront.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div className="col-span-2 p-3 bg-primary/10 rounded-lg">
+                          <p className="text-muted-foreground text-xs">Borrower Receives</p>
+                          <p className="font-bold text-primary text-lg">K{loanCalc.disbursementAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Monthly Payment</p>
+                          <p className="font-medium text-foreground">K{loanCalc.monthlyPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Total Repayment</p>
+                          <p className="font-medium text-foreground">K{loanCalc.totalRepayment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Monthly Payment</p>
-                        <p className="font-medium text-foreground">
-                          K{((parseFloat(newLoan.loan_amount) * (1 + (parseFloat(newLoan.interest_rate) / 100) * (parseInt(newLoan.loan_term_months) / 12))) / parseInt(newLoan.loan_term_months)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Total Interest</p>
-                        <p className="font-medium text-foreground">
-                          K{(parseFloat(newLoan.loan_amount) * (parseFloat(newLoan.interest_rate) / 100) * (parseInt(newLoan.loan_term_months) / 12)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="collateral" className="space-y-4 mt-4">
@@ -1361,10 +1379,14 @@ const AdminApplications = () => {
                   {[
                     { label: "NRC Front", url: selectedApp.nrc_front_url },
                     { label: "NRC Back", url: selectedApp.nrc_back_url },
-                    { label: "Payslip", url: selectedApp.payslip_url },
                     { label: "Selfie", url: selectedApp.selfie_url },
+                    { label: "Payslip 1 (Latest)", url: selectedApp.payslip_url },
+                    { label: "Payslip 2", url: selectedApp.payslip_2_url },
+                    { label: "Payslip 3", url: selectedApp.payslip_3_url },
+                    { label: "Bank Statement", url: selectedApp.bank_statement_url },
                     { label: "Employer Letter", url: selectedApp.employer_letter_url },
-                    { label: "Contract", url: selectedApp.contract_url },
+                    { label: "Collateral Image", url: selectedApp.collateral_image_url },
+                    { label: "Signed Contract", url: selectedApp.contract_url },
                   ].map((doc) => (
                     <Card key={doc.label} className="bg-secondary/30 border-border/50">
                       <CardContent className="p-4 flex items-center justify-between">
