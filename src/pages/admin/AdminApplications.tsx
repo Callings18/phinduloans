@@ -66,6 +66,8 @@ import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
 import GuidedTour from "@/components/common/GuidedTour";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
+import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/components/common/BulkActions";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -97,6 +99,7 @@ const AdminApplications = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [runTour, setRunTour] = useState(false);
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
 
   const tourSteps: Step[] = [
     {
@@ -247,7 +250,7 @@ const AdminApplications = () => {
 
       // Get the selected product to use its interest period/type
       const selectedProduct = loanProducts?.find(p => p.id === data.loanData.product_id);
-      
+
       // Use unified calculation utility
       const loanCalc = calculateLoan(loanAmount, termMonths, {
         interest_rate: interestRate,
@@ -322,7 +325,7 @@ const AdminApplications = () => {
         Object.entries(documentUrls).forEach(([key, value]) => {
           if (value) updateData[key] = value;
         });
-        
+
         await supabase.from('loan_applications').update(updateData).eq('id', loanId);
       }
     },
@@ -505,20 +508,20 @@ const AdminApplications = () => {
   const uploadDocumentFile = async (file: File, folder: string, loanId: string): Promise<string | null> => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${loanId}/${folder}/${Date.now()}.${fileExt}`;
-    
+
     const { error: uploadError } = await supabase.storage
       .from('loan-documents')
       .upload(fileName, file);
-    
+
     if (uploadError) {
       console.error('Upload error:', uploadError);
       return null;
     }
-    
+
     const { data: { publicUrl } } = supabase.storage
       .from('loan-documents')
       .getPublicUrl(fileName);
-    
+
     return publicUrl;
   };
 
@@ -545,11 +548,11 @@ const AdminApplications = () => {
 
   const handleApprove = async () => {
     if (!selectedApp) return;
-    
+
     // Check minimum credit score requirement from loan product
     const product = loanProducts?.find(p => p.id === selectedApp.loan_product_id);
     const minCreditScore = (product as any)?.min_credit_score || 0;
-    
+
     if (minCreditScore > 0) {
       // Check if risk assessment exists with sufficient credit score
       const { data: riskAssessment } = await supabase
@@ -557,26 +560,26 @@ const AdminApplications = () => {
         .select('credit_score')
         .eq('loan_application_id', selectedApp.id)
         .maybeSingle();
-      
+
       if (!riskAssessment) {
-        toast({ 
-          title: "Risk Assessment Required", 
+        toast({
+          title: "Risk Assessment Required",
           description: `This product requires a credit score of at least ${minCreditScore}. Please complete the risk assessment first.`,
-          variant: "destructive" 
+          variant: "destructive"
         });
         return;
       }
-      
+
       if ((riskAssessment.credit_score || 0) < minCreditScore) {
-        toast({ 
-          title: "Credit Score Below Minimum", 
+        toast({
+          title: "Credit Score Below Minimum",
           description: `Borrower's credit score (${riskAssessment.credit_score}) is below the required ${minCreditScore} for this product.`,
-          variant: "destructive" 
+          variant: "destructive"
         });
         return;
       }
     }
-    
+
     setIsProcessing(true);
     await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'approved' });
     setIsProcessing(false);
@@ -626,16 +629,163 @@ const AdminApplications = () => {
 
   const filteredApps = applications?.filter(app => {
     const query = searchQuery.toLowerCase().trim();
-    const matchesSearch = !query || 
+    const matchesSearch = !query ||
       (app.full_name?.toLowerCase() || '').includes(query) ||
       (app.email?.toLowerCase() || '').includes(query) ||
       (app.nrc_number?.toLowerCase() || '').includes(query) ||
       (app.phone?.toLowerCase() || '').includes(query);
-    
+
     const matchesSource = sourceFilter === 'all' || (app as any).source === sourceFilter;
-    
+
     return matchesSearch && matchesSource;
   });
+
+  // Toggle select all applications
+  const toggleSelectAll = () => {
+    if (selectedApplications.length === filteredApps?.length) {
+      setSelectedApplications([]);
+    } else {
+      setSelectedApplications(filteredApps?.map(app => app.id) || []);
+    }
+  };
+
+  // Toggle single application selection
+  const toggleSelectApplication = (id: string) => {
+    setSelectedApplications(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  // Staff options for bulk assign
+  const staffOptions = staffList?.map((s: any) => ({
+    value: s.user_id,
+    label: s.profile?.full_name || s.profile?.email || 'Unknown Staff'
+  })) || [];
+
+  // Bulk actions with dynamic staff options
+  const bulkActions: BulkAction[] = defaultLoanApplicationActions.map(action => {
+    if (action.id === 'assign') {
+      return { ...action, selectOptions: staffOptions };
+    }
+    return action;
+  });
+
+  // Handle bulk action execution
+  const handleBulkAction = async (actionId: string, inputValue?: string) => {
+    if (selectedApplications.length === 0) return;
+
+    switch (actionId) {
+      case 'approve':
+        // Bulk approve
+        const approvePromises = selectedApplications.map(id =>
+          supabase.from('loan_applications').update({ status: 'approved' }).eq('id', id)
+        );
+        await Promise.all(approvePromises);
+        await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+        setSelectedApplications([]);
+        break;
+
+      case 'reject':
+        // Bulk reject with reason
+        const rejectPromises = selectedApplications.map(id =>
+          supabase.from('loan_applications').update({
+            status: 'rejected',
+            rejection_reason: inputValue || 'Bulk rejection'
+          }).eq('id', id)
+        );
+        await Promise.all(rejectPromises);
+        await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+        setSelectedApplications([]);
+        break;
+
+      case 'assign':
+        // Bulk assign to officer
+        if (!inputValue) throw new Error('Please select an officer');
+        const assignPromises = selectedApplications.map(id =>
+          supabase.from('loan_applications').update({
+            assigned_to: inputValue,
+            status: 'under_review'
+          }).eq('id', id)
+        );
+        await Promise.all(assignPromises);
+        await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+        setSelectedApplications([]);
+        break;
+
+      case 'send_email':
+        // Get email addresses and send bulk email notification
+        const emailApps = applications?.filter(app => selectedApplications.includes(app.id));
+        for (const app of emailApps || []) {
+          if (app.email && app.user_id) {
+            await notificationService.send({
+              userId: app.user_id,
+              type: 'email',
+              title: 'Update on Your Loan Application',
+              message: inputValue || 'Your loan application status has been updated.',
+              recipient: app.email
+            });
+          }
+        }
+        setSelectedApplications([]);
+        break;
+
+      case 'send_sms':
+        // Get phone numbers and send bulk SMS
+        const smsApps = applications?.filter(app => selectedApplications.includes(app.id));
+        for (const app of smsApps || []) {
+          if (app.phone && app.user_id) {
+            await notificationService.send({
+              userId: app.user_id,
+              type: 'sms',
+              title: 'Loan Application Update',
+              message: inputValue || 'Your loan application status has been updated.',
+              recipient: app.phone
+            });
+          }
+        }
+        setSelectedApplications([]);
+        break;
+
+      case 'export':
+        // Export selected applications to CSV
+        const exportApps = applications?.filter(app => selectedApplications.includes(app.id));
+        if (exportApps && exportApps.length > 0) {
+          const headers = ['Name', 'Email', 'Phone', 'NRC', 'Amount', 'Status', 'Date'];
+          const rows = exportApps.map(app => [
+            app.full_name,
+            app.email,
+            app.phone,
+            app.nrc_number,
+            app.loan_amount,
+            app.status,
+            new Date(app.created_at).toLocaleDateString()
+          ]);
+          const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `applications_export_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setSelectedApplications([]);
+        break;
+
+      case 'delete':
+        // Bulk delete
+        const deletePromises = selectedApplications.map(id =>
+          supabase.from('loan_applications').delete().eq('id', id)
+        );
+        await Promise.all(deletePromises);
+        await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+        setSelectedApplications([]);
+        break;
+
+      default:
+        throw new Error('Unknown action');
+    }
+  };
 
   return (
     <AdminLayout>
@@ -713,6 +863,33 @@ const AdminApplications = () => {
           </CardContent>
         </Card>
 
+        {/* Bulk Actions Bar */}
+        {selectedApplications.length > 0 && (
+          <BulkActions
+            selectedIds={selectedApplications}
+            onAction={handleBulkAction}
+            actions={bulkActions}
+            entityName="applications"
+            onClearSelection={() => setSelectedApplications([])}
+          />
+        )}
+
+        {/* Select All Bar */}
+        {filteredApps && filteredApps.length > 0 && (
+          <div className="flex items-center gap-3 px-4 py-2 glass rounded-lg border-border/50">
+            <Checkbox
+              id="select-all"
+              checked={selectedApplications.length === filteredApps.length && filteredApps.length > 0}
+              onCheckedChange={toggleSelectAll}
+            />
+            <label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer">
+              {selectedApplications.length === filteredApps.length && filteredApps.length > 0
+                ? `All ${filteredApps.length} applications selected`
+                : `Select all ${filteredApps.length} applications`}
+            </label>
+          </div>
+        )}
+
         {/* Applications List */}
         {isLoading ? (
           <div className="flex justify-center py-12">
@@ -724,10 +901,18 @@ const AdminApplications = () => {
               const config = statusConfig[app.status as keyof typeof statusConfig];
 
               return (
-                <Card key={app.id} className="glass border-border/50 hover:border-primary/30 transition-colors">
+                <Card key={app.id} className={`glass border-border/50 hover:border-primary/30 transition-colors ${selectedApplications.includes(app.id) ? 'ring-2 ring-primary/50' : ''}`}>
                   <CardContent className="p-6">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div className="flex items-start gap-4">
+                        {/* Selection Checkbox */}
+                        <div className="flex items-center">
+                          <Checkbox
+                            checked={selectedApplications.includes(app.id)}
+                            onCheckedChange={() => toggleSelectApplication(app.id)}
+                            className="mt-1"
+                          />
+                        </div>
                         <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
                           <User className="text-primary" size={24} />
                         </div>
@@ -1136,7 +1321,7 @@ const AdminApplications = () => {
                 {/* Payslips */}
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Payslips (3 months)</Label>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Payslip 1 */}
                     <div className="space-y-2">

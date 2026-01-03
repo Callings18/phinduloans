@@ -55,6 +55,8 @@ import {
 } from "@/components/ui/table";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
+import BulkActions, { defaultRepaymentActions } from "@/components/common/BulkActions";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Repayment {
   id: string;
@@ -90,6 +92,7 @@ const AdminRepayments = () => {
   });
 
   const queryClient = useQueryClient();
+  const [selectedRepayments, setSelectedRepayments] = useState<string[]>([]);
 
   // Fetch all repayments
   const { data: repayments, isLoading } = useQuery({
@@ -118,11 +121,11 @@ const AdminRepayments = () => {
     mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
       if (!repayment) throw new Error("Repayment not found");
-      
+
       const amountDue = Number(repayment.amount);
       const isFullPayment = paidAmount >= amountDue;
       const remainingAmount = amountDue - paidAmount;
-      
+
       if (isFullPayment) {
         // Full payment - mark as paid
         const { error } = await supabase
@@ -153,18 +156,18 @@ const AdminRepayments = () => {
 
         if (error) throw error;
       }
-      
+
       return { repayment, paidAmount, isFullPayment };
     },
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
-      
+
       if (isFullPayment) {
         toast.success("Full payment recorded successfully");
       } else {
         toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
       }
-      
+
       // Send SMS confirmation
       if (repayment?.loan_applications) {
         const loanRepayments = repayments?.filter(r => r.loan_id === repayment.loan_id) || [];
@@ -173,7 +176,7 @@ const AdminRepayments = () => {
           .reduce((sum, r) => sum + Number(r.amount), 0) + paidAmount;
         const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.original_amount || r.amount), 0);
         const remainingBalance = totalDue - totalPaid;
-        
+
         await notificationService.sendPaymentConfirmation(
           repayment.user_id,
           repayment.loan_applications.full_name,
@@ -181,7 +184,7 @@ const AdminRepayments = () => {
           remainingBalance,
           repayment.loan_applications.phone
         );
-        
+
         if (remainingBalance <= 0) {
           await notificationService.sendLoanCompletion(
             repayment.user_id,
@@ -190,7 +193,7 @@ const AdminRepayments = () => {
           );
         }
       }
-      
+
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
       setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "" });
@@ -253,9 +256,9 @@ const AdminRepayments = () => {
   const submitPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRepayment) return;
-    
+
     const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
-    
+
     recordPaymentMutation.mutate({
       repaymentId: selectedRepayment.id,
       paymentMethod: paymentData.payment_method,
@@ -274,10 +277,10 @@ const AdminRepayments = () => {
       return { status: "paid", color: "bg-success/20 text-success border-success/30", icon: CheckCircle };
     }
     if (isOverdue) {
-      return { 
-        status: `${daysOverdue} days overdue`, 
-        color: "bg-destructive/20 text-destructive border-destructive/30", 
-        icon: AlertTriangle 
+      return {
+        status: `${daysOverdue} days overdue`,
+        color: "bg-destructive/20 text-destructive border-destructive/30",
+        icon: AlertTriangle
       };
     }
     return { status: "pending", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
@@ -287,18 +290,101 @@ const AdminRepayments = () => {
     const matchesSearch =
       rep.loan_applications?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rep.transaction_reference?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const today = new Date();
     const dueDate = new Date(rep.due_date);
     const isOverdue = rep.status === "pending" && isAfter(today, dueDate);
-    
-    const matchesStatus = 
-      statusFilter === "all" || 
+
+    const matchesStatus =
+      statusFilter === "all" ||
       rep.status === statusFilter ||
       (statusFilter === "overdue" && isOverdue);
-    
+
     return matchesSearch && matchesStatus;
   });
+
+  // Toggle all selected repayments
+  const toggleSelectAll = () => {
+    if (selectedRepayments.length === filteredRepayments?.length) {
+      setSelectedRepayments([]);
+    } else {
+      setSelectedRepayments(filteredRepayments?.map(r => r.id) || []);
+    }
+  };
+
+  // Toggle single repayment selection
+  const toggleSelectRepayment = (id: string) => {
+    setSelectedRepayments(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  // Handle bulk action execution
+  const handleBulkAction = async (actionId: string, inputValue?: string) => {
+    if (selectedRepayments.length === 0) return;
+
+    switch (actionId) {
+      case 'mark_paid':
+        // Bulk mark as paid
+        for (const id of selectedRepayments) {
+          await supabase.from('loan_repayments').update({
+            status: 'paid',
+            paid_date: new Date().toISOString().split('T')[0],
+            transaction_reference: `BULK-${Date.now()}`
+          }).eq('id', id);
+        }
+        await queryClient.invalidateQueries({ queryKey: ['admin-repayments'] });
+        toast.success(`${selectedRepayments.length} repayments marked as paid`);
+        setSelectedRepayments([]);
+        break;
+
+      case 'send_reminder':
+        // Send payment reminders to selected borrowers
+        const reminderReps = repayments?.filter(r => selectedRepayments.includes(r.id));
+        for (const rep of reminderReps || []) {
+          if (rep.loan_applications?.phone && rep.user_id) {
+            await notificationService.send({
+              userId: rep.user_id,
+              type: 'sms',
+              title: 'Payment Reminder',
+              message: inputValue || `Dear ${rep.loan_applications.full_name}, your payment of K${Number(rep.amount).toLocaleString()} is due on ${format(new Date(rep.due_date), 'MMM dd, yyyy')}. Please make your payment to avoid penalties.`,
+              recipient: rep.loan_applications.phone
+            });
+          }
+        }
+        toast.success(`Reminders sent to ${selectedRepayments.length} borrowers`);
+        setSelectedRepayments([]);
+        break;
+
+      case 'export':
+        // Export selected repayments to CSV
+        const exportReps = repayments?.filter(r => selectedRepayments.includes(r.id));
+        if (exportReps && exportReps.length > 0) {
+          const headers = ['Borrower', 'Phone', 'Amount', 'Due Date', 'Status', 'Installment'];
+          const rows = exportReps.map(r => [
+            r.loan_applications?.full_name || 'Unknown',
+            r.loan_applications?.phone || '',
+            r.amount,
+            format(new Date(r.due_date), 'yyyy-MM-dd'),
+            r.status,
+            r.installment_number || ''
+          ]);
+          const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `repayments_export_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setSelectedRepayments([]);
+        break;
+
+      default:
+        throw new Error('Unknown action');
+    }
+  };
 
   // Calculate stats
   const today = new Date();
@@ -306,7 +392,7 @@ const AdminRepayments = () => {
     total: repayments?.length || 0,
     pending: repayments?.filter((r) => r.status === "pending").length || 0,
     paid: repayments?.filter((r) => r.status === "paid").length || 0,
-    overdue: repayments?.filter((r) => 
+    overdue: repayments?.filter((r) =>
       r.status === "pending" && isAfter(today, new Date(r.due_date))
     ).length || 0,
     totalCollected: repayments
@@ -426,6 +512,17 @@ const AdminRepayments = () => {
           </CardContent>
         </Card>
 
+        {/* Bulk Actions Bar */}
+        {selectedRepayments.length > 0 && (
+          <BulkActions
+            selectedIds={selectedRepayments}
+            onAction={handleBulkAction}
+            actions={defaultRepaymentActions}
+            entityName="repayments"
+            onClearSelection={() => setSelectedRepayments([])}
+          />
+        )}
+
         {/* Repayments Table */}
         <Card className="border-border/50 bg-card/50">
           <CardHeader>
@@ -451,6 +548,12 @@ const AdminRepayments = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedRepayments.length === filteredRepayments?.length && filteredRepayments.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>#</TableHead>
                     <TableHead>Borrower</TableHead>
                     <TableHead>Amount</TableHead>
@@ -466,7 +569,13 @@ const AdminRepayments = () => {
                     const statusInfo = getStatusInfo(rep);
                     const StatusIcon = statusInfo.icon;
                     return (
-                      <TableRow key={rep.id} className={statusInfo.status.includes("overdue") ? "bg-destructive/5" : ""}>
+                      <TableRow key={rep.id} className={`${statusInfo.status.includes("overdue") ? "bg-destructive/5" : ""} ${selectedRepayments.includes(rep.id) ? "bg-primary/5" : ""}`}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedRepayments.includes(rep.id)}
+                            onCheckedChange={() => toggleSelectRepayment(rep.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{rep.installment_number || "-"}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
