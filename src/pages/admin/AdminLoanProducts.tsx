@@ -73,9 +73,11 @@ import {
   AlertTriangle,
   Link2,
   ShieldAlert,
+  Calculator,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
 
 interface LoanProduct {
   id: string;
@@ -146,17 +148,21 @@ const defaultFormData = {
   name: "",
   description: "",
   product_code: "",
+  category: "personal" as string,  // NEW: Loan category
   channels: ["website", "admin"],
   status: "active",
   min_amount: 500,
   max_amount: 50000,
   min_term_months: 1,
   max_term_months: 24,
+  term_unit: "months" as string,  // NEW: days/weeks/months/years
   interest_rate: 15,
   interest_type: "flat",
   interest_period: "monthly",
   processing_fee_percent: 2,
+  processing_fee_type: "percentage" as string,  // NEW: fixed/percentage
   enforcement_fee_percent: 10,
+  enforcement_fee_type: "percentage" as string,  // NEW: fixed/percentage
   penalty_frequency: "monthly",
   is_active: true,
   requirements: "",
@@ -233,7 +239,7 @@ const AdminLoanProducts = () => {
         .from("loan_applications")
         .select("loan_product_id");
       if (error) throw error;
-      
+
       const counts: Record<string, number> = {};
       data?.forEach((app) => {
         if (app.loan_product_id) {
@@ -280,7 +286,7 @@ const AdminLoanProducts = () => {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const linkedCount = linkedLoansCounts?.[id] || 0;
-      
+
       if (linkedCount > 0) {
         // Has linked applications - archive instead of delete
         const { error } = await supabase
@@ -300,8 +306,8 @@ const AdminLoanProducts = () => {
       queryClient.invalidateQueries({ queryKey: ["loan-products"] });
       setDeleteConfirmProduct(null);
       if (result?.archived) {
-        toast({ 
-          title: "Product archived", 
+        toast({
+          title: "Product archived",
           description: `This product has ${result.count} linked loan(s) and was archived instead of deleted.`
         });
       } else {
@@ -376,7 +382,7 @@ const AdminLoanProducts = () => {
         max_guarantee_percent: product.max_guarantee_percent,
         guarantee_fee_percent: product.guarantee_fee_percent,
       };
-      
+
       const { error } = await supabase.from("loan_products").insert(clonedData);
       if (error) throw error;
     },
@@ -399,17 +405,21 @@ const AdminLoanProducts = () => {
       name: product.name,
       description: product.description || "",
       product_code: product.product_code || "",
+      category: (product as any).category || "personal",  // NEW
       channels: product.channels || ["website", "admin"],
       status: product.status || "active",
       min_amount: product.min_amount,
       max_amount: product.max_amount,
       min_term_months: product.min_term_months,
       max_term_months: product.max_term_months,
+      term_unit: (product as any).term_unit || "months",  // NEW
       interest_rate: product.interest_rate,
       interest_type: product.interest_type || "flat",
       interest_period: product.interest_period || "monthly",
       processing_fee_percent: product.processing_fee_percent || 2,
+      processing_fee_type: (product as any).processing_fee_type || "percentage",  // NEW
       enforcement_fee_percent: product.enforcement_fee_percent || 0,
+      enforcement_fee_type: (product as any).enforcement_fee_type || "percentage",  // NEW
       penalty_frequency: product.penalty_frequency || "monthly",
       is_active: product.is_active,
       requirements: product.requirements?.join("\n") || "",
@@ -528,7 +538,7 @@ const AdminLoanProducts = () => {
   const toggleActive = (product: LoanProduct) => {
     updateMutation.mutate({
       id: product.id,
-      data: { 
+      data: {
         is_active: !product.is_active,
         status: !product.is_active ? "active" : "inactive"
       },
@@ -636,6 +646,10 @@ const AdminLoanProducts = () => {
                     <FileText size={12} className="mr-1" />
                     Docs
                   </TabsTrigger>
+                  <TabsTrigger value="preview" className="text-xs px-2 py-2">
+                    <Calculator size={12} className="mr-1" />
+                    Preview
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Tab 1: Basic Info */}
@@ -656,6 +670,27 @@ const AdminLoanProducts = () => {
                         onChange={(e) => setFormData({ ...formData, product_code: e.target.value })}
                         placeholder="e.g., SAL-ADV-001"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Loan Category *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(v) => setFormData({ ...formData, category: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="personal">Personal Loan</SelectItem>
+                          <SelectItem value="salary_advance">Salary Advance</SelectItem>
+                          <SelectItem value="sme">SME / Business Loan</SelectItem>
+                          <SelectItem value="asset_backed">Asset-Backed Loan</SelectItem>
+                          <SelectItem value="emergency">Emergency Loan</SelectItem>
+                          <SelectItem value="group">Group Loan</SelectItem>
+                          <SelectItem value="payroll">Payroll Deduction Loan</SelectItem>
+                          <SelectItem value="bnpl">Buy Now Pay Later</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="col-span-2 space-y-2">
                       <Label>Description</Label>
@@ -846,12 +881,30 @@ const AdminLoanProducts = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Max Term (months)</Label>
+                      <Label>Max Term</Label>
                       <Input
                         type="number"
                         value={formData.max_term_months}
                         onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Term Unit</Label>
+                      <Select
+                        value={formData.term_unit}
+                        onValueChange={(v) => setFormData({ ...formData, term_unit: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="days">Days</SelectItem>
+                          <SelectItem value="weeks">Weeks</SelectItem>
+                          <SelectItem value="months">Months</SelectItem>
+                          <SelectItem value="years">Years</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Loan duration unit for min/max term</p>
                     </div>
                   </div>
                 </TabsContent>
@@ -1155,7 +1208,7 @@ const AdminLoanProducts = () => {
                           onCheckedChange={(checked) => setFormData({ ...formData, crb_check_required: checked })}
                         />
                       </div>
-                      
+
                       {formData.crb_check_required && (
                         <div className="grid grid-cols-3 gap-4 pl-4 border-l-2 border-primary/30">
                           <div className="space-y-2">
@@ -1201,7 +1254,7 @@ const AdminLoanProducts = () => {
                           onCheckedChange={(checked) => setFormData({ ...formData, guarantee_required: checked })}
                         />
                       </div>
-                      
+
                       {formData.guarantee_required && (
                         <div className="grid grid-cols-3 gap-4 pl-4 border-l-2 border-primary/30">
                           <div className="space-y-2">
@@ -1241,6 +1294,122 @@ const AdminLoanProducts = () => {
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Tab 9: Calculation Preview */}
+                <TabsContent value="preview" className="space-y-4 pt-4">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <Calculator size={18} className="text-primary" />
+                        Test Calculation Preview
+                      </h4>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Enter sample values to preview how this product calculates loans.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Sample Principal (K)</Label>
+                          <Input
+                            type="number"
+                            id="preview-principal"
+                            defaultValue={formData.min_amount}
+                            placeholder="e.g., 5000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Sample Term ({formData.term_unit})</Label>
+                          <Input
+                            type="number"
+                            id="preview-term"
+                            defaultValue={formData.min_term_months}
+                            placeholder="e.g., 6"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => {
+                          const principal = Number((document.getElementById('preview-principal') as HTMLInputElement)?.value) || formData.min_amount;
+                          const term = Number((document.getElementById('preview-term') as HTMLInputElement)?.value) || formData.min_term_months;
+
+                          // Convert term to months based on term_unit
+                          let termMonths = term;
+                          if (formData.term_unit === 'days') termMonths = term / 30;
+                          else if (formData.term_unit === 'weeks') termMonths = term / 4.33;
+                          else if (formData.term_unit === 'years') termMonths = term * 12;
+
+                          const result = calculateLoan(principal, termMonths, {
+                            interest_rate: formData.interest_rate,
+                            interest_period: formData.interest_period as any,
+                            interest_type: formData.interest_type as any,
+                            processing_fee_percent: formData.processing_fee_percent,
+                            insurance_percent: formData.insurance_percent,
+                            vat_percent: formData.vat_percent,
+                            platform_fee_percent: formData.platform_fee_percent,
+                          });
+
+                          const previewResult = document.getElementById('preview-result');
+                          if (previewResult) {
+                            previewResult.innerHTML = `
+                              <div class="grid grid-cols-2 gap-3 text-sm">
+                                <div class="p-3 rounded bg-background border">
+                                  <span class="text-muted-foreground">Principal</span>
+                                  <p class="font-semibold text-foreground">${formatCurrency(result.principal)}</p>
+                                </div>
+                                <div class="p-3 rounded bg-background border">
+                                  <span class="text-muted-foreground">Interest (${formData.interest_rate}% ${getInterestPeriodLabel(formData.interest_period as any)})</span>
+                                  <p class="font-semibold text-foreground">${formatCurrency(result.totalInterest)}</p>
+                                </div>
+                                <div class="p-3 rounded bg-background border">
+                                  <span class="text-muted-foreground">Processing Fee</span>
+                                  <p class="font-semibold text-foreground">${formatCurrency(result.processingFee)}</p>
+                                </div>
+                                <div class="p-3 rounded bg-background border">
+                                  <span class="text-muted-foreground">Total Fees (deducted)</span>
+                                  <p class="font-semibold text-foreground">${formatCurrency(result.feesDeductedUpfront)}</p>
+                                </div>
+                                <div class="p-3 rounded bg-emerald-500/10 border border-emerald-500/30">
+                                  <span class="text-muted-foreground">Borrower Receives</span>
+                                  <p class="font-bold text-emerald-500">${formatCurrency(result.disbursementAmount)}</p>
+                                </div>
+                                <div class="p-3 rounded bg-primary/10 border border-primary/30">
+                                  <span class="text-muted-foreground">Total Repayment</span>
+                                  <p class="font-bold text-primary">${formatCurrency(result.totalRepayment)}</p>
+                                </div>
+                                <div class="p-3 rounded bg-background border col-span-2">
+                                  <span class="text-muted-foreground">Monthly Payment (${termMonths.toFixed(1)} months)</span>
+                                  <p class="font-semibold text-lg text-foreground">${formatCurrency(result.monthlyPayment)} /month</p>
+                                </div>
+                                <div class="p-3 rounded bg-muted/50 border col-span-2 text-xs text-muted-foreground">
+                                  Effective Annual Rate: ${result.effectiveAnnualRate.toFixed(2)}% | Interest Type: ${formData.interest_type}
+                                </div>
+                              </div>
+                            `;
+                          }
+                        }}
+                      >
+                        <Calculator size={16} className="mr-2" />
+                        Calculate Preview
+                      </Button>
+                    </div>
+
+                    <div id="preview-result" className="p-4 rounded-lg bg-muted/30 border border-border/50 min-h-[200px] flex items-center justify-center text-muted-foreground">
+                      Click "Calculate Preview" to see results
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm">
+                      <p className="font-medium text-yellow-600 dark:text-yellow-400 mb-1">⚠️ Formula Details</p>
+                      <ul className="text-muted-foreground space-y-1">
+                        <li>• <strong>Flat Rate:</strong> Interest = Principal × Rate × Term</li>
+                        <li>• <strong>Reducing Balance:</strong> Uses amortization formula (PMT)</li>
+                        <li>• <strong>Fees:</strong> Deducted from principal before disbursement</li>
+                        <li>• <strong>Repayment:</strong> Principal + Interest (fees already taken)</li>
+                      </ul>
                     </div>
                   </div>
                 </TabsContent>
@@ -1417,9 +1586,9 @@ const AdminLoanProducts = () => {
                               onCheckedChange={() => toggleActive(product)}
                             />
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => cloneMutation.mutate(product)}
                             title="Clone product"
                           >
