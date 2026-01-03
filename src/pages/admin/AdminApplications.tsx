@@ -53,8 +53,6 @@ import {
   UserCheck,
   Loader2,
   Link2,
-  GitBranch,
-  History as WorkflowHistoryIcon,
   Activity,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -192,105 +190,13 @@ const AdminApplications = () => {
     },
   });
 
-  const { data: applicationDocs } = useQuery({
-    queryKey: ['application-documents', selectedApp?.id],
-    queryFn: async () => {
-      if (!selectedApp) return [];
-      // @ts-expect-error - Table exists after migrations
-      const { data, error } = await supabase
-        .from('loan_application_documents')
-        .select('*')
-        .eq('application_id', selectedApp.id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedApp,
-  });
+  // Placeholder for application docs - tables don't exist yet
+  const applicationDocs: any[] = [];
 
-  const { data: workflowStages } = useQuery({
-    queryKey: ['workflow-stages', selectedApp?.loan_product_id],
-    queryFn: async () => {
-      if (!selectedApp?.loan_product_id) return [];
-      // @ts-expect-error - Table exists after migrations
-      const { data, error } = await supabase
-        .from('workflow_stages')
-        .select('*')
-        .eq('loan_product_id', selectedApp.loan_product_id)
-        .order('id', { ascending: true });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedApp?.loan_product_id,
-  });
-
-  const { data: workflowTransitions } = useQuery({
-    queryKey: ['workflow-transitions', selectedApp?.loan_product_id],
-    queryFn: async () => {
-      if (!selectedApp?.loan_product_id) return [];
-      // @ts-expect-error - Table exists after migrations
-      const { data, error } = await supabase
-        .from('workflow_transitions')
-        .select('*')
-        .eq('loan_product_id', selectedApp.loan_product_id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedApp?.loan_product_id,
-  });
-
-  const { data: workflowHistory } = useQuery({
-    queryKey: ['workflow_history', selectedApp?.id],
-    queryFn: async () => {
-      if (!selectedApp?.id) return [];
-      // @ts-expect-error - Table exists after migrations
-      const { data, error } = await supabase
-        .from('workflow_history')
-        .select(`
-          *,
-          performed_by_profile:profiles!workflow_history_performed_by_fkey(full_name, email),
-          from_stage:workflow_stages!workflow_history_from_stage_id_fkey(name),
-          to_stage:workflow_stages!workflow_history_to_stage_id_fkey(name)
-        `)
-        .eq('application_id', selectedApp.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedApp?.id,
-  });
-
-  const transitionMutation = useMutation({
-    mutationFn: async ({ toStageId }: { toStageId: string }) => {
-      if (!selectedApp) return;
-
-      const { error } = await supabase
-        .from('loan_applications')
-        // @ts-expect-error - Column exists after migrations
-        .update({ current_stage_id: toStageId })
-        .eq('id', selectedApp.id);
-
-      if (error) throw error;
-
-      // Log to history
-      // @ts-expect-error - Table exists after migrations
-      await supabase.from('workflow_history').insert({
-        application_id: selectedApp.id,
-        from_stage_id: (selectedApp as any).current_stage_id,
-        to_stage_id: toStageId,
-        actor_id: user?.id,
-        action: 'transition',
-        notes: `Transitioned to stage ${toStageId}`
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
-      toast({ title: "Workflow stage updated" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Transition failed", description: error.message, variant: "destructive" });
-    }
-  });
+  // Placeholder for workflow data - tables don't exist yet  
+  const workflowStages: any[] = [];
+  const workflowTransitions: any[] = [];
+  const workflowHistory: any[] = [];
 
   const { data: loanProducts } = useQuery({
     queryKey: ['loan-products'],
@@ -623,11 +529,26 @@ const AdminApplications = () => {
       return null;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('loan-documents')
-      .getPublicUrl(fileName);
+    // Return the file path instead of public URL for secure access via signed URLs
+    return fileName;
+  };
 
-    return publicUrl;
+  // Helper to get signed URL for viewing documents securely
+  const getSignedUrl = async (filePath: string | null): Promise<string | null> => {
+    if (!filePath) return null;
+    
+    // If it's already a full URL (legacy data), return as-is
+    if (filePath.startsWith('http')) return filePath;
+    
+    const { data, error } = await supabase.storage
+      .from('loan-documents')
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
+    
+    if (error) {
+      console.error('Failed to create signed URL:', error);
+      return null;
+    }
+    return data.signedUrl;
   };
 
   const handleProductSelect = (productId: string) => {
@@ -1532,7 +1453,7 @@ const AdminApplications = () => {
                 <TabsTrigger value="risk">Risk Review</TabsTrigger>
                 <TabsTrigger value="actions">Actions</TabsTrigger>
                 <TabsTrigger value="history" className="flex items-center gap-2">
-                  <WorkflowHistoryIcon size={14} /> History
+                  <Activity size={14} /> History
                 </TabsTrigger>
               </TabsList>
 
@@ -1754,48 +1675,7 @@ const AdminApplications = () => {
               </TabsContent>
 
               <TabsContent value="actions" className="space-y-6 mt-4">
-                {/* Workflow Transitions */}
-                {workflowStages && workflowStages.length > 0 && (
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-foreground flex items-center gap-2">
-                      <GitBranch size={18} />
-                      Workflow Progress
-                    </h4>
-                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                      {workflowStages.map((stage: any, index: number) => (
-                        <div key={stage.id} className="flex items-center flex-shrink-0">
-                          <Badge
-                            variant={(selectedApp as any).current_stage_id === stage.id ? "default" : "outline"}
-                            className={(selectedApp as any).current_stage_id === stage.id ? "bg-primary text-primary-foreground" : "opacity-50"}
-                          >
-                            {stage.name}
-                          </Badge>
-                          {index < workflowStages.length - 1 && (
-                            <div className="w-4 h-[1px] bg-border mx-1" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {workflowTransitions?.filter((t: any) => t.from_stage_id === (selectedApp as any).current_stage_id).map((trans: any) => (
-                        <Button
-                          key={trans.id}
-                          variant="outline"
-                          className="justify-between border-dashed border-primary/30 hover:border-primary"
-                          onClick={() => transitionMutation.mutate({ toStageId: trans.to_stage_id })}
-                          disabled={transitionMutation.isPending}
-                        >
-                          <span className="flex flex-col items-start gap-0.5">
-                            <span className="text-xs text-muted-foreground">Transition to:</span>
-                            <span>{(workflowStages as any[]).find((s: any) => s.id === trans.to_stage_id)?.name}</span>
-                          </span>
-                          <GitBranch size={14} className="text-primary" />
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Workflow section placeholder - feature coming soon */}
 
                 {/* Status-based actions */}
                 <div className="pt-4 border-t border-border">
@@ -1957,7 +1837,7 @@ const AdminApplications = () => {
                     </div>
                   ) : (
                     <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                      <WorkflowHistoryIcon size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                      <Activity size={48} className="mx-auto text-muted-foreground/30 mb-4" />
                       <p className="text-muted-foreground">No history available for this application.</p>
                     </div>
                   )}
