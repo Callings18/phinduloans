@@ -34,6 +34,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import ThemeToggle from "@/components/common/ThemeToggle";
+import NotificationCenter from "@/components/common/NotificationCenter";
 
 interface MenuGroup {
   label: string;
@@ -162,6 +164,15 @@ const AdminSidebar = () => {
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
+
+      {/* Quick Actions - Theme & Notifications */}
+      <div className={cn(
+        "px-4 py-3 border-b border-sidebar-border flex gap-2 shrink-0",
+        collapsed ? "justify-center" : "justify-start"
+      )}>
+        <ThemeToggle variant={collapsed ? "minimal" : "default"} />
+        {!collapsed && <NotificationCenter />}
+      </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">

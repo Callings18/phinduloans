@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import PhinduAI from "../common/PhinduAI";
 import phinduLogo from "@/assets/phindu-logo.jpg";
+import ThemeToggle from "../common/ThemeToggle";
+import NotificationCenter from "../common/NotificationCenter";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -34,9 +36,9 @@ const Navbar = () => {
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-3 group">
-              <img 
-                src={phinduLogo} 
-                alt="Phindu Loans" 
+              <img
+                src={phinduLogo}
+                alt="Phindu Loans"
                 className="w-10 h-10 rounded-lg object-cover group-hover:shadow-glow transition-shadow duration-300"
               />
               <div className="flex flex-col">
@@ -64,34 +66,42 @@ const Navbar = () => {
             </div>
 
             {/* CTA Buttons */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3">
+              {/* Theme Toggle */}
+              <ThemeToggle />
+
               {isLoading ? (
                 <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               ) : user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                      <div className="w-7 h-7 rounded-full gradient-primary flex items-center justify-center">
-                        <User className="text-primary-foreground" size={14} />
-                      </div>
-                      <span className="max-w-24 truncate">{user.email?.split('@')[0]}</span>
-                      <ChevronDown size={14} className="text-muted-foreground" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
-                        <LayoutDashboard size={16} />
-                        {isAdmin ? "Admin Dashboard" : "My Dashboard"}
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-                      <LogOut size={16} className="mr-2" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <>
+                  {/* Notification Center */}
+                  <NotificationCenter />
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="gap-2">
+                        <div className="w-7 h-7 rounded-full gradient-primary flex items-center justify-center">
+                          <User className="text-primary-foreground" size={14} />
+                        </div>
+                        <span className="max-w-24 truncate">{user.email?.split('@')[0]}</span>
+                        <ChevronDown size={14} className="text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem asChild>
+                        <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
+                          <LayoutDashboard size={16} />
+                          {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+                        <LogOut size={16} className="mr-2" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
               ) : (
                 <>
                   <Button variant="ghost" asChild>
@@ -105,12 +115,16 @@ const Navbar = () => {
             </div>
 
             {/* Mobile Menu Button */}
-            <button
-              className="md:hidden text-foreground p-2 hover:bg-secondary rounded-lg transition-colors"
-              onClick={() => setIsOpen(!isOpen)}
-            >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            <div className="md:hidden flex items-center gap-2">
+              <ThemeToggle variant="minimal" />
+              {user && <NotificationCenter />}
+              <button
+                className="text-foreground p-2 hover:bg-secondary rounded-lg transition-colors"
+                onClick={() => setIsOpen(!isOpen)}
+              >
+                {isOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
           </div>
 
           {/* Mobile Navigation */}

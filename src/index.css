@@ -51,7 +51,7 @@
     --gradient-card: linear-gradient(145deg, hsl(280, 50%, 12%) 0%, hsl(280, 50%, 6%) 100%);
     --gradient-button: linear-gradient(135deg, hsl(330, 90%, 55%) 0%, hsl(340, 85%, 50%) 100%);
     --gradient-success: linear-gradient(135deg, hsl(160, 70%, 40%) 0%, hsl(140, 60%, 35%) 100%);
-    
+
     --shadow-glow: 0 0 60px hsl(330, 90%, 55% / 0.3);
     --shadow-card: 0 8px 32px hsl(280, 60%, 4% / 0.5);
     --shadow-button: 0 4px 20px hsl(330, 90%, 55% / 0.4);
@@ -69,6 +69,55 @@
     --info-foreground: 210 80% 95%;
   }
 
+  /* Light theme */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 330 90% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 10%;
+
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+
+    --accent: 330 90% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 330 90% 50%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 10% 10%;
+    --sidebar-primary: 330 90% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 240 10% 10%;
+    --sidebar-border: 240 6% 90%;
+    --sidebar-ring: 330 90% 50%;
+
+    /* Status colors for light mode */
+    --success: 160 60% 40%;
+    --warning: 45 100% 50%;
+    --info: 210 80% 50%;
+    --success-foreground: 0 0% 100%;
+    --warning-foreground: 45 100% 10%;
+    --info-foreground: 0 0% 100%;
+  }
+
+  /* Dark theme */
   .dark {
     --background: 280 60% 4%;
     --foreground: 0 0% 98%;
@@ -102,7 +151,12 @@
     font-family: 'Outfit', sans-serif;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Outfit', sans-serif;
   }
 }
@@ -175,12 +229,10 @@
 
   .animate-shimmer {
     animation: shimmer 2s linear infinite;
-    background: linear-gradient(
-      90deg,
-      hsl(var(--muted)) 0%,
-      hsl(var(--secondary)) 50%,
-      hsl(var(--muted)) 100%
-    );
+    background: linear-gradient(90deg,
+        hsl(var(--muted)) 0%,
+        hsl(var(--secondary)) 50%,
+        hsl(var(--muted)) 100%);
     background-size: 200% 100%;
   }
 
@@ -190,18 +242,24 @@
 }
 
 @keyframes float {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translateY(-20px);
   }
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 20px hsl(330, 90%, 55% / 0.3);
   }
+
   50% {
     box-shadow: 0 0 40px hsl(330, 90%, 55% / 0.5);
   }
@@ -212,6 +270,7 @@
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -222,6 +281,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -231,6 +291,7 @@
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -241,6 +302,7 @@
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
