@@ -16,6 +16,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -53,6 +60,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import ProductDocumentManager from "@/components/admin/ProductDocumentManager";
+import WorkflowConfiguration from "@/components/admin/WorkflowConfiguration";
 import {
   Plus,
   Pencil,
@@ -74,6 +83,8 @@ import {
   Link2,
   ShieldAlert,
   Calculator,
+  Settings,
+  GitBranch,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -214,6 +225,7 @@ const AdminLoanProducts = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<LoanProduct | null>(null);
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState<LoanProduct | null>(null);
+  const [configuringProduct, setConfiguringProduct] = useState<LoanProduct | null>(null);
   const [formData, setFormData] = useState(defaultFormData);
 
   const { toast } = useToast();
@@ -1600,6 +1612,14 @@ const AdminLoanProducts = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => setConfiguringProduct(product)}
+                            title="Configure Docs & Workflow"
+                          >
+                            <Settings size={16} className="text-primary" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="text-destructive hover:text-destructive"
                             onClick={() => setDeleteConfirmProduct(product)}
                           >
@@ -1614,6 +1634,48 @@ const AdminLoanProducts = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Configure Product Sheet (Docs & Workflow) */}
+        <Sheet open={!!configuringProduct} onOpenChange={(open) => !open && setConfiguringProduct(null)}>
+          <SheetContent className="sm:max-w-4xl overflow-y-auto">
+            <SheetHeader className="mb-6">
+              <SheetTitle className="text-2xl flex items-center gap-2">
+                <Settings className="text-primary" size={24} />
+                Configure: {configuringProduct?.name}
+              </SheetTitle>
+              <SheetDescription>
+                Manage document requirements and the approval workflow for this loan product.
+              </SheetDescription>
+            </SheetHeader>
+
+            {configuringProduct && (
+              <Tabs defaultValue="documents" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="documents" className="flex items-center gap-2">
+                    <FileText size={16} />
+                    Documents
+                  </TabsTrigger>
+                  <TabsTrigger value="workflow" className="flex items-center gap-2">
+                    <GitBranch size={16} />
+                    Approval Workflow
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="documents" className="mt-0 border-none p-0">
+                  <ProductDocumentManager
+                    productId={configuringProduct.id}
+                    productName={configuringProduct.name}
+                  />
+                </TabsContent>
+                <TabsContent value="workflow" className="mt-0 border-none p-0">
+                  <WorkflowConfiguration
+                    productId={configuringProduct.id}
+                    productName={configuringProduct.name}
+                  />
+                </TabsContent>
+              </Tabs>
+            )}
+          </SheetContent>
+        </Sheet>
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={!!deleteConfirmProduct} onOpenChange={() => setDeleteConfirmProduct(null)}>

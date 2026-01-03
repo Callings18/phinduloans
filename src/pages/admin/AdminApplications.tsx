@@ -52,7 +52,12 @@ import {
   MessageCircle,
   UserCheck,
   Loader2,
+  Link2,
+  GitBranch,
+  History as WorkflowHistoryIcon,
+  Activity,
 } from "lucide-react";
+import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateLoan } from "@/utils/loanCalculations";
@@ -185,6 +190,106 @@ const AdminApplications = () => {
       if (error) throw error;
       return data;
     },
+  });
+
+  const { data: applicationDocs } = useQuery({
+    queryKey: ['application-documents', selectedApp?.id],
+    queryFn: async () => {
+      if (!selectedApp) return [];
+      // @ts-expect-error - Table exists after migrations
+      const { data, error } = await supabase
+        .from('loan_application_documents')
+        .select('*')
+        .eq('application_id', selectedApp.id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedApp,
+  });
+
+  const { data: workflowStages } = useQuery({
+    queryKey: ['workflow-stages', selectedApp?.loan_product_id],
+    queryFn: async () => {
+      if (!selectedApp?.loan_product_id) return [];
+      // @ts-expect-error - Table exists after migrations
+      const { data, error } = await supabase
+        .from('workflow_stages')
+        .select('*')
+        .eq('loan_product_id', selectedApp.loan_product_id)
+        .order('id', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedApp?.loan_product_id,
+  });
+
+  const { data: workflowTransitions } = useQuery({
+    queryKey: ['workflow-transitions', selectedApp?.loan_product_id],
+    queryFn: async () => {
+      if (!selectedApp?.loan_product_id) return [];
+      // @ts-expect-error - Table exists after migrations
+      const { data, error } = await supabase
+        .from('workflow_transitions')
+        .select('*')
+        .eq('loan_product_id', selectedApp.loan_product_id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedApp?.loan_product_id,
+  });
+
+  const { data: workflowHistory } = useQuery({
+    queryKey: ['workflow_history', selectedApp?.id],
+    queryFn: async () => {
+      if (!selectedApp?.id) return [];
+      // @ts-expect-error - Table exists after migrations
+      const { data, error } = await supabase
+        .from('workflow_history')
+        .select(`
+          *,
+          performed_by_profile:profiles!workflow_history_performed_by_fkey(full_name, email),
+          from_stage:workflow_stages!workflow_history_from_stage_id_fkey(name),
+          to_stage:workflow_stages!workflow_history_to_stage_id_fkey(name)
+        `)
+        .eq('application_id', selectedApp.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedApp?.id,
+  });
+
+  const transitionMutation = useMutation({
+    mutationFn: async ({ toStageId }: { toStageId: string }) => {
+      if (!selectedApp) return;
+
+      const { error } = await supabase
+        .from('loan_applications')
+        // @ts-expect-error - Column exists after migrations
+        .update({ current_stage_id: toStageId })
+        .eq('id', selectedApp.id);
+
+      if (error) throw error;
+
+      // Log to history
+      // @ts-expect-error - Table exists after migrations
+      await supabase.from('workflow_history').insert({
+        application_id: selectedApp.id,
+        from_stage_id: (selectedApp as any).current_stage_id,
+        to_stage_id: toStageId,
+        actor_id: user?.id,
+        action: 'transition',
+        notes: `Transitioned to stage ${toStageId}`
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      toast({ title: "Workflow stage updated" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Transition failed", description: error.message, variant: "destructive" });
+    }
   });
 
   const { data: loanProducts } = useQuery({
@@ -1426,6 +1531,9 @@ const AdminApplications = () => {
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="risk">Risk Review</TabsTrigger>
                 <TabsTrigger value="actions">Actions</TabsTrigger>
+                <TabsTrigger value="history" className="flex items-center gap-2">
+                  <WorkflowHistoryIcon size={14} /> History
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="details" className="space-y-6 mt-4">
@@ -1560,150 +1668,300 @@ const AdminApplications = () => {
               </TabsContent>
 
               <TabsContent value="documents" className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: "NRC Front", url: selectedApp.nrc_front_url },
-                    { label: "NRC Back", url: selectedApp.nrc_back_url },
-                    { label: "Selfie", url: selectedApp.selfie_url },
-                    { label: "Payslip 1 (Latest)", url: selectedApp.payslip_url },
-                    { label: "Payslip 2", url: selectedApp.payslip_2_url },
-                    { label: "Payslip 3", url: selectedApp.payslip_3_url },
-                    { label: "Bank Statement", url: selectedApp.bank_statement_url },
-                    { label: "Employer Letter", url: selectedApp.employer_letter_url },
-                    { label: "Collateral Image", url: selectedApp.collateral_image_url },
-                    { label: "Signed Contract", url: selectedApp.contract_url },
-                  ].map((doc) => (
-                    <Card key={doc.label} className="bg-secondary/30 border-border/50">
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText size={18} className="text-muted-foreground" />
-                          <span className="text-foreground">{doc.label}</span>
-                        </div>
-                        {doc.url ? (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={doc.url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink size={14} className="mr-1" />
-                              View
-                            </a>
-                          </Button>
-                        ) : (
-                          <Badge variant="outline" className="text-muted-foreground">
-                            Not uploaded
-                          </Badge>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                {/* Dynamic Documents */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {applicationDocs && applicationDocs.length > 0 ? (
+                    applicationDocs.map((doc: any) => (
+                      <Card key={doc.id} className="bg-secondary/30 border-border/50">
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <FileText size={18} className="text-muted-foreground" />
+                              <span className="text-foreground font-medium uppercase text-xs">
+                                {doc.document_type.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground truncate max-w-[200px]">{doc.file_name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={
+                              doc.status === 'verified' ? "bg-green-500/10 text-green-500 border-green-500/20" :
+                                doc.status === 'rejected' ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                                  "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                            }>
+                              {doc.status}
+                            </Badge>
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink size={14} className="mr-1" />
+                                View
+                              </a>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-2 py-12 text-center border-2 border-dashed rounded-xl border-border bg-secondary/10">
+                      <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2 opacity-20" />
+                      <p className="text-muted-foreground text-sm">No dynamic documents found for this application.</p>
+                      <p className="text-xs text-muted-foreground/60">Check legacy folder if application is old.</p>
+                    </div>
+                  )}
                 </div>
+
+                {/* Legacy Documents (fallback) */}
+                {(selectedApp.nrc_front_url || selectedApp.nrc_back_url || selectedApp.selfie_url || selectedApp.payslip_url) && (
+                  <div className="pt-6 border-t border-border mt-4">
+                    <h4 className="text-sm font-semibold mb-4 flex items-center gap-2 text-muted-foreground">
+                      <Link2 size={16} />
+                      Legacy / Standard Documents
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {[
+                        { label: "NRC Front", url: selectedApp.nrc_front_url },
+                        { label: "NRC Back", url: selectedApp.nrc_back_url },
+                        { label: "Selfie", url: selectedApp.selfie_url },
+                        { label: "Payslip 1", url: selectedApp.payslip_url },
+                        { label: "Payslip 2", url: selectedApp.payslip_2_url },
+                        { label: "Payslip 3", url: selectedApp.payslip_3_url },
+                        { label: "Bank Statement", url: selectedApp.bank_statement_url },
+                        { label: "Employer Letter", url: selectedApp.employer_letter_url },
+                        { label: "Collateral Image", url: selectedApp.collateral_image_url },
+                      ].filter(d => d.url).map((doc) => (
+                        <Card key={doc.label} className="bg-secondary/20 border-border/30">
+                          <CardContent className="p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText size={16} className="text-muted-foreground" />
+                              <span className="text-sm text-foreground">{doc.label}</span>
+                            </div>
+                            <Button variant="ghost" size="sm" asChild>
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink size={12} className="mr-1" />
+                                View
+                              </a>
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="risk" className="space-y-4 mt-4">
                 <RiskAssessmentModule applicationId={selectedApp.id} />
               </TabsContent>
 
-              <TabsContent value="actions" className="space-y-4 mt-4">
-                {/* Status-based actions */}
-                {selectedApp.status === 'pending' && (
-                  <Card className="bg-secondary/30 border-border/50">
-                    <CardContent className="p-4 space-y-4">
-                      <h4 className="font-semibold text-foreground">Review Application</h4>
-                      <div className="space-y-2">
-                        <Label>Rejection Reason (required if rejecting)</Label>
-                        <Textarea
-                          placeholder="Enter reason for rejection..."
-                          value={rejectionReason}
-                          onChange={(e) => setRejectionReason(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex gap-2">
+              <TabsContent value="actions" className="space-y-6 mt-4">
+                {/* Workflow Transitions */}
+                {workflowStages && workflowStages.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-foreground flex items-center gap-2">
+                      <GitBranch size={18} />
+                      Workflow Progress
+                    </h4>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                      {workflowStages.map((stage: any, index: number) => (
+                        <div key={stage.id} className="flex items-center flex-shrink-0">
+                          <Badge
+                            variant={(selectedApp as any).current_stage_id === stage.id ? "default" : "outline"}
+                            className={(selectedApp as any).current_stage_id === stage.id ? "bg-primary text-primary-foreground" : "opacity-50"}
+                          >
+                            {stage.name}
+                          </Badge>
+                          {index < workflowStages.length - 1 && (
+                            <div className="w-4 h-[1px] bg-border mx-1" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {workflowTransitions?.filter((t: any) => t.from_stage_id === (selectedApp as any).current_stage_id).map((trans: any) => (
                         <Button
-                          variant="destructive"
-                          onClick={handleReject}
-                          disabled={isProcessing}
+                          key={trans.id}
+                          variant="outline"
+                          className="justify-between border-dashed border-primary/30 hover:border-primary"
+                          onClick={() => transitionMutation.mutate({ toStageId: trans.to_stage_id })}
+                          disabled={transitionMutation.isPending}
                         >
-                          <XCircle size={16} className="mr-1" />
-                          Reject
+                          <span className="flex flex-col items-start gap-0.5">
+                            <span className="text-xs text-muted-foreground">Transition to:</span>
+                            <span>{(workflowStages as any[]).find((s: any) => s.id === trans.to_stage_id)?.name}</span>
+                          </span>
+                          <GitBranch size={14} className="text-primary" />
                         </Button>
-                        <Button
-                          onClick={handleApprove}
-                          disabled={isProcessing}
-                        >
-                          <CheckCircle size={16} className="mr-1" />
-                          Approve
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
-                {selectedApp.status === 'approved' && (
+                {/* Status-based actions */}
+                <div className="pt-4 border-t border-border">
+                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Application Context</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedApp.status === 'pending' && (
+                      <Card className="bg-secondary/30 border-border/50">
+                        <CardContent className="p-4 space-y-4">
+                          <h4 className="font-semibold text-foreground">Review Application</h4>
+                          <div className="space-y-2">
+                            <Label>Rejection Reason (if rejecting)</Label>
+                            <Textarea
+                              placeholder="Enter reason for rejection..."
+                              value={rejectionReason}
+                              onChange={(e) => setRejectionReason(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={handleReject}
+                              disabled={isProcessing}
+                            >
+                              <XCircle size={16} className="mr-1" />
+                              Reject
+                            </Button>
+                            <Button
+                              className="flex-1"
+                              onClick={handleApprove}
+                              disabled={isProcessing}
+                            >
+                              <CheckCircle size={16} className="mr-1" />
+                              Approve
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedApp.status === 'approved' && (
+                      <Card className="bg-secondary/30 border-border/50">
+                        <CardContent className="p-4 space-y-4">
+                          <h4 className="font-semibold text-foreground">Disburse Loan</h4>
+                          <p className="text-sm text-muted-foreground">
+                            This loan is approved and ready for disbursement.
+                          </p>
+                          <Button onClick={() => setIsDisburseOpen(true)} className="w-full">
+                            <DollarSign size={16} className="mr-1" />
+                            Disburse Now
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Quick Print/Actions */}
+                    <Card className="bg-secondary/30 border-border/50">
+                      <CardContent className="p-4 space-y-4">
+                        <h4 className="font-semibold text-foreground">Communication</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button variant="outline" size="sm" onClick={() => window.print()}>
+                            <Printer size={14} className="mr-1" /> Print
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Mail size={14} className="mr-1" /> Email
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* Assignment action */}
+                <div className="pt-6 border-t border-border">
+                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Assignment</h4>
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-4">
-                      <h4 className="font-semibold text-foreground">Disburse Loan</h4>
-                      <p className="text-sm text-muted-foreground">
-                        This loan is approved and ready for disbursement.
-                      </p>
-                      <Button onClick={() => setIsDisburseOpen(true)}>
-                        <DollarSign size={16} className="mr-1" />
-                        Disburse Now
+                      <div className="space-y-2">
+                        <Label>Select Staff Member</Label>
+                        <Select value={assigneeId} onValueChange={setAssigneeId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {staffList?.map((staff: any) => (
+                              <SelectItem key={staff.user_id} value={staff.user_id}>
+                                {staff.profile?.full_name || staff.profile?.email} ({staff.role.replace('_', ' ')})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => assignMutation.mutate({
+                          id: selectedApp.id,
+                          staffId: assigneeId === "unassigned" ? "" : assigneeId
+                        })}
+                        disabled={assignMutation.isPending}
+                      >
+                        {assignMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
+                        Update Assignment
                       </Button>
                     </CardContent>
                   </Card>
-                )}
+                </div>
 
                 {/* Delete action */}
-                <Card className="bg-destructive/10 border-destructive/30">
-                  <CardContent className="p-4 space-y-4">
-                    <h4 className="font-semibold text-destructive">Danger Zone</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Permanently delete this loan application. This action cannot be undone.
-                    </p>
-                    <Button
-                      variant="destructive"
-                      onClick={() => setIsDeleteOpen(true)}
-                    >
-                      <Trash2 size={16} className="mr-1" />
-                      Delete Application
-                    </Button>
-                  </CardContent>
-                </Card>
+                <div className="pt-6 border-t border-border">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/5"
+                    onClick={() => setIsDeleteOpen(true)}
+                  >
+                    <Trash2 size={16} className="mr-1" />
+                    Delete Application
+                  </Button>
+                </div>
+              </TabsContent>
 
-                {/* Assignment action */}
-                <Card className="bg-secondary/30 border-border/50">
-                  <CardContent className="p-4 space-y-4">
-                    <h4 className="font-semibold text-foreground flex items-center gap-2">
-                      <UserCheck size={18} />
-                      Assign to Officer
-                    </h4>
-                    <div className="space-y-2">
-                      <Label>Select Staff Member</Label>
-                      <Select value={assigneeId} onValueChange={setAssigneeId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Unassigned" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unassigned">Unassigned</SelectItem>
-                          {staffList?.map((staff: any) => (
-                            <SelectItem key={staff.user_id} value={staff.user_id}>
-                              {staff.profile?.full_name || staff.profile?.email} ({staff.role.replace('_', ' ')})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              <TabsContent value="history" className="mt-4 space-y-4">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Workflow Audit Log</h4>
+
+                  {workflowHistory && workflowHistory.length > 0 ? (
+                    <div className="relative space-y-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                      {workflowHistory.map((item: any) => (
+                        <div key={item.id} className="relative flex items-start gap-4 pl-10">
+                          <div className="absolute left-0 flex items-center justify-center w-10 h-10 rounded-full bg-secondary border border-border shadow-sm">
+                            <Activity size={16} className="text-primary" />
+                          </div>
+                          <Card className="flex-1 bg-secondary/30 border-border/50">
+                            <CardContent className="p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold">
+                                    {item.from_stage?.name || 'Start'} → {item.to_stage?.name}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {format(new Date(item.created_at), 'MMM dd, yyyy HH:mm')}
+                                  </span>
+                                </div>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {item.performed_by_profile?.full_name || 'System'}
+                                </Badge>
+                              </div>
+                              {item.notes && (
+                                <p className="text-xs text-muted-foreground italic bg-background/50 p-2 rounded border border-border/30">
+                                  "{item.notes}"
+                                </p>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      ))}
                     </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => assignMutation.mutate({
-                        id: selectedApp.id,
-                        staffId: assigneeId === "unassigned" ? "" : assigneeId
-                      })}
-                      disabled={assignMutation.isPending}
-                    >
-                      {assignMutation.isPending && <Loader2 className="animate-spin mr-2" />}
-                      Update Assignment
-                    </Button>
-                  </CardContent>
-                </Card>
+                  ) : (
+                    <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
+                      <WorkflowHistoryIcon size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                      <p className="text-muted-foreground">No history available for this application.</p>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           )}
@@ -1936,7 +2194,7 @@ const AdminApplications = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AdminLayout>
+    </AdminLayout >
   );
 };
 

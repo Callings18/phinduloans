@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,11 +70,9 @@ const loanSchema = z.object({
   loanTerm: z.number().min(1, "Loan term required"),
 });
 
+// Basic documents schema will be checked dynamically
 const documentsSchema = z.object({
-  nrcFront: z.any().refine((file) => file !== null, "NRC Front is required"),
-  nrcBack: z.any().refine((file) => file !== null, "NRC Back is required"),
-  payslip: z.any().refine((file) => file !== null, "Latest payslip is required"),
-  selfie: z.any().refine((file) => file !== null, "Selfie is required"),
+  // We'll validate this manually based on required docs from DB
 });
 
 const Apply = () => {
@@ -85,6 +84,26 @@ const Apply = () => {
   const [runTour, setRunTour] = useState(false);
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
+  const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
+
+  // Fetch required documents for the selected product
+  const { data: productDocs, isLoading: docsLoading } = useQuery({
+    queryKey: ["product-requirements", selectedProduct?.id],
+    queryFn: async () => {
+      if (!selectedProduct) return [];
+      // @ts-expect-error - Table exists after migrations
+      const { data, error } = await supabase
+        .from("loan_product_documents")
+        .select("*")
+        .eq("loan_product_id", selectedProduct.id)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedProduct?.id,
+  });
 
   const tourSteps: Step[] = [
     {
@@ -206,6 +225,26 @@ const Apply = () => {
     updateFormData(field, file);
   };
 
+  const handleDynamicFileUpload = (docType: string, file: File | null) => {
+    if (file) {
+      setDynamicDocs(prev => ({ ...prev, [docType]: file }));
+    } else {
+      setDynamicDocs(prev => {
+        const next = { ...prev };
+        delete next[docType];
+        return next;
+      });
+    }
+
+    if (errors[docType]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[docType];
+        return next;
+      });
+    }
+  };
+
   const validateStep = (step: number): boolean => {
     try {
       if (step === 1) {
@@ -233,12 +272,21 @@ const Apply = () => {
           loanTerm: formData.loanTerm,
         });
       } else if (step === 4) {
-        documentsSchema.parse({
-          nrcFront: formData.nrcFront,
-          nrcBack: formData.nrcBack,
-          payslip: formData.payslip,
-          selfie: formData.selfie,
+        // Dynamic documents validation
+        let hasErrors = false;
+        const newDocErrors: Record<string, string> = {};
+
+        productDocs?.forEach((doc: any) => {
+          if (doc.is_mandatory && !dynamicDocs[doc.document_type]) {
+            newDocErrors[doc.document_type] = `${doc.document_name} is required`;
+            hasErrors = true;
+          }
         });
+
+        if (hasErrors) {
+          setErrors(newDocErrors);
+          return false;
+        }
       }
       setErrors({});
       return true;
@@ -267,23 +315,23 @@ const Apply = () => {
   };
 
   // Calculate loan using unified calculation utility
-  const loanCalc = selectedProduct 
+  const loanCalc = selectedProduct
     ? calculateLoan(formData.loanAmount, formData.loanTerm, {
-        interest_rate: selectedProduct.interest_rate,
-        interest_period: selectedProduct.interest_period as any,
-        interest_type: selectedProduct.interest_type as any,
-        processing_fee_percent: selectedProduct.processing_fee_percent,
-        insurance_percent: selectedProduct.insurance_percent,
-        vat_percent: selectedProduct.vat_percent,
-        platform_fee_percent: selectedProduct.platform_fee_percent,
-      })
+      interest_rate: selectedProduct.interest_rate,
+      interest_period: selectedProduct.interest_period as any,
+      interest_type: selectedProduct.interest_type as any,
+      processing_fee_percent: selectedProduct.processing_fee_percent,
+      insurance_percent: selectedProduct.insurance_percent,
+      vat_percent: selectedProduct.vat_percent,
+      platform_fee_percent: selectedProduct.platform_fee_percent,
+    })
     : null;
 
   const totalInterest = loanCalc?.totalInterest ?? 0;
   const totalRepayment = loanCalc?.totalRepayment ?? formData.loanAmount;
   const monthlyPayment = loanCalc?.monthlyPayment ?? 0;
-  const interestPeriodLabel = selectedProduct 
-    ? getInterestPeriodLabel(selectedProduct.interest_period as any) 
+  const interestPeriodLabel = selectedProduct
+    ? getInterestPeriodLabel(selectedProduct.interest_period as any)
     : 'per month';
 
   const handleSubmit = async () => {
@@ -309,46 +357,39 @@ const Apply = () => {
     setIsSubmitting(true);
 
     try {
-      // 1. Upload Documents
-      const uploadFile = async (file: File, prefix: string) => {
+      // 1. Upload Dynamic Documents
+      const uploadedDocs: any[] = [];
+      const docEntries = Object.entries(dynamicDocs);
+
+      for (const [docType, file] of docEntries) {
         const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}/${prefix}_${Date.now()}.${fileExt}`;
-        const { data, error } = await supabase.storage
+        const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
+        const { data, error: uploadErr } = await supabase.storage
           .from('loan-documents')
           .upload(fileName, file);
 
-        if (error) throw error;
+        if (uploadErr) throw uploadErr;
 
         const { data: { publicUrl } } = supabase.storage.from('loan-documents').getPublicUrl(fileName);
-        return publicUrl;
-      };
 
-      // Upload required documents
-      const [nrcFrontUrl, nrcBackUrl, payslipUrl, selfieUrl] = await Promise.all([
-        uploadFile(formData.nrcFront!, 'nrc_front'),
-        uploadFile(formData.nrcBack!, 'nrc_back'),
-        uploadFile(formData.payslip!, 'payslip'),
-        uploadFile(formData.selfie!, 'selfie'),
-      ]);
+        uploadedDocs.push({
+          document_type: docType,
+          file_url: publicUrl,
+          file_name: file.name,
+          file_size: file.size,
+          file_type: file.type
+        });
+      }
 
-      // Upload optional documents
-      const [payslip2Url, payslip3Url, bankStatementUrl, employerLetterUrl, collateralImageUrl] = await Promise.all([
-        formData.payslip2 ? uploadFile(formData.payslip2, 'payslip_2') : Promise.resolve(null),
-        formData.payslip3 ? uploadFile(formData.payslip3, 'payslip_3') : Promise.resolve(null),
-        formData.bankStatement ? uploadFile(formData.bankStatement, 'bank_statement') : Promise.resolve(null),
-        formData.employerLetter ? uploadFile(formData.employerLetter, 'employer_letter') : Promise.resolve(null),
-        formData.collateralImage ? uploadFile(formData.collateralImage, 'collateral') : Promise.resolve(null),
-      ]);
-
-      // 2. Map employment type to enum
+      // 2. Map employment type
       const employmentTypeMap: Record<string, "employed" | "self_employed" | "contract" | "other"> = {
         "permanent": "employed",
         "contract": "contract",
         "self-employed": "self_employed",
       };
 
-      // 3. Insert Application with source tag
-      const { error } = await supabase.from('loan_applications').insert({
+      // 3. Insert Application
+      const { data: appData, error: appError } = await supabase.from('loan_applications').insert({
         user_id: user.id,
         full_name: `${formData.firstName} ${formData.lastName}`,
         email: formData.email,
@@ -369,24 +410,38 @@ const Apply = () => {
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
         loan_product_id: selectedProduct?.id || null,
-        nrc_front_url: nrcFrontUrl,
-        nrc_back_url: nrcBackUrl,
-        payslip_url: payslipUrl,
-        payslip_2_url: payslip2Url,
-        payslip_3_url: payslip3Url,
-        bank_statement_url: bankStatementUrl,
-        employer_letter_url: employerLetterUrl,
+        // Legacy fields - fill with some defaults/first docs for backward compatibility
+        nrc_front_url: uploadedDocs.find(d => d.document_type === 'nrc_front')?.file_url || null,
+        nrc_back_url: uploadedDocs.find(d => d.document_type === 'nrc_back')?.file_url || null,
+        payslip_url: uploadedDocs.find(d => d.document_type === 'payslip')?.file_url || null,
+        selfie_url: uploadedDocs.find(d => d.document_type === 'selfie')?.file_url || null,
         collateral_description: formData.collateralDescription || null,
         collateral_value: formData.collateralValue ? parseFloat(formData.collateralValue) : null,
-        collateral_image_url: collateralImageUrl,
-        selfie_url: selfieUrl,
         status: 'pending',
         source: 'website',
-      });
+      }).select().single();
 
-      if (error) throw error;
+      if (appError) throw appError;
 
-      // 4. Update user profile with application data (creates borrower record)
+      // 4. Insert into loan_application_documents
+      if (uploadedDocs.length > 0 && appData) {
+        // @ts-expect-error - Table exists after migrations
+        const { error: docsError } = await supabase.from('loan_application_documents').insert(
+          uploadedDocs.map(doc => ({
+            application_id: appData.id,
+            user_id: user.id,
+            document_type: doc.document_type,
+            file_url: doc.file_url,
+            file_name: doc.file_name,
+            file_size: doc.file_size,
+            file_type: doc.file_type,
+            status: 'pending'
+          }))
+        );
+        if (docsError) throw docsError;
+      }
+
+      // 5. Update profile
       await supabase.from('profiles').upsert({
         id: user.id,
         email: formData.email,
@@ -867,91 +922,67 @@ const Apply = () => {
                 <div className="space-y-6 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Upload Documents</h2>
 
-                  {/* Required Documents */}
+                  {/* Dynamic Documents from Product Config */}
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground mb-4">Required Documents</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {[
-                        { field: "nrcFront", label: "NRC (Front) *", description: "Clear photo of front" },
-                        { field: "nrcBack", label: "NRC (Back) *", description: "Clear photo of back" },
-                        { field: "payslip", label: "Latest Payslip *", description: "Most recent payslip" },
-                        { field: "selfie", label: "Selfie *", description: "Clear photo of your face" },
-                      ].map((doc) => (
-                        <div key={doc.field} className="space-y-2">
-                          <Label className={errors[doc.field] ? "text-destructive" : ""}>{doc.label}</Label>
-                          <label
-                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
-                              ? "border-primary bg-primary/10 shadow-glow"
-                              : errors[doc.field]
-                                ? "border-destructive bg-destructive/5"
-                                : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                              }`}
-                          >
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              className="hidden"
-                              onChange={(e) => handleFileUpload(doc.field, e.target.files?.[0] || null)}
-                            />
-                            {formData[doc.field as keyof typeof formData] ? (
-                              <CheckCircle className="text-primary mb-2" size={32} />
-                            ) : (
-                              <Upload className={errors[doc.field] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
-                            )}
-                            <span className={`text-sm ${errors[doc.field] ? "text-destructive" : "text-muted-foreground"}`}>
-                              {errors[doc.field] || doc.description}
-                            </span>
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                    {docsLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : productDocs && productDocs.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {productDocs.map((doc: any) => (
+                          <div key={doc.id} className="space-y-2">
+                            <Label className={errors[doc.document_type] ? "text-destructive" : ""}>
+                              {doc.document_name} {doc.is_mandatory && "*"}
+                            </Label>
+                            <label
+                              className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${dynamicDocs[doc.document_type]
+                                ? "border-primary bg-primary/10 shadow-glow"
+                                : errors[doc.document_type]
+                                  ? "border-destructive bg-destructive/5"
+                                  : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                                }`}
+                            >
+                              <input
+                                type="file"
+                                accept={doc.allowed_file_types?.map((t: string) => `.${t}`).join(',') || "image/*,.pdf"}
+                                className="hidden"
+                                onChange={(e) => handleDynamicFileUpload(doc.document_type, e.target.files?.[0] || null)}
+                              />
+                              {dynamicDocs[doc.document_type] ? (
+                                <CheckCircle className="text-primary mb-2" size={32} />
+                              ) : (
+                                <Upload className={errors[doc.document_type] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                              )}
+                              <span className={`text-sm ${errors[doc.document_type] ? "text-destructive" : "text-muted-foreground"}`}>
+                                {errors[doc.document_type] || doc.description || `Upload ${doc.document_name}`}
+                              </span>
+                              {dynamicDocs[doc.document_type] && (
+                                <span className="text-[10px] text-primary mt-1 truncate max-w-full italic">
+                                  {dynamicDocs[doc.document_type].name}
+                                </span>
+                              )}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 border-2 border-dashed rounded-xl border-border">
+                        <p className="text-muted-foreground">No documents required for this product.</p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Additional Payslips & Bank Statement */}
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Additional Documents (Recommended)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {[
-                        { field: "payslip2", label: "2nd Payslip", description: "Previous month payslip" },
-                        { field: "payslip3", label: "3rd Payslip", description: "Two months ago payslip" },
-                        { field: "bankStatement", label: "Bank Statement", description: "Last 3 months statement" },
-                        { field: "employerLetter", label: "Employer Letter", description: "Employment confirmation" },
-                      ].map((doc) => (
-                        <div key={doc.field} className="space-y-2">
-                          <Label>{doc.label}</Label>
-                          <label
-                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[doc.field as keyof typeof formData]
-                              ? "border-primary bg-primary/10 shadow-glow"
-                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                              }`}
-                          >
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              className="hidden"
-                              onChange={(e) => handleFileUpload(doc.field, e.target.files?.[0] || null)}
-                            />
-                            {formData[doc.field as keyof typeof formData] ? (
-                              <CheckCircle className="text-primary mb-2" size={32} />
-                            ) : (
-                              <Upload className="text-muted-foreground mb-2" size={32} />
-                            )}
-                            <span className="text-sm text-muted-foreground">{doc.description}</span>
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Collateral Image - Show if product requires collateral */}
+                  {/* Collateral Details - still manual if needed */}
                   {selectedProduct?.collateral_required && (
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Collateral Documentation</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div className="pt-6 border-t border-border">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Collateral Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <Label>Collateral Description</Label>
                           <Input
-                            placeholder="Describe the collateral (e.g., 2020 Toyota Corolla)"
+                            placeholder="Describe the collateral"
                             value={formData.collateralDescription}
                             onChange={(e) => updateFormData("collateralDescription", e.target.value)}
                           />
@@ -960,33 +991,11 @@ const Apply = () => {
                           <Label>Estimated Value (K)</Label>
                           <Input
                             type="number"
-                            placeholder="e.g., 50000"
+                            placeholder="Value in Kwacha"
                             value={formData.collateralValue}
                             onChange={(e) => updateFormData("collateralValue", e.target.value)}
                           />
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Collateral Image</Label>
-                        <label
-                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData.collateralImage
-                            ? "border-primary bg-primary/10 shadow-glow"
-                            : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                            }`}
-                        >
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => handleFileUpload("collateralImage", e.target.files?.[0] || null)}
-                          />
-                          {formData.collateralImage ? (
-                            <CheckCircle className="text-primary mb-2" size={32} />
-                          ) : (
-                            <Upload className="text-muted-foreground mb-2" size={32} />
-                          )}
-                          <span className="text-sm text-muted-foreground">Upload photo of collateral</span>
-                        </label>
                       </div>
                     </div>
                   )}
