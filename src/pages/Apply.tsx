@@ -86,24 +86,13 @@ const Apply = () => {
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
 
-  // Fetch required documents for the selected product
-  const { data: productDocs, isLoading: docsLoading } = useQuery({
-    queryKey: ["product-requirements", selectedProduct?.id],
-    queryFn: async () => {
-      if (!selectedProduct) return [];
-      // @ts-expect-error - Table exists after migrations
-      const { data, error } = await supabase
-        .from("loan_product_documents")
-        .select("*")
-        .eq("loan_product_id", selectedProduct.id)
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedProduct?.id,
-  });
+  // Product docs - use product requirements array for now
+  const productDocs = selectedProduct?.requirements?.map((req, idx) => ({
+    id: `req_${idx}`,
+    document_type: req.toLowerCase().replace(/\s+/g, '_'),
+    document_name: req,
+    is_mandatory: true,
+  })) || [];
 
   const tourSteps: Step[] = [
     {
@@ -357,7 +346,7 @@ const Apply = () => {
     setIsSubmitting(true);
 
     try {
-      // 1. Upload Dynamic Documents
+      // 1. Upload Dynamic Documents with signed URLs for security
       const uploadedDocs: any[] = [];
       const docEntries = Object.entries(dynamicDocs);
 
@@ -370,11 +359,10 @@ const Apply = () => {
 
         if (uploadErr) throw uploadErr;
 
-        const { data: { publicUrl } } = supabase.storage.from('loan-documents').getPublicUrl(fileName);
-
+        // Store the file path instead of public URL - we'll generate signed URLs when viewing
         uploadedDocs.push({
           document_type: docType,
-          file_url: publicUrl,
+          file_url: fileName, // Store path, not public URL
           file_name: file.name,
           file_size: file.size,
           file_type: file.type
@@ -388,7 +376,7 @@ const Apply = () => {
         "self-employed": "self_employed",
       };
 
-      // 3. Insert Application
+      // 3. Insert Application - store file paths (not public URLs) for secure access
       const { data: appData, error: appError } = await supabase.from('loan_applications').insert({
         user_id: user.id,
         full_name: `${formData.firstName} ${formData.lastName}`,
@@ -410,7 +398,7 @@ const Apply = () => {
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
         loan_product_id: selectedProduct?.id || null,
-        // Legacy fields - fill with some defaults/first docs for backward compatibility
+        // Store file paths for secure signed URL generation later
         nrc_front_url: uploadedDocs.find(d => d.document_type === 'nrc_front')?.file_url || null,
         nrc_back_url: uploadedDocs.find(d => d.document_type === 'nrc_back')?.file_url || null,
         payslip_url: uploadedDocs.find(d => d.document_type === 'payslip')?.file_url || null,
@@ -423,25 +411,7 @@ const Apply = () => {
 
       if (appError) throw appError;
 
-      // 4. Insert into loan_application_documents
-      if (uploadedDocs.length > 0 && appData) {
-        // @ts-expect-error - Table exists after migrations
-        const { error: docsError } = await supabase.from('loan_application_documents').insert(
-          uploadedDocs.map(doc => ({
-            application_id: appData.id,
-            user_id: user.id,
-            document_type: doc.document_type,
-            file_url: doc.file_url,
-            file_name: doc.file_name,
-            file_size: doc.file_size,
-            file_type: doc.file_type,
-            status: 'pending'
-          }))
-        );
-        if (docsError) throw docsError;
-      }
-
-      // 5. Update profile
+      // 4. Update profile
       await supabase.from('profiles').upsert({
         id: user.id,
         email: formData.email,
@@ -925,11 +895,7 @@ const Apply = () => {
                   {/* Dynamic Documents from Product Config */}
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground mb-4">Required Documents</h3>
-                    {docsLoading ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </div>
-                    ) : productDocs && productDocs.length > 0 ? (
+                    {productDocs && productDocs.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {productDocs.map((doc: any) => (
                           <div key={doc.id} className="space-y-2">
