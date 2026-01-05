@@ -86,13 +86,33 @@ const Apply = () => {
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
 
-  // Product docs - use product requirements array for now
-  const productDocs = selectedProduct?.requirements?.map((req, idx) => ({
-    id: `req_${idx}`,
-    document_type: req.toLowerCase().replace(/\s+/g, '_'),
-    document_name: req,
-    is_mandatory: true,
-  })) || [];
+  // Standard required documents that are always needed
+  const standardDocs = [
+    { id: 'nrc_front', document_type: 'nrc_front', document_name: 'NRC Front', is_mandatory: true },
+    { id: 'nrc_back', document_type: 'nrc_back', document_name: 'NRC Back', is_mandatory: true },
+    { id: 'selfie', document_type: 'selfie', document_name: 'Selfie Photo', is_mandatory: true },
+    { id: 'payslip', document_type: 'payslip', document_name: 'Latest Payslip', is_mandatory: true },
+  ];
+
+  // Additional product-specific documents from requirements (excluding standard ones)
+  const productSpecificDocs = (selectedProduct?.requirements || [])
+    .filter((req) => {
+      const lowerReq = req.toLowerCase();
+      // Skip if it's a standard document
+      return !lowerReq.includes('nrc') && 
+             !lowerReq.includes('selfie') && 
+             !lowerReq.includes('payslip') &&
+             !lowerReq.includes('pay slip');
+    })
+    .map((req, idx) => ({
+      id: `extra_${idx}`,
+      document_type: `extra_${req.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30)}`,
+      document_name: req,
+      is_mandatory: false, // Product-specific docs are optional
+    }));
+
+  // Combined docs list
+  const productDocs = [...standardDocs, ...productSpecificDocs];
 
   const tourSteps: Step[] = [
     {
@@ -346,27 +366,39 @@ const Apply = () => {
     setIsSubmitting(true);
 
     try {
-      // 1. Upload Dynamic Documents with signed URLs for security
+      // 1. Upload Documents with better error handling
       const uploadedDocs: any[] = [];
       const docEntries = Object.entries(dynamicDocs);
 
       for (const [docType, file] of docEntries) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
-        const { data, error: uploadErr } = await supabase.storage
-          .from('loan-documents')
-          .upload(fileName, file);
+        try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
+          const { data, error: uploadErr } = await supabase.storage
+            .from('loan-documents')
+            .upload(fileName, file);
 
-        if (uploadErr) throw uploadErr;
-
-        // Store the file path instead of public URL - we'll generate signed URLs when viewing
-        uploadedDocs.push({
-          document_type: docType,
-          file_url: fileName, // Store path, not public URL
-          file_name: file.name,
-          file_size: file.size,
-          file_type: file.type
-        });
+          if (uploadErr) {
+            console.error(`Failed to upload ${docType}:`, uploadErr);
+            // Continue with other uploads, don't fail entirely
+            toast({
+              title: "Document Upload Warning",
+              description: `${docType} upload failed: ${uploadErr.message}. Application will continue.`,
+              variant: "default",
+            });
+          } else {
+            // Store the file path instead of public URL
+            uploadedDocs.push({
+              document_type: docType,
+              file_url: fileName,
+              file_name: file.name,
+              file_size: file.size,
+              file_type: file.type
+            });
+          }
+        } catch (err: any) {
+          console.error(`Upload error for ${docType}:`, err);
+        }
       }
 
       // 2. Map employment type
@@ -376,7 +408,7 @@ const Apply = () => {
         "self-employed": "self_employed",
       };
 
-      // 3. Insert Application - store file paths (not public URLs) for secure access
+      // 3. Insert Application - store file paths for secure access
       const { data: appData, error: appError } = await supabase.from('loan_applications').insert({
         user_id: user.id,
         full_name: `${formData.firstName} ${formData.lastName}`,
@@ -407,6 +439,8 @@ const Apply = () => {
         collateral_value: formData.collateralValue ? parseFloat(formData.collateralValue) : null,
         status: 'pending',
         source: 'website',
+        crb_consent: formData.dataConsent,
+        crb_consent_timestamp: formData.dataConsent ? new Date().toISOString() : null,
       }).select().single();
 
       if (appError) throw appError;
