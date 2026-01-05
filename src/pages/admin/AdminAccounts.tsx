@@ -146,13 +146,19 @@ const AdminAccounts = () => {
   // Update account mutation
   const updateAccountMutation = useMutation({
     mutationFn: async (data: { id: string; balance: number; notes: string }) => {
-      const account = accounts.find(a => a.id === data.id);
-      if (!account) throw new Error("Account not found");
+      // Fetch fresh account data to avoid stale data issues
+      const { data: account, error: fetchError } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', data.id)
+        .single();
+      
+      if (fetchError || !account) throw new Error("Account not found");
       
       // If balance changed, create a transaction
       if (data.balance !== account.balance) {
         const diff = data.balance - account.balance;
-        await supabase.from('account_transactions').insert({
+        const { error: txError } = await supabase.from('account_transactions').insert({
           account_id: data.id,
           transaction_type: diff > 0 ? 'adjustment_credit' : 'adjustment_debit',
           amount: Math.abs(diff),
@@ -161,11 +167,12 @@ const AdminAccounts = () => {
           source: 'Manual Adjustment',
           notes: data.notes || 'Balance adjustment',
         });
+        if (txError) throw txError;
       }
       
       const { error } = await supabase
         .from('accounts')
-        .update({ balance: data.balance, notes: data.notes || null })
+        .update({ balance: data.balance, notes: data.notes || null, updated_at: new Date().toISOString() })
         .eq('id', data.id);
       if (error) throw error;
     },
@@ -184,8 +191,14 @@ const AdminAccounts = () => {
   // Add/Withdraw funds mutation
   const fundsMutation = useMutation({
     mutationFn: async (data: typeof fundsData) => {
-      const account = accounts.find(a => a.id === data.account_id);
-      if (!account) throw new Error("Account not found");
+      // Fetch fresh account data to avoid stale balance issues
+      const { data: account, error: fetchError } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', data.account_id)
+        .single();
+      
+      if (fetchError || !account) throw new Error("Account not found");
       
       const newBalance = data.transaction_type === 'deposit' 
         ? account.balance + data.amount 
@@ -210,7 +223,7 @@ const AdminAccounts = () => {
       // Update balance
       const { error: accError } = await supabase
         .from('accounts')
-        .update({ balance: newBalance })
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
         .eq('id', data.account_id);
       if (accError) throw accError;
     },
@@ -229,10 +242,20 @@ const AdminAccounts = () => {
   // Transfer mutation
   const transferMutation = useMutation({
     mutationFn: async (data: typeof transferData) => {
-      const fromAccount = accounts.find(a => a.id === data.from_account_id);
-      const toAccount = accounts.find(a => a.id === data.to_account_id);
+      // Fetch fresh account data to avoid stale balance issues
+      const { data: fromAccount, error: fromErr } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', data.from_account_id)
+        .single();
       
-      if (!fromAccount || !toAccount) throw new Error("Account not found");
+      const { data: toAccount, error: toErr } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('id', data.to_account_id)
+        .single();
+      
+      if (fromErr || !fromAccount || toErr || !toAccount) throw new Error("Account not found");
       if (fromAccount.balance < data.amount) throw new Error("Insufficient funds");
       
       const fromNewBalance = fromAccount.balance - data.amount;
@@ -265,8 +288,17 @@ const AdminAccounts = () => {
       if (txInError) throw txInError;
       
       // Update balances
-      await supabase.from('accounts').update({ balance: fromNewBalance }).eq('id', data.from_account_id);
-      await supabase.from('accounts').update({ balance: toNewBalance }).eq('id', data.to_account_id);
+      const { error: fromUpdateErr } = await supabase
+        .from('accounts')
+        .update({ balance: fromNewBalance, updated_at: new Date().toISOString() })
+        .eq('id', data.from_account_id);
+      if (fromUpdateErr) throw fromUpdateErr;
+      
+      const { error: toUpdateErr } = await supabase
+        .from('accounts')
+        .update({ balance: toNewBalance, updated_at: new Date().toISOString() })
+        .eq('id', data.to_account_id);
+      if (toUpdateErr) throw toUpdateErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
