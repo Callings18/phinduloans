@@ -1612,11 +1612,24 @@ const AdminApplications = () => {
                             }>
                               {doc.status}
                             </Badge>
-                            <Button variant="outline" size="sm" asChild>
-                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink size={14} className="mr-1" />
-                                View
-                              </a>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={async () => {
+                                const signedUrl = await getSignedUrl(doc.file_url);
+                                if (signedUrl) {
+                                  window.open(signedUrl, '_blank');
+                                } else {
+                                  toast({
+                                    title: "Error",
+                                    description: "Failed to load document. Please try again.",
+                                    variant: "destructive"
+                                  });
+                                }
+                              }}
+                            >
+                              <ExternalLink size={14} className="mr-1" />
+                              View
                             </Button>
                           </div>
                         </CardContent>
@@ -1656,11 +1669,24 @@ const AdminApplications = () => {
                               <FileText size={16} className="text-muted-foreground" />
                               <span className="text-sm text-foreground">{doc.label}</span>
                             </div>
-                            <Button variant="ghost" size="sm" asChild>
-                              <a href={doc.url} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink size={12} className="mr-1" />
-                                View
-                              </a>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={async () => {
+                                const signedUrl = await getSignedUrl(doc.url);
+                                if (signedUrl) {
+                                  window.open(signedUrl, '_blank');
+                                } else {
+                                  toast({
+                                    title: "Error",
+                                    description: "Failed to load document. Please try again.",
+                                    variant: "destructive"
+                                  });
+                                }
+                              }}
+                            >
+                              <ExternalLink size={12} className="mr-1" />
+                              View
                             </Button>
                           </CardContent>
                         </Card>
