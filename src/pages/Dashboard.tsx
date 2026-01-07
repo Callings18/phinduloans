@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import GuidedTour from "@/components/common/GuidedTour";
 import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStatusTracker";
 import PaymentReminder from "@/components/dashboard/PaymentReminder";
+import QuickApply from "@/components/dashboard/QuickApply";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -34,7 +35,7 @@ import {
   Activity,
   User,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
@@ -59,6 +60,7 @@ const statusConfig = {
 const Dashboard = () => {
   const { user, isLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [runTour, setRunTour] = useState(false);
   const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
@@ -353,24 +355,15 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions - Use QuickApply for logged-in users */}
           <div className="mb-8 tour-apply">
-            <Card className="glass border-border/50 overflow-hidden">
-              <div className="gradient-primary p-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-primary-foreground mb-1">Need Funds?</h3>
-                    <p className="text-primary-foreground/80 text-sm">Apply for a new loan in minutes</p>
-                  </div>
-                  <Button variant="secondary" asChild className="bg-white/20 border-white/30 text-white hover:bg-white/30">
-                    <Link to="/apply" className="flex items-center gap-2">
-                      <Plus size={18} />
-                      Apply Now
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            {user && profile && (
+              <QuickApply 
+                userId={user.id} 
+                profile={profile}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
+              />
+            )}
           </div>
 
           {/* Loan Tabs */}
