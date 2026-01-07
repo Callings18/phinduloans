@@ -109,7 +109,7 @@ export default function GuarantorTab({ loanId }: Props) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedGuarantor, setSelectedGuarantor] = useState<Guarantor | null>(null);
   const [verificationNotes, setVerificationNotes] = useState("");
-  
+
   const [formData, setFormData] = useState({
     full_name: "",
     relationship: "",
@@ -190,8 +190,8 @@ export default function GuarantorTab({ loanId }: Props) {
           employer_name: formData.employer_name || null,
           monthly_income: formData.monthly_income ? Number(formData.monthly_income) : null,
           consent_signed: formData.consent_signed,
-          consent_date: formData.consent_signed && !selectedGuarantor.consent_date 
-            ? new Date().toISOString().split("T")[0] 
+          consent_date: formData.consent_signed && !selectedGuarantor.consent_date
+            ? new Date().toISOString().split("T")[0]
             : selectedGuarantor.consent_date,
         })
         .eq("id", selectedGuarantor.id);
@@ -214,7 +214,7 @@ export default function GuarantorTab({ loanId }: Props) {
     mutationFn: async () => {
       if (!selectedGuarantor) throw new Error("No guarantor selected");
       const user = (await supabase.auth.getUser()).data.user;
-      
+
       const { error } = await supabase
         .from("loan_guarantors")
         .update({
@@ -341,7 +341,7 @@ export default function GuarantorTab({ loanId }: Props) {
           <Input
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            placeholder="+260 9XX XXX XXX"
+            placeholder="+260 967 713 001"
           />
         </div>
         <div className="space-y-2">

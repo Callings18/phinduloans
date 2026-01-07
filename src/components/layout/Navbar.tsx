@@ -23,6 +23,7 @@ const Navbar = () => {
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/apply", label: "Apply Now" },
+    { href: "/pre-qualify", label: "Check Eligibility" },
     { href: "/calculator", label: "Calculator" },
     { href: "/about-us", label: "About" },
   ];

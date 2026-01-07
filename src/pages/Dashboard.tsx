@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import GuidedTour from "@/components/common/GuidedTour";
 import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStatusTracker";
+import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -31,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
+  User,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -222,11 +224,11 @@ const Dashboard = () => {
   const completedLoans = loans?.filter(l => l.status === 'completed') || [];
   const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
   const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
-  
+
   // Calculate upcoming payment
   const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= new Date()) || [];
   const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
-  
+
   // Calculate overdue amount
   const overdueRepayments = repayments?.filter(r => r.status === 'pending' && isAfter(new Date(), new Date(r.due_date))) || [];
   const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
@@ -251,16 +253,34 @@ const Dashboard = () => {
               </h1>
               <p className="text-muted-foreground">Manage your loans and track your repayments</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="glass border-border/50"
-              onClick={() => setRunTour(true)}
-            >
-              <HelpCircle size={18} className="mr-2 text-primary" />
-              How it works
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="glass border-border/50"
+                asChild
+              >
+                <Link to="/profile">
+                  <User size={18} className="mr-2 text-primary" />
+                  My Profile
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="glass border-border/50"
+                onClick={() => setRunTour(true)}
+              >
+                <HelpCircle size={18} className="mr-2 text-primary" />
+                How it works
+              </Button>
+            </div>
           </div>
+
+          {/* Payment Reminders */}
+          {repayments && repayments.length > 0 && (
+            <PaymentReminder repayments={repayments} className="mb-8" />
+          )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 tour-stats">

@@ -11,6 +11,8 @@ import Calculator from "./pages/Calculator";
 import Apply from "./pages/Apply";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import Profile from "./pages/Profile";
+import PreQualification from "./pages/PreQualification";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
@@ -46,11 +48,13 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/calculator" element={<Calculator />} />
+              <Route path="/pre-qualify" element={<PreQualification />} />
               <Route path="/about" element={<About />} />
               <Route path="/about-us" element={<About />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/applications" element={<AdminApplications />} />
               <Route path="/admin/borrowers" element={<AdminBorrowers />} />

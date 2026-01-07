@@ -244,7 +244,7 @@ const AdminRepayments = () => {
         outstandingBalance,
         companyName: settings?.companyInfo?.name || 'PHINDU Finance',
         companyAddress: settings?.companyInfo?.address || 'Lusaka, Zambia',
-        companyPhone: settings?.companyInfo?.support_phone || '+260 97 1234567',
+        companyPhone: settings?.companyInfo?.support_phone || '+260 967 713 001',
       });
 
       toast.success('Receipt downloaded successfully');

@@ -4,11 +4,12 @@ import Footer from "@/components/layout/Footer";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, Info, Package, Loader2 } from "lucide-react";
+import { ArrowRight, Info, Package, Loader2, Scale } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { calculateLoan, generateRepaymentSchedule, LoanProduct as LoanProductCalc, getInterestPeriodLabel } from "@/utils/loanCalculations";
+import LoanComparison from "@/components/common/LoanComparison";
 
 const Calculator = () => {
   const [loanAmount, setLoanAmount] = useState(5000);
@@ -32,18 +33,18 @@ const Calculator = () => {
   // Build product config for calculations
   const productForCalc: LoanProductCalc = selectedProduct
     ? {
-        interest_rate: selectedProduct.interest_rate,
-        interest_period: selectedProduct.interest_period as any,
-        interest_type: selectedProduct.interest_type as any,
-        processing_fee_percent: selectedProduct.processing_fee_percent,
-        insurance_percent: selectedProduct.insurance_percent,
-        vat_percent: selectedProduct.vat_percent,
-        platform_fee_percent: selectedProduct.platform_fee_percent,
-        late_payment_penalty_percent: selectedProduct.late_payment_penalty_percent,
-        penalty_frequency: selectedProduct.penalty_frequency as any,
-        grace_period_days: selectedProduct.grace_period_days,
-        early_repayment_fee_percent: selectedProduct.early_repayment_fee_percent,
-      }
+      interest_rate: selectedProduct.interest_rate,
+      interest_period: selectedProduct.interest_period as any,
+      interest_type: selectedProduct.interest_type as any,
+      processing_fee_percent: selectedProduct.processing_fee_percent,
+      insurance_percent: selectedProduct.insurance_percent,
+      vat_percent: selectedProduct.vat_percent,
+      platform_fee_percent: selectedProduct.platform_fee_percent,
+      late_payment_penalty_percent: selectedProduct.late_payment_penalty_percent,
+      penalty_frequency: selectedProduct.penalty_frequency as any,
+      grace_period_days: selectedProduct.grace_period_days,
+      early_repayment_fee_percent: selectedProduct.early_repayment_fee_percent,
+    }
     : { interest_rate: 15, interest_period: 'monthly', interest_type: 'flat' };
 
   // Use the unified calculation utility
@@ -221,6 +222,20 @@ const Calculator = () => {
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Loan Comparison Section */}
+            <div className="mt-12">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center justify-center gap-2">
+                  <Scale className="text-primary" size={24} />
+                  Compare Products
+                </h2>
+                <p className="text-muted-foreground">
+                  Not sure which loan is right for you? Compare products side-by-side.
+                </p>
+              </div>
+              <LoanComparison />
             </div>
           </div>
         </div>

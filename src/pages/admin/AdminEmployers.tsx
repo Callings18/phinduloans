@@ -266,7 +266,7 @@ const AdminEmployers = () => {
                       id="phone"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+260 XXX XXXXXX"
+                      placeholder="+260 9XX XXXXXX"
                     />
                   </div>
                 </div>

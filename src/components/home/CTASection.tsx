@@ -16,7 +16,7 @@ const CTASection = () => {
             <span className="text-gradient">Started?</span>
           </h2>
           <p className="text-lg text-muted-foreground mb-10">
-            Join thousands of Zambians who trust Phindu for their financial needs. 
+            Join thousands of Zambians who trust Phindu for their financial needs.
             Apply today and get funds within 24 hours.
           </p>
 
@@ -29,7 +29,7 @@ const CTASection = () => {
             </Button>
             <Button variant="glass" size="lg">
               <Phone size={20} />
-              Call Us: +260 XXX XXX
+              Call Us: +260 967 713 001
             </Button>
           </div>
 

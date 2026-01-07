@@ -55,8 +55,8 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   const config = letterTypeConfig[data.letterType];
   const companyName = data.companyName || "Phindu Finance";
   const companyAddress = data.companyAddress || "Plot 123, Great East Road, Lusaka, Zambia";
-  const companyPhone = data.companyPhone || "+260 97X XXX XXX";
-  
+  const companyPhone = data.companyPhone || "+260 967 713 001";
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   const contentWidth = pageWidth - margin * 2;
@@ -66,12 +66,12 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.text(companyName, pageWidth / 2, yPos, { align: "center" });
-  
+
   yPos += 7;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text(companyAddress, pageWidth / 2, yPos, { align: "center" });
-  
+
   yPos += 5;
   doc.text(`Tel: ${companyPhone}`, pageWidth / 2, yPos, { align: "center" });
 
@@ -92,13 +92,13 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   doc.text(data.borrowerName, margin, yPos);
   yPos += 5;
   doc.setFont("helvetica", "normal");
-  
+
   const addressLines = doc.splitTextToSize(data.borrowerAddress || "Address on file", contentWidth);
   addressLines.forEach((line: string) => {
     doc.text(line, margin, yPos);
     yPos += 5;
   });
-  
+
   doc.text(`Phone: ${data.borrowerPhone}`, margin, yPos);
   yPos += 5;
   doc.text(`Email: ${data.borrowerEmail}`, margin, yPos);
@@ -107,9 +107,9 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   yPos += 20;
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  
-  const titleColor = data.letterType === "legal_notice" ? [180, 0, 0] : 
-                     data.letterType === "final_notice" ? [200, 100, 0] : [0, 0, 0];
+
+  const titleColor = data.letterType === "legal_notice" ? [180, 0, 0] :
+    data.letterType === "final_notice" ? [200, 100, 0] : [0, 0, 0];
   doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
   doc.text(config.title, pageWidth / 2, yPos, { align: "center" });
   doc.setTextColor(0, 0, 0);
@@ -123,7 +123,7 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   // Body - Opening
   yPos += 10;
   const openingText = `Our records indicate that your loan account (Ref: ${data.loanId.slice(0, 8).toUpperCase()}) has ${data.overdueCount} overdue payment(s) totaling K${data.overdueAmount.toLocaleString()}. The oldest overdue payment dates back to ${format(new Date(data.oldestOverdueDate), "MMMM dd, yyyy")}.`;
-  
+
   const openingLines = doc.splitTextToSize(openingText, contentWidth);
   openingLines.forEach((line: string) => {
     doc.text(line, margin, yPos);
@@ -136,20 +136,20 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   doc.rect(margin, yPos, contentWidth, 40, "F");
   doc.setDrawColor(200, 200, 200);
   doc.rect(margin, yPos, contentWidth, 40, "S");
-  
+
   yPos += 8;
   doc.setFont("helvetica", "bold");
   doc.text("ACCOUNT SUMMARY", margin + 5, yPos);
-  
+
   yPos += 8;
   doc.setFont("helvetica", "normal");
   doc.text(`Original Loan Amount:`, margin + 5, yPos);
   doc.text(`K${data.loanAmount.toLocaleString()}`, margin + contentWidth - 5, yPos, { align: "right" });
-  
+
   yPos += 6;
   doc.text(`Total Contract Value:`, margin + 5, yPos);
   doc.text(`K${data.totalRepayment.toLocaleString()}`, margin + contentWidth - 5, yPos, { align: "right" });
-  
+
   yPos += 6;
   doc.setTextColor(180, 0, 0);
   doc.setFont("helvetica", "bold");
@@ -161,7 +161,7 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   yPos += 20;
   doc.setFont("helvetica", "normal");
   const actionText = `${config.urgency} settle the outstanding amount of K${(data.overdueAmount + data.penaltyAmount).toLocaleString()} within ${config.deadline} business days from the date of this letter. Failure to do so will result in ${config.consequence}.`;
-  
+
   const actionLines = doc.splitTextToSize(actionText, contentWidth);
   actionLines.forEach((line: string) => {
     doc.text(line, margin, yPos);
@@ -176,14 +176,14 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   doc.setFont("helvetica", "normal");
   doc.text("• Bank Transfer: Phindu Finance - Account No: XXXX-XXXX-XXXX", margin + 5, yPos);
   yPos += 6;
-  doc.text("• Mobile Money: +260 97X XXX XXX", margin + 5, yPos);
+  doc.text("• Mobile Money: +260 967 713 001", margin + 5, yPos);
   yPos += 6;
   doc.text("• Visit our office at the address above", margin + 5, yPos);
 
   // Contact for Assistance
   yPos += 12;
   const contactText = `If you are experiencing financial difficulties, we encourage you to contact us immediately at ${companyPhone} to discuss a suitable payment arrangement. We are committed to working with you to find a mutually acceptable solution.`;
-  
+
   const contactLines = doc.splitTextToSize(contactText, contentWidth);
   contactLines.forEach((line: string) => {
     doc.text(line, margin, yPos);
@@ -197,11 +197,11 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
     doc.rect(margin, yPos, contentWidth, 20, "F");
     doc.setDrawColor(180, 0, 0);
     doc.rect(margin, yPos, contentWidth, 20, "S");
-    
+
     yPos += 8;
     doc.setTextColor(180, 0, 0);
     doc.setFont("helvetica", "bold");
-    const warningText = data.letterType === "legal_notice" 
+    const warningText = data.letterType === "legal_notice"
       ? "WARNING: This is our final communication before legal proceedings."
       : "IMPORTANT: Immediate action is required to avoid legal consequences.";
     doc.text(warningText, pageWidth / 2, yPos, { align: "center" });
@@ -213,7 +213,7 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   yPos += 10;
   doc.setFont("helvetica", "normal");
   doc.text("We trust this matter will receive your urgent attention.", margin, yPos);
-  
+
   yPos += 15;
   doc.text("Yours sincerely,", margin, yPos);
   yPos += 15;

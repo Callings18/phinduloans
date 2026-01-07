@@ -165,7 +165,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isUndoDisbursementOpen, setIsUndoDisbursementOpen] = useState(false);
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
-  
+
   // Phase 1 new states
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
@@ -243,37 +243,37 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const recordPaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
-      
+
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
       const dueAmount = selectedRepayment.amount + (selectedRepayment.penalty_amount || 0);
-      
+
       // Calculate allocation (penalty first, then principal/interest)
       const penaltyPaid = Math.min(paidAmount, selectedRepayment.penalty_amount || 0);
       const remainingAfterPenalty = paidAmount - penaltyPaid;
-      
+
       // Simple allocation: remaining goes to principal (for simplicity)
       const principalPaid = remainingAfterPenalty;
-      
+
       let newStatus = "pending";
       let adjustedAmount = selectedRepayment.amount;
-      
+
       if (paidAmount >= dueAmount) {
         // Full payment or overpayment
         newStatus = "paid";
-        
+
         // Handle overpayment - apply to next pending installment
         if (paidAmount > dueAmount) {
           const excess = paidAmount - dueAmount;
           const nextPending = repayments?.find(
             r => r.status === "pending" && r.id !== selectedRepayment.id
           );
-          
+
           if (nextPending) {
             // Apply excess to next installment
             const newNextAmount = Math.max(0, nextPending.amount - excess);
             await supabase
               .from("loan_repayments")
-              .update({ 
+              .update({
                 amount: newNextAmount,
                 original_amount: nextPending.original_amount || nextPending.amount
               })
@@ -285,7 +285,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         adjustedAmount = selectedRepayment.amount - remainingAfterPenalty;
         newStatus = adjustedAmount > 0 ? "pending" : "paid";
       }
-      
+
       const { error } = await supabase
         .from("loan_repayments")
         .update({
@@ -315,13 +315,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           .update({ status: "completed" })
           .eq("id", loan.id);
       }
-      
+
       return { paidAmount, isPartial: paidAmount < dueAmount, isOverpayment: paidAmount > dueAmount };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      
+
       if (result.isPartial) {
         toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
       } else if (result.isOverpayment) {
@@ -329,7 +329,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       } else {
         toast.success("Payment recorded successfully");
       }
-      
+
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
       setPaymentMethod("cash");
@@ -345,7 +345,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reversePaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedPaidRepayment || !loan) throw new Error("No repayment selected");
-      
+
       const { error } = await supabase
         .from("loan_repayments")
         .update({
@@ -399,7 +399,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const applyPenaltiesMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      
+
       // Use the database function to apply penalties
       const { data, error } = await supabase.rpc("apply_loan_penalties", {
         p_loan_id: loan.id,
@@ -423,7 +423,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const calculateEarlySettlementMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      
+
       const { data, error } = await supabase.rpc("calculate_early_settlement", {
         p_loan_id: loan.id,
       });
@@ -444,7 +444,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const processEarlySettlementMutation = useMutation({
     mutationFn: async () => {
       if (!loan || !earlySettlement) throw new Error("No loan or settlement data");
-      
+
       // Mark all pending repayments as paid
       const { error: repaymentError } = await supabase
         .from("loan_repayments")
@@ -544,7 +544,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
-      
+
       // Recalculate loan
       const principal = loan.loan_amount;
       const interest = principal * (newRate / 100) * newTerm;
@@ -737,7 +737,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       })),
       companyName: settings?.companyInfo?.name || 'PHINDU Finance',
       companyAddress: settings?.companyInfo?.address || 'Lusaka, Zambia',
-      companyPhone: settings?.companyInfo?.support_phone || '+260 97 1234567',
+      companyPhone: settings?.companyInfo?.support_phone || '+260 967 713 001',
     };
     downloadLoanSchedule(scheduleData);
     toast.success('Loan schedule downloaded');
@@ -746,7 +746,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const handleShareScheduleWhatsApp = () => {
     // First download the schedule
     handleDownloadSchedule();
-    
+
     // Then open WhatsApp with message
     const message = encodeURIComponent(
       `Hello ${loan.full_name},\n\n` +
@@ -759,14 +759,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `Please contact us if you have any questions.\n\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`
     );
-    
+
     const phone = loan.phone.replace(/\s+/g, '').replace(/^0/, '260');
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
   };
 
   const handleEmailSchedule = () => {
     handleDownloadSchedule();
-    
+
     const subject = encodeURIComponent(`Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`);
     const body = encodeURIComponent(
       `Dear ${loan.full_name},\n\n` +
@@ -782,7 +782,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `Best regards,\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`
     );
-    
+
     window.location.href = `mailto:${loan.email}?subject=${subject}&body=${body}`;
   };
 
@@ -1073,7 +1073,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           const isOverdue = rep.status === "pending" && new Date(rep.due_date) < new Date();
                           const displayStatus = rep.is_reversed ? "reversed" : isOverdue ? "overdue" : rep.status;
                           const totalDue = rep.amount + (rep.penalty_amount || 0);
-                          
+
                           return (
                             <TableRow key={rep.id} className={isOverdue ? "bg-destructive/5" : rep.is_reversed ? "bg-muted/50" : ""}>
                               <TableCell className="font-medium">{rep.installment_number || "-"}</TableCell>
@@ -1095,8 +1095,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">
                                   {rep.status === "pending" && !rep.is_reversed && (
-                                    <Button 
-                                      size="sm" 
+                                    <Button
+                                      size="sm"
                                       variant="outline"
                                       onClick={() => {
                                         setSelectedRepayment(rep);
@@ -1108,8 +1108,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (
-                                    <Button 
-                                      size="sm" 
+                                    <Button
+                                      size="sm"
                                       variant="ghost"
                                       className="text-muted-foreground hover:text-destructive"
                                       onClick={() => {
@@ -1152,8 +1152,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
               {/* Write-Off Tab */}
               <TabsContent value="writeoff" className="m-0">
-                <WriteOffTab 
-                  loan={loan} 
+                <WriteOffTab
+                  loan={loan}
                   totalPaid={totalPaid}
                   totalPending={loan.total_repayment - totalPaid}
                 />
@@ -1299,8 +1299,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         </Button>
                       )}
                       {loan.status === "active" && (
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => calculateEarlySettlementMutation.mutate()}
                           disabled={calculateEarlySettlementMutation.isPending}
@@ -1359,9 +1359,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           <Send size={14} className="mr-1" /> Email
                         </Button>
                       </div>
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         className="text-xs"
                         onClick={() => setIsContractEditOpen(true)}
                       >
@@ -1431,8 +1431,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       placeholder="Add internal notes about this loan..."
                       rows={4}
                     />
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => saveNotesMutation.mutate()}
                       disabled={saveNotesMutation.isPending}
                     >
@@ -1551,7 +1551,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 Due: {selectedRepayment?.due_date ? format(new Date(selectedRepayment.due_date), "MMM dd, yyyy") : ""}
               </p>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Amount to Pay</Label>
               <Input
@@ -1564,7 +1564,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 Pay less for partial payment • Pay more for advance payment
               </p>
             </div>
-            
+
             {paymentAmount && Number(paymentAmount) !== (selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0) && (
               <div className={`p-3 rounded-lg border ${Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
                 <div className="flex items-center gap-2">
@@ -1592,7 +1592,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label>Payment Method</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -1618,8 +1618,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsRecordPaymentOpen(false)}>Cancel</Button>
-              <Button 
-                onClick={() => recordPaymentMutation.mutate()} 
+              <Button
+                onClick={() => recordPaymentMutation.mutate()}
                 disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
               >
                 {recordPaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
@@ -1650,7 +1650,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 {selectedPaidRepayment?.payment_method && ` via ${selectedPaidRepayment.payment_method.replace("_", " ")}`}
               </p>
             </div>
-            
+
             <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
               <div className="flex items-start gap-2">
                 <AlertTriangle size={16} className="text-destructive mt-0.5" />
@@ -1662,7 +1662,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Reason for Reversal *</Label>
               <Textarea
@@ -1674,9 +1674,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsReversalOpen(false)}>Cancel</Button>
-              <Button 
+              <Button
                 variant="destructive"
-                onClick={() => reversePaymentMutation.mutate()} 
+                onClick={() => reversePaymentMutation.mutate()}
                 disabled={reversePaymentMutation.isPending || !reversalReason}
               >
                 {reversePaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <RotateCcw size={14} className="mr-1" />}
@@ -1728,7 +1728,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </span>
                 </div>
               </div>
-              
+
               <div className="p-3 rounded-lg bg-info/10 border border-info/20">
                 <div className="flex items-start gap-2">
                   <CheckCircle size={16} className="text-info mt-0.5" />
@@ -1740,11 +1740,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setIsEarlySettlementOpen(false)}>Cancel</Button>
-                <Button 
-                  onClick={() => processEarlySettlementMutation.mutate()} 
+                <Button
+                  onClick={() => processEarlySettlementMutation.mutate()}
                   disabled={processEarlySettlementMutation.isPending}
                 >
                   {processEarlySettlementMutation.isPending ? (
@@ -1766,13 +1766,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Apply Penalties</AlertDialogTitle>
             <AlertDialogDescription>
-              This will calculate and apply late payment penalties to all overdue installments based on the loan product's penalty rate. 
+              This will calculate and apply late payment penalties to all overdue installments based on the loan product's penalty rate.
               There are currently {overdueCount} overdue installments.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={() => applyPenaltiesMutation.mutate()}
               disabled={applyPenaltiesMutation.isPending}
             >
@@ -1826,8 +1826,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsRestructureOpen(false)}>Cancel</Button>
-              <Button 
-                onClick={() => restructureLoanMutation.mutate()} 
+              <Button
+                onClick={() => restructureLoanMutation.mutate()}
                 disabled={restructureLoanMutation.isPending || !restructureReason}
               >
                 {restructureLoanMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <RefreshCw size={14} className="mr-1" />}
@@ -1868,7 +1868,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => undoDisbursementMutation.mutate()}
             >
@@ -1905,7 +1905,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 <span className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Contract Amendment/Notes</Label>
               <Textarea
@@ -1918,10 +1918,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 These notes will be appended to the admin notes and can be referenced when generating new contracts.
               </p>
             </div>
-            
+
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsContractEditOpen(false)}>Cancel</Button>
-              <Button 
+              <Button
                 onClick={() => {
                   const newNote = `[CONTRACT NOTE ${format(new Date(), "yyyy-MM-dd")}]: ${contractNotes}`;
                   setAdminNotes((prev) => `${prev}\n\n${newNote}`);
