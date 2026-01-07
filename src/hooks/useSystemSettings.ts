@@ -42,9 +42,9 @@ export const useSystemSettings = () => {
                     date_format: "DD/MM/YYYY",
                 },
                 companyInfo: (settings.company_info as CompanyInfo) || {
-                    name: "PHINDU",
+                    name: "Phindu Loans",
                     address: "Lusaka, Zambia",
-                    support_email: "info@phinducredit.co.zm",
+                    support_email: "support@phindu.co.zm",
                     support_phone: "+260 967 713 001",
                     tax_id: "",
                 },
