@@ -2145,7 +2145,7 @@ const AdminApplications = () => {
                 <Input
                   value={disbursement.mobile_money_number}
                   onChange={(e) => setDisbursement({ ...disbursement, mobile_money_number: e.target.value })}
-                  placeholder="+260 97X XXX XXX"
+                  placeholder="+260 967 713 001"
                 />
               </div>
             )}

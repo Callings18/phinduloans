@@ -254,7 +254,7 @@ const AdminBorrowers = () => {
     mutationFn: async ({ id, blacklist, reason }: { id: string; blacklist: boolean; reason?: string }) => {
       const { data: session } = await supabase.auth.getSession();
       const userId = session?.session?.user?.id;
-      
+
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -269,10 +269,10 @@ const AdminBorrowers = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-borrowers'] });
-      toast({ 
+      toast({
         title: variables.blacklist ? "Borrower blacklisted" : "Borrower removed from blacklist",
-        description: variables.blacklist 
-          ? "This borrower will no longer qualify for new loans" 
+        description: variables.blacklist
+          ? "This borrower will no longer qualify for new loans"
           : "This borrower can now apply for loans again"
       });
       setIsBlacklistOpen(false);
@@ -540,7 +540,7 @@ const AdminBorrowers = () => {
               <Input
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+260 97X XXX XXX"
+                placeholder="+260 967 713 001"
               />
             </div>
             <div className="space-y-2">
@@ -622,7 +622,7 @@ const AdminBorrowers = () => {
               <Input
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+260 97X XXX XXX"
+                placeholder="+260 967 713 001"
               />
             </div>
             <div className="space-y-2">
@@ -882,7 +882,7 @@ const AdminBorrowers = () => {
               Blacklist Borrower
             </DialogTitle>
             <DialogDescription>
-              Add <span className="font-semibold">{selectedBorrower?.full_name}</span> to the blacklist. 
+              Add <span className="font-semibold">{selectedBorrower?.full_name}</span> to the blacklist.
               They will no longer be able to apply for loans.
             </DialogDescription>
           </DialogHeader>

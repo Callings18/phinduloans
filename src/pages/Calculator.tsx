@@ -4,10 +4,11 @@ import Footer from "@/components/layout/Footer";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, Info, Package, Loader2 } from "lucide-react";
+import { ArrowRight, Info, Package, Loader2, Scale } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import LoanComparison from "@/components/common/LoanComparison";
 
 const Calculator = () => {
   const [loanAmount, setLoanAmount] = useState(5000);
@@ -207,6 +208,20 @@ const Calculator = () => {
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Loan Comparison Section */}
+            <div className="mt-12">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center justify-center gap-2">
+                  <Scale className="text-primary" size={24} />
+                  Compare Products
+                </h2>
+                <p className="text-muted-foreground">
+                  Not sure which loan is right for you? Compare products side-by-side.
+                </p>
+              </div>
+              <LoanComparison />
             </div>
           </div>
         </div>

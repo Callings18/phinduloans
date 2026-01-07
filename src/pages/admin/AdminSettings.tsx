@@ -58,7 +58,7 @@ const AdminSettings = () => {
     name: "LoanSphere Microfinance",
     address: "Lusaka, Zambia",
     support_email: "support@loansphere.com",
-    support_phone: "+260 XXXXXXXX",
+    support_phone: "+260 967 713 001",
     tax_id: ""
   });
 

@@ -224,7 +224,7 @@ const AdminLoans = () => {
         .order("due_date", { ascending: true });
 
       if (error) throw error;
-      
+
       // Get earliest due date per loan
       const dueDateMap: Record<string, string> = {};
       data.forEach((r) => {
@@ -319,7 +319,7 @@ const AdminLoans = () => {
 
     const principal = Number(loanAmount);
     const months = Number(loanTermMonths);
-    
+
     const loanCalc = calculateLoan(principal, months, {
       interest_rate: selectedProduct.interest_rate,
       interest_period: (selectedProduct as any).interest_period,
@@ -330,12 +330,12 @@ const AdminLoans = () => {
       platform_fee_percent: (selectedProduct as any).platform_fee_percent,
     });
 
-    return { 
-      principal, 
-      interest: loanCalc.totalInterest, 
-      processingFee: loanCalc.processingFee, 
-      totalRepayment: loanCalc.totalRepayment, 
-      monthlyPayment: loanCalc.monthlyPayment, 
+    return {
+      principal,
+      interest: loanCalc.totalInterest,
+      processingFee: loanCalc.processingFee,
+      totalRepayment: loanCalc.totalRepayment,
+      monthlyPayment: loanCalc.monthlyPayment,
       rate: selectedProduct.interest_rate,
       interestPeriod: getInterestPeriodLabel((selectedProduct as any).interest_period),
     };
@@ -676,7 +676,7 @@ const AdminLoans = () => {
       transaction_reference: "",
       amount: "",
     });
-    
+
     // Fetch next pending repayment for this loan
     const { data: repayment } = await supabase
       .from("loan_repayments")
@@ -686,7 +686,7 @@ const AdminLoans = () => {
       .order("due_date", { ascending: true })
       .limit(1)
       .maybeSingle();
-    
+
     setNextRepayment(repayment);
     if (repayment) {
       setQuickPaymentData(prev => ({ ...prev, amount: repayment.amount.toString() }));
@@ -698,7 +698,7 @@ const AdminLoans = () => {
   const quickPaymentMutation = useMutation({
     mutationFn: async () => {
       if (!quickPaymentLoan || !nextRepayment) throw new Error("No repayment selected");
-      
+
       const { error } = await supabase
         .from("loan_repayments")
         .update({
@@ -958,13 +958,13 @@ const AdminLoans = () => {
                     {filteredLoans.map((loan) => {
                       const dueDate = loanDueDates?.[loan.id];
                       const isOverdue = dueDate && new Date(dueDate) < new Date();
-                      
+
                       // Calculate disbursed amount (after fees)
                       const product = loanProducts?.find(p => p.id === loan.loan_product_id);
                       const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
                       const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;
                       const disbursedAmount = Number(loan.loan_amount) - processingFee - legalFee;
-                      
+
                       return (
                         <TableRow key={loan.id}>
                           <TableCell>
@@ -1397,7 +1397,7 @@ const AdminLoans = () => {
                 <Input
                   value={disbursement.mobile_money_number}
                   onChange={(e) => setDisbursement({ ...disbursement, mobile_money_number: e.target.value })}
-                  placeholder="+260 97X XXX XXX"
+                  placeholder="+260 967 713 001"
                 />
               </div>
             )}
@@ -1458,7 +1458,7 @@ const AdminLoans = () => {
               Quick payment for {quickPaymentLoan?.full_name}
             </DialogDescription>
           </DialogHeader>
-          
+
           {nextRepayment ? (
             <div className="space-y-4">
               <div className="p-4 rounded-lg bg-muted/50 space-y-2">
@@ -1541,9 +1541,9 @@ const AdminLoans = () => {
             <div className="py-8 text-center">
               <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No pending repayments found for this loan</p>
-              <Button 
-                variant="outline" 
-                className="mt-4" 
+              <Button
+                variant="outline"
+                className="mt-4"
                 onClick={() => {
                   setIsQuickPaymentOpen(false);
                   setSelectedLoan(quickPaymentLoan);

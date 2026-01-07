@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,8 +19,11 @@ import { calculateLoan, getInterestPeriodLabel, type LoanProduct as CalcLoanProd
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import GuidedTour from "@/components/common/GuidedTour";
+import DocumentUploader from "@/components/common/DocumentUploader";
+import { useApplicationDraft, ApplicationDraft } from "@/hooks/useApplicationDraft";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 interface LoanProduct {
   id: string;
@@ -85,6 +90,11 @@ const Apply = () => {
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
+
+  // Draft system
+  const { draft, hasDraft, lastSaved, isSaving, saveDraft, clearDraft } = useApplicationDraft();
+  const [showDraftDialog, setShowDraftDialog] = useState(false);
+  const [draftChecked, setDraftChecked] = useState(false);
 
   // Fetch required documents for the selected product
   const { data: productDocs, isLoading: docsLoading } = useQuery({
@@ -165,6 +175,103 @@ const Apply = () => {
     termsAccepted: false,
     dataConsent: false,
   });
+
+  // Check for existing draft on mount
+  useEffect(() => {
+    if (!draftChecked && hasDraft && draft) {
+      setShowDraftDialog(true);
+      setDraftChecked(true);
+    }
+  }, [hasDraft, draft, draftChecked]);
+
+  // Auto-save draft when form data changes
+  useEffect(() => {
+    if (draftChecked) {
+      const draftData: Partial<ApplicationDraft> = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        nrc: formData.nrc,
+        dob: formData.dob,
+        gender: formData.gender,
+        address: formData.address,
+        city: formData.city,
+        employerName: formData.employerName,
+        employerAddress: formData.employerAddress,
+        jobTitle: formData.jobTitle,
+        employmentType: formData.employmentType,
+        monthlyIncome: formData.monthlyIncome,
+        payDay: formData.payDay,
+        employmentDuration: formData.employmentDuration,
+        loanAmount: formData.loanAmount,
+        loanPurpose: formData.loanPurpose,
+        loanTerm: formData.loanTerm,
+        repaymentMethod: formData.repaymentMethod,
+        collateralDescription: formData.collateralDescription,
+        collateralValue: formData.collateralValue,
+        selectedProductId: selectedProduct?.id,
+        currentStep,
+        uploadedDocNames: Object.fromEntries(
+          Object.entries(dynamicDocs).map(([key, file]) => [key, file.name])
+        ),
+      };
+      saveDraft(draftData);
+    }
+  }, [formData, currentStep, selectedProduct, dynamicDocs, draftChecked, saveDraft]);
+
+  // Restore draft function
+  const handleRestoreDraft = useCallback(() => {
+    if (draft) {
+      setFormData(prev => ({
+        ...prev,
+        firstName: draft.firstName || '',
+        lastName: draft.lastName || '',
+        email: draft.email || prev.email,
+        phone: draft.phone || '',
+        nrc: draft.nrc || '',
+        dob: draft.dob || '',
+        gender: draft.gender || '',
+        address: draft.address || '',
+        city: draft.city || '',
+        employerName: draft.employerName || '',
+        employerAddress: draft.employerAddress || '',
+        jobTitle: draft.jobTitle || '',
+        employmentType: draft.employmentType || '',
+        monthlyIncome: draft.monthlyIncome || '',
+        payDay: draft.payDay || '',
+        employmentDuration: draft.employmentDuration || '',
+        loanAmount: draft.loanAmount || 5000,
+        loanPurpose: draft.loanPurpose || '',
+        loanTerm: draft.loanTerm || 6,
+        repaymentMethod: draft.repaymentMethod || '',
+        collateralDescription: draft.collateralDescription || '',
+        collateralValue: draft.collateralValue || '',
+      }));
+      setCurrentStep(draft.currentStep || 1);
+
+      // Find and set the product if saved
+      if (draft.selectedProductId && loanProducts.length > 0) {
+        const product = loanProducts.find(p => p.id === draft.selectedProductId);
+        if (product) setSelectedProduct(product);
+      }
+
+      toast({
+        title: "Draft Restored",
+        description: "Your previous application progress has been restored.",
+      });
+    }
+    setShowDraftDialog(false);
+  }, [draft, loanProducts, toast]);
+
+  const handleDiscardDraft = useCallback(() => {
+    clearDraft();
+    setShowDraftDialog(false);
+    toast({
+      title: "Draft Discarded",
+      description: "Starting a fresh application.",
+    });
+  }, [clearDraft, toast]);
 
   // Fetch loan products
   useEffect(() => {
@@ -452,6 +559,9 @@ const Apply = () => {
         city: formData.city || null,
       });
 
+      // Clear draft on successful submission
+      clearDraft();
+
       toast({
         title: "Application Submitted!",
         description: "We'll review your application and get back to you within 24 hours.",
@@ -478,6 +588,47 @@ const Apply = () => {
         externalRun={runTour}
         onFinish={() => setRunTour(false)}
       />
+
+      {/* Draft Recovery Dialog */}
+      <Dialog open={showDraftDialog} onOpenChange={setShowDraftDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-primary" />
+              Resume Previous Application?
+            </DialogTitle>
+            <DialogDescription>
+              We found an unfinished application from{' '}
+              {draft?.lastSaved && formatDistanceToNow(new Date(draft.lastSaved), { addSuffix: true })}.
+              Would you like to continue where you left off?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
+            <p className="text-sm">
+              <span className="text-muted-foreground">Name:</span>{' '}
+              <span className="font-medium">{draft?.firstName} {draft?.lastName}</span>
+            </p>
+            <p className="text-sm">
+              <span className="text-muted-foreground">Amount:</span>{' '}
+              <span className="font-medium">K{draft?.loanAmount?.toLocaleString()}</span>
+            </p>
+            <p className="text-sm">
+              <span className="text-muted-foreground">Progress:</span>{' '}
+              <span className="font-medium">Step {draft?.currentStep} of 4</span>
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleDiscardDraft}>
+              <Trash2 size={16} className="mr-2" />
+              Start Fresh
+            </Button>
+            <Button variant="hero" onClick={handleRestoreDraft}>
+              <RefreshCw size={16} className="mr-2" />
+              Resume Application
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
@@ -507,6 +658,53 @@ const Apply = () => {
               </p>
             )}
           </div>
+
+          {/* Auto-save indicator */}
+          {draftChecked && (
+            <div className="max-w-2xl mx-auto mb-6">
+              <Alert className="glass border-border/50">
+                <AlertDescription className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm">
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-primary" />
+                        <span className="text-muted-foreground">Saving...</span>
+                      </>
+                    ) : lastSaved ? (
+                      <>
+                        <Save size={14} className="text-success" />
+                        <span className="text-muted-foreground">
+                          Auto-saved {formatDistanceToNow(lastSaved, { addSuffix: true })}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock size={14} className="text-muted-foreground" />
+                        <span className="text-muted-foreground">Your progress will be saved automatically</span>
+                      </>
+                    )}
+                  </div>
+                  {hasDraft && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        clearDraft();
+                        toast({
+                          title: "Draft Cleared",
+                          description: "Your saved progress has been cleared.",
+                        });
+                      }}
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 size={12} className="mr-1" />
+                      Clear Draft
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
 
           {/* Progress Steps */}
           <div className="max-w-3xl mx-auto mb-12 tour-apply-steps">
@@ -597,7 +795,7 @@ const Apply = () => {
                       <Label htmlFor="phone">Phone Number *</Label>
                       <Input
                         id="phone"
-                        placeholder="+260 XXX XXX XXX"
+                        placeholder="+260 967 713 001"
                         value={formData.phone}
                         onChange={(e) => updateFormData("phone", e.target.value)}
                         className={errors.phone ? "border-destructive" : ""}

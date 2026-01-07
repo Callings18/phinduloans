@@ -45,7 +45,7 @@ export const useSystemSettings = () => {
                     name: "PHINDU",
                     address: "Lusaka, Zambia",
                     support_email: "info@phinducredit.co.zm",
-                    support_phone: "+260 XXX XXX XXX",
+                    support_phone: "+260 967 713 001",
                     tax_id: "",
                 },
                 lendingRules: (settings.lending_rules as LendingRules) || {
