@@ -14,14 +14,14 @@ const Footer = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xl">{companyInfo?.name.charAt(0) || "P"}</span>
+                <span className="text-primary-foreground font-bold text-xl">P</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-foreground font-bold text-lg leading-tight uppercase">
-                  {companyInfo?.name.split(" ")[0] || "PHINDU"}
+                  PHINDU
                 </span>
                 <span className="text-muted-foreground text-xs tracking-wider uppercase">
-                  {companyInfo?.name.split(" ").slice(1).join(" ") || "CREDIT SOLUTIONS"}
+                  LOANS
                 </span>
               </div>
             </div>
@@ -75,15 +75,19 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
                 <Phone size={16} className="text-primary" />
-                {companyInfo?.support_phone || "+260 967 713 001"}
+                {(!companyInfo?.support_phone || companyInfo?.support_phone.includes('XXX'))
+                  ? "+260 967 713 001"
+                  : companyInfo?.support_phone}
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
                 <Mail size={16} className="text-primary" />
-                {companyInfo?.support_email || "info@phinducredit.co.zm"}
+                {(!companyInfo?.support_email || companyInfo?.support_email.includes('phindu.com'))
+                  ? "support@phindu.co.zm"
+                  : companyInfo?.support_email}
               </li>
               <li className="flex items-start gap-3 text-muted-foreground text-sm">
                 <MapPin size={16} className="text-primary mt-0.5" />
-                {companyInfo?.address || "Plot 123, Cairo Road, Lusaka, Zambia"}
+                {companyInfo?.address || "Lusaka, Zambia"}
               </li>
             </ul>
           </div>
