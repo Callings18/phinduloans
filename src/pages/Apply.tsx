@@ -96,23 +96,16 @@ const Apply = () => {
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [draftChecked, setDraftChecked] = useState(false);
 
-  // Fetch required documents for the selected product
-  const { data: productDocs, isLoading: docsLoading } = useQuery({
-    queryKey: ["product-requirements", selectedProduct?.id],
-    queryFn: async () => {
-      if (!selectedProduct) return [];
-      // @ts-expect-error - Table exists after migrations
-      const { data, error } = await supabase
-        .from("loan_product_documents")
-        .select("*")
-        .eq("loan_product_id", selectedProduct.id)
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!selectedProduct,
-  });
+  // Standard required documents for all loan products
+  const productDocs = [
+    { document_type: 'nrc_front', document_name: 'NRC Front', is_mandatory: true, display_order: 1 },
+    { document_type: 'nrc_back', document_name: 'NRC Back', is_mandatory: true, display_order: 2 },
+    { document_type: 'selfie', document_name: 'Selfie Photo', is_mandatory: true, display_order: 3 },
+    { document_type: 'payslip', document_name: 'Latest Payslip', is_mandatory: true, display_order: 4 },
+    { document_type: 'bank_statement', document_name: 'Bank Statement (3 months)', is_mandatory: false, display_order: 5 },
+    { document_type: 'employer_letter', document_name: 'Employment Letter', is_mandatory: false, display_order: 6 },
+  ];
+  const docsLoading = false;
 
   // Fetch user profile for autofill
   const { data: profile } = useQuery({
