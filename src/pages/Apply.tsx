@@ -114,6 +114,41 @@ const Apply = () => {
     enabled: !!selectedProduct,
   });
 
+  // Fetch user profile for autofill
+  const { data: profile } = useQuery({
+    queryKey: ["user-profile", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Fetch previous application for document reuse
+  const { data: previousApplication } = useQuery({
+    queryKey: ["previous-application", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("*")
+        .eq("user_id", user.id)
+        .neq("status", "rejected")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   const tourSteps: Step[] = [
     {
       target: ".tour-apply-header",
@@ -173,6 +208,7 @@ const Apply = () => {
     selfie: null as File | null,
     termsAccepted: false,
     dataConsent: false,
+    reusedDocs: {} as Record<string, string>, // Map of docType -> file_url to reuse
   });
 
   // Check for existing draft on mount
@@ -214,6 +250,7 @@ const Apply = () => {
         uploadedDocNames: Object.fromEntries(
           Object.entries(dynamicDocs).map(([key, file]) => [key, file.name])
         ),
+        reusedDocs: formData.reusedDocs,
       };
       saveDraft(draftData);
     }
@@ -246,6 +283,19 @@ const Apply = () => {
         repaymentMethod: draft.repaymentMethod || '',
         collateralDescription: draft.collateralDescription || '',
         collateralValue: draft.collateralValue || '',
+        reusedDocs: draft.reusedDocs || {},
+        // Ensure other required fields are initialized
+        nrcFront: null,
+        nrcBack: null,
+        payslip: null,
+        payslip2: null,
+        payslip3: null,
+        bankStatement: null,
+        employerLetter: null,
+        collateralImage: null,
+        selfie: null,
+        termsAccepted: false,
+        dataConsent: false,
       }));
       setCurrentStep(draft.currentStep || 1);
 
@@ -297,12 +347,24 @@ const Apply = () => {
     fetchProducts();
   }, [searchParams]);
 
-  // Pre-fill email if user is logged in
+  // Autofill profile data if logged in and no draft
   useEffect(() => {
-    if (user?.email) {
+    if (user && profile && !hasDraft && !draftChecked) {
+      setFormData(prev => ({
+        ...prev,
+        firstName: profile.full_name?.split(' ')[0] || prev.firstName,
+        lastName: profile.full_name?.split(' ').slice(1).join(' ') || prev.lastName,
+        email: profile.email || user.email || prev.email,
+        phone: profile.phone || prev.phone,
+        nrc: profile.nrc_number || prev.nrc,
+        address: profile.address || prev.address,
+        city: profile.city || prev.city,
+      }));
+    } else if (user?.email && !profile) {
+      // Fallback for just email
       setFormData(prev => ({ ...prev, email: user.email || "" }));
     }
-  }, [user]);
+  }, [user, profile, hasDraft, draftChecked]);
 
   // Update sliders when product changes
   useEffect(() => {
@@ -383,7 +445,8 @@ const Apply = () => {
         const newDocErrors: Record<string, string> = {};
 
         productDocs?.forEach((doc: any) => {
-          if (doc.is_mandatory && !dynamicDocs[doc.document_type]) {
+          // Check if mandatory AND not uploaded AND not being reused
+          if (doc.is_mandatory && !dynamicDocs[doc.document_type] && !formData.reusedDocs[doc.document_type]) {
             newDocErrors[doc.document_type] = `${doc.document_name} is required`;
             hasErrors = true;
           }
@@ -527,11 +590,11 @@ const Apply = () => {
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
         loan_product_id: selectedProduct?.id || null,
-        // Store file paths for secure signed URL generation later
-        nrc_front_url: uploadedDocs.find(d => d.document_type === 'nrc_front')?.file_url || null,
-        nrc_back_url: uploadedDocs.find(d => d.document_type === 'nrc_back')?.file_url || null,
-        payslip_url: uploadedDocs.find(d => d.document_type === 'payslip')?.file_url || null,
-        selfie_url: uploadedDocs.find(d => d.document_type === 'selfie')?.file_url || null,
+        // Use reused URL if available, otherwise new upload URL
+        nrc_front_url: formData.reusedDocs['nrc_front'] || uploadedDocs.find(d => d.document_type === 'nrc_front')?.file_url || null,
+        nrc_back_url: formData.reusedDocs['nrc_back'] || uploadedDocs.find(d => d.document_type === 'nrc_back')?.file_url || null,
+        payslip_url: formData.reusedDocs['payslip'] || uploadedDocs.find(d => d.document_type === 'payslip')?.file_url || null,
+        selfie_url: formData.reusedDocs['selfie'] || uploadedDocs.find(d => d.document_type === 'selfie')?.file_url || null,
         collateral_description: formData.collateralDescription || null,
         collateral_value: formData.collateralValue ? parseFloat(formData.collateralValue) : null,
         status: 'pending',
@@ -1124,34 +1187,84 @@ const Apply = () => {
                             <Label className={errors[doc.document_type] ? "text-destructive" : ""}>
                               {doc.document_name} {doc.is_mandatory && "*"}
                             </Label>
-                            <label
-                              className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${dynamicDocs[doc.document_type]
-                                ? "border-primary bg-primary/10 shadow-glow"
-                                : errors[doc.document_type]
-                                  ? "border-destructive bg-destructive/5"
-                                  : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                                }`}
-                            >
-                              <input
-                                type="file"
-                                accept={doc.allowed_file_types?.map((t: string) => `.${t}`).join(',') || "image/*,.pdf"}
-                                className="hidden"
-                                onChange={(e) => handleDynamicFileUpload(doc.document_type, e.target.files?.[0] || null)}
-                              />
-                              {dynamicDocs[doc.document_type] ? (
-                                <CheckCircle className="text-primary mb-2" size={32} />
-                              ) : (
-                                <Upload className={errors[doc.document_type] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+
+                            {/* Document Reuse Option */}
+                            {previousApplication &&
+                              ['nrc_front', 'nrc_back', 'payslip', 'selfie'].includes(doc.document_type) &&
+                              previousApplication[`${doc.document_type}_url`] && (
+                                <div className="mb-2 flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
+                                  <Checkbox
+                                    id={`reuse-${doc.id}`}
+                                    checked={!!formData.reusedDocs[doc.document_type]}
+                                    onCheckedChange={(checked) => {
+                                      const url = previousApplication[`${doc.document_type}_url`];
+                                      setFormData(prev => {
+                                        const next = { ...prev };
+                                        if (checked) {
+                                          next.reusedDocs = { ...next.reusedDocs, [doc.document_type]: url };
+                                          // Clear manual upload if switching to reuse
+                                          setDynamicDocs(docs => {
+                                            const d = { ...docs };
+                                            delete d[doc.document_type];
+                                            return d;
+                                          });
+                                        } else {
+                                          const r = { ...next.reusedDocs };
+                                          delete r[doc.document_type];
+                                          next.reusedDocs = r;
+                                        }
+                                        return next;
+                                      });
+                                      // Clear error
+                                      if (errors[doc.document_type]) {
+                                        setErrors(e => {
+                                          const next = { ...e };
+                                          delete next[doc.document_type];
+                                          return next;
+                                        });
+                                      }
+                                    }}
+                                  />
+                                  <label htmlFor={`reuse-${doc.id}`} className="text-sm cursor-pointer flex-1">
+                                    <span className="font-medium">Reuse from previous application</span>
+                                    <span className="block text-xs text-muted-foreground">
+                                      Verified on {new Date(previousApplication.created_at).toLocaleDateString()}
+                                    </span>
+                                  </label>
+                                  <CheckCircle size={16} className="text-success" />
+                                </div>
                               )}
-                              <span className={`text-sm ${errors[doc.document_type] ? "text-destructive" : "text-muted-foreground"}`}>
-                                {errors[doc.document_type] || doc.description || `Upload ${doc.document_name}`}
-                              </span>
-                              {dynamicDocs[doc.document_type] && (
-                                <span className="text-[10px] text-primary mt-1 truncate max-w-full italic">
-                                  {dynamicDocs[doc.document_type].name}
+
+                            {!formData.reusedDocs[doc.document_type] && (
+                              <label
+                                className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${dynamicDocs[doc.document_type]
+                                  ? "border-primary bg-primary/10 shadow-glow"
+                                  : errors[doc.document_type]
+                                    ? "border-destructive bg-destructive/5"
+                                    : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                                  }`}
+                              >
+                                <input
+                                  type="file"
+                                  accept={doc.allowed_file_types?.map((t: string) => `.${t}`).join(',') || "image/*,.pdf"}
+                                  className="hidden"
+                                  onChange={(e) => handleDynamicFileUpload(doc.document_type, e.target.files?.[0] || null)}
+                                />
+                                {dynamicDocs[doc.document_type] ? (
+                                  <CheckCircle className="text-primary mb-2" size={32} />
+                                ) : (
+                                  <Upload className={errors[doc.document_type] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                                )}
+                                <span className={`text-sm ${errors[doc.document_type] ? "text-destructive" : "text-muted-foreground"}`}>
+                                  {errors[doc.document_type] || doc.description || `Upload ${doc.document_name}`}
                                 </span>
-                              )}
-                            </label>
+                                {dynamicDocs[doc.document_type] && (
+                                  <span className="text-[10px] text-primary mt-1 truncate max-w-full italic">
+                                    {dynamicDocs[doc.document_type].name}
+                                  </span>
+                                )}
+                              </label>
+                            )}
                           </div>
                         ))}
                       </div>

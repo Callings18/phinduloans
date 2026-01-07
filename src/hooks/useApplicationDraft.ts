@@ -31,6 +31,7 @@ export interface ApplicationDraft {
     lastSaved: string;
     // Store file metadata (names only, not actual files)
     uploadedDocNames: Record<string, string>;
+    reusedDocs?: Record<string, string>;
 }
 
 interface UseDraftReturn {
