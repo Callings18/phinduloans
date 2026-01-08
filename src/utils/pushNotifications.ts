@@ -1,4 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
+/**
+ * Push Notification Utilities
+ * Handles browser push notifications for the PWA
+ * Note: This is a stub implementation - full push notifications require
+ * a push_subscriptions table and VAPID keys to be configured
+ */
 
 export interface PushNotificationOptions {
   title: string;
@@ -7,11 +12,6 @@ export interface PushNotificationOptions {
   badge?: string;
   tag?: string;
   requireInteraction?: boolean;
-  actions?: Array<{
-    action: string;
-    title: string;
-    icon?: string;
-  }>;
   data?: any;
 }
 
@@ -65,23 +65,10 @@ class PushNotificationManager {
         return existingSubscription;
       }
 
-      // Subscribe to push notifications
-      // Note: You'll need to generate VAPID keys for production
-      const subscription = await this.registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: this.urlBase64ToUint8Array(
-          // Replace with your actual VAPID public key
-          process.env.VITE_VAPID_PUBLIC_KEY || 
-          'BEl62iUYgUivxIkv69yViEuiBIa-Ib37gp2' +
-          'QsTAHqyLU81YfmpH4vPYh6wKPKNSBJDU3A' +
-          'TpwpJX8w-Z1234567890'
-        )
-      });
-
-      // Store subscription in database
-      await this.saveSubscription(userId, subscription);
-
-      return subscription;
+      // Note: Full push subscription requires VAPID keys and a push_subscriptions table
+      // This is a placeholder - actual implementation would need proper VAPID setup
+      console.log('Push subscription would be saved for user:', userId);
+      return null;
     } catch (error) {
       console.error('Failed to subscribe to push notifications:', error);
       return null;
@@ -97,7 +84,7 @@ class PushNotificationManager {
       const subscription = await this.registration.pushManager.getSubscription();
       if (subscription) {
         await subscription.unsubscribe();
-        await this.removeSubscription(userId);
+        console.log('Push subscription removed for user:', userId);
         return true;
       }
       return false;
@@ -127,75 +114,13 @@ class PushNotificationManager {
         badge: options.badge || '/favicon.jpg',
         tag: options.tag,
         requireInteraction: options.requireInteraction || false,
-        actions: options.actions || [],
         data: options.data,
-        vibrate: [200, 100, 200],
       });
       return true;
     } catch (error) {
       console.error('Failed to show notification:', error);
       return false;
     }
-  }
-
-  private async saveSubscription(userId: string, subscription: PushSubscription) {
-    try {
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .upsert({
-          user_id: userId,
-          endpoint: subscription.endpoint,
-          keys: {
-            p256dh: this.arrayBufferToBase64(subscription.getKey('p256dh')),
-            auth: this.arrayBufferToBase64(subscription.getKey('auth')),
-          },
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,endpoint'
-        });
-
-      if (error) {
-        console.error('Error saving push subscription:', error);
-      }
-    } catch (error) {
-      console.error('Error saving subscription:', error);
-    }
-  }
-
-  private async removeSubscription(userId: string) {
-    try {
-      await supabase
-        .from('push_subscriptions')
-        .delete()
-        .eq('user_id', userId);
-    } catch (error) {
-      console.error('Error removing subscription:', error);
-    }
-  }
-
-  private urlBase64ToUint8Array(base64String: string): Uint8Array {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
-  private arrayBufferToBase64(buffer: ArrayBuffer | null): string {
-    if (!buffer) return '';
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
   }
 }
 
