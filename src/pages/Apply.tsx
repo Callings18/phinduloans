@@ -23,7 +23,17 @@ import DocumentUploader from "@/components/common/DocumentUploader";
 import { useApplicationDraft, ApplicationDraft } from "@/hooks/useApplicationDraft";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, subMonths, format } from "date-fns";
+
+// Helper function to get last 3 months
+const getLastThreeMonths = () => {
+  const today = new Date();
+  return [
+    { label: format(subMonths(today, 1), 'MMMM yyyy'), key: 'payslip' },
+    { label: format(subMonths(today, 2), 'MMMM yyyy'), key: 'payslip2' },
+    { label: format(subMonths(today, 3), 'MMMM yyyy'), key: 'payslip3' },
+  ];
+};
 
 interface LoanProduct {
   id: string;
@@ -1268,6 +1278,56 @@ const Apply = () => {
                     )}
                   </div>
 
+                  {/* Latest 3 Months Payslips */}
+                  <div className="pt-6 border-t border-border">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Latest Payslips (3 Months) *</h3>
+                    <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {getLastThreeMonths().map((month, index) => (
+                        <div key={month.key} className="space-y-2">
+                          <Label className={errors[month.key] ? "text-destructive" : ""}>
+                            {month.label} {index === 0 && "(Latest)"}
+                            {index === 0 && " *"}
+                          </Label>
+                          <label
+                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
+                              formData[month.key as keyof typeof formData]
+                                ? "border-primary bg-primary/10 shadow-glow"
+                                : errors[month.key]
+                                  ? "border-destructive bg-destructive/5"
+                                  : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="hidden"
+                              onChange={(e) => updateFormData(month.key, e.target.files?.[0] || null)}
+                            />
+                            {formData[month.key as keyof typeof formData] ? (
+                              <>
+                                <CheckCircle className="text-primary mb-2" size={32} />
+                                <span className="text-sm text-primary font-medium text-center">Uploaded</span>
+                                <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-full">
+                                  {(formData[month.key as keyof typeof formData] as File)?.name}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className={errors[month.key] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                                <span className={`text-sm ${errors[month.key] ? "text-destructive" : "text-muted-foreground"} text-center`}>
+                                  {errors[month.key] || `Upload payslip`}
+                                </span>
+                                <span className="text-xs text-muted-foreground mt-1">PDF, JPG, or PNG</span>
+                              </>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">* At least the latest month's payslip is required</p>
+                  </div>
+
                   {/* Collateral Details - still manual if needed */}
                   {selectedProduct?.collateral_required && (
                     <div className="pt-6 border-t border-border">
@@ -1290,6 +1350,40 @@ const Apply = () => {
                             onChange={(e) => updateFormData("collateralValue", e.target.value)}
                           />
                         </div>
+                      </div>
+                      
+                      {/* Collateral Photo Upload */}
+                      <div className="space-y-2 mt-6">
+                        <Label>Collateral Photo</Label>
+                        <label
+                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
+                            formData.collateralImage
+                              ? "border-primary bg-primary/10 shadow-glow"
+                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => updateFormData("collateralImage", e.target.files?.[0] || null)}
+                          />
+                          {formData.collateralImage ? (
+                            <>
+                              <CheckCircle className="text-primary mb-2" size={32} />
+                              <span className="text-sm text-primary font-medium">Collateral photo uploaded</span>
+                              <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-full">
+                                {formData.collateralImage.name}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="text-muted-foreground mb-2" size={32} />
+                              <span className="text-sm text-muted-foreground">Upload photo of collateral</span>
+                              <span className="text-xs text-muted-foreground mt-1">Click to select image</span>
+                            </>
+                          )}
+                        </label>
                       </div>
                     </div>
                   )}

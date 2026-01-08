@@ -220,8 +220,8 @@ const PreQualification = () => {
             color: 'text-destructive',
             bgColor: 'bg-destructive/10',
             borderColor: 'border-destructive/30',
-            title: 'Not Eligible at This Time',
-            description: 'Based on the information provided, you may not currently meet our criteria.',
+            title: 'Sorry, You Do Not Qualify',
+            description: 'Based on the information provided, you do not currently meet our lending criteria.',
         },
     };
 

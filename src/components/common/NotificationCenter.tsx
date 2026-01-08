@@ -20,12 +20,15 @@ import {
     Wallet,
     Loader2,
     Trash2,
+    BellRing,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
+import { pushNotificationManager } from "@/utils/pushNotifications";
+import { useToast } from "@/hooks/use-toast";
 
 interface Notification {
     id: string;
@@ -54,7 +57,10 @@ const getNotificationIcon = (type: Notification["type"]) => {
 const NotificationCenter: React.FC = () => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
+    const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
+    const [pushEnabled, setPushEnabled] = useState(false);
+    const [showPushPrompt, setShowPushPrompt] = useState(false);
 
     // Fetch notifications
     const { data: notifications = [], isLoading } = useQuery({
@@ -78,6 +84,20 @@ const NotificationCenter: React.FC = () => {
         refetchInterval: 30000, // Refetch every 30 seconds
     });
 
+    // Check push notification permission status
+    useEffect(() => {
+        const checkPushStatus = async () => {
+            const permission = pushNotificationManager.getPermissionStatus();
+            setPushEnabled(permission === 'granted');
+            
+            // Show prompt if not granted and not dismissed
+            if (permission === 'default' && !localStorage.getItem('push-prompt-dismissed')) {
+                setTimeout(() => setShowPushPrompt(true), 5000); // Show after 5 seconds
+            }
+        };
+        checkPushStatus();
+    }, []);
+
     // Subscribe to realtime notifications
     useEffect(() => {
         if (!user?.id) return;
@@ -92,8 +112,26 @@ const NotificationCenter: React.FC = () => {
                     table: "notification_logs",
                     filter: `user_id=eq.${user.id}`,
                 },
-                () => {
+                (payload) => {
                     queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+                    
+                    // Show toast notification for new notifications
+                    const newNotification = payload.new as Notification;
+                    toast({
+                        title: newNotification.title,
+                        description: newNotification.message,
+                        duration: 5000,
+                    });
+
+                    // Show browser push notification if enabled
+                    if (pushEnabled) {
+                        pushNotificationManager.showNotification({
+                            title: newNotification.title,
+                            body: newNotification.message,
+                            tag: newNotification.id,
+                            data: newNotification,
+                        });
+                    }
                 }
             )
             .subscribe();
@@ -101,7 +139,39 @@ const NotificationCenter: React.FC = () => {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user?.id, queryClient]);
+    }, [user?.id, queryClient, toast, pushEnabled]);
+
+    // Enable push notifications
+    const handleEnablePush = async () => {
+        const permission = await pushNotificationManager.requestPermission();
+        if (permission === 'granted') {
+            await pushNotificationManager.init();
+            if (user?.id) {
+                await pushNotificationManager.subscribe(user.id);
+            }
+            setPushEnabled(true);
+            setShowPushPrompt(false);
+            toast({
+                title: "Push Notifications Enabled",
+                description: "You'll now receive real-time notifications",
+            });
+        } else {
+            toast({
+                title: "Permission Denied",
+                description: "You can enable notifications in your browser settings",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleDismissPushPrompt = () => {
+        setShowPushPrompt(false);
+        localStorage.setItem('push-prompt-dismissed', 'true');
+        // Auto-show again after 7 days
+        setTimeout(() => {
+            localStorage.removeItem('push-prompt-dismissed');
+        }, 7 * 24 * 60 * 60 * 1000);
+    };
 
     // Mark as read mutation
     const markAsReadMutation = useMutation({
@@ -182,6 +252,47 @@ const NotificationCenter: React.FC = () => {
                         </Button>
                     )}
                 </div>
+
+                {/* Push Notification Prompt */}
+                {showPushPrompt && !pushEnabled && (
+                    <div className="px-3 py-3 bg-primary/5 border-b border-border/50">
+                        <div className="flex items-start gap-2">
+                            <BellRing className="text-primary mt-0.5" size={16} />
+                            <div className="flex-1">
+                                <p className="text-xs font-medium mb-1">Enable Push Notifications</p>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                    Get instant updates about your loans, payments, and applications
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="default"
+                                        className="h-7 text-xs"
+                                        onClick={handleEnablePush}
+                                    >
+                                        Enable
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 text-xs"
+                                        onClick={handleDismissPushPrompt}
+                                    >
+                                        Not Now
+                                    </Button>
+                                </div>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={handleDismissPushPrompt}
+                            >
+                                <X size={14} />
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="overflow-y-auto max-h-72">
                     {isLoading ? (

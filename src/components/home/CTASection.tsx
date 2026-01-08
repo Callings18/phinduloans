@@ -27,9 +27,11 @@ const CTASection = () => {
                 <ArrowRight size={20} />
               </Link>
             </Button>
-            <Button variant="glass" size="lg">
-              <Phone size={20} />
-              Call Us: +260 967 713 001
+            <Button variant="glass" size="lg" asChild>
+              <a href="tel:+260967713001">
+                <Phone size={20} />
+                Call Us: +260 967 713 001
+              </a>
             </Button>
           </div>
 
