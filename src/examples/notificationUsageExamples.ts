@@ -68,7 +68,7 @@ export async function example_sendMultiChannel() {
     message: 'Your loan of K10,000 has been disbursed to your account.',
     subject: 'Loan Disbursed',
     title: 'Disbursement Confirmed',
-  });
+  } as any);
 
   console.log('SMS result:', results.sms);
   console.log('WhatsApp result:', results.whatsapp);

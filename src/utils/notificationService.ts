@@ -55,7 +55,7 @@ class NotificationService {
         return null;
       }
 
-      this.settings = data?.value as NotificationSettings || null;
+      this.settings = data?.value as unknown as NotificationSettings || null;
       this.settingsLoadedAt = now;
       return this.settings;
     } catch (error) {
@@ -157,7 +157,7 @@ class NotificationService {
   }
 
   // Multi-channel send (SMS + Email + WhatsApp)
-  async sendMultiChannel(params: Omit<SendNotificationParams, 'type'> & { phone?: string; email?: string }) {
+  async sendMultiChannel(params: Omit<SendNotificationParams, 'type' | 'to'> & { phone?: string; email?: string }) {
     const results = {
       sms: null as any,
       email: null as any,
