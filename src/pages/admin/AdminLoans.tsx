@@ -137,7 +137,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("applications");
+  const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -748,20 +748,23 @@ const AdminLoans = () => {
     );
   };
 
-  // Filter loans based on active tab
+  // Filter loans based on active tab - Only show actual disbursed loans, not applications
   const getFilteredLoans = () => {
     let filtered = loans || [];
 
-    // Tab-based filtering
-    if (activeTab === "applications") {
-      filtered = filtered.filter(l => ["pending", "under_review", "approved", "rejected"].includes(l.status));
-    } else if (activeTab === "active") {
+    // Always exclude application statuses (pending, under_review, approved, rejected)
+    // Only show actual disbursed loans
+    filtered = filtered.filter(l => !["pending", "under_review", "approved", "rejected"].includes(l.status));
+
+    // Tab-based filtering within actual loans
+    if (activeTab === "active") {
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
       filtered = filtered.filter(l => l.status === "completed");
     } else if (activeTab === "defaulted") {
       filtered = filtered.filter(l => l.status === "defaulted");
     }
+    // No else needed - "all" tab will show all disbursed loans (active, completed, defaulted)
 
     // Status filter within tab
     if (statusFilter !== "all") {
@@ -783,9 +786,7 @@ const AdminLoans = () => {
   const filteredLoans = getFilteredLoans();
 
   const stats = {
-    total: loans?.length || 0,
-    pending: loans?.filter(l => l.status === "pending").length || 0,
-    approved: loans?.filter(l => l.status === "approved").length || 0,
+    total: loans?.filter(l => ["active", "disbursed", "completed", "defaulted"].includes(l.status)).length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
     completed: loans?.filter(l => l.status === "completed").length || 0,
     defaulted: loans?.filter(l => l.status === "defaulted").length || 0,
@@ -981,7 +982,7 @@ const AdminLoans = () => {
                           <TableCell>
                             <div>
                               <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
-                              {(processingFee > 0 || legalFee > 0) && (
+                              {(processingFee > 0 || legalFee > 0) && ['disbursed', 'active', 'completed', 'defaulted'].includes(loan.status) && (
                                 <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
                               )}
                             </div>

@@ -12,6 +12,7 @@ import GuidedTour from "@/components/common/GuidedTour";
 import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStatusTracker";
 import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import QuickApply from "@/components/dashboard/QuickApply";
+import WalletWidget from "@/components/dashboard/WalletWidget";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -355,15 +356,20 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {/* Quick Actions - Use QuickApply for logged-in users */}
-          <div className="mb-8 tour-apply">
-            {user && profile && (
-              <QuickApply 
-                userId={user.id} 
-                profile={profile}
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
-              />
-            )}
+          {/* Quick Actions and Wallet - Use QuickApply for logged-in users */}
+          <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="tour-apply">
+              {user && profile && (
+                <QuickApply 
+                  userId={user.id} 
+                  profile={profile}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
+                />
+              )}
+            </div>
+            <div className="tour-wallet">
+              {user && <WalletWidget />}
+            </div>
           </div>
 
           {/* Loan Tabs */}

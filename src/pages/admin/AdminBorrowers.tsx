@@ -321,6 +321,7 @@ const AdminBorrowers = () => {
     borrower.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     borrower.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     borrower.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

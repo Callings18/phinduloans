@@ -100,6 +100,7 @@ const AdminApplications = () => {
   const [isDisburseOpen, setIsDisburseOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectionCategory, setRejectionCategory] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [runTour, setRunTour] = useState(false);
   const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
@@ -373,6 +374,15 @@ const AdminApplications = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      
+      // Show contract reminder for approved loans
+      if (variables.status === 'approved') {
+        toast({
+          title: "Application Approved",
+          description: "Don't forget to generate and send the loan contract to the borrower.",
+          duration: 5000,
+        });
+      }
 
       // Trigger SMS notification
       if (variables.status === 'approved' && selectedApp) {
@@ -612,17 +622,22 @@ const AdminApplications = () => {
   };
 
   const handleReject = async () => {
-    if (!selectedApp || !rejectionReason) {
-      toast({ title: "Please provide a rejection reason", variant: "destructive" });
+    if (!selectedApp || !rejectionCategory) {
+      toast({ title: "Please select a rejection reason", variant: "destructive" });
       return;
     }
     setIsProcessing(true);
+    const fullReason = rejectionReason 
+      ? `${rejectionCategory}: ${rejectionReason}`
+      : rejectionCategory;
     await updateStatusMutation.mutateAsync({
       id: selectedApp.id,
       status: 'rejected',
-      reason: rejectionReason,
+      reason: fullReason,
     });
     setIsProcessing(false);
+    setRejectionCategory("");
+    setRejectionReason("");
   };
 
   const handleCreateLoan = () => {
@@ -1527,10 +1542,20 @@ const AdminApplications = () => {
 
                 {/* Loan Details */}
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-foreground flex items-center gap-2">
-                    <CreditCard size={18} />
-                    Loan Details
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-foreground flex items-center gap-2">
+                      <CreditCard size={18} />
+                      Loan Details
+                    </h4>
+                    {selectedApp.loan_product_id && (() => {
+                      const product = loanProducts?.find(p => p.id === selectedApp.loan_product_id);
+                      return product ? (
+                        <Badge variant="outline" className="text-xs">
+                          {product.name}
+                        </Badge>
+                      ) : null;
+                    })()}
+                  </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground">Loan Amount</p>
@@ -1712,11 +1737,32 @@ const AdminApplications = () => {
                         <CardContent className="p-4 space-y-4">
                           <h4 className="font-semibold text-foreground">Review Application</h4>
                           <div className="space-y-2">
-                            <Label>Rejection Reason (if rejecting)</Label>
+                            <Label>Rejection Reason *</Label>
+                            <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select rejection reason" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
+                                <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
+                                <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
+                                <SelectItem value="High Debt-to-Income Ratio">High Debt-to-Income Ratio</SelectItem>
+                                <SelectItem value="Unstable Employment">Unstable Employment</SelectItem>
+                                <SelectItem value="Failed CRB Check">Failed CRB Check</SelectItem>
+                                <SelectItem value="Insufficient Collateral">Insufficient Collateral</SelectItem>
+                                <SelectItem value="Age Requirement Not Met">Age Requirement Not Met</SelectItem>
+                                <SelectItem value="Duplicate Application">Duplicate Application</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Additional Details (Optional)</Label>
                             <Textarea
-                              placeholder="Enter reason for rejection..."
+                              placeholder="Add more context or specific details..."
                               value={rejectionReason}
                               onChange={(e) => setRejectionReason(e.target.value)}
+                              rows={3}
                             />
                           </div>
                           <div className="flex gap-2">

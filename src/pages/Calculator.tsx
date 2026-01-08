@@ -158,24 +158,67 @@ const Calculator = () => {
 
                 {/* Results */}
                 <div className="mt-10 space-y-4">
-                  <div className="p-6 rounded-2xl bg-secondary/50 border border-border">
+                  <div className="p-6 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30">
                     <p className="text-muted-foreground text-sm mb-1">Monthly Payment</p>
                     <p className="text-4xl font-bold text-gradient">
                       K{monthlyPayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
 
+                  {/* Fees Breakdown */}
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
+                    <p className="text-sm font-semibold text-foreground mb-3">Fees & Charges Breakdown</p>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Principal Amount:</span>
+                        <span className="font-medium">K{loanAmount.toLocaleString()}</span>
+                      </div>
+                      {calculation.processingFee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent}%):</span>
+                          <span className="font-medium">K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {calculation.insurance > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Insurance ({selectedProduct?.insurance_percent}%):</span>
+                          <span className="font-medium">K{calculation.insurance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {calculation.vat > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent}%):</span>
+                          <span className="font-medium">K{calculation.vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {calculation.platformFee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Platform Fee ({selectedProduct?.platform_fee_percent}%):</span>
+                          <span className="font-medium">K{calculation.platformFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-2 border-t border-border">
+                        <span className="text-muted-foreground">Total Interest:</span>
+                        <span className="font-medium text-warning">K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
+                        <span>Total Repayment:</span>
+                        <span className="text-primary">K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-                      <p className="text-muted-foreground text-xs mb-1">Total Interest</p>
-                      <p className="text-xl font-semibold text-foreground">
-                        K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="p-4 rounded-xl bg-success/10 border border-success/30">
+                      <p className="text-muted-foreground text-xs mb-1">You'll Receive</p>
+                      <p className="text-lg font-semibold text-success">
+                        K{(loanAmount - calculation.processingFee - calculation.insurance - calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
-                    <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-                      <p className="text-muted-foreground text-xs mb-1">Total Repayment</p>
-                      <p className="text-xl font-semibold text-foreground">
-                        K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="p-4 rounded-xl bg-info/10 border border-info/30">
+                      <p className="text-muted-foreground text-xs mb-1">Interest Rate</p>
+                      <p className="text-lg font-semibold text-info">
+                        {selectedProduct?.interest_rate || 15}% {selectedProduct?.interest_type || 'flat'}
                       </p>
                     </div>
                   </div>
@@ -191,35 +234,71 @@ const Calculator = () => {
 
               {/* Repayment Schedule */}
               <div className="glass rounded-3xl p-8">
-                <h2 className="text-xl font-semibold text-foreground mb-6">Repayment Schedule</h2>
+                <h2 className="text-xl font-semibold text-foreground mb-6">
+                  Amortization Schedule
+                </h2>
 
-                <div className="overflow-auto max-h-[500px]">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-card">
+                <div className="overflow-auto max-h-[500px] scrollbar-thin">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-card z-10">
                       <tr className="border-b border-border">
-                        <th className="text-left py-3 px-2 text-muted-foreground text-sm font-medium">Month</th>
-                        <th className="text-right py-3 px-2 text-muted-foreground text-sm font-medium">Payment</th>
-                        <th className="text-right py-3 px-2 text-muted-foreground text-sm font-medium">Balance</th>
+                        <th className="text-left py-3 px-2 text-muted-foreground text-xs font-medium">#</th>
+                        <th className="text-right py-3 px-2 text-muted-foreground text-xs font-medium">Principal</th>
+                        <th className="text-right py-3 px-2 text-muted-foreground text-xs font-medium">Interest</th>
+                        <th className="text-right py-3 px-2 text-muted-foreground text-xs font-medium">Payment</th>
+                        <th className="text-right py-3 px-2 text-muted-foreground text-xs font-medium">Balance</th>
                       </tr>
                     </thead>
                     <tbody>
                       {generateSchedule().map((row) => (
-                        <tr key={row.month} className="border-b border-border/50">
-                          <td className="py-3 px-2 text-foreground">{row.month}</td>
-                          <td className="py-3 px-2 text-right text-foreground">K{row.payment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="py-3 px-2 text-right text-muted-foreground">K{row.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <tr key={row.month} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                          <td className="py-3 px-2 text-foreground font-medium">{row.month}</td>
+                          <td className="py-3 px-2 text-right text-success">
+                            K{row.principal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-2 text-right text-warning">
+                            K{row.interest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-2 text-right text-foreground font-semibold">
+                            K{row.payment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-2 text-right text-muted-foreground">
+                            K{row.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                <div className="mt-6 p-4 rounded-xl bg-secondary/30 border border-border flex items-start gap-3">
-                  <Info className="text-primary mt-0.5" size={20} />
-                  <p className="text-muted-foreground text-sm">
-                    This is a representative example for <strong>{selectedProduct?.name || 'Standard Loan'}</strong>. Actual rates may vary based on your credit profile and employment status.
-                    Interest rate: {selectedProduct?.interest_rate || 15}% {selectedProduct?.interest_type || 'flat'} {getInterestPeriodLabel(selectedProduct?.interest_period as any)}.
-                  </p>
+                <div className="mt-6 space-y-3">
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-lg bg-success/10 border border-success/30">
+                      <p className="text-muted-foreground mb-1">Total Principal</p>
+                      <p className="font-semibold text-success">K{loanAmount.toLocaleString()}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
+                      <p className="text-muted-foreground mb-1">Total Interest</p>
+                      <p className="font-semibold text-warning">K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
+                      <p className="text-muted-foreground mb-1">Total Cost</p>
+                      <p className="font-semibold text-primary">K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-border flex items-start gap-3">
+                    <Info className="text-primary mt-0.5 flex-shrink-0" size={20} />
+                    <div className="text-xs text-muted-foreground">
+                      <p className="mb-2">
+                        This is a representative example for <strong>{selectedProduct?.name || 'Standard Loan'}</strong>. Actual rates may vary based on your credit profile and employment status.
+                      </p>
+                      <p>
+                        Interest: {selectedProduct?.interest_rate || 15}% {selectedProduct?.interest_type || 'flat'} {getInterestPeriodLabel(selectedProduct?.interest_period as any)}
+                        {selectedProduct?.grace_period_days > 0 && ` • Grace period: ${selectedProduct.grace_period_days} days`}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

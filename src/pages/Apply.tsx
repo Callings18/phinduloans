@@ -1278,7 +1278,8 @@ const Apply = () => {
                     )}
                   </div>
 
-                  {/* Latest 3 Months Payslips */}
+                  {/* Latest 3 Months Payslips - Not required for Business and Personal loans */}
+                  {selectedProduct && !selectedProduct.name?.toLowerCase().includes('business') && !selectedProduct.name?.toLowerCase().includes('personal') && (
                   <div className="pt-6 border-t border-border">
                     <h3 className="text-sm font-medium text-muted-foreground mb-4">Latest Payslips (3 Months) *</h3>
                     <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
@@ -1327,6 +1328,7 @@ const Apply = () => {
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">* At least the latest month's payslip is required</p>
                   </div>
+                  )}
 
                   {/* Collateral Details - still manual if needed */}
                   {selectedProduct?.collateral_required && (

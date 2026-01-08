@@ -90,6 +90,10 @@ const AdminRepayments = () => {
     transaction_reference: "",
     amount: "",
   });
+  const [isSplitPayment, setIsSplitPayment] = useState(false);
+  const [splitPayments, setSplitPayments] = useState<Array<{ method: string; amount: string; reference: string }>>([
+    { method: "mobile_money", amount: "", reference: "" },
+  ]);
 
   const queryClient = useQueryClient();
   const [selectedRepayments, setSelectedRepayments] = useState<string[]>([]);
@@ -253,18 +257,74 @@ const AdminRepayments = () => {
     }
   };
 
-  const submitPayment = (e: React.FormEvent) => {
+  const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRepayment) return;
 
-    const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
+    if (isSplitPayment) {
+      // Validate split payments
+      const validSplits = splitPayments.filter(sp => sp.amount && parseFloat(sp.amount) > 0);
+      if (validSplits.length === 0) {
+        toast.error("Please enter at least one valid payment amount");
+        return;
+      }
 
-    recordPaymentMutation.mutate({
-      repaymentId: selectedRepayment.id,
-      paymentMethod: paymentData.payment_method,
-      transactionRef: paymentData.transaction_reference,
-      paidAmount,
-    });
+      const totalSplitAmount = validSplits.reduce((sum, sp) => sum + parseFloat(sp.amount), 0);
+      
+      // Record the payment with split info
+      recordPaymentMutation.mutate({
+        repaymentId: selectedRepayment.id,
+        paymentMethod: "split", // Special indicator for split payment
+        transactionRef: `SPLIT-${Date.now()}`,
+        paidAmount: totalSplitAmount,
+      });
+
+      // Store split payment details
+      const repayment = repayments?.find(r => r.id === selectedRepayment.id);
+      if (repayment) {
+        for (const split of validSplits) {
+          await supabase.from("payment_splits").insert({
+            repayment_id: selectedRepayment.id,
+            split_number: validSplits.indexOf(split) + 1,
+            amount: parseFloat(split.amount),
+            payment_method: split.method,
+            transaction_reference: split.reference || null,
+            status: "completed",
+            notes: `Split payment ${validSplits.indexOf(split) + 1} of ${validSplits.length}`,
+          });
+        }
+      }
+    } else {
+      // Single payment method
+      const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
+
+      recordPaymentMutation.mutate({
+        repaymentId: selectedRepayment.id,
+        paymentMethod: paymentData.payment_method,
+        transactionRef: paymentData.transaction_reference,
+        paidAmount,
+      });
+    }
+  };
+
+  const addSplitPayment = () => {
+    setSplitPayments([...splitPayments, { method: "mobile_money", amount: "", reference: "" }]);
+  };
+
+  const removeSplitPayment = (index: number) => {
+    if (splitPayments.length > 1) {
+      setSplitPayments(splitPayments.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateSplitPayment = (index: number, field: string, value: string) => {
+    const updated = [...splitPayments];
+    updated[index] = { ...updated[index], [field]: value };
+    setSplitPayments(updated);
+  };
+
+  const getTotalSplitAmount = () => {
+    return splitPayments.reduce((sum, sp) => sum + (parseFloat(sp.amount) || 0), 0);
   };
 
   const getStatusInfo = (repayment: Repayment) => {
@@ -684,24 +744,47 @@ const AdminRepayments = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Payment Amount *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    max={selectedRepayment.amount}
-                    value={paymentData.amount}
-                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                    placeholder={`Full amount: K${Number(selectedRepayment.amount).toLocaleString()}`}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter amount received. Leave empty to record full payment of K{Number(selectedRepayment.amount).toLocaleString()}
-                  </p>
+                {/* Split Payment Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border/50">
+                  <div>
+                    <Label className="font-medium">Split Payment</Label>
+                    <p className="text-xs text-muted-foreground">Accept multiple payment methods</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={isSplitPayment ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setIsSplitPayment(!isSplitPayment);
+                      if (!isSplitPayment) {
+                        setSplitPayments([{ method: "mobile_money", amount: "", reference: "" }]);
+                      }
+                    }}
+                  >
+                    {isSplitPayment ? "Enabled" : "Disabled"}
+                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Payment Method *</Label>
+                {!isSplitPayment ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Payment Amount *</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="1"
+                        max={selectedRepayment.amount}
+                        value={paymentData.amount}
+                        onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                        placeholder={`Full amount: K${Number(selectedRepayment.amount).toLocaleString()}`}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter amount received. Leave empty to record full payment of K{Number(selectedRepayment.amount).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Payment Method *</Label>
                   <Select
                     value={paymentData.payment_method}
                     onValueChange={(value) => setPaymentData({ ...paymentData, payment_method: value })}
@@ -732,14 +815,107 @@ const AdminRepayments = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Transaction Reference (Optional)</Label>
-                  <Input
-                    value={paymentData.transaction_reference}
-                    onChange={(e) => setPaymentData({ ...paymentData, transaction_reference: e.target.value })}
-                    placeholder="Enter reference number"
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label>Transaction Reference (Optional)</Label>
+                      <Input
+                        value={paymentData.transaction_reference}
+                        onChange={(e) => setPaymentData({ ...paymentData, transaction_reference: e.target.value })}
+                        placeholder="Enter reference number"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Split Payment Inputs */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>Payment Methods</Label>
+                        <Button type="button" size="sm" variant="outline" onClick={addSplitPayment}>
+                          <Plus size={14} className="mr-1" />
+                          Add Method
+                        </Button>
+                      </div>
+
+                      {splitPayments.map((split, index) => (
+                        <div key={index} className="p-3 rounded-lg border border-border/50 space-y-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">Payment {index + 1}</span>
+                            {splitPayments.length > 1 && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeSplitPayment(index)}
+                              >
+                                <XCircle size={14} />
+                              </Button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs">Method</Label>
+                              <Select
+                                value={split.method}
+                                onValueChange={(value) => updateSplitPayment(index, "method", value)}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                  <SelectItem value="cash">Cash</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div>
+                              <Label className="text-xs">Amount (ZMW)</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={split.amount}
+                                onChange={(e) => updateSplitPayment(index, "amount", e.target.value)}
+                                placeholder="0.00"
+                                className="h-9"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label className="text-xs">Reference (Optional)</Label>
+                            <Input
+                              value={split.reference}
+                              onChange={(e) => updateSplitPayment(index, "reference", e.target.value)}
+                              placeholder="Transaction ref"
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Split Payment Summary */}
+                      <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Total Split Amount:</span>
+                          <span className="text-lg font-bold text-primary">K{getTotalSplitAmount().toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center mt-1 text-xs">
+                          <span className="text-muted-foreground">Amount Due:</span>
+                          <span>K{Number(selectedRepayment.amount).toLocaleString()}</span>
+                        </div>
+                        {getTotalSplitAmount() < Number(selectedRepayment.amount) && (
+                          <div className="flex justify-between items-center mt-1 text-xs text-warning">
+                            <span>Remaining:</span>
+                            <span>K{(Number(selectedRepayment.amount) - getTotalSplitAmount()).toLocaleString()}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex gap-3 pt-4">
                   <Button

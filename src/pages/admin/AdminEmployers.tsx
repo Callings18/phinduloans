@@ -400,9 +400,9 @@ const AdminEmployers = () => {
           <Card className="border-border/50 bg-card/50">
             <CardContent className="py-12 text-center">
               <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No employers found</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-2">No employees found</h3>
               <p className="text-muted-foreground">
-                {searchTerm ? "Try adjusting your search" : "Add your first employer to get started"}
+                {searchTerm ? "Try adjusting your search" : "Add your first employee to get started"}
               </p>
             </CardContent>
           </Card>
