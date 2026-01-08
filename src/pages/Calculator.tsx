@@ -179,16 +179,16 @@ const Calculator = () => {
                           <span className="font-medium">K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
-                      {calculation.insurance > 0 && (
+                      {calculation.insuranceFee > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Insurance ({selectedProduct?.insurance_percent}%):</span>
-                          <span className="font-medium">K{calculation.insurance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium">K{calculation.insuranceFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
-                      {calculation.vat > 0 && (
+                      {calculation.vatAmount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent}%):</span>
-                          <span className="font-medium">K{calculation.vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium">K{calculation.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
                       {calculation.platformFee > 0 && (
@@ -212,7 +212,7 @@ const Calculator = () => {
                     <div className="p-4 rounded-xl bg-success/10 border border-success/30">
                       <p className="text-muted-foreground text-xs mb-1">You'll Receive</p>
                       <p className="text-lg font-semibold text-success">
-                        K{(loanAmount - calculation.processingFee - calculation.insurance - calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        K{(loanAmount - calculation.processingFee - calculation.insuranceFee - calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="p-4 rounded-xl bg-info/10 border border-info/30">

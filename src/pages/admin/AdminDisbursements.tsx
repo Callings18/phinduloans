@@ -39,6 +39,7 @@ import {
   Loader2,
   Send,
   RefreshCw,
+  Smartphone,
 } from "lucide-react";
 
 interface Disbursement {
@@ -167,10 +168,11 @@ const AdminDisbursements = () => {
         account_id: formData.source_account_id,
         transaction_type: "disbursement",
         amount: disbursementAmount,
+        balance_before: sourceAccount.balance,
         balance_after: sourceAccount.balance - disbursementAmount,
         reference_type: "loan_disbursement",
         reference_id: selectedLoan,
-        description: `Loan disbursement to ${loan.full_name}`,
+        notes: `Loan disbursement to ${loan.full_name}`,
       });
     },
     onSuccess: () => {

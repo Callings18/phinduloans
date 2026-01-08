@@ -787,6 +787,8 @@ const AdminLoans = () => {
 
   const stats = {
     total: loans?.filter(l => ["active", "disbursed", "completed", "defaulted"].includes(l.status)).length || 0,
+    pending: loans?.filter(l => l.status === "pending").length || 0,
+    approved: loans?.filter(l => l.status === "approved").length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
     completed: loans?.filter(l => l.status === "completed").length || 0,
     defaulted: loans?.filter(l => l.status === "defaulted").length || 0,
