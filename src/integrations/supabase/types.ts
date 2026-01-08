@@ -284,6 +284,131 @@ export type Database = {
           },
         ]
       }
+      court_case_events: {
+        Row: {
+          court_case_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          documents_url: string | null
+          event_date: string
+          event_type: string
+          id: string
+          next_action: string | null
+          next_action_date: string | null
+          outcome: string | null
+        }
+        Insert: {
+          court_case_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          documents_url?: string | null
+          event_date?: string
+          event_type: string
+          id?: string
+          next_action?: string | null
+          next_action_date?: string | null
+          outcome?: string | null
+        }
+        Update: {
+          court_case_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          documents_url?: string | null
+          event_date?: string
+          event_type?: string
+          id?: string
+          next_action?: string | null
+          next_action_date?: string | null
+          outcome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_case_events_court_case_id_fkey"
+            columns: ["court_case_id"]
+            isOneToOne: false
+            referencedRelation: "court_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      court_cases: {
+        Row: {
+          assigned_lawyer: string | null
+          case_number: string | null
+          case_type: string
+          court_name: string | null
+          created_at: string
+          created_by: string | null
+          filing_date: string | null
+          hearing_date: string | null
+          id: string
+          judgment_amount: number | null
+          judgment_date: string | null
+          lawyer_contact: string | null
+          legal_fees: number | null
+          loan_id: string
+          notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_lawyer?: string | null
+          case_number?: string | null
+          case_type?: string
+          court_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          filing_date?: string | null
+          hearing_date?: string | null
+          id?: string
+          judgment_amount?: number | null
+          judgment_date?: string | null
+          lawyer_contact?: string | null
+          legal_fees?: number | null
+          loan_id: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_lawyer?: string | null
+          case_number?: string | null
+          case_type?: string
+          court_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          filing_date?: string | null
+          hearing_date?: string | null
+          id?: string
+          judgment_amount?: number | null
+          judgment_date?: string | null
+          lawyer_contact?: string | null
+          legal_fees?: number | null
+          loan_id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_cases_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "court_cases_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       crb_requests: {
         Row: {
           blacklist_flag: boolean | null
@@ -1433,6 +1558,54 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_splits: {
+        Row: {
+          account_id: string | null
+          amount: number
+          created_at: string
+          id: string
+          notes: string | null
+          payment_method: string
+          repayment_id: string
+          transaction_reference: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          amount: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method: string
+          repayment_id: string
+          transaction_reference?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string
+          repayment_id?: string
+          transaction_reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_splits_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_splits_repayment_id_fkey"
+            columns: ["repayment_id"]
+            isOneToOne: false
+            referencedRelation: "loan_repayments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pmic_borrower_enrollments: {
         Row: {
           available_deduction_capacity: number | null
@@ -1763,6 +1936,42 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth_key: string
+          created_at: string
+          device_info: Json | null
+          endpoint: string
+          id: string
+          is_active: boolean | null
+          p256dh_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string
+          device_info?: Json | null
+          endpoint: string
+          id?: string
+          is_active?: boolean | null
+          p256dh_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string
+          device_info?: Json | null
+          endpoint?: string
+          id?: string
+          is_active?: boolean | null
+          p256dh_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       risk_assessments: {
         Row: {
           admin_notes: string | null
@@ -1867,6 +2076,89 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      wallet_accounts: {
+        Row: {
+          account_type: string
+          balance: number
+          created_at: string
+          currency: string
+          id: string
+          is_active: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_type?: string
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_type?: string
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallet_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          balance_before: number
+          created_at: string
+          description: string | null
+          id: string
+          reference_id: string | null
+          reference_type: string | null
+          status: string | null
+          transaction_type: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          balance_before: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          status?: string | null
+          transaction_type: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          balance_before?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          status?: string | null
+          transaction_type?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallet_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
