@@ -55,9 +55,9 @@ const AdminSettings = () => {
   });
 
   const [companyInfo, setCompanyInfo] = useState({
-    name: "LoanSphere Microfinance",
+    name: "Phindu Loans",
     address: "Lusaka, Zambia",
-    support_email: "support@loansphere.com",
+    support_email: "support@phindu.co.zm",
     support_phone: "+260 967 713 001",
     tax_id: ""
   });

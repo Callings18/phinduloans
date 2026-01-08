@@ -8,6 +8,7 @@ import { ArrowRight, Info, Package, Loader2, Scale } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { calculateLoan, generateRepaymentSchedule, LoanProduct as LoanProductCalc, getInterestPeriodLabel } from "@/utils/loanCalculations";
 import LoanComparison from "@/components/common/LoanComparison";
 
 const Calculator = () => {
@@ -28,26 +29,39 @@ const Calculator = () => {
   });
 
   const selectedProduct = products?.find(p => p.id === selectedProductId) || products?.[0];
-  const interestRate = (selectedProduct?.interest_rate || 15) / 100;
 
-  // Monthly payment calculation (Flat rate typical for many Zambian micro-lenders)
-  const monthlyPayment = (loanAmount * (1 + interestRate * (loanTerm / 12))) / loanTerm;
-  const totalPayment = monthlyPayment * loanTerm;
-  const totalInterest = totalPayment - loanAmount;
+  // Build product config for calculations
+  const productForCalc: LoanProductCalc = selectedProduct
+    ? {
+      interest_rate: selectedProduct.interest_rate,
+      interest_period: selectedProduct.interest_period as any,
+      interest_type: selectedProduct.interest_type as any,
+      processing_fee_percent: selectedProduct.processing_fee_percent,
+      insurance_percent: selectedProduct.insurance_percent,
+      vat_percent: selectedProduct.vat_percent,
+      platform_fee_percent: selectedProduct.platform_fee_percent,
+      late_payment_penalty_percent: selectedProduct.late_payment_penalty_percent,
+      penalty_frequency: selectedProduct.penalty_frequency as any,
+      grace_period_days: selectedProduct.grace_period_days,
+      early_repayment_fee_percent: selectedProduct.early_repayment_fee_percent,
+    }
+    : { interest_rate: 15, interest_period: 'monthly', interest_type: 'flat' };
+
+  // Use the unified calculation utility
+  const calculation = calculateLoan(loanAmount, loanTerm, productForCalc);
+  const monthlyPayment = calculation.monthlyPayment;
+  const totalPayment = calculation.totalRepayment;
+  const totalInterest = calculation.totalInterest;
 
   const generateSchedule = () => {
-    const schedule = [];
-    let balance = totalPayment;
-
-    for (let month = 1; month <= loanTerm; month++) {
-      balance -= monthlyPayment;
-      schedule.push({
-        month,
-        payment: monthlyPayment,
-        balance: Math.max(0, balance),
-      });
-    }
-    return schedule;
+    const schedule = generateRepaymentSchedule(loanAmount, loanTerm, productForCalc, new Date());
+    return schedule.map((item) => ({
+      month: item.installmentNumber,
+      payment: item.totalPayment,
+      balance: item.remainingBalance,
+      principal: item.principal,
+      interest: item.interest,
+    }));
   };
 
   return (
@@ -204,7 +218,7 @@ const Calculator = () => {
                   <Info className="text-primary mt-0.5" size={20} />
                   <p className="text-muted-foreground text-sm">
                     This is a representative example for <strong>{selectedProduct?.name || 'Standard Loan'}</strong>. Actual rates may vary based on your credit profile and employment status.
-                    Interest rate: {selectedProduct?.interest_rate || 15}% flat rate per annum (calculated monthly).
+                    Interest rate: {selectedProduct?.interest_rate || 15}% {selectedProduct?.interest_type || 'flat'} {getInterestPeriodLabel(selectedProduct?.interest_period as any)}.
                   </p>
                 </div>
               </div>

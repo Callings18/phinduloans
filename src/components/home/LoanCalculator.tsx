@@ -197,12 +197,14 @@ const LoanCalculator = () => {
                   <h3 className="font-bold text-foreground text-lg">Loan Summary</h3>
                   
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Service Fee</span>
-                      <span className="font-semibold text-foreground">
-                        K{serviceFee.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
+                    {serviceFee > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Service Fee (deducted)</span>
+                        <span className="font-semibold text-foreground">
+                          K{serviceFee.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
                     
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Amount You Receive</span>
@@ -210,11 +212,25 @@ const LoanCalculator = () => {
                         K{calculation.disbursementAmount.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total Interest ({selectedProduct?.interest_rate || 15}% {selectedProduct?.interest_period || 'monthly'})</span>
+                      <span className="font-semibold text-primary">
+                        K{calculation.totalInterest.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
                     
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Monthly Repayment</span>
                       <span className="font-semibold text-foreground">
                         K{calculation.monthlyPayment.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center border-t border-border pt-3 mt-2">
+                      <span className="text-muted-foreground font-medium">Total Repayment</span>
+                      <span className="font-bold text-foreground text-lg">
+                        K{calculation.totalRepayment.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     

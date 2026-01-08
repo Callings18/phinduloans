@@ -94,23 +94,37 @@ const Profile = () => {
         enabled: !!user?.id,
     });
 
-    // Fetch user's documents from applications
-    const { data: documents } = useQuery({
-        queryKey: ['user-documents', user?.id],
-        queryFn: async () => {
-            if (!user?.id) return [];
-            // @ts-expect-error - Table exists after migrations
-            const { data, error } = await supabase
-                .from('loan_application_documents')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+  // Fetch user's documents from past applications
+  const { data: documents } = useQuery({
+    queryKey: ['user-documents', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      // Get documents from past loan applications
+      const { data, error } = await supabase
+        .from('loan_applications')
+        .select('id, nrc_front_url, nrc_back_url, selfie_url, payslip_url, bank_statement_url, employer_letter_url, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-            if (error) throw error;
-            return data || [];
-        },
-        enabled: !!user?.id,
-    });
+      if (error) throw error;
+      
+      // Transform to document list format
+      if (data && data[0]) {
+        const app = data[0];
+        const docs: any[] = [];
+        if (app.nrc_front_url) docs.push({ document_type: 'NRC Front', file_url: app.nrc_front_url, created_at: app.created_at });
+        if (app.nrc_back_url) docs.push({ document_type: 'NRC Back', file_url: app.nrc_back_url, created_at: app.created_at });
+        if (app.selfie_url) docs.push({ document_type: 'Selfie', file_url: app.selfie_url, created_at: app.created_at });
+        if (app.payslip_url) docs.push({ document_type: 'Payslip', file_url: app.payslip_url, created_at: app.created_at });
+        if (app.bank_statement_url) docs.push({ document_type: 'Bank Statement', file_url: app.bank_statement_url, created_at: app.created_at });
+        if (app.employer_letter_url) docs.push({ document_type: 'Employer Letter', file_url: app.employer_letter_url, created_at: app.created_at });
+        return docs;
+      }
+      return [];
+    },
+    enabled: !!user?.id,
+  });
 
     // Fetch loan applications summary
     const { data: applicationsSummary } = useQuery({
