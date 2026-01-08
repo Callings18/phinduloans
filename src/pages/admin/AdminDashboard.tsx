@@ -75,11 +75,12 @@ const AdminDashboard = () => {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const [applications, profiles, disbursements, repayments] = await Promise.all([
+      const [applications, profiles, disbursements, repayments, accounts] = await Promise.all([
         supabase.from('loan_applications').select('*').order('created_at', { ascending: false }),
         supabase.from('profiles').select('id'),
         supabase.from('disbursements').select('*').eq('status', 'completed'),
         supabase.from('loan_repayments').select('*'),
+        supabase.from('accounts').select('balance, is_active'),
       ]);
 
       const loans = applications.data || [];
@@ -113,20 +114,15 @@ const AdminDashboard = () => {
       const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
       const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
-      // Get funding pool from system settings
-      const { data: fundingPoolSetting } = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'funding_pool')
-        .single();
-      
-      const fundingPool = fundingPoolSetting?.value as number || 500000; // Default 500k
+      // Capital pool from active accounts (real balances)
+      const accountBalances = (accounts.data || []).filter(a => a.is_active !== false);
+      const totalCapitalPool = accountBalances.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
       const outstandingPrincipal = activeLoans.reduce((sum, l) => {
         const paidForLoan = allRepayments.filter(r => r.loan_id === l.id && r.status === 'paid')
           .reduce((s, r) => s + Number(r.principal_paid || 0), 0);
         return sum + (Number(l.loan_amount || 0) - paidForLoan);
       }, 0);
-      const availableBalance = Math.max(0, fundingPool - outstandingPrincipal);
+      const availableBalance = Math.max(0, totalCapitalPool - outstandingPrincipal);
 
       return {
         totalApplications: loans.length,
@@ -147,7 +143,7 @@ const AdminDashboard = () => {
         overdueCount: overdueRepayments.length,
         recentApplications: loans.slice(0, 6),
         availableBalance,
-        fundingPool,
+        totalCapitalPool,
       };
     },
   });
@@ -363,7 +359,9 @@ const AdminDashboard = () => {
                 Available Balance
               </p>
               <p className="text-2xl font-bold text-primary">K{(stats?.availableBalance || 0).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground mt-1">of K{(stats?.fundingPool || 0).toLocaleString()} pool</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                of K{(stats?.totalCapitalPool || 0).toLocaleString()} across all active accounts
+              </p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card/80">
