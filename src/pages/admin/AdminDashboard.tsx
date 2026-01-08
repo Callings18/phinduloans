@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import GuidedTour from "@/components/common/GuidedTour";
 import QuickActions from "@/components/admin/QuickActions";
 import ModuleWidgets from "@/components/admin/ModuleWidgets";
+import CapitalPoolWidget from "@/components/dashboard/CapitalPoolWidget";
 import { Step } from "react-joyride";
 import {
   DropdownMenu,
@@ -253,6 +254,15 @@ const AdminDashboard = () => {
 
         {/* Quick Actions */}
         <QuickActions />
+
+        {/* Capital Pool Widget - Show available funds */}
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Wallet size={18} className="text-primary" />
+            Available Capital Pool
+          </h2>
+          <CapitalPoolWidget />
+        </div>
 
         {/* Module Widgets - Action Required */}
         <div>

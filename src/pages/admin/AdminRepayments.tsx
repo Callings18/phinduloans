@@ -89,14 +89,30 @@ const AdminRepayments = () => {
     payment_method: "mobile_money",
     transaction_reference: "",
     amount: "",
+    destination_account_id: "", // NEW: Which account to deposit to
   });
   const [isSplitPayment, setIsSplitPayment] = useState(false);
-  const [splitPayments, setSplitPayments] = useState<Array<{ method: string; amount: string; reference: string }>>([
-    { method: "mobile_money", amount: "", reference: "" },
+  const [splitPayments, setSplitPayments] = useState<Array<{ method: string; amount: string; reference: string; destination_account_id: string }>>([
+    { method: "mobile_money", amount: "", reference: "", destination_account_id: "" },
   ]);
 
   const queryClient = useQueryClient();
   const [selectedRepayments, setSelectedRepayments] = useState<string[]>([]);
+
+  // Fetch active accounts for deposit destination
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["active-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Fetch all repayments
   const { data: repayments, isLoading } = useQuery({
@@ -122,13 +138,21 @@ const AdminRepayments = () => {
 
   // Record payment mutation - supports partial payments
   const recordPaymentMutation = useMutation({
-    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number }) => {
+    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, destinationAccountId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; destinationAccountId: string }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
       if (!repayment) throw new Error("Repayment not found");
+
+      if (!destinationAccountId) {
+        throw new Error("Please select a destination account for the payment");
+      }
 
       const amountDue = Number(repayment.amount);
       const isFullPayment = paidAmount >= amountDue;
       const remainingAmount = amountDue - paidAmount;
+
+      // Get destination account
+      const destAccount = accounts.find(a => a.id === destinationAccountId);
+      if (!destAccount) throw new Error("Destination account not found");
 
       if (isFullPayment) {
         // Full payment - mark as paid
@@ -161,15 +185,37 @@ const AdminRepayments = () => {
         if (error) throw error;
       }
 
+      // Add payment to destination account balance
+      const newBalance = destAccount.balance + paidAmount;
+      const { error: accountError } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance })
+        .eq("id", destinationAccountId);
+
+      if (accountError) throw accountError;
+
+      // Record account transaction
+      await supabase.from("account_transactions").insert({
+        account_id: destinationAccountId,
+        transaction_type: "repayment",
+        amount: paidAmount,
+        balance_after: newBalance,
+        reference_type: "loan_repayment",
+        reference_id: repaymentId,
+        description: `Loan repayment from ${repayment.loan_applications?.full_name || 'borrower'}`,
+      });
+
       return { repayment, paidAmount, isFullPayment };
     },
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] }); // Refresh account balances
+      queryClient.invalidateQueries({ queryKey: ["accounts"] }); // Refresh all accounts
 
       if (isFullPayment) {
-        toast.success("Full payment recorded successfully");
+        toast.success("Full payment recorded and deposited to account");
       } else {
-        toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+        toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded and deposited`);
       }
 
       // Send SMS confirmation
@@ -200,7 +246,7 @@ const AdminRepayments = () => {
 
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
-      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "" });
+      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
@@ -271,12 +317,20 @@ const AdminRepayments = () => {
 
       const totalSplitAmount = validSplits.reduce((sum, sp) => sum + parseFloat(sp.amount), 0);
       
+      // For split payments, use the first split's destination account (or validate all have same destination)
+      const firstDestination = validSplits[0].destination_account_id;
+      if (!firstDestination) {
+        toast.error("Please select a destination account for at least one payment");
+        return;
+      }
+
       // Record the payment with split info
       recordPaymentMutation.mutate({
         repaymentId: selectedRepayment.id,
         paymentMethod: "split", // Special indicator for split payment
         transactionRef: `SPLIT-${Date.now()}`,
         paidAmount: totalSplitAmount,
+        destinationAccountId: firstDestination,
       });
 
       // Store split payment details
@@ -298,17 +352,23 @@ const AdminRepayments = () => {
       // Single payment method
       const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
 
+      if (!paymentData.destination_account_id) {
+        toast.error("Please select a destination account");
+        return;
+      }
+
       recordPaymentMutation.mutate({
         repaymentId: selectedRepayment.id,
         paymentMethod: paymentData.payment_method,
         transactionRef: paymentData.transaction_reference,
         paidAmount,
+        destinationAccountId: paymentData.destination_account_id,
       });
     }
   };
 
   const addSplitPayment = () => {
-    setSplitPayments([...splitPayments, { method: "mobile_money", amount: "", reference: "" }]);
+    setSplitPayments([...splitPayments, { method: "mobile_money", amount: "", reference: "", destination_account_id: "" }]);
   };
 
   const removeSplitPayment = (index: number) => {
@@ -757,7 +817,7 @@ const AdminRepayments = () => {
                     onClick={() => {
                       setIsSplitPayment(!isSplitPayment);
                       if (!isSplitPayment) {
-                        setSplitPayments([{ method: "mobile_money", amount: "", reference: "" }]);
+                        setSplitPayments([{ method: "mobile_money", amount: "", reference: "", destination_account_id: "" }]);
                       }
                     }}
                   >
@@ -783,37 +843,72 @@ const AdminRepayments = () => {
                       </p>
                     </div>
 
+                    {/* NEW: Destination Account Selection */}
+                    <div className="space-y-2">
+                      <Label>Deposit To Account *</Label>
+                      <Select
+                        value={paymentData.destination_account_id}
+                        onValueChange={(value) => setPaymentData({ ...paymentData, destination_account_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select account to deposit payment" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts.length === 0 ? (
+                            <SelectItem value="none" disabled>No active accounts available</SelectItem>
+                          ) : (
+                            accounts.map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                <div className="flex items-center gap-2">
+                                  {account.account_type === 'bank' && <Building size={14} />}
+                                  {account.account_type === 'mobile_money' && <Smartphone size={14} />}
+                                  {account.account_type === 'cash' && <Banknote size={14} />}
+                                  <span>{account.account_name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    (K{account.balance.toLocaleString()})
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Payment will be deposited to this account
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       <Label>Payment Method *</Label>
-                  <Select
-                    value={paymentData.payment_method}
-                    onValueChange={(value) => setPaymentData({ ...paymentData, payment_method: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mobile_money">
-                        <div className="flex items-center gap-2">
-                          <Phone size={14} />
-                          Mobile Money
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="bank_transfer">
-                        <div className="flex items-center gap-2">
-                          <Building size={14} />
-                          Bank Transfer
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="cash">
-                        <div className="flex items-center gap-2">
-                          <Banknote size={14} />
-                          Cash
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      <Select
+                        value={paymentData.payment_method}
+                        onValueChange={(value) => setPaymentData({ ...paymentData, payment_method: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mobile_money">
+                            <div className="flex items-center gap-2">
+                              <Phone size={14} />
+                              Mobile Money
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="bank_transfer">
+                            <div className="flex items-center gap-2">
+                              <Building size={14} />
+                              Bank Transfer
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="cash">
+                            <div className="flex items-center gap-2">
+                              <Banknote size={14} />
+                              Cash
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     <div className="space-y-2">
                       <Label>Transaction Reference (Optional)</Label>

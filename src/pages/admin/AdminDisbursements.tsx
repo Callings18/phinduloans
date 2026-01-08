@@ -69,6 +69,7 @@ const AdminDisbursements = () => {
     mobile_money_number: "",
     account_number: "",
     amount: "",
+    source_account_id: "", // NEW: Which account to disburse from
   });
 
   const queryClient = useQueryClient();
@@ -107,26 +108,77 @@ const AdminDisbursements = () => {
     },
   });
 
+  // Fetch active accounts for source selection
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["active-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const createDisbursementMutation = useMutation({
     mutationFn: async () => {
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
 
-      const { error } = await supabase.from("disbursements").insert({
+      if (!formData.source_account_id) {
+        throw new Error("Please select a source account for disbursement");
+      }
+
+      const disbursementAmount = Number(formData.amount) || loan.loan_amount;
+      
+      // Check account balance
+      const sourceAccount = accounts.find(a => a.id === formData.source_account_id);
+      if (!sourceAccount) throw new Error("Source account not found");
+      if (sourceAccount.balance < disbursementAmount) {
+        throw new Error(`Insufficient balance in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}`);
+      }
+
+      // Create disbursement record with source account
+      const { error: disbError } = await supabase.from("disbursements").insert({
         loan_id: selectedLoan,
-        amount: Number(formData.amount) || loan.loan_amount,
+        amount: disbursementAmount,
         disbursement_method: formData.disbursement_method,
         mobile_money_number: formData.disbursement_method === "mobile_money" ? formData.mobile_money_number : null,
         account_number: formData.disbursement_method === "bank_transfer" ? formData.account_number : null,
         status: "pending",
+        source_account_id: formData.source_account_id,
       });
 
-      if (error) throw error;
+      if (disbError) throw disbError;
+
+      // Deduct from source account balance
+      const { error: accountError } = await supabase
+        .from("accounts")
+        .update({ balance: sourceAccount.balance - disbursementAmount })
+        .eq("id", formData.source_account_id);
+
+      if (accountError) throw accountError;
+
+      // Record account transaction
+      await supabase.from("account_transactions").insert({
+        account_id: formData.source_account_id,
+        transaction_type: "disbursement",
+        amount: disbursementAmount,
+        balance_after: sourceAccount.balance - disbursementAmount,
+        reference_type: "loan_disbursement",
+        reference_id: selectedLoan,
+        description: `Loan disbursement to ${loan.full_name}`,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
       queryClient.invalidateQueries({ queryKey: ["approved-loans-for-disbursement"] });
-      toast.success("Disbursement created successfully");
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] }); // Refresh account balances
+      queryClient.invalidateQueries({ queryKey: ["accounts"] }); // Refresh all accounts
+      toast.success("Disbursement created and account balance updated");
       resetForm();
       setIsDialogOpen(false);
     },
@@ -177,6 +229,7 @@ const AdminDisbursements = () => {
       mobile_money_number: "",
       account_number: "",
       amount: "",
+      source_account_id: "",
     });
     setSelectedLoan("");
   };
@@ -267,6 +320,41 @@ const AdminDisbursements = () => {
                       )}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* NEW: Source Account Selection */}
+                <div className="space-y-2">
+                  <Label>Source Account (Disburse From) *</Label>
+                  <Select
+                    value={formData.source_account_id}
+                    onValueChange={(value) => setFormData({ ...formData, source_account_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account to withdraw from" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.length === 0 ? (
+                        <SelectItem value="none" disabled>No active accounts available</SelectItem>
+                      ) : (
+                        accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            <div className="flex items-center gap-2">
+                              {account.account_type === 'bank' && <Building size={14} />}
+                              {account.account_type === 'mobile_money' && <Smartphone size={14} />}
+                              {account.account_type === 'cash' && <Banknote size={14} />}
+                              <span>{account.account_name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                (K{account.balance.toLocaleString()})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Money will be withdrawn from this account
+                  </p>
                 </div>
 
                 <div className="space-y-2">
