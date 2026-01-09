@@ -27,6 +27,7 @@ import {
   Shield
 } from "lucide-react";
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
+import { BrevoSettings } from "@/components/admin/BrevoSettings";
 
 interface PaymentSettings {
   id: string;
@@ -260,6 +261,9 @@ const AdminSettings = () => {
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2">
               <BellRing size={16} /> Notifications
+            </TabsTrigger>
+            <TabsTrigger value="brevo" className="gap-2">
+              <BellRing size={16} /> Brevo
             </TabsTrigger>
             <TabsTrigger value="integrations" className="gap-2">
               <Shield size={16} /> Integrations
@@ -700,6 +704,11 @@ const AdminSettings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Brevo Notification Settings */}
+          <TabsContent value="brevo">
+            <BrevoSettings />
           </TabsContent>
 
           {/* Integrations Settings (CRB & Guarantee) */}
