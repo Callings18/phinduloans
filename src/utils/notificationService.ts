@@ -1,15 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type NotificationType = 'sms' | 'email' | 'whatsapp';
-export type NotificationProvider = 'africastalking' | 'twilio' | 'sendgrid' | 'smtp';
 
-interface NotificationSettings {
-  sms_enabled: boolean;
-  sms_provider: 'africastalking' | 'twilio' | 'none';
-  whatsapp_enabled: boolean;
-  whatsapp_provider: 'africastalking' | 'twilio' | 'none';
-  email_enabled: boolean;
-  email_provider: 'sendgrid' | 'smtp' | 'none';
+interface BrevoSettings {
+  brevo_api_key: string;
+  brevo_sender_name: string;
+  brevo_sender_email: string;
+  brevo_sender_phone: string;
+  brevo_email_enabled: boolean;
+  brevo_sms_enabled: boolean;
+  brevo_whatsapp_enabled: boolean;
   notify_on_signup: boolean;
   notify_on_loan_approval: boolean;
   notify_on_loan_rejection: boolean;
@@ -27,15 +27,18 @@ interface SendNotificationParams {
   subject?: string;
   message: string;
   title?: string;
-  eventType?: keyof NotificationSettings;
+  htmlContent?: string;
+  templateId?: number;
+  templateParams?: Record<string, string>;
+  eventType?: string;
 }
 
 class NotificationService {
-  private settings: NotificationSettings | null = null;
+  private settings: BrevoSettings | null = null;
   private settingsLoadedAt: number = 0;
   private settingsCacheDuration = 5 * 60 * 1000; // 5 minutes
 
-  async getSettings(): Promise<NotificationSettings | null> {
+  async getSettings(): Promise<BrevoSettings | null> {
     const now = Date.now();
     
     // Return cached settings if still valid
@@ -47,7 +50,7 @@ class NotificationService {
       const { data, error } = await supabase
         .from("system_settings")
         .select("value")
-        .eq("key", "notification_providers")
+        .eq("key", "brevo_settings")
         .maybeSingle();
 
       if (error) {
@@ -55,7 +58,7 @@ class NotificationService {
         return null;
       }
 
-      this.settings = data?.value as unknown as NotificationSettings || null;
+      this.settings = data?.value as unknown as BrevoSettings || null;
       this.settingsLoadedAt = now;
       return this.settings;
     } catch (error) {
@@ -71,70 +74,54 @@ class NotificationService {
     
     // Check if event type notifications are enabled
     if (params.eventType && settings) {
-      const eventEnabled = settings[params.eventType];
-      if (!eventEnabled) {
+      const eventKey = `notify_on_${params.eventType}` as keyof BrevoSettings;
+      const eventEnabled = settings[eventKey];
+      if (eventEnabled === false) {
         console.log(`[Notification Service] ${params.eventType} notifications are disabled`);
         return { success: false, message: "Notification type disabled" };
       }
     }
 
-    // Determine provider and check if enabled
-    let provider: string | null = null;
+    // Check if channel is enabled
     let enabled = false;
-
     if (params.type === 'sms' && settings) {
-      enabled = settings.sms_enabled;
-      provider = settings.sms_provider !== 'none' ? settings.sms_provider : null;
+      enabled = settings.brevo_sms_enabled;
     } else if (params.type === 'whatsapp' && settings) {
-      enabled = settings.whatsapp_enabled;
-      provider = settings.whatsapp_provider !== 'none' ? settings.whatsapp_provider : null;
+      enabled = settings.brevo_whatsapp_enabled;
     } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled;
-      provider = settings.email_provider !== 'none' ? settings.email_provider : null;
+      enabled = settings.brevo_email_enabled;
     }
 
-    if (!enabled || !provider) {
-      console.log(`[Notification Service] ${params.type} notifications not enabled or provider not configured`);
-      // Still log to database
+    if (!enabled) {
+      console.log(`[Notification Service] ${params.type} notifications not enabled`);
       await this.logNotification({
         ...params,
         status: 'disabled',
-        provider_response: { note: 'Notifications not enabled or provider not configured' }
+        provider_response: { note: 'Channel not enabled' }
       });
-      return { success: false, message: "Notifications not enabled" };
+      return { success: false, message: "Channel not enabled" };
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("send-notification", {
+      const { data, error } = await supabase.functions.invoke("brevo-notification", {
         body: {
           type: params.type,
-          provider: provider,
           to: params.to,
           subject: params.subject,
           message: params.message,
-          title: params.title,
+          htmlContent: params.htmlContent,
+          templateId: params.templateId,
+          templateParams: params.templateParams,
           userId: params.userId,
+          eventType: params.eventType,
         },
       });
 
       if (error) throw error;
 
-      await this.logNotification({
-        ...params,
-        status: 'sent',
-        provider_response: data
-      });
-
       return { success: true, data };
     } catch (error: any) {
       console.error("[Notification Service] Error sending notification:", error);
-      
-      await this.logNotification({
-        ...params,
-        status: 'failed',
-        provider_response: { error: error.message }
-      });
-
       return { success: false, error };
     }
   }
@@ -202,7 +189,7 @@ class NotificationService {
       message,
       subject,
       title: "Welcome",
-      eventType: "notify_on_signup"
+      eventType: "signup"
     });
   }
 
@@ -217,7 +204,7 @@ class NotificationService {
       message,
       subject,
       title: "Loan Approved",
-      eventType: "notify_on_loan_approval"
+      eventType: "loan_approval"
     });
   }
 
@@ -233,7 +220,7 @@ class NotificationService {
       message,
       subject,
       title: "Loan Application Update",
-      eventType: "notify_on_loan_rejection"
+      eventType: "loan_rejection"
     });
   }
 
@@ -248,7 +235,7 @@ class NotificationService {
       message,
       subject,
       title: "Disbursement Confirmation",
-      eventType: "notify_on_disbursement"
+      eventType: "disbursement"
     });
   }
 
@@ -263,7 +250,7 @@ class NotificationService {
       message,
       subject,
       title: "Payment Received",
-      eventType: "notify_on_payment_received"
+      eventType: "payment_received"
     });
   }
 
@@ -278,7 +265,7 @@ class NotificationService {
       message,
       subject,
       title: "Payment Reminder",
-      eventType: "notify_on_payment_reminder"
+      eventType: "payment_reminder"
     });
   }
 
@@ -293,7 +280,7 @@ class NotificationService {
       message,
       subject,
       title: "Overdue Notice",
-      eventType: "notify_on_overdue"
+      eventType: "overdue"
     });
   }
 
@@ -308,7 +295,7 @@ class NotificationService {
       message,
       subject,
       title: "Loan Completed",
-      eventType: "notify_on_loan_completion"
+      eventType: "loan_completion"
     });
   }
 
@@ -328,7 +315,20 @@ class NotificationService {
       message,
       subject,
       title: `Collection Notice - Level ${escalationLevel}`,
-      eventType: "notify_on_overdue"
+      eventType: "overdue"
+    });
+  }
+
+  // Send OTP
+  async sendOTP(phone: string, otp: string) {
+    const message = `Your Phindu Finance verification code is: ${otp}. This code expires in 10 minutes. Do not share this code with anyone.`;
+    
+    return this.send({
+      type: 'sms',
+      to: phone,
+      message,
+      title: 'OTP Verification',
+      eventType: 'otp'
     });
   }
 }

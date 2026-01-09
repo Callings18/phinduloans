@@ -148,6 +148,39 @@ export type Database = {
         }
         Relationships: []
       }
+      brevo_whatsapp_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          is_active: boolean | null
+          template_id: string
+          template_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          event_type: string
+          id?: string
+          is_active?: boolean | null
+          template_id: string
+          template_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          id?: string
+          is_active?: boolean | null
+          template_id?: string
+          template_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       collection_activities: {
         Row: {
           activity_type: string
