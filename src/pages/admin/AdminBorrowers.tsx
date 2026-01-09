@@ -740,7 +740,7 @@ const AdminBorrowers = () => {
                                   K{Number(loan.loan_amount).toLocaleString()}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  {loan.loan_term_months} months • {loan.loan_purpose}
+                                  {loan.loan_term_months} {(loan as any).term_unit || 'months'} • {loan.loan_purpose}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   Applied: {new Date(loan.created_at).toLocaleDateString()}

@@ -1563,7 +1563,7 @@ const AdminApplications = () => {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Term</p>
-                      <p className="text-foreground font-medium">{selectedApp.loan_term_months} months</p>
+                      <p className="text-foreground font-medium">{selectedApp.loan_term_months} {(selectedApp as any).term_unit || 'months'}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Interest Rate</p>

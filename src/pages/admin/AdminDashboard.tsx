@@ -614,7 +614,7 @@ const AdminDashboard = () => {
                           <span className="font-semibold text-foreground">K{Number(app.loan_amount).toLocaleString()}</span>
                         </td>
                         <td className="py-4 px-4">
-                          <span className="text-muted-foreground">{app.loan_term_months} months</span>
+                          <span className="text-muted-foreground">{app.loan_term_months} {(app as any).term_unit || 'months'}</span>
                         </td>
                         <td className="py-4 px-4">
                           <Badge variant="outline" className={`${getStatusBadge(app.status)} capitalize`}>

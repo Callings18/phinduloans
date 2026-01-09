@@ -86,6 +86,7 @@ interface Loan {
   city: string | null;
   loan_amount: number;
   loan_term_months: number;
+  term_unit: string;
   interest_rate: number;
   total_repayment: number;
   monthly_payment: number;
@@ -121,6 +122,7 @@ interface LoanProduct {
   max_amount: number;
   min_term_months: number;
   max_term_months: number;
+  term_unit: string;
   processing_fee_percent: number | null;
   enforcement_fee_percent?: number | null;
 }
@@ -364,6 +366,7 @@ const AdminLoans = () => {
           job_title: jobTitle || null,
           loan_amount: loanDetails.principal,
           loan_term_months: Number(loanTermMonths),
+          term_unit: selectedProduct?.term_unit || 'months',
           interest_rate: loanDetails.rate,
           monthly_payment: loanDetails.monthlyPayment,
           total_repayment: loanDetails.totalRepayment,
@@ -989,7 +992,7 @@ const AdminLoans = () => {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>{loan.loan_term_months} months</TableCell>
+                          <TableCell>{loan.loan_term_months} {loan.term_unit || 'months'}</TableCell>
                           <TableCell>{getStatusBadge(loan.status)}</TableCell>
                           <TableCell>
                             <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
@@ -1176,11 +1179,11 @@ const AdminLoans = () => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Term (months) *</Label>
+                  <Label>Term ({selectedProduct?.term_unit || 'months'}) *</Label>
                   <Input type="number" value={loanTermMonths} onChange={(e) => setLoanTermMonths(e.target.value)} placeholder="12" />
                   {selectedProduct && (
                     <p className="text-xs text-muted-foreground">
-                      Min: {selectedProduct.min_term_months} - Max: {selectedProduct.max_term_months} months
+                      Min: {selectedProduct.min_term_months} - Max: {selectedProduct.max_term_months} {selectedProduct.term_unit || 'months'}
                     </p>
                   )}
                 </div>
@@ -1312,7 +1315,7 @@ const AdminLoans = () => {
                 <Input type="number" value={editLoanAmount} onChange={(e) => setEditLoanAmount(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Term (months)</Label>
+                <Label>Term ({editingLoan?.term_unit || 'months'})</Label>
                 <Input type="number" value={editLoanTermMonths} onChange={(e) => setEditLoanTermMonths(e.target.value)} />
               </div>
               <div className="space-y-2">

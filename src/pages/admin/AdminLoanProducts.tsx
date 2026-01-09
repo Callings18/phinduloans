@@ -490,6 +490,7 @@ const AdminLoanProducts = () => {
       max_amount: formData.max_amount,
       min_term_months: formData.min_term_months,
       max_term_months: formData.max_term_months,
+      term_unit: formData.term_unit, // Save the term unit (days/weeks/months/years)
       interest_rate: formData.interest_rate,
       interest_type: formData.interest_type,
       interest_period: formData.interest_period,
@@ -1557,7 +1558,7 @@ const AdminLoanProducts = () => {
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
                           <Clock size={14} className="text-muted-foreground" />
-                          {product.min_term_months} - {product.max_term_months} mo
+                          {product.min_term_months} - {product.max_term_months} {(product as any).term_unit?.slice(0, 1) || 'mo'}
                         </div>
                       </TableCell>
                       <TableCell>
