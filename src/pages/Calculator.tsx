@@ -165,54 +165,124 @@ const Calculator = () => {
                     </p>
                   </div>
 
-                  {/* Fees Breakdown */}
+                  {/* Complete Fees Breakdown */}
                   <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
-                    <p className="text-sm font-semibold text-foreground mb-3">Fees & Charges Breakdown</p>
+                    <p className="text-sm font-semibold text-foreground mb-3">Complete Fees & Charges Breakdown</p>
                     <div className="space-y-1.5 text-xs">
+                      {/* Principal */}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Principal Amount:</span>
                         <span className="font-medium">K{loanAmount.toLocaleString()}</span>
                       </div>
+
+                      {/* Upfront Fees Section */}
+                      <div className="pt-2 border-t border-border/50">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Upfront Deductions:</p>
+                      </div>
+                      
                       {calculation.processingFee > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent}%):</span>
-                          <span className="font-medium">K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium text-warning">-K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
                       {calculation.insuranceFee > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Insurance ({selectedProduct?.insurance_percent}%):</span>
-                          <span className="font-medium">K{calculation.insuranceFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium text-warning">-K{calculation.insuranceFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
                       {calculation.vatAmount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent}%):</span>
-                          <span className="font-medium">K{calculation.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium text-warning">-K{calculation.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
                       {calculation.platformFee > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Platform Fee ({selectedProduct?.platform_fee_percent}%):</span>
-                          <span className="font-medium">K{calculation.platformFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium text-warning">-K{calculation.platformFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
-                      <div className="flex justify-between pt-2 border-t border-border">
-                        <span className="text-muted-foreground">Total Interest:</span>
-                        <span className="font-medium text-warning">K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      
+                      {/* Guarantee Fee - if applicable */}
+                      {selectedProduct?.guarantee_required && (selectedProduct?.guarantee_fee_percent || 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Guarantee Fee ({selectedProduct?.guarantee_fee_percent}%):</span>
+                          <span className="font-medium text-warning">-K{(loanAmount * (selectedProduct?.guarantee_fee_percent || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+
+                      {/* Total Upfront Deductions */}
+                      {calculation.feesDeductedUpfront > 0 && (
+                        <div className="flex justify-between pt-1 text-sm">
+                          <span className="text-muted-foreground font-medium">Total Upfront Deductions:</span>
+                          <span className="font-semibold text-warning">-K{calculation.feesDeductedUpfront.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+
+                      {/* Interest Section */}
+                      <div className="pt-2 border-t border-border/50">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Interest Charges:</p>
                       </div>
-                      <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
-                        <span>Total Repayment:</span>
-                        <span className="text-primary">K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total Interest ({selectedProduct?.interest_rate}% {selectedProduct?.interest_type || 'flat'}):</span>
+                        <span className="font-medium text-info">K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {/* Penalty & Late Fee Info */}
+                      <div className="pt-2 border-t border-border/50">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Potential Charges (if applicable):</p>
+                      </div>
+                      
+                      {(selectedProduct?.late_payment_penalty_percent || 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Late Payment Penalty:</span>
+                          <span className="font-medium text-destructive">{selectedProduct?.late_payment_penalty_percent}% {selectedProduct?.penalty_frequency || 'per month'}</span>
+                        </div>
+                      )}
+                      
+                      {(selectedProduct?.early_repayment_fee_percent || 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Early Settlement Fee:</span>
+                          <span className="font-medium">{selectedProduct?.early_repayment_fee_percent}% of outstanding</span>
+                        </div>
+                      )}
+                      
+                      {(selectedProduct?.enforcement_fee_percent || 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Legal/Enforcement Fee:</span>
+                          <span className="font-medium text-destructive">{selectedProduct?.enforcement_fee_percent}% (if defaulted)</span>
+                        </div>
+                      )}
+
+                      {/* Grace Period Info */}
+                      {(selectedProduct?.grace_period_days || 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Grace Period:</span>
+                          <span className="font-medium text-success">{selectedProduct?.grace_period_days} days</span>
+                        </div>
+                      )}
+
+                      {/* Summary Section */}
+                      <div className="pt-3 mt-2 border-t border-border space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">You'll Receive:</span>
+                          <span className="font-bold text-success">K{calculation.disbursementAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-semibold">
+                          <span>Total Repayment:</span>
+                          <span className="text-primary">K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 rounded-xl bg-success/10 border border-success/30">
-                      <p className="text-muted-foreground text-xs mb-1">You'll Receive</p>
+                      <p className="text-muted-foreground text-xs mb-1">Monthly Payment</p>
                       <p className="text-lg font-semibold text-success">
-                        K{(loanAmount - calculation.processingFee - calculation.insuranceFee - calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        K{monthlyPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="p-4 rounded-xl bg-info/10 border border-info/30">
