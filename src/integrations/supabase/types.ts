@@ -925,6 +925,7 @@ export type Database = {
           settlement_type: string | null
           source: string | null
           status: Database["public"]["Enums"]["loan_status"]
+          term_unit: string
           total_penalties: number | null
           total_repayment: number | null
           updated_at: string
@@ -976,6 +977,7 @@ export type Database = {
           settlement_type?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
+          term_unit?: string
           total_penalties?: number | null
           total_repayment?: number | null
           updated_at?: string
@@ -1027,6 +1029,7 @@ export type Database = {
           settlement_type?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
+          term_unit?: string
           total_penalties?: number | null
           total_repayment?: number | null
           updated_at?: string
@@ -1199,6 +1202,7 @@ export type Database = {
           repayment_methods: string[] | null
           requirements: string[] | null
           status: string | null
+          term_unit: string
           updated_at: string
           vat_percent: number | null
           version: number | null
@@ -1262,6 +1266,7 @@ export type Database = {
           repayment_methods?: string[] | null
           requirements?: string[] | null
           status?: string | null
+          term_unit?: string
           updated_at?: string
           vat_percent?: number | null
           version?: number | null
@@ -1325,6 +1330,7 @@ export type Database = {
           repayment_methods?: string[] | null
           requirements?: string[] | null
           status?: string | null
+          term_unit?: string
           updated_at?: string
           vat_percent?: number | null
           version?: number | null
