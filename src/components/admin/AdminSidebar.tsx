@@ -26,6 +26,7 @@ import {
   Landmark,
   Wallet,
   PiggyBank,
+  Scale,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { icon: AlertTriangle, label: "Collections", path: "/admin/collections" },
       { icon: FileX, label: "Write-Offs", path: "/admin/write-offs" },
+      { icon: Scale, label: "Court Cases", path: "/admin/court-cases" },
     ],
   },
   {
