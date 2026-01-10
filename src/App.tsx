@@ -34,6 +34,7 @@ import AdminContractTemplates from "./pages/admin/AdminContractTemplates";
 import AdminPMIC from "./pages/admin/AdminPMIC";
 import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
+import AdminCourtCases from "./pages/admin/AdminCourtCases";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ const App = () => (
               <Route path="/admin/pmic" element={<AdminPMIC />} />
               <Route path="/admin/accounts" element={<AdminAccounts />} />
               <Route path="/admin/expenses" element={<AdminExpenses />} />
+              <Route path="/admin/court-cases" element={<AdminCourtCases />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
