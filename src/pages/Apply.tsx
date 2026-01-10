@@ -52,6 +52,7 @@ interface LoanProduct {
   platform_fee_percent: number | null;
   requirements: string[] | null;
   collateral_required: boolean | null;
+  eligible_locations: string[] | null;
 }
 
 const steps = [
@@ -1276,6 +1277,33 @@ const Apply = () => {
                         <p className="text-muted-foreground">No documents required for this product.</p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Payslip Password Field */}
+                  <div className="pt-6 border-t border-border">
+                    <div className="p-4 bg-info/10 border border-info/30 rounded-lg mb-4">
+                      <div className="flex items-start gap-3">
+                        <FileText className="text-info mt-0.5" size={20} />
+                        <div className="text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground mb-1">Payslip Password Required</p>
+                          All government payslips are secured with passwords. Please enter your payslip password 
+                          to allow verification. Your information is kept confidential and used strictly for 
+                          processing your application.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Payslip Password</Label>
+                      <Input
+                        type="password"
+                        placeholder="Enter your payslip password"
+                        value={(formData as any).payslipPassword || ""}
+                        onChange={(e) => updateFormData("payslipPassword", e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This password is used to open your password-protected payslip PDF for verification
+                      </p>
+                    </div>
                   </div>
 
                   {/* Latest 3 Months Payslips - Not required for Business and Personal loans */}

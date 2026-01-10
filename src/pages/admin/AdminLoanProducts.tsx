@@ -218,6 +218,7 @@ const defaultFormData = {
   guarantee_provider: "",
   max_guarantee_percent: 80,
   guarantee_fee_percent: 0,
+  eligible_locations: null as string[] | null,
 };
 
 const AdminLoanProducts = () => {
@@ -475,6 +476,7 @@ const AdminLoanProducts = () => {
       guarantee_provider: product.guarantee_provider || "",
       max_guarantee_percent: product.max_guarantee_percent ?? 80,
       guarantee_fee_percent: product.guarantee_fee_percent ?? 0,
+      eligible_locations: (product as any).eligible_locations || null,
     });
     setIsDialogOpen(true);
   };
@@ -539,6 +541,7 @@ const AdminLoanProducts = () => {
       guarantee_provider: formData.guarantee_provider || null,
       max_guarantee_percent: formData.max_guarantee_percent,
       guarantee_fee_percent: formData.guarantee_fee_percent,
+      eligible_locations: (formData as any).eligible_locations,
     };
 
     if (editingProduct) {
@@ -815,6 +818,26 @@ const AdminLoanProducts = () => {
                         ))}
                       </div>
                     </div>
+                    
+                    {/* NEW: Location Eligibility */}
+                    <div className="col-span-2 space-y-2">
+                      <Label>Eligible Locations</Label>
+                      <Input
+                        value={(formData as any).eligible_locations?.join(", ") || ""}
+                        onChange={(e) => {
+                          const locations = e.target.value
+                            .split(",")
+                            .map((l) => l.trim())
+                            .filter((l) => l);
+                          setFormData({ ...formData, eligible_locations: locations.length > 0 ? locations : null } as any);
+                        }}
+                        placeholder="Leave empty for nationwide, or enter: Lusaka, Kitwe, Ndola"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Comma-separated list of eligible cities/provinces. Leave empty = nationwide (all locations allowed)
+                      </p>
+                    </div>
+                    
                     <div className="col-span-2 grid grid-cols-3 gap-4 pt-2">
                       <div className="flex items-center gap-3">
                         <Checkbox
