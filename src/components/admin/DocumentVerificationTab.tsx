@@ -38,6 +38,8 @@ import {
   AlertTriangle,
   ExternalLink,
   ShieldCheck,
+  Image,
+  Link2,
 } from "lucide-react";
 import {
   Select,
@@ -59,6 +61,12 @@ interface DocumentChecklistItem {
   rejection_reason: string | null;
   file_url: string | null;
   notes: string | null;
+}
+
+interface LegacyDocument {
+  label: string;
+  url: string | null;
+  type: 'image' | 'document';
 }
 
 interface Props {
@@ -89,6 +97,33 @@ export default function DocumentVerificationTab({ loanId }: Props) {
 
   const queryClient = useQueryClient();
 
+  // Fetch loan application for legacy documents
+  const { data: loanApplication } = useQuery({
+    queryKey: ["loan-application-docs", loanId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select(`
+          nrc_front_url,
+          nrc_back_url,
+          selfie_url,
+          payslip_url,
+          payslip_2_url,
+          payslip_3_url,
+          bank_statement_url,
+          employer_letter_url,
+          collateral_image_url,
+          collateral_description,
+          signed_contract_url
+        `)
+        .eq("id", loanId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Fetch document checklist
   const { data: documents, isLoading } = useQuery({
     queryKey: ["document-checklist", loanId],
@@ -103,6 +138,20 @@ export default function DocumentVerificationTab({ loanId }: Props) {
       return data as DocumentChecklistItem[];
     },
   });
+
+  // Build legacy documents list from loan application
+  const legacyDocuments: LegacyDocument[] = loanApplication ? ([
+    { label: "NRC Front", url: loanApplication.nrc_front_url, type: 'image' as const },
+    { label: "NRC Back", url: loanApplication.nrc_back_url, type: 'image' as const },
+    { label: "Selfie", url: loanApplication.selfie_url, type: 'image' as const },
+    { label: "Payslip 1", url: loanApplication.payslip_url, type: 'document' as const },
+    { label: "Payslip 2", url: loanApplication.payslip_2_url, type: 'document' as const },
+    { label: "Payslip 3", url: loanApplication.payslip_3_url, type: 'document' as const },
+    { label: "Bank Statement", url: loanApplication.bank_statement_url, type: 'document' as const },
+    { label: "Employer Letter", url: loanApplication.employer_letter_url, type: 'document' as const },
+    { label: "Collateral Image", url: loanApplication.collateral_image_url, type: 'image' as const },
+    { label: "Signed Contract", url: loanApplication.signed_contract_url, type: 'document' as const },
+  ] as LegacyDocument[]).filter(doc => doc.url) : [];
 
   // Initialize checklist mutation
   const initChecklistMutation = useMutation({
@@ -283,19 +332,64 @@ export default function DocumentVerificationTab({ loanId }: Props) {
 
   if (!documents || documents.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4 opacity-30" />
-          <h3 className="text-lg font-medium mb-2">No Document Checklist</h3>
-          <p className="text-muted-foreground mb-4">
-            Initialize the document checklist for this loan
-          </p>
-          <Button onClick={() => initChecklistMutation.mutate()} disabled={initChecklistMutation.isPending}>
-            {initChecklistMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
-            <Plus size={14} className="mr-1" /> Initialize Checklist
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="py-12 text-center border-dashed border-2 border-border rounded-lg">
+            <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4 opacity-30" />
+            <h3 className="text-lg font-medium mb-2">No dynamic documents found for this application</h3>
+            <p className="text-muted-foreground mb-4">
+              Check legacy folder if application is old.
+            </p>
+            <Button onClick={() => initChecklistMutation.mutate()} disabled={initChecklistMutation.isPending}>
+              {initChecklistMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
+              <Plus size={14} className="mr-1" /> Initialize Checklist
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Legacy / Standard Documents - Also show when no checklist */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Link2 size={16} /> Legacy / Standard Documents
+            </CardTitle>
+            <CardDescription>Documents uploaded during application</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {legacyDocuments.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {legacyDocuments.map((doc, index) => (
+                  <Card key={index} className="bg-secondary/20 border-border/30">
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {doc.type === 'image' ? (
+                          <Image size={18} className="text-primary" />
+                        ) : (
+                          <FileText size={18} className="text-primary" />
+                        )}
+                        <span className="font-medium">{doc.label}</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => doc.url && handleViewDocument(doc.url)}
+                      >
+                        <ExternalLink size={14} className="mr-1" /> View
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="mx-auto h-10 w-10 opacity-30 mb-2" />
+                <p>No legacy documents found for this application</p>
+                <p className="text-xs mt-1">Documents may not have been uploaded during application</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -436,6 +530,49 @@ export default function DocumentVerificationTab({ loanId }: Props) {
               </Table>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Legacy / Standard Documents from Application */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Link2 size={16} /> Legacy / Standard Documents
+          </CardTitle>
+          <CardDescription>Documents uploaded during application</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {legacyDocuments.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {legacyDocuments.map((doc, index) => (
+                <Card key={index} className="bg-secondary/20 border-border/30">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {doc.type === 'image' ? (
+                        <Image size={18} className="text-primary" />
+                      ) : (
+                        <FileText size={18} className="text-primary" />
+                      )}
+                      <span className="font-medium">{doc.label}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => doc.url && handleViewDocument(doc.url)}
+                    >
+                      <ExternalLink size={14} className="mr-1" /> View
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="mx-auto h-10 w-10 opacity-30 mb-2" />
+              <p>No legacy documents found for this application</p>
+              <p className="text-xs mt-1">Documents may not have been uploaded during application</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
