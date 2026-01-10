@@ -372,9 +372,13 @@ export type Database = {
           assigned_lawyer: string | null
           case_number: string | null
           case_type: string
+          claim_amount: number | null
+          court_location: string | null
           court_name: string | null
           created_at: string
           created_by: string | null
+          defendant_name: string | null
+          enforcement_status: string | null
           filing_date: string | null
           hearing_date: string | null
           id: string
@@ -383,7 +387,10 @@ export type Database = {
           lawyer_contact: string | null
           legal_fees: number | null
           loan_id: string
+          next_hearing_date: string | null
           notes: string | null
+          plaintiff_name: string | null
+          recovered_amount: number | null
           status: string
           updated_at: string
         }
@@ -391,9 +398,13 @@ export type Database = {
           assigned_lawyer?: string | null
           case_number?: string | null
           case_type?: string
+          claim_amount?: number | null
+          court_location?: string | null
           court_name?: string | null
           created_at?: string
           created_by?: string | null
+          defendant_name?: string | null
+          enforcement_status?: string | null
           filing_date?: string | null
           hearing_date?: string | null
           id?: string
@@ -402,7 +413,10 @@ export type Database = {
           lawyer_contact?: string | null
           legal_fees?: number | null
           loan_id: string
+          next_hearing_date?: string | null
           notes?: string | null
+          plaintiff_name?: string | null
+          recovered_amount?: number | null
           status?: string
           updated_at?: string
         }
@@ -410,9 +424,13 @@ export type Database = {
           assigned_lawyer?: string | null
           case_number?: string | null
           case_type?: string
+          claim_amount?: number | null
+          court_location?: string | null
           court_name?: string | null
           created_at?: string
           created_by?: string | null
+          defendant_name?: string | null
+          enforcement_status?: string | null
           filing_date?: string | null
           hearing_date?: string | null
           id?: string
@@ -421,7 +439,10 @@ export type Database = {
           lawyer_contact?: string | null
           legal_fees?: number | null
           loan_id?: string
+          next_hearing_date?: string | null
           notes?: string | null
+          plaintiff_name?: string | null
+          recovered_amount?: number | null
           status?: string
           updated_at?: string
         }
@@ -933,10 +954,12 @@ export type Database = {
           employer_name: string | null
           employment_duration: string | null
           employment_type: Database["public"]["Enums"]["employment_type"]
+          enforcement_fees: number | null
           full_name: string
           id: string
           interest_rate: number | null
           job_title: string | null
+          legal_fees: number | null
           loan_amount: number
           loan_product_id: string | null
           loan_purpose: string
@@ -948,6 +971,7 @@ export type Database = {
           nrc_number: string
           payslip_2_url: string | null
           payslip_3_url: string | null
+          payslip_password: string | null
           payslip_url: string | null
           phone: string
           rejection_reason: string | null
@@ -956,6 +980,8 @@ export type Database = {
           selfie_url: string | null
           settlement_date: string | null
           settlement_type: string | null
+          signed_contract_uploaded_at: string | null
+          signed_contract_url: string | null
           source: string | null
           status: Database["public"]["Enums"]["loan_status"]
           term_unit: string
@@ -985,10 +1011,12 @@ export type Database = {
           employer_name?: string | null
           employment_duration?: string | null
           employment_type: Database["public"]["Enums"]["employment_type"]
+          enforcement_fees?: number | null
           full_name: string
           id?: string
           interest_rate?: number | null
           job_title?: string | null
+          legal_fees?: number | null
           loan_amount: number
           loan_product_id?: string | null
           loan_purpose: string
@@ -1000,6 +1028,7 @@ export type Database = {
           nrc_number: string
           payslip_2_url?: string | null
           payslip_3_url?: string | null
+          payslip_password?: string | null
           payslip_url?: string | null
           phone: string
           rejection_reason?: string | null
@@ -1008,6 +1037,8 @@ export type Database = {
           selfie_url?: string | null
           settlement_date?: string | null
           settlement_type?: string | null
+          signed_contract_uploaded_at?: string | null
+          signed_contract_url?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
           term_unit?: string
@@ -1037,10 +1068,12 @@ export type Database = {
           employer_name?: string | null
           employment_duration?: string | null
           employment_type?: Database["public"]["Enums"]["employment_type"]
+          enforcement_fees?: number | null
           full_name?: string
           id?: string
           interest_rate?: number | null
           job_title?: string | null
+          legal_fees?: number | null
           loan_amount?: number
           loan_product_id?: string | null
           loan_purpose?: string
@@ -1052,6 +1085,7 @@ export type Database = {
           nrc_number?: string
           payslip_2_url?: string | null
           payslip_3_url?: string | null
+          payslip_password?: string | null
           payslip_url?: string | null
           phone?: string
           rejection_reason?: string | null
@@ -1060,6 +1094,8 @@ export type Database = {
           selfie_url?: string | null
           settlement_date?: string | null
           settlement_type?: string | null
+          signed_contract_uploaded_at?: string | null
+          signed_contract_url?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
           term_unit?: string
@@ -1193,6 +1229,7 @@ export type Database = {
           digital_signature_required: boolean | null
           early_repayment_allowed: boolean | null
           early_repayment_fee_percent: number | null
+          eligible_locations: string[] | null
           employer_whitelist_enabled: boolean | null
           employment_types: string[] | null
           enforcement_fee_percent: number | null
@@ -1257,6 +1294,7 @@ export type Database = {
           digital_signature_required?: boolean | null
           early_repayment_allowed?: boolean | null
           early_repayment_fee_percent?: number | null
+          eligible_locations?: string[] | null
           employer_whitelist_enabled?: boolean | null
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
@@ -1321,6 +1359,7 @@ export type Database = {
           digital_signature_required?: boolean | null
           early_repayment_allowed?: boolean | null
           early_repayment_fee_percent?: number | null
+          eligible_locations?: string[] | null
           employer_whitelist_enabled?: boolean | null
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null

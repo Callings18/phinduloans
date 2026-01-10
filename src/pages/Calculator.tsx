@@ -230,37 +230,13 @@ const Calculator = () => {
                         <span className="font-medium text-info">K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
 
-                      {/* Penalty & Late Fee Info */}
-                      <div className="pt-2 border-t border-border/50">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Potential Charges (if applicable):</p>
-                      </div>
-                      
-                      {(selectedProduct?.late_payment_penalty_percent || 0) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Late Payment Penalty:</span>
-                          <span className="font-medium text-destructive">{selectedProduct?.late_payment_penalty_percent}% {selectedProduct?.penalty_frequency || 'per month'}</span>
-                        </div>
-                      )}
-                      
-                      {(selectedProduct?.early_repayment_fee_percent || 0) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Early Settlement Fee:</span>
-                          <span className="font-medium">{selectedProduct?.early_repayment_fee_percent}% of outstanding</span>
-                        </div>
-                      )}
-                      
-                      {(selectedProduct?.enforcement_fee_percent || 0) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Legal/Enforcement Fee:</span>
-                          <span className="font-medium text-destructive">{selectedProduct?.enforcement_fee_percent}% (if defaulted)</span>
-                        </div>
-                      )}
-
-                      {/* Grace Period Info */}
+                      {/* Grace Period Info - shown for transparency */}
                       {(selectedProduct?.grace_period_days || 0) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Grace Period:</span>
-                          <span className="font-medium text-success">{selectedProduct?.grace_period_days} days</span>
+                        <div className="pt-2 border-t border-border/50">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Grace Period:</span>
+                            <span className="font-medium text-success">{selectedProduct?.grace_period_days} days</span>
+                          </div>
                         </div>
                       )}
 
