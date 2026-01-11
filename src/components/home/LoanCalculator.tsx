@@ -103,11 +103,13 @@ const LoanCalculator = () => {
 
   const calculation = calculateLoan(amount, term, productForCalc);
 
-  // Service fee = processing fee + legal costs (platform fee used as legal costs for now)
-  const serviceFee = calculation.processingFee + calculation.platformFee;
+  // Upfront fees - Legal is fixed at 10%
+  const processingFee = calculation.processingFee;
+  const legalFee = amount * 0.10; // Fixed 10% legal fee
+  const totalDeductions = processingFee + legalFee;
   
-  // Amount you receive = principal - service fee (processing + legal only)
-  const amountYouReceive = amount - serviceFee;
+  // Amount you receive = principal - upfront deductions
+  const amountYouReceive = amount - totalDeductions;
 
   // Check if product is available nationwide or restricted
   const isNationwide = !selectedProduct?.eligible_locations || selectedProduct.eligible_locations.length === 0;
@@ -218,23 +220,39 @@ const LoanCalculator = () => {
                   )}
                 </div>
 
-                {/* Loan Summary - Clean narration */}
+                {/* Upfront Fees Breakdown */}
                 <div className="bg-secondary/50 rounded-xl p-6 space-y-4">
-                  <h3 className="font-bold text-foreground text-lg">Loan Summary</h3>
+                  <h3 className="font-bold text-foreground text-lg">Upfront Fees (Deducted)</h3>
                   
                   <div className="space-y-3">
-                    {/* Service Fee (Processing + Legal) */}
+                    {/* Processing Fee */}
                     <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Service Fee</span>
+                      <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent || 1}%)</span>
                       <span className="font-semibold text-primary">
-                        K{serviceFee.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
+                        K{processingFee.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    {/* Legal Fee - Fixed 10% */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Legal Fee (10%)</span>
+                      <span className="font-semibold text-primary">
+                        K{legalFee.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    {/* Total Deductions */}
+                    <div className="flex justify-between items-center pt-2 border-t border-border/50">
+                      <span className="text-muted-foreground font-medium">Total Deductions</span>
+                      <span className="font-semibold text-primary">
+                        K{totalDeductions.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
 
                     {/* Amount You Receive */}
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Amount You Receive</span>
-                      <span className="font-semibold text-primary">
+                      <span className="font-bold text-success">
                         K{amountYouReceive.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
                       </span>
                     </div>

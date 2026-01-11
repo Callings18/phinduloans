@@ -175,26 +175,48 @@ const Calculator = () => {
                     </p>
                   </div>
 
-                  {/* Simple Fees Breakdown - Upfront Only */}
+                  {/* Upfront Fees Breakdown */}
                   <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
-                    <p className="text-sm font-semibold text-foreground mb-3">Loan Summary</p>
+                    <p className="text-sm font-semibold text-foreground mb-3">Upfront Fees (Deducted)</p>
                     <div className="space-y-2 text-sm">
-                      {/* Service Fee (Processing + Legal) */}
+                      {/* Processing Fee */}
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service Fee</span>
+                        <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent || 1}%)</span>
                         <span className="font-semibold text-primary">
-                          K{(calculation.processingFee + calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      {/* Legal Fee - Fixed at 10% */}
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Legal Fee (10%)</span>
+                        <span className="font-semibold text-primary">
+                          K{(loanAmount * 0.10).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      {/* Total Upfront Deductions */}
+                      <div className="flex justify-between pt-2 border-t border-border/50">
+                        <span className="text-muted-foreground font-medium">Total Deductions</span>
+                        <span className="font-semibold text-primary">
+                          K{(calculation.processingFee + (loanAmount * 0.10)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
 
                       {/* Amount You Receive */}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount You Receive</span>
-                        <span className="font-semibold text-primary">
-                          K{(loanAmount - calculation.processingFee - calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        <span className="font-bold text-success">
+                          K{(loanAmount - calculation.processingFee - (loanAmount * 0.10)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
+                    </div>
+                  </div>
 
+                  {/* Loan Summary */}
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
+                    <p className="text-sm font-semibold text-foreground mb-3">Loan Summary</p>
+                    <div className="space-y-2 text-sm">
                       {/* Monthly Repayment */}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Monthly Repayment</span>
