@@ -30,7 +30,7 @@ const Calculator = () => {
 
   const selectedProduct = products?.find(p => p.id === selectedProductId) || products?.[0];
 
-  // Build product config for calculations
+  // Build product config for calculations (only upfront fees, no potential charges)
   const productForCalc: LoanProductCalc = selectedProduct
     ? {
       interest_rate: selectedProduct.interest_rate,
@@ -39,11 +39,8 @@ const Calculator = () => {
       processing_fee_percent: selectedProduct.processing_fee_percent,
       insurance_percent: selectedProduct.insurance_percent,
       vat_percent: selectedProduct.vat_percent,
-      platform_fee_percent: selectedProduct.platform_fee_percent,
-      late_payment_penalty_percent: selectedProduct.late_payment_penalty_percent,
-      penalty_frequency: selectedProduct.penalty_frequency as any,
+      platform_fee_percent: selectedProduct.platform_fee_percent, // This is legal fees
       grace_period_days: selectedProduct.grace_period_days,
-      early_repayment_fee_percent: selectedProduct.early_repayment_fee_percent,
     }
     : { interest_rate: 15, interest_period: 'monthly', interest_type: 'flat' };
 
@@ -178,91 +175,40 @@ const Calculator = () => {
                     </p>
                   </div>
 
-                  {/* Complete Fees Breakdown */}
+                  {/* Simple Fees Breakdown - Upfront Only */}
                   <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
-                    <p className="text-sm font-semibold text-foreground mb-3">Complete Fees & Charges Breakdown</p>
-                    <div className="space-y-1.5 text-xs">
-                      {/* Principal */}
+                    <p className="text-sm font-semibold text-foreground mb-3">Loan Summary</p>
+                    <div className="space-y-2 text-sm">
+                      {/* Service Fee (Processing + Legal) */}
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Principal Amount:</span>
-                        <span className="font-medium">K{loanAmount.toLocaleString()}</span>
+                        <span className="text-muted-foreground">Service Fee</span>
+                        <span className="font-semibold text-primary">
+                          K{(calculation.processingFee + calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
 
-                      {/* Upfront Fees Section */}
-                      <div className="pt-2 border-t border-border/50">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Upfront Deductions:</p>
-                      </div>
-                      
-                      {calculation.processingFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent}%):</span>
-                          <span className="font-medium text-warning">-K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-                      {calculation.insuranceFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Insurance ({selectedProduct?.insurance_percent}%):</span>
-                          <span className="font-medium text-warning">-K{calculation.insuranceFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-                      {calculation.vatAmount > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent}%):</span>
-                          <span className="font-medium text-warning">-K{calculation.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-                      {calculation.platformFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Platform Fee ({selectedProduct?.platform_fee_percent}%):</span>
-                          <span className="font-medium text-warning">-K{calculation.platformFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-                      
-                      {/* Guarantee Fee - if applicable */}
-                      {selectedProduct?.guarantee_required && (selectedProduct?.guarantee_fee_percent || 0) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Guarantee Fee ({selectedProduct?.guarantee_fee_percent}%):</span>
-                          <span className="font-medium text-warning">-K{(loanAmount * (selectedProduct?.guarantee_fee_percent || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-
-                      {/* Total Upfront Deductions */}
-                      {calculation.feesDeductedUpfront > 0 && (
-                        <div className="flex justify-between pt-1 text-sm">
-                          <span className="text-muted-foreground font-medium">Total Upfront Deductions:</span>
-                          <span className="font-semibold text-warning">-K{calculation.feesDeductedUpfront.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-
-                      {/* Interest Section */}
-                      <div className="pt-2 border-t border-border/50">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Interest Charges:</p>
-                      </div>
+                      {/* Amount You Receive */}
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Interest ({selectedProduct?.interest_rate}% {selectedProduct?.interest_type || 'flat'}):</span>
-                        <span className="font-medium text-info">K{totalInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-muted-foreground">Amount You Receive</span>
+                        <span className="font-semibold text-primary">
+                          K{(loanAmount - calculation.processingFee - calculation.platformFee).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
 
-                      {/* Grace Period Info - shown for transparency */}
-                      {(selectedProduct?.grace_period_days || 0) > 0 && (
-                        <div className="pt-2 border-t border-border/50">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Grace Period:</span>
-                            <span className="font-medium text-success">{selectedProduct?.grace_period_days} days</span>
-                          </div>
-                        </div>
-                      )}
+                      {/* Monthly Repayment */}
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Monthly Repayment</span>
+                        <span className="font-semibold text-primary">
+                          K{monthlyPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
 
-                      {/* Summary Section */}
-                      <div className="pt-3 mt-2 border-t border-border space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium">You'll Receive:</span>
-                          <span className="font-bold text-success">K{calculation.disbursementAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="flex justify-between text-sm font-semibold">
-                          <span>Total Repayment:</span>
-                          <span className="text-primary">K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
+                      {/* Total Repayment */}
+                      <div className="flex justify-between pt-2 border-t border-border/50">
+                        <span className="font-medium">Total Repayment</span>
+                        <span className="font-bold text-primary">
+                          K{totalPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
                     </div>
                   </div>
