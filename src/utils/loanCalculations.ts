@@ -164,8 +164,8 @@ export function calculateLoan(
   
   const totalFees = processingFee + insuranceFee + platformFee + vatAmount;
   
-  // Fees are deducted upfront from disbursement
-  const feesDeductedUpfront = processingFee + vatAmount + platformFee;
+  // ALL fees are deducted upfront from disbursement
+  const feesDeductedUpfront = processingFee + insuranceFee + platformFee + vatAmount;
   const disbursementAmount = principal - feesDeductedUpfront;
   
   // Total repayment is just principal + interest (fees already deducted from disbursement)
