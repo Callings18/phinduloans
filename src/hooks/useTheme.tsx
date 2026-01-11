@@ -1,5 +1,6 @@
-// Custom theme hook for Phindu - cache-bust v2
-import React, { createContext, useContext, useEffect, useState } from "react";
+// Custom theme hook for Phindu - cache-bust v3
+import * as React from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light" | "system";
 
