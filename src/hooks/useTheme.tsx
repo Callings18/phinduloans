@@ -1,22 +1,4 @@
-import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "next-themes";
-import type { ReactNode } from "react";
-
-interface ThemeProviderProps {
-  children: ReactNode;
-}
-
-export function ThemeProvider({ children }: ThemeProviderProps) {
-  return (
-    <NextThemesProvider
-      attribute="class"
-      defaultTheme="dark"
-      storageKey="phindu-theme"
-      enableSystem
-    >
-      {children}
-    </NextThemesProvider>
-  );
-}
+import { useTheme as useNextTheme } from "next-themes";
 
 export function useTheme() {
   const { theme, setTheme, resolvedTheme } = useNextTheme();
