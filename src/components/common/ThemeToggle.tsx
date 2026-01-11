@@ -1,4 +1,4 @@
-import React from "react";
+
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -15,7 +15,7 @@ interface ThemeToggleProps {
     className?: string;
 }
 
-const ThemeToggle: React.FC<ThemeToggleProps> = ({ variant = "default", className }) => {
+const ThemeToggle = ({ variant = "default", className }: ThemeToggleProps) => {
     const { theme, setTheme, resolvedTheme } = useTheme();
 
     if (variant === "minimal") {
