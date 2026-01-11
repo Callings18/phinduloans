@@ -60,6 +60,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import ProductDocumentManager from "@/components/admin/ProductDocumentManager";
 import WorkflowConfiguration from "@/components/admin/WorkflowConfiguration";
 import {
@@ -85,10 +91,16 @@ import {
   Calculator,
   Settings,
   GitBranch,
+  MapPin,
+  Globe,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
+import { ZAMBIAN_CITIES_LIST } from "@/constants/zambianLocations";
+import { cn } from "@/lib/utils";
 
 interface LoanProduct {
   id: string;
@@ -819,22 +831,87 @@ const AdminLoanProducts = () => {
                       </div>
                     </div>
                     
-                    {/* NEW: Location Eligibility */}
+                    {/* NEW: Location Eligibility with Multi-Select */}
                     <div className="col-span-2 space-y-2">
                       <Label>Eligible Locations</Label>
-                      <Input
-                        value={(formData as any).eligible_locations?.join(", ") || ""}
-                        onChange={(e) => {
-                          const locations = e.target.value
-                            .split(",")
-                            .map((l) => l.trim())
-                            .filter((l) => l);
-                          setFormData({ ...formData, eligible_locations: locations.length > 0 ? locations : null } as any);
-                        }}
-                        placeholder="Leave empty for nationwide, or enter: Lusaka, Kitwe, Ndola"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Comma-separated list of eligible cities/provinces. Leave empty = nationwide (all locations allowed)
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between h-auto min-h-10"
+                          >
+                            <div className="flex flex-wrap gap-1 flex-1 text-left">
+                              {!formData.eligible_locations || formData.eligible_locations.length === 0 ? (
+                                <span className="text-muted-foreground">Nationwide (All Locations)</span>
+                              ) : (
+                                formData.eligible_locations.map((location) => (
+                                  <Badge key={location} variant="secondary" className="text-xs">
+                                    {location}
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <div className="p-2 border-b">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-success"
+                              onClick={() => setFormData({ ...formData, eligible_locations: null })}
+                            >
+                              <Globe size={14} className="mr-2" />
+                              Nationwide (All Locations)
+                            </Button>
+                          </div>
+                          <ScrollArea className="h-64">
+                            <div className="p-2 space-y-1">
+                              {ZAMBIAN_CITIES_LIST.map((city) => {
+                                const isSelected = formData.eligible_locations?.includes(city) || false;
+                                return (
+                                  <div
+                                    key={city}
+                                    className={cn(
+                                      "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-accent",
+                                      isSelected && "bg-primary/10"
+                                    )}
+                                    onClick={() => {
+                                      const current = formData.eligible_locations || [];
+                                      if (isSelected) {
+                                        const newLocations = current.filter(l => l !== city);
+                                        setFormData({ 
+                                          ...formData, 
+                                          eligible_locations: newLocations.length > 0 ? newLocations : null 
+                                        });
+                                      } else {
+                                        setFormData({ 
+                                          ...formData, 
+                                          eligible_locations: [...current, city] 
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <div className={cn(
+                                      "w-4 h-4 border rounded flex items-center justify-center",
+                                      isSelected ? "bg-primary border-primary" : "border-input"
+                                    )}>
+                                      {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                    </div>
+                                    <MapPin size={14} className="text-muted-foreground" />
+                                    <span className="text-sm">{city}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </ScrollArea>
+                        </PopoverContent>
+                      </Popover>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Globe size={12} />
+                        Leave empty/select "Nationwide" for all locations. Select specific cities to restrict.
                       </p>
                     </div>
                     
@@ -1551,6 +1628,7 @@ const AdminLoanProducts = () => {
                     <TableHead>Amount Range</TableHead>
                     <TableHead>Term</TableHead>
                     <TableHead>Interest</TableHead>
+                    <TableHead>Availability</TableHead>
                     <TableHead>Linked Loans</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1592,6 +1670,30 @@ const AdminLoanProducts = () => {
                           </div>
                           <p className="text-xs text-muted-foreground capitalize">{product.interest_type}</p>
                         </div>
+                      </TableCell>
+                      {/* Availability column */}
+                      <TableCell>
+                        {(() => {
+                          const locations = (product as any).eligible_locations;
+                          const isNationwide = !locations || locations.length === 0;
+                          return (
+                            <div className="flex items-center gap-1">
+                              {isNationwide ? (
+                                <Badge variant="secondary" className="bg-success/10 text-success border-success/20">
+                                  <Globe size={12} className="mr-1" />
+                                  Nationwide
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-warning/10 text-warning border-warning/20">
+                                  <MapPin size={12} className="mr-1" />
+                                  {locations.length === 1 
+                                    ? locations[0] 
+                                    : `${locations.length} cities`}
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">

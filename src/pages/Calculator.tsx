@@ -113,6 +113,19 @@ const Calculator = () => {
                               <span className="font-medium text-foreground">{product.name}</span>
                             </div>
                             <p className="text-xs text-primary">{product.interest_rate}% interest</p>
+                            {/* Location availability */}
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className={cn(
+                                "text-[10px] px-1.5 py-0.5 rounded",
+                                !product.eligible_locations || product.eligible_locations.length === 0
+                                  ? "bg-success/10 text-success"
+                                  : "bg-warning/10 text-warning"
+                              )}>
+                                {!product.eligible_locations || product.eligible_locations.length === 0
+                                  ? "Nationwide"
+                                  : product.eligible_locations.slice(0, 2).join(", ") + (product.eligible_locations.length > 2 ? "..." : "")}
+                              </span>
+                            </div>
                           </button>
                         ))}
                       </div>
