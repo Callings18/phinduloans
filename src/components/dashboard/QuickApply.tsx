@@ -441,6 +441,16 @@ const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
                   <span className="font-medium text-right">K{loanCalc.monthlyPayment.toLocaleString()}</span>
                   <span className="text-muted-foreground">Total Interest:</span>
                   <span className="font-medium text-right">K{loanCalc.totalInterest.toLocaleString()}</span>
+                  {loanCalc.feesDeductedUpfront > 0 && (
+                    <>
+                      <span className="text-muted-foreground">Processing Fee (2.5%):</span>
+                      <span className="font-medium text-right text-destructive">-K{loanCalc.processingFee.toLocaleString()}</span>
+                      <span className="text-muted-foreground">Legal/Admin Fee (10%):</span>
+                      <span className="font-medium text-right text-destructive">-K{loanCalc.platformFee.toLocaleString()}</span>
+                      <span className="text-muted-foreground">You Will Receive:</span>
+                      <span className="font-bold text-right text-primary">K{loanCalc.disbursementAmount.toLocaleString()}</span>
+                    </>
+                  )}
                   <span className="text-muted-foreground">Total Repayment:</span>
                   <span className="font-bold text-right text-primary">K{loanCalc.totalRepayment.toLocaleString()}</span>
                 </div>

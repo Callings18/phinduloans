@@ -508,7 +508,10 @@ const Apply = () => {
     : 'per month';
 
   const handleSubmit = async () => {
+    console.log('[Apply] handleSubmit called', { user: user?.id, termsAccepted: formData.termsAccepted, dataConsent: formData.dataConsent });
+    
     if (!user) {
+      console.error('[Apply] No user found - redirecting to auth');
       toast({
         title: "Login Required",
         description: "Please login or create an account to submit your application.",
@@ -519,6 +522,7 @@ const Apply = () => {
     }
 
     if (!formData.termsAccepted || !formData.dataConsent) {
+      console.warn('[Apply] Consent not accepted');
       toast({
         title: "Consent Required",
         description: "Please accept the terms and data consent to continue.",
@@ -528,30 +532,33 @@ const Apply = () => {
     }
 
     setIsSubmitting(true);
+    console.log('[Apply] Starting submission process...');
 
     try {
       // 1. Upload Documents with better error handling
       const uploadedDocs: any[] = [];
       const docEntries = Object.entries(dynamicDocs);
+      console.log('[Apply] Documents to upload:', docEntries.map(([type]) => type));
 
       for (const [docType, file] of docEntries) {
         try {
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
+          console.log(`[Apply] Uploading ${docType}: ${fileName}`);
+          
           const { data, error: uploadErr } = await supabase.storage
             .from('loan-documents')
             .upload(fileName, file);
 
           if (uploadErr) {
-            console.error(`Failed to upload ${docType}:`, uploadErr);
-            // Continue with other uploads, don't fail entirely
+            console.error(`[Apply] Failed to upload ${docType}:`, uploadErr);
             toast({
               title: "Document Upload Warning",
               description: `${docType} upload failed: ${uploadErr.message}. Application will continue.`,
               variant: "default",
             });
           } else {
-            // Store the file path instead of public URL
+            console.log(`[Apply] Successfully uploaded ${docType}`);
             uploadedDocs.push({
               document_type: docType,
               file_url: fileName,
@@ -561,7 +568,7 @@ const Apply = () => {
             });
           }
         } catch (err: any) {
-          console.error(`Upload error for ${docType}:`, err);
+          console.error(`[Apply] Upload error for ${docType}:`, err);
         }
       }
 
@@ -572,8 +579,10 @@ const Apply = () => {
         "self-employed": "self_employed",
       };
 
+      console.log('[Apply] Inserting application to database...');
+
       // 3. Insert Application - store file paths for secure access
-      const { data: appData, error: appError } = await supabase.from('loan_applications').insert({
+      const applicationData = {
         user_id: user.id,
         full_name: `${formData.firstName} ${formData.lastName}`,
         email: formData.email,
@@ -594,23 +603,32 @@ const Apply = () => {
         monthly_payment: monthlyPayment,
         total_repayment: totalRepayment,
         loan_product_id: selectedProduct?.id || null,
-        // Use reused URL if available, otherwise new upload URL
         nrc_front_url: formData.reusedDocs['nrc_front'] || uploadedDocs.find(d => d.document_type === 'nrc_front')?.file_url || null,
         nrc_back_url: formData.reusedDocs['nrc_back'] || uploadedDocs.find(d => d.document_type === 'nrc_back')?.file_url || null,
         payslip_url: formData.reusedDocs['payslip'] || uploadedDocs.find(d => d.document_type === 'payslip')?.file_url || null,
         selfie_url: formData.reusedDocs['selfie'] || uploadedDocs.find(d => d.document_type === 'selfie')?.file_url || null,
         collateral_description: formData.collateralDescription || null,
         collateral_value: formData.collateralValue ? parseFloat(formData.collateralValue) : null,
-        status: 'pending',
+        status: 'pending' as const,
         source: 'website',
         crb_consent: formData.dataConsent,
         crb_consent_timestamp: formData.dataConsent ? new Date().toISOString() : null,
-      }).select().single();
+      };
 
-      if (appError) throw appError;
+      console.log('[Apply] Application data:', { ...applicationData, nrc_front_url: '***', nrc_back_url: '***' });
+
+      const { data: appData, error: appError } = await supabase.from('loan_applications').insert(applicationData).select().single();
+
+      if (appError) {
+        console.error('[Apply] Database insert error:', appError);
+        throw appError;
+      }
+
+      console.log('[Apply] Application created successfully:', appData?.id);
 
       // 4. Update profile
-      await supabase.from('profiles').upsert({
+      console.log('[Apply] Updating user profile...');
+      const { error: profileError } = await supabase.from('profiles').upsert({
         id: user.id,
         email: formData.email,
         full_name: `${formData.firstName} ${formData.lastName}`,
@@ -620,8 +638,13 @@ const Apply = () => {
         city: formData.city || null,
       });
 
+      if (profileError) {
+        console.warn('[Apply] Profile update failed (non-critical):', profileError);
+      }
+
       // Clear draft on successful submission
       clearDraft();
+      console.log('[Apply] Application submission complete!');
 
       toast({
         title: "Application Submitted!",
@@ -630,6 +653,7 @@ const Apply = () => {
 
       navigate('/dashboard');
     } catch (error: any) {
+      console.error('[Apply] Submission failed with error:', error);
       toast({
         title: "Submission Failed",
         description: error.message || "Something went wrong. Please try again.",
@@ -1152,11 +1176,36 @@ const Apply = () => {
                       {loanCalc && loanCalc.feesDeductedUpfront > 0 && (
                         <>
                           <div className="h-px bg-border my-3" />
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Service Fees (deducted)</span>
+                          <p className="text-xs text-muted-foreground mb-2">Fees Deducted at Disbursement:</p>
+                          {loanCalc.processingFee > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Processing Fee (2.5%)</span>
+                              <span className="text-destructive">-K{loanCalc.processingFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            </div>
+                          )}
+                          {loanCalc.platformFee > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Legal/Admin Fee (10%)</span>
+                              <span className="text-destructive">-K{loanCalc.platformFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            </div>
+                          )}
+                          {loanCalc.insuranceFee > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Insurance</span>
+                              <span className="text-destructive">-K{loanCalc.insuranceFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            </div>
+                          )}
+                          {loanCalc.vatAmount > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">VAT</span>
+                              <span className="text-destructive">-K{loanCalc.vatAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-sm font-medium border-t border-border/50 pt-2 mt-2">
+                            <span className="text-muted-foreground">Total Deductions</span>
                             <span className="text-destructive">-K{loanCalc.feesDeductedUpfront.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                           </div>
-                          <div className="flex justify-between">
+                          <div className="flex justify-between mt-2">
                             <span className="text-foreground font-medium">You Will Receive</span>
                             <span className="text-primary font-bold text-lg">K{loanCalc.disbursementAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                           </div>

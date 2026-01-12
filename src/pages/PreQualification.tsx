@@ -168,7 +168,13 @@ const PreQualification = () => {
 
         // Determine status
         let status: 'eligible' | 'maybe' | 'not_eligible';
-        if (score >= 70) {
+        
+        // HARD DISQUALIFICATION: DTI over 60% is too risky
+        if (dti > 60) {
+            status = 'not_eligible';
+            reasons.push("Debt-to-income ratio exceeds maximum allowed (60%)");
+            tips.push("Your existing debt payments are too high relative to your income. Pay down existing debts before applying.");
+        } else if (score >= 70) {
             status = 'eligible';
         } else if (score >= 40) {
             status = 'maybe';
