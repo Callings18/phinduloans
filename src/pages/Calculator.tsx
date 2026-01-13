@@ -187,19 +187,21 @@ const Calculator = () => {
                         </span>
                       </div>
 
-                      {/* Legal Fee - Fixed at 10% */}
+                      {/* Legal Fee - From database */}
+                      {(selectedProduct?.platform_fee_percent || 0) > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Legal Fee (10%)</span>
+                        <span className="text-muted-foreground">Legal Fee ({selectedProduct?.platform_fee_percent}%)</span>
                         <span className="font-semibold text-primary">
-                          K{(loanAmount * 0.10).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{(loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
+                      )}
 
                       {/* Total Upfront Deductions */}
                       <div className="flex justify-between pt-2 border-t border-border/50">
                         <span className="text-muted-foreground font-medium">Total Deductions</span>
                         <span className="font-semibold text-primary">
-                          K{(calculation.processingFee + (loanAmount * 0.10)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{(calculation.processingFee + (loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
 
@@ -207,7 +209,7 @@ const Calculator = () => {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount You Receive</span>
                         <span className="font-bold text-success">
-                          K{(loanAmount - calculation.processingFee - (loanAmount * 0.10)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{(loanAmount - calculation.processingFee - (loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>

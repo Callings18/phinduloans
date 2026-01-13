@@ -50,7 +50,7 @@ const LoanCalculator = () => {
       if (error) throw error;
       return data as LoanProduct[];
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0, // Always fetch fresh data
   });
 
   // Set default product when products load
@@ -103,9 +103,10 @@ const LoanCalculator = () => {
 
   const calculation = calculateLoan(amount, term, productForCalc);
 
-  // Upfront fees - Legal is fixed at 10%
+  // Upfront fees - Use database values
   const processingFee = calculation.processingFee;
-  const legalFee = amount * 0.10; // Fixed 10% legal fee
+  const legalFeePercent = selectedProduct?.platform_fee_percent || 0;
+  const legalFee = amount * (legalFeePercent / 100);
   const totalDeductions = processingFee + legalFee;
   
   // Amount you receive = principal - upfront deductions
@@ -233,13 +234,15 @@ const LoanCalculator = () => {
                       </span>
                     </div>
 
-                    {/* Legal Fee - Fixed 10% */}
+                    {/* Legal Fee - From database */}
+                    {legalFeePercent > 0 && (
                     <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Legal Fee (10%)</span>
+                      <span className="text-muted-foreground">Legal Fee ({legalFeePercent}%)</span>
                       <span className="font-semibold text-primary">
                         K{legalFee.toLocaleString('en-ZM', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
+                    )}
 
                     {/* Total Deductions */}
                     <div className="flex justify-between items-center pt-2 border-t border-border/50">
