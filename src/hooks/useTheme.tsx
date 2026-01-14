@@ -1,6 +1,4 @@
-// Custom theme hook for Phindu - cache-bust v3
-import * as React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 
 type Theme = "dark" | "light" | "system";
 
@@ -19,16 +17,14 @@ function getSystemTheme(): "dark" | "light" {
   return "dark";
 }
 
-function getInitialTheme(): Theme {
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem("phindu-theme") as Theme | null;
-    return stored || "dark";
-  }
-  return "dark";
-}
-
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("phindu-theme") as Theme | null;
+      return stored || "dark";
+    }
+    return "dark";
+  });
   const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -60,8 +56,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(newTheme);
   };
 
+  const value = useMemo(
+    () => ({ theme, setTheme, resolvedTheme }),
+    [theme, resolvedTheme]
+  );
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

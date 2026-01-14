@@ -1,5 +1,3 @@
-// Auth hook with explicit React import - cache-bust v3
-import * as React from 'react';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,23 +37,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const hasRole = (role: string) => roles.includes(role);
-  // Admin is now super_admin or admin
   const isAdmin = roles.includes('admin') || roles.includes('super_admin');
 
-  // Staff includes all employee roles
   const isStaff = roles.some(role =>
     ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
   );
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
 
-        // Defer role check 
         if (session?.user) {
           fetchUserRoles(session.user.id).then(setRoles);
         } else {
@@ -64,7 +58,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);

@@ -26,9 +26,7 @@ const Calculator = () => {
         .eq('is_active', true);
       if (error) throw error;
       return data;
-    },
-    staleTime: 0, // Always fetch fresh data
-    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+    }
   });
 
   const selectedProduct = products?.find(p => p.id === selectedProductId) || products?.[0];
@@ -40,10 +38,9 @@ const Calculator = () => {
       interest_period: selectedProduct.interest_period as any,
       interest_type: selectedProduct.interest_type as any,
       processing_fee_percent: selectedProduct.processing_fee_percent,
-      enforcement_fee_percent: selectedProduct.enforcement_fee_percent,
       insurance_percent: selectedProduct.insurance_percent,
       vat_percent: selectedProduct.vat_percent,
-      platform_fee_percent: selectedProduct.platform_fee_percent,
+      platform_fee_percent: selectedProduct.platform_fee_percent, // This is legal fees
       grace_period_days: selectedProduct.grace_period_days,
     }
     : { interest_rate: 15, interest_period: 'monthly', interest_type: 'flat' };
@@ -184,60 +181,28 @@ const Calculator = () => {
                     <p className="text-sm font-semibold text-foreground mb-3">Upfront Fees (Deducted)</p>
                     <div className="space-y-2 text-sm">
                       {/* Processing Fee */}
-                      {calculation.processingFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent || 0}%)</span>
-                          <span className="font-semibold text-yellow-500">
-                            K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent || 1}%)</span>
+                        <span className="font-semibold text-primary">
+                          K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
 
-                      {/* Legal/Enforcement Fee - From database */}
-                      {calculation.enforcementFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Legal Fee ({selectedProduct?.enforcement_fee_percent || 0}%)</span>
-                          <span className="font-semibold text-yellow-500">
-                            K{calculation.enforcementFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Platform Fee */}
-                      {calculation.platformFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Platform Fee ({selectedProduct?.platform_fee_percent || 0}%)</span>
-                          <span className="font-semibold text-yellow-500">
-                            K{calculation.platformFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Insurance Fee */}
-                      {calculation.insuranceFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Insurance ({selectedProduct?.insurance_percent || 0}%)</span>
-                          <span className="font-semibold text-yellow-500">
-                            K{calculation.insuranceFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* VAT */}
-                      {calculation.vatAmount > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent || 0}%)</span>
-                          <span className="font-semibold text-yellow-500">
-                            K{calculation.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
+                      {/* Legal Fee - From database */}
+                      {(selectedProduct?.platform_fee_percent || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Legal Fee ({selectedProduct?.platform_fee_percent}%)</span>
+                        <span className="font-semibold text-primary">
+                          K{(loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                       )}
 
                       {/* Total Upfront Deductions */}
                       <div className="flex justify-between pt-2 border-t border-border/50">
                         <span className="text-muted-foreground font-medium">Total Deductions</span>
-                        <span className="font-semibold text-yellow-500">
-                          K{calculation.feesDeductedUpfront.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        <span className="font-semibold text-primary">
+                          K{(calculation.processingFee + (loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
 
@@ -245,7 +210,7 @@ const Calculator = () => {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount You Receive</span>
                         <span className="font-bold text-success">
-                          K{calculation.disbursementAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{(loanAmount - calculation.processingFee - (loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>

@@ -13,7 +13,6 @@ export interface LoanProduct {
   interest_period?: InterestPeriod | null;
   interest_type?: InterestType | null;
   processing_fee_percent?: number | null;
-  enforcement_fee_percent?: number | null;
   insurance_percent?: number | null;
   vat_percent?: number | null;
   platform_fee_percent?: number | null;
@@ -28,7 +27,6 @@ export interface LoanCalculationResult {
   monthlyInterestRate: number;
   totalInterest: number;
   processingFee: number;
-  enforcementFee: number;
   insuranceFee: number;
   vatAmount: number;
   platformFee: number;
@@ -107,7 +105,7 @@ export function calculateReducingBalancePayment(
 ): number {
   const r = monthlyRate / 100;
   if (r === 0) return principal / termMonths;
-
+  
   // PMT = P × [r(1+r)^n] / [(1+r)^n – 1]
   const payment = principal * (r * Math.pow(1 + r, termMonths)) / (Math.pow(1 + r, termMonths) - 1);
   return payment;
@@ -139,13 +137,13 @@ export function calculateLoan(
     product.interest_rate,
     (product.interest_period as InterestPeriod) || 'monthly'
   );
-
+  
   const interestType = (product.interest_type as InterestType) || 'flat';
-
+  
   // Calculate interest based on type
   let totalInterest: number;
   let monthlyPayment: number;
-
+  
   if (interestType === 'reducing') {
     monthlyPayment = calculateReducingBalancePayment(principal, monthlyRate, termMonths);
     totalInterest = calculateReducingBalanceInterest(principal, monthlyRate, termMonths);
@@ -154,35 +152,33 @@ export function calculateLoan(
     totalInterest = calculateFlatInterest(principal, monthlyRate, termMonths);
     monthlyPayment = (principal + totalInterest) / termMonths;
   }
-
+  
   // Calculate fees - these are DEDUCTED from disbursement, not added to repayment
   const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
-  const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
   const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
   const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
-
+  
   // VAT on fees (not on principal or interest typically)
-  const vatableAmount = processingFee + platformFee + enforcementFee;
+  const vatableAmount = processingFee + platformFee;
   const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
-
-  const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
-
-  // ALL fees are deducted upfront from disbursement (including enforcement/legal fee)
-  const feesDeductedUpfront = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+  
+  const totalFees = processingFee + insuranceFee + platformFee + vatAmount;
+  
+  // ALL fees are deducted upfront from disbursement
+  const feesDeductedUpfront = processingFee + insuranceFee + platformFee + vatAmount;
   const disbursementAmount = principal - feesDeductedUpfront;
-
+  
   // Total repayment is just principal + interest (fees already deducted from disbursement)
   const totalRepayment = principal + totalInterest;
-
+  
   // Monthly payment based on what borrower repays (principal + interest)
   const adjustedMonthlyPayment = totalRepayment / termMonths;
-
+  
   return {
     principal,
     monthlyInterestRate: monthlyRate,
     totalInterest: Math.round(totalInterest * 100) / 100,
     processingFee: Math.round(processingFee * 100) / 100,
-    enforcementFee: Math.round(enforcementFee * 100) / 100,
     insuranceFee: Math.round(insuranceFee * 100) / 100,
     vatAmount: Math.round(vatAmount * 100) / 100,
     platformFee: Math.round(platformFee * 100) / 100,
@@ -208,20 +204,20 @@ export function generateRepaymentSchedule(
     product.interest_rate,
     (product.interest_period as InterestPeriod) || 'monthly'
   );
-
+  
   const interestType = (product.interest_type as InterestType) || 'flat';
   const loanCalc = calculateLoan(principal, termMonths, product);
-
+  
   const schedule: RepaymentScheduleItem[] = [];
   let remainingBalance = principal;
-
+  
   for (let i = 1; i <= termMonths; i++) {
     const dueDate = new Date(startDate);
     dueDate.setMonth(dueDate.getMonth() + i);
-
+    
     let interestPayment: number;
     let principalPayment: number;
-
+    
     if (interestType === 'reducing') {
       // Interest on remaining balance
       interestPayment = remainingBalance * (monthlyRate / 100);
@@ -231,9 +227,9 @@ export function generateRepaymentSchedule(
       interestPayment = loanCalc.totalInterest / termMonths;
       principalPayment = principal / termMonths;
     }
-
+    
     remainingBalance = Math.max(0, remainingBalance - principalPayment);
-
+    
     schedule.push({
       installmentNumber: i,
       dueDate,
@@ -243,7 +239,7 @@ export function generateRepaymentSchedule(
       remainingBalance: Math.round(remainingBalance * 100) / 100,
     });
   }
-
+  
   return schedule;
 }
 
@@ -258,12 +254,12 @@ export function calculatePenalty(
   const penaltyRate = product.late_payment_penalty_percent || 0;
   const frequency = (product.penalty_frequency as PenaltyFrequency) || 'monthly';
   const gracePeriod = product.grace_period_days || 0;
-
+  
   // No penalty within grace period
   if (daysOverdue <= gracePeriod) return 0;
-
+  
   const effectiveDaysOverdue = daysOverdue - gracePeriod;
-
+  
   switch (frequency) {
     case 'daily':
       return overdueAmount * (penaltyRate / 100) * effectiveDaysOverdue;
@@ -294,7 +290,7 @@ export function calculateEarlySettlement(
   const earlyFeeRate = product.early_repayment_fee_percent || 0;
   const earlySettlementFee = outstandingPrincipal * (earlyFeeRate / 100);
   const totalPayoff = outstandingPrincipal + outstandingInterest + totalPenalties + earlySettlementFee;
-
+  
   return {
     earlySettlementFee: Math.round(earlySettlementFee * 100) / 100,
     totalPayoff: Math.round(totalPayoff * 100) / 100,
