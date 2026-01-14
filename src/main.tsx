@@ -1,6 +1,6 @@
-// Main entry - fixed React imports v4
-import React from "react";
-import ReactDOM from "react-dom/client";
+// Main entry - v5 standard imports
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import "@fontsource/outfit/300.css";
 import "@fontsource/outfit/400.css";
 import "@fontsource/outfit/500.css";
@@ -23,8 +23,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
     <App />
-  </React.StrictMode>
+  </StrictMode>
 );
