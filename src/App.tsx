@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -34,13 +35,12 @@ import AdminPMIC from "./pages/admin/AdminPMIC";
 import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
-import { useEffect } from "react";
 
 const queryClient = new QueryClient();
 
 function App() {
   // Apply dark theme on mount
-  useEffect(() => {
+  React.useEffect(() => {
     document.documentElement.classList.add("dark");
   }, []);
 
