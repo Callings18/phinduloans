@@ -1,6 +1,5 @@
-// Custom theme hook for Phindu - cache-bust v3
+// Custom theme hook for Phindu - cache-bust v4
 import * as React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light" | "system";
 
@@ -10,7 +9,7 @@ interface ThemeContextType {
   resolvedTheme: "dark" | "light";
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
 function getSystemTheme(): "dark" | "light" {
   if (typeof window !== "undefined") {
@@ -28,10 +27,10 @@ function getInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+  const [theme, setThemeState] = React.useState<Theme>(getInitialTheme);
+  const [resolvedTheme, setResolvedTheme] = React.useState<"dark" | "light">("dark");
 
-  useEffect(() => {
+  React.useEffect(() => {
     const root = document.documentElement;
     const resolved = theme === "system" ? getSystemTheme() : theme;
     
@@ -41,7 +40,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("phindu-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -68,7 +67,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
+  const context = React.useContext(ThemeContext);
   if (context === undefined) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
