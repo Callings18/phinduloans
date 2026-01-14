@@ -8,19 +8,37 @@ const corsHeaders = {
 
 interface NotificationRequest {
   type: 'sms' | 'email' | 'whatsapp';
-  provider: string;
+  provider?: string;
   to: string;
   message: string;
   subject?: string;
   title?: string;
   userId?: string;
+  htmlContent?: string;
 }
 
 interface NotificationSettings {
+  // SMS Settings
+  sms_enabled?: boolean;
+  sms_provider?: string;
   africastalking_username?: string;
   africastalking_api_key?: string;
   africastalking_sender_id?: string;
-  africastalking_whatsapp_number?: string;
+  
+  // WhatsApp Settings  
+  whatsapp_enabled?: boolean;
+  whatsapp_provider?: string;
+  fonnte_api_token?: string;
+  fonnte_device_id?: string;
+  
+  // Email Settings
+  email_enabled?: boolean;
+  email_provider?: string;
+  resend_api_key?: string;
+  resend_from_email?: string;
+  resend_from_name?: string;
+  
+  // Legacy settings (keeping for backwards compatibility)
   twilio_account_sid?: string;
   twilio_auth_token?: string;
   twilio_phone_number?: string;
@@ -51,6 +69,10 @@ async function getNotificationSettings(supabase: any): Promise<NotificationSetti
   return data.value as NotificationSettings;
 }
 
+// ============================================================================
+// SMS PROVIDERS
+// ============================================================================
+
 async function sendSMS_AfricasTalking(
   to: string,
   message: string,
@@ -64,7 +86,7 @@ async function sendSMS_AfricasTalking(
     throw new Error("Africa's Talking credentials not configured");
   }
 
-  // Format phone number
+  // Format phone number for Zambia
   let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   if (phone.startsWith("0")) {
     phone = "+260" + phone.substring(1);
@@ -115,7 +137,6 @@ async function sendSMS_Twilio(
     throw new Error("Twilio credentials not configured");
   }
 
-  // Format phone number
   let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   if (phone.startsWith("0")) {
     phone = "+260" + phone.substring(1);
@@ -151,49 +172,52 @@ async function sendSMS_Twilio(
   return result;
 }
 
-async function sendWhatsApp_AfricasTalking(
+// ============================================================================
+// WHATSAPP PROVIDERS
+// ============================================================================
+
+/**
+ * Fonnte WhatsApp API - Very affordable (~$6/month unlimited)
+ * Documentation: https://fonnte.com/api
+ */
+async function sendWhatsApp_Fonnte(
   to: string,
   message: string,
   settings: NotificationSettings
 ): Promise<any> {
-  const username = settings.africastalking_username;
-  const apiKey = settings.africastalking_api_key;
-  const whatsappNumber = settings.africastalking_whatsapp_number;
+  const apiToken = settings.fonnte_api_token;
 
-  if (!username || !apiKey || !whatsappNumber) {
-    throw new Error("Africa's Talking WhatsApp credentials not configured");
+  if (!apiToken) {
+    throw new Error("Fonnte API token not configured");
   }
 
-  // Format phone number
+  // Format phone number - Fonnte accepts various formats
   let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   if (phone.startsWith("0")) {
-    phone = "+260" + phone.substring(1);
-  } else if (!phone.startsWith("+")) {
-    phone = "+260" + phone;
+    phone = "260" + phone.substring(1); // Zambia country code without +
+  } else if (phone.startsWith("+")) {
+    phone = phone.substring(1); // Remove + prefix
   }
 
-  const atUrl = username === "sandbox" 
-    ? "https://api.sandbox.africastalking.com/version1/messaging"
-    : "https://api.africastalking.com/version1/messaging";
-
-  const formData = new URLSearchParams();
-  formData.append("username", username);
-  formData.append("to", phone);
-  formData.append("message", message);
-  formData.append("from", whatsappNumber);
-
-  const response = await fetch(atUrl, {
+  const response = await fetch("https://api.fonnte.com/send", {
     method: "POST",
     headers: {
-      "apiKey": apiKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Accept": "application/json"
+      "Authorization": apiToken,
+      "Content-Type": "application/json",
     },
-    body: formData.toString()
+    body: JSON.stringify({
+      target: phone,
+      message: message,
+      countryCode: "260", // Zambia
+    })
   });
 
   const result = await response.json();
-  console.log("[WhatsApp - AfricasTalking] Response:", JSON.stringify(result));
+  console.log("[WhatsApp - Fonnte] Response:", JSON.stringify(result));
+
+  if (!result.status) {
+    throw new Error(result.reason || result.detail || "Failed to send WhatsApp via Fonnte");
+  }
 
   return result;
 }
@@ -211,7 +235,6 @@ async function sendWhatsApp_Twilio(
     throw new Error("Twilio WhatsApp credentials not configured");
   }
 
-  // Format phone number
   let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   if (phone.startsWith("0")) {
     phone = "+260" + phone.substring(1);
@@ -247,11 +270,60 @@ async function sendWhatsApp_Twilio(
   return result;
 }
 
+// ============================================================================
+// EMAIL PROVIDERS
+// ============================================================================
+
+/**
+ * Resend Email API - 3,000 free emails/month, very easy to use
+ * Documentation: https://resend.com/docs
+ */
+async function sendEmail_Resend(
+  to: string,
+  subject: string,
+  message: string,
+  settings: NotificationSettings,
+  htmlContent?: string
+): Promise<any> {
+  const apiKey = settings.resend_api_key;
+  const fromEmail = settings.resend_from_email || "noreply@phindu.co.zm";
+  const fromName = settings.resend_from_name || "Phindu Finance";
+
+  if (!apiKey) {
+    throw new Error("Resend API key not configured");
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: `${fromName} <${fromEmail}>`,
+      to: [to],
+      subject: subject,
+      text: message,
+      html: htmlContent || `<p>${message.replace(/\n/g, '<br>')}</p>`,
+    }),
+  });
+
+  const result = await response.json();
+  console.log("[Email - Resend] Response:", JSON.stringify(result));
+
+  if (!response.ok) {
+    throw new Error(result.message || `Resend error: ${response.status}`);
+  }
+
+  return result;
+}
+
 async function sendEmail_SendGrid(
   to: string,
   subject: string,
   message: string,
-  settings: NotificationSettings
+  settings: NotificationSettings,
+  htmlContent?: string
 ): Promise<any> {
   const apiKey = settings.sendgrid_api_key;
   const fromEmail = settings.sendgrid_from_email;
@@ -276,10 +348,16 @@ async function sendEmail_SendGrid(
         email: fromEmail,
         name: fromName,
       },
-      content: [{
-        type: "text/plain",
-        value: message,
-      }],
+      content: [
+        {
+          type: "text/plain",
+          value: message,
+        },
+        ...(htmlContent ? [{
+          type: "text/html",
+          value: htmlContent,
+        }] : []),
+      ],
     }),
   });
 
@@ -293,20 +371,9 @@ async function sendEmail_SendGrid(
   return { success: true, messageId: response.headers.get("x-message-id") };
 }
 
-async function sendEmail_SMTP(
-  to: string,
-  subject: string,
-  message: string,
-  settings: NotificationSettings
-): Promise<any> {
-  // Note: Deno doesn't have built-in SMTP support
-  // This would typically require a third-party library or service
-  // For now, we'll log and return a placeholder
-  console.log("[Email - SMTP] SMTP sending not yet implemented in edge function");
-  console.log(`Would send to: ${to}, Subject: ${subject}`);
-  
-  throw new Error("SMTP sending not yet implemented. Please use SendGrid or configure an SMTP relay service.");
-}
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
 
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -319,66 +386,106 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const request: NotificationRequest = await req.json();
-    const { type, provider, to, message, subject, title, userId } = request;
+    const { type, provider: requestedProvider, to, message, subject, title, userId, htmlContent } = request;
 
-    if (!type || !provider || !to || !message) {
+    if (!type || !to || !message) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: type, provider, to, message" }),
+        JSON.stringify({ error: "Missing required fields: type, to, message" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
+    const settings = await getNotificationSettings(supabase);
+    
+    // Determine provider from settings or request
+    let provider = requestedProvider;
+    if (!provider) {
+      if (type === 'sms') {
+        provider = settings.sms_provider || 'africastalking';
+      } else if (type === 'whatsapp') {
+        provider = settings.whatsapp_provider || 'fonnte';
+      } else if (type === 'email') {
+        provider = settings.email_provider || 'resend';
+      }
+    }
+
     console.log(`[Notification] Sending ${type} via ${provider} to ${to}`);
 
-    const settings = await getNotificationSettings(supabase);
     let result: any;
+    let status = "sent";
 
-    // Route to appropriate provider
-    if (type === 'sms') {
-      if (provider === 'africastalking') {
-        result = await sendSMS_AfricasTalking(to, message, settings);
-      } else if (provider === 'twilio') {
-        result = await sendSMS_Twilio(to, message, settings);
+    try {
+      // Route to appropriate provider
+      if (type === 'sms') {
+        if (!settings.sms_enabled) {
+          throw new Error("SMS notifications are disabled");
+        }
+        if (provider === 'africastalking') {
+          result = await sendSMS_AfricasTalking(to, message, settings);
+        } else if (provider === 'twilio') {
+          result = await sendSMS_Twilio(to, message, settings);
+        } else {
+          throw new Error(`Unsupported SMS provider: ${provider}`);
+        }
+      } else if (type === 'whatsapp') {
+        if (!settings.whatsapp_enabled) {
+          throw new Error("WhatsApp notifications are disabled");
+        }
+        if (provider === 'fonnte') {
+          result = await sendWhatsApp_Fonnte(to, message, settings);
+        } else if (provider === 'twilio') {
+          result = await sendWhatsApp_Twilio(to, message, settings);
+        } else {
+          throw new Error(`Unsupported WhatsApp provider: ${provider}`);
+        }
+      } else if (type === 'email') {
+        if (!settings.email_enabled) {
+          throw new Error("Email notifications are disabled");
+        }
+        if (!subject) {
+          return new Response(
+            JSON.stringify({ error: "Subject required for email notifications" }),
+            { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          );
+        }
+        if (provider === 'resend') {
+          result = await sendEmail_Resend(to, subject, message, settings, htmlContent);
+        } else if (provider === 'sendgrid') {
+          result = await sendEmail_SendGrid(to, subject, message, settings, htmlContent);
+        } else {
+          throw new Error(`Unsupported email provider: ${provider}`);
+        }
       } else {
-        throw new Error(`Unsupported SMS provider: ${provider}`);
+        throw new Error(`Unsupported notification type: ${type}`);
       }
-    } else if (type === 'whatsapp') {
-      if (provider === 'africastalking') {
-        result = await sendWhatsApp_AfricasTalking(to, message, settings);
-      } else if (provider === 'twilio') {
-        result = await sendWhatsApp_Twilio(to, message, settings);
-      } else {
-        throw new Error(`Unsupported WhatsApp provider: ${provider}`);
-      }
-    } else if (type === 'email') {
-      if (!subject) {
-        return new Response(
-          JSON.stringify({ error: "Subject required for email notifications" }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-      if (provider === 'sendgrid') {
-        result = await sendEmail_SendGrid(to, subject, message, settings);
-      } else if (provider === 'smtp') {
-        result = await sendEmail_SMTP(to, subject, message, settings);
-      } else {
-        throw new Error(`Unsupported email provider: ${provider}`);
-      }
-    } else {
-      throw new Error(`Unsupported notification type: ${type}`);
+    } catch (sendError: any) {
+      status = "failed";
+      result = { error: sendError.message };
+      console.error(`[Notification] Send failed:`, sendError.message);
     }
 
     // Log to database
-    await supabase.from("notification_logs").insert({
-      user_id: userId || null,
-      type: type,
-      recipient: to,
-      title: title || subject || "Notification",
-      message: message,
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      provider_response: result
-    });
+    try {
+      await supabase.from("notification_logs").insert({
+        user_id: userId || null,
+        type: type,
+        recipient: to,
+        title: title || subject || "Notification",
+        message: message,
+        status: status,
+        sent_at: status === "sent" ? new Date().toISOString() : null,
+        provider_response: { provider, ...result }
+      });
+    } catch (logError) {
+      console.error("[Notification] Failed to log:", logError);
+    }
+
+    if (status === "failed") {
+      return new Response(
+        JSON.stringify({ success: false, error: result.error }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ success: true, result }),
