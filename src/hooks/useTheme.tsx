@@ -1,4 +1,4 @@
-// Custom theme hook for Phindu - cache-bust v4
+// Custom theme hook for Phindu - cache-bust v5
 import * as React from "react";
 
 type Theme = "dark" | "light" | "system";
