@@ -1603,6 +1603,42 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_templates: {
+        Row: {
+          created_at: string | null
+          email_subject: string | null
+          email_template: string | null
+          event_type: string
+          id: string
+          is_active: boolean | null
+          sms_template: string | null
+          updated_at: string | null
+          whatsapp_template: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_subject?: string | null
+          email_template?: string | null
+          event_type: string
+          id?: string
+          is_active?: boolean | null
+          sms_template?: string | null
+          updated_at?: string | null
+          whatsapp_template?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_subject?: string | null
+          email_template?: string | null
+          event_type?: string
+          id?: string
+          is_active?: boolean | null
+          sms_template?: string | null
+          updated_at?: string | null
+          whatsapp_template?: string | null
+        }
+        Relationships: []
+      }
       payment_gateway_settings: {
         Row: {
           api_key: string | null
