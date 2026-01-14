@@ -1,0 +1,281 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "React 18",
+    "Vite",
+    "Tailwind CSS",
+    "Supabase",
+    "React Router v6",
+    "TanStack React Query",
+    "Shadcn/ui",
+    "React Hook Form",
+    "Zod"
+  ],
+  "features": [
+    {
+      "name": "Home Page",
+      "description": "Landing page with hero section, features overview, how it works section, and call-to-action for loan applications",
+      "files": [
+        "src/pages/Index.tsx",
+        "src/components/home/HeroSection.tsx",
+        "src/components/home/FeaturesSection.tsx",
+        "src/components/home/HowItWorks.tsx",
+        "src/components/home/CTASection.tsx",
+        "src/components/home/LoanCalculator.tsx"
+      ]
+    },
+    {
+      "name": "User Authentication",
+      "description": "User login and registration functionality with Supabase authentication",
+      "files": [
+        "src/pages/Auth.tsx",
+        "src/hooks/useAuth.tsx"
+      ]
+    },
+    {
+      "name": "Loan Application",
+      "description": "Multi-step loan application form where users can apply for loans with personal details, employment info, and document uploads",
+      "files": [
+        "src/pages/Apply.tsx",
+        "src/hooks/useApplicationDraft.ts"
+      ]
+    },
+    {
+      "name": "Pre-Qualification",
+      "description": "Check loan eligibility before formal application with basic credit and employment checks",
+      "files": [
+        "src/pages/PreQualification.tsx"
+      ]
+    },
+    {
+      "name": "Loan Calculator",
+      "description": "Calculate loan repayments, interest, and monthly installments based on amount, term, and rate",
+      "files": [
+        "src/pages/Calculator.tsx",
+        "src/components/home/LoanCalculator.tsx",
+        "src/utils/loanCalculations.ts"
+      ]
+    },
+    {
+      "name": "User Dashboard",
+      "description": "User dashboard showing application status, wallet balance, payment reminders, and quick actions",
+      "files": [
+        "src/pages/Dashboard.tsx",
+        "src/components/dashboard/ApplicationStatusTracker.tsx",
+        "src/components/dashboard/WalletWidget.tsx",
+        "src/components/dashboard/PaymentReminder.tsx",
+        "src/components/dashboard/QuickApply.tsx",
+        "src/components/dashboard/CapitalPoolWidget.tsx"
+      ]
+    },
+    {
+      "name": "User Profile",
+      "description": "User profile management with personal information and settings",
+      "files": [
+        "src/pages/Profile.tsx"
+      ]
+    },
+    {
+      "name": "About Page",
+      "description": "Company information and about us page",
+      "files": [
+        "src/pages/About.tsx"
+      ]
+    },
+    {
+      "name": "Admin Dashboard",
+      "description": "Admin overview with key metrics, quick actions, and system status widgets",
+      "files": [
+        "src/pages/admin/AdminDashboard.tsx",
+        "src/components/admin/AdminLayout.tsx",
+        "src/components/admin/AdminSidebar.tsx",
+        "src/components/admin/ModuleWidgets.tsx",
+        "src/components/admin/QuickActions.tsx"
+      ]
+    },
+    {
+      "name": "Loan Applications Management",
+      "description": "Admin interface to review, approve, or reject loan applications",
+      "files": [
+        "src/pages/admin/AdminApplications.tsx",
+        "src/components/admin/LoanDetailsModal.tsx",
+        "src/components/admin/DocumentVerificationTab.tsx",
+        "src/components/admin/GuarantorTab.tsx"
+      ]
+    },
+    {
+      "name": "Loans Management",
+      "description": "Manage active loans, view loan details, and track loan status",
+      "files": [
+        "src/pages/admin/AdminLoans.tsx"
+      ]
+    },
+    {
+      "name": "Borrowers Management",
+      "description": "Manage borrower profiles, view borrower history and credit information",
+      "files": [
+        "src/pages/admin/AdminBorrowers.tsx"
+      ]
+    },
+    {
+      "name": "Repayments Management",
+      "description": "Track and manage loan repayments, process payments, and generate receipts",
+      "files": [
+        "src/pages/admin/AdminRepayments.tsx",
+        "src/pages/admin/AdminBulkRepayments.tsx",
+        "src/utils/generateRepaymentReceipt.ts"
+      ]
+    },
+    {
+      "name": "Disbursements Management",
+      "description": "Process and track loan disbursements to borrowers",
+      "files": [
+        "src/pages/admin/AdminDisbursements.tsx"
+      ]
+    },
+    {
+      "name": "Collections Management",
+      "description": "Manage loan collections, track overdue payments, and automate collection workflows",
+      "files": [
+        "src/pages/admin/AdminCollections.tsx",
+        "src/components/admin/CollectionsAutomation.tsx",
+        "src/utils/generateDemandLetter.ts"
+      ]
+    },
+    {
+      "name": "Loan Products",
+      "description": "Configure and manage different loan product types with terms, rates, and requirements",
+      "files": [
+        "src/pages/admin/AdminLoanProducts.tsx",
+        "src/components/admin/ProductDocumentManager.tsx"
+      ]
+    },
+    {
+      "name": "Employer Management",
+      "description": "Manage employer records for payroll deduction loans",
+      "files": [
+        "src/pages/admin/AdminEmployers.tsx"
+      ]
+    },
+    {
+      "name": "Staff Management",
+      "description": "Manage staff accounts, roles, and permissions",
+      "files": [
+        "src/pages/admin/AdminStaff.tsx"
+      ]
+    },
+    {
+      "name": "Reports",
+      "description": "Generate and export various reports on loans, repayments, and performance",
+      "files": [
+        "src/pages/admin/AdminReports.tsx",
+        "src/components/admin/ReportsExport.tsx"
+      ]
+    },
+    {
+      "name": "PMIC Module",
+      "description": "Payroll Micro Insurance Corporation integration for employee loan deductions and compliance",
+      "files": [
+        "src/pages/admin/AdminPMIC.tsx",
+        "src/components/admin/pmic/PMICConfigSettings.tsx",
+        "src/components/admin/pmic/PMICEligibilityCalculator.tsx",
+        "src/components/admin/pmic/PMICEmployerList.tsx",
+        "src/components/admin/pmic/PMICEnrollmentList.tsx",
+        "src/components/admin/pmic/PMICExceptionList.tsx",
+        "src/components/admin/pmic/PMICSubmissionList.tsx",
+        "src/hooks/usePMIC.ts",
+        "src/utils/pmicEligibilityCalculator.ts",
+        "src/utils/generatePMICExport.ts"
+      ]
+    },
+    {
+      "name": "Accounts Management",
+      "description": "Manage financial accounts and transactions",
+      "files": [
+        "src/pages/admin/AdminAccounts.tsx"
+      ]
+    },
+    {
+      "name": "Expenses Tracking",
+      "description": "Track and manage operational expenses",
+      "files": [
+        "src/pages/admin/AdminExpenses.tsx"
+      ]
+    },
+    {
+      "name": "Write-offs Management",
+      "description": "Manage loan write-offs for bad debts",
+      "files": [
+        "src/pages/admin/AdminWriteOffs.tsx",
+        "src/components/admin/WriteOffTab.tsx"
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "description": "View system audit logs and activity history",
+      "files": [
+        "src/pages/admin/AdminAuditLogs.tsx"
+      ]
+    },
+    {
+      "name": "Contract Templates",
+      "description": "Manage loan contract templates and document generation",
+      "files": [
+        "src/pages/admin/AdminContractTemplates.tsx",
+        "src/utils/generateLoanContract.ts",
+        "src/utils/generateLoanSchedule.ts",
+        "src/utils/generateStatement.ts",
+        "src/utils/generateClearanceCertificate.ts"
+      ]
+    },
+    {
+      "name": "System Settings",
+      "description": "Configure system settings, integrations, and notification providers",
+      "files": [
+        "src/pages/admin/AdminSettings.tsx",
+        "src/components/admin/IntegrationsSettings.tsx",
+        "src/components/admin/NotificationProvidersSettings.tsx",
+        "src/components/admin/WorkflowConfiguration.tsx",
+        "src/hooks/useSystemSettings.ts"
+      ]
+    },
+    {
+      "name": "Risk Assessment",
+      "description": "Credit risk assessment and CRB checks for loan applications",
+      "files": [
+        "src/components/admin/RiskAssessmentModule.tsx",
+        "src/components/admin/CRBCheckModule.tsx",
+        "src/components/admin/GuaranteeCheckModule.tsx"
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "Push notifications, SMS, and email notification services",
+      "files": [
+        "src/components/common/NotificationCenter.tsx",
+        "src/utils/notifications.ts",
+        "src/utils/notificationService.ts",
+        "src/utils/pushNotifications.ts",
+        "src/utils/smsService.ts"
+      ]
+    },
+    {
+      "name": "Navigation and Layout",
+      "description": "Common navigation components including navbar and footer",
+      "files": [
+        "src/components/layout/Navbar.tsx",
+        "src/components/layout/Footer.tsx",
+        "src/components/NavLink.tsx"
+      ]
+    },
+    {
+      "name": "Theme and UI",
+      "description": "Theme toggling and common UI utilities",
+      "files": [
+        "src/hooks/useTheme.tsx",
+        "src/components/common/ThemeToggle.tsx",
+        "src/components/ui/"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,574 @@
+[
+  {
+    "id": "TC001",
+    "title": "User Login with Correct Credentials",
+    "description": "Verify that users can successfully log in with valid username/email and password combinations.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid username/email and corresponding password."
+      },
+      {
+        "type": "action",
+        "description": "Click the login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that login is successful and the user is redirected to their dashboard."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "User Login with Incorrect Credentials",
+    "description": "Ensure that login fails with invalid username/email or password and proper error messages are displayed.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter an invalid username/email or incorrect password."
+      },
+      {
+        "type": "action",
+        "description": "Click the login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that an appropriate error message is shown and login is not allowed."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "User Registration with Valid Data",
+    "description": "Verify that a new user can register successfully by providing valid data including all mandatory fields.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the registration page."
+      },
+      {
+        "type": "action",
+        "description": "Input valid personal details, contact information, and password."
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm registration success and system sends verification where applicable."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "User Registration with Missing Mandatory Fields",
+    "description": "Ensure the registration form validates mandatory fields and shows appropriate error messages when fields are missing.",
+    "category": "error handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to registration page."
+      },
+      {
+        "type": "action",
+        "description": "Leave mandatory fields blank and attempt to submit the form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation errors are displayed for each missing mandatory field preventing submission."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Loan Calculator Accuracy for Various Inputs",
+    "description": "Verify the loan calculator correctly computes repayment amounts, interest, and monthly installments for different amounts, terms, and interest rates.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the Loan Calculator page."
+      },
+      {
+        "type": "action",
+        "description": "Input a loan amount, term, and interest rate."
+      },
+      {
+        "type": "action",
+        "description": "Trigger the calculation."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the repayment schedule and interest amounts are accurate as per calculation formulas."
+      },
+      {
+        "type": "action",
+        "description": "Repeat with edge values such as minimum and maximum allowed loan amounts and terms."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm calculator handles edge cases without errors and returns usable results."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Pre-Qualification Eligibility Check",
+    "description": "Verify the pre-qualification tool accurately determines eligibility based on credit and employment checks before submission.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the pre-qualification page."
+      },
+      {
+        "type": "action",
+        "description": "Input applicant data including employment and credit info."
+      },
+      {
+        "type": "action",
+        "description": "Submit the pre-qualification check."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the system returns correct eligibility status either 'eligible' or 'not eligible' with reasons."
+      },
+      {
+        "type": "action",
+        "description": "Test with borderline cases and invalid inputs."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure the tool handles these gracefully and responds accordingly."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Multi-Step Loan Application Completion",
+    "description": "Ensure the multi-step loan application form collects and validates borrower personal, employment, and document details correctly.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the loan application page."
+      },
+      {
+        "type": "action",
+        "description": "Complete personal details step with valid data."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that form proceeds to employment details step."
+      },
+      {
+        "type": "action",
+        "description": "Complete employment information accurately."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify successful navigation to document upload step."
+      },
+      {
+        "type": "action",
+        "description": "Upload all required documents and submit application."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm application submission success and correct data persistence."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Loan Application Form Validation on Missing Fields",
+    "description": "Verify the loan application form validates mandatory fields at each step and prevents progressing or submitting with missing or invalid data.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to loan application page."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to proceed from personal details step with missing mandatory fields."
+      },
+      {
+        "type": "assertion",
+        "description": "Errors must be shown for each missing field and prevent moving forward."
+      },
+      {
+        "type": "action",
+        "description": "Repeat validation on employment details and document upload steps."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm consistent validation behavior preventing incomplete submissions."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Admin Review Loan Applications with CRB and PMIC Compliance",
+    "description": "Verify admin can access loan applications, view CRB and PMIC integration results, approve or reject applications accordingly.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as admin and navigate to loan applications management."
+      },
+      {
+        "type": "action",
+        "description": "Select a submitted application."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify CRB and PMIC check results are visible and clearly displayed."
+      },
+      {
+        "type": "action",
+        "description": "Approve the application with valid checks."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the status of the application updates to approved."
+      },
+      {
+        "type": "action",
+        "description": "Reject an application failing compliance checks."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify status updates to rejected and reason is logged."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Loan Disbursement Processing",
+    "description": "Verify that after admin approval, loans can be disbursed correctly and reflected in borrower dashboards.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as admin and navigate to disbursements management."
+      },
+      {
+        "type": "action",
+        "description": "Select approved loan applications ready for disbursement."
+      },
+      {
+        "type": "action",
+        "description": "Process disbursement."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm loan status updates to disbursed and borrower wallet balance reflects the disbursed amount."
+      },
+      {
+        "type": "action",
+        "description": "Login as borrower and verify updated loan and wallet details on dashboard."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Repayment Processing and Receipt Generation",
+    "description": "Validate that repayments can be processed both manually and via bulk processing, with accurate repayment schedules and receipts generated.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "As admin, navigate to repayments management."
+      },
+      {
+        "type": "action",
+        "description": "Process a manual repayment for an active loan."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify repayment schedule is updated and receipt is generated correctly."
+      },
+      {
+        "type": "action",
+        "description": "Prepare a bulk repayment batch and submit."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm all repayments in bulk are processed correctly with receipts generated."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Role-Based Access Control Enforcement",
+    "description": "Verify system enforces permissions for all user roles. Differentiate access rights for borrowers, admins, and staff on various modules.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as borrower and attempt to access admin pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Access should be denied with appropriate messages."
+      },
+      {
+        "type": "action",
+        "description": "Login as staff with limited permissions and attempt actions beyond role."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify actions are blocked and unauthorized access is logged."
+      },
+      {
+        "type": "action",
+        "description": "Login as admin and access restricted sections."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm full access granted as per role."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Audit Log Captures Critical User and System Activities",
+    "description": "Ensure all key system events such as logins, loan approvals, disbursements, repayments, and configuration changes are logged with timestamp, user and details.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Perform critical actions like login, approve loan, disburse loan, process repayment, and change settings."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to audit logs as admin."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify logs exist for each action with accurate details and timestamps."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Multi-Tenant Data Isolation",
+    "description": "Confirm that tenant data is completely isolated in the SaaS platform and that cross-tenant data access is blocked.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as user of tenant A and access tenant data."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no data from tenant B is visible or accessible."
+      },
+      {
+        "type": "action",
+        "description": "Login as admin of tenant B and verify tenant A data is inaccessible."
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Notification Delivery via Email and SMS",
+    "description": "Verify notifications related to loan applications, repayments, and system alerts are sent promptly and accurately via configured email and SMS providers.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Trigger notification events such as loan approval and repayment reminders."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify notifications are delivered to users via email and SMS."
+      },
+      {
+        "type": "action",
+        "description": "Test system behavior on notification service failure by simulating errors."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure failures are logged and retries or fallback mechanisms occur."
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Admin Legal Case Management for Loans",
+    "description": "Verify admin can create, update, and track loan-related court cases and assign lawyers correctly in the collections management module.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as admin and navigate to collections management."
+      },
+      {
+        "type": "action",
+        "description": "Create a new legal case linked to a loan."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm case creation with correct loan association."
+      },
+      {
+        "type": "action",
+        "description": "Assign a lawyer to the case."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify lawyer assignment is saved and reflected in case status."
+      },
+      {
+        "type": "action",
+        "description": "Update case status and track progress."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure status updates persist and notifications trigger if applicable."
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Configurable Loan Products Validation",
+    "description": "Verify loan product configurations allow setting terms, rates, fees, and eligibility rules and these apply correctly in loan calculations and applications.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as admin and navigate to loan products management."
+      },
+      {
+        "type": "action",
+        "description": "Create or update a loan product with specific terms, rates, fees, and eligibility settings."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm configurations save successfully."
+      },
+      {
+        "type": "action",
+        "description": "Submit a loan application selecting the configured loan product."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify loan calculations, eligibility checks, and terms adhere to configured product rules."
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "User Dashboard Loan Status and Wallet Display",
+    "description": "Check that borrower dashboard shows real-time loan application status, active loans, wallet balance, payment reminders, and available quick actions.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as a borrower with active loan applications and wallet balance."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the dashboard accurately reflects current loan status, wallet balance, pending payments, and quick apply options."
+      },
+      {
+        "type": "action",
+        "description": "Trigger status updates by simulating loan application approval or repayment."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm dashboard updates accordingly and timely."
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Staff Management Role Assignments and Permissions",
+    "description": "Verify admin can create staff accounts, assign roles, permissions, and that assigned permissions are enforced throughout the system.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "As admin, create a new staff user."
+      },
+      {
+        "type": "action",
+        "description": "Assign a predefined role with limited or full permissions."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm staff record saves with correct roles."
+      },
+      {
+        "type": "action",
+        "description": "Login as staff and verify access matches assigned permissions."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure staff can access only authorized modules and functionalities."
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Report Generation and Export",
+    "description": "Verify reports on loans, repayments, and performance generate correctly with accurate data and can be exported in available formats.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as admin and navigate to reports section."
+      },
+      {
+        "type": "action",
+        "description": "Generate loan performance and repayment reports for given date ranges."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify reports display correct aggregated data."
+      },
+      {
+        "type": "action",
+        "description": "Export reports in supported formats (e.g., PDF, CSV)."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm exported files contain accurate data and open without errors."
+      }
+    ]
+  }
+]

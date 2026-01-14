@@ -1,0 +1,15 @@
+{
+  "status": "init",
+  "executionArgs": {
+    "projectName": "phinduloans",
+    "projectPath": "c:\\Users\\calli\\Documents\\PhinduLoans\\phinduloans",
+    "testIds": [],
+    "additionalInstruction": "",
+    "envs": {
+      "API_KEY": "sk-user-iTVHJO87OEGHqjCbDFCA7QtOzHq5aX2mWizpXW8BUVkVSzpq9drxBs_zhw4PlTXEfr5BwJiBhS3dcGR2LgSuOywQWbkwcqK72a21bx14eK3U5-KNqQURirk0eIN7MFB4TV4"
+    }
+  },
+  "scope": "codebase",
+  "type": "frontend",
+  "localEndpoint": "http://localhost:8080/"
+}
