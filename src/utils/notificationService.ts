@@ -158,7 +158,7 @@ class NotificationService {
   // ============================================================================
 
   async sendSignupWelcome(userId: string, name: string, phone: string, email?: string) {
-    const message = `Welcome to Phindu Finance, ${name}! 🎉\n\nYour account has been created successfully. You can now apply for loans and manage your finances with ease.\n\nContact us at support@phindu.co.zm for any assistance.`;
+    const message = `Welcome to Phindu Finance, ${name}! 🎉\n\nYour account has been created successfully. You can now apply for loans and manage your finances with ease.\n\nContact us at info@phindu.com for any assistance.`;
     const subject = "Welcome to Phindu Finance!";
 
     return this.sendMultiChannel({

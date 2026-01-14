@@ -58,7 +58,7 @@ const AdminSettings = () => {
   const [companyInfo, setCompanyInfo] = useState({
     name: "Phindu Loans",
     address: "Lusaka, Zambia",
-    support_email: "support@phindu.co.zm",
+    support_email: "info@phindu.com",
     support_phone: "+260 967 713 001",
     tax_id: ""
   });

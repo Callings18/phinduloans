@@ -432,7 +432,7 @@ export const BrevoSettings = () => {
                   <Label>Sender Email</Label>
                   <Input
                     type="email"
-                    placeholder="notifications@phindu.co.zm"
+                    placeholder="noreply@phindu.com"
                     value={settings.brevo_sender_email}
                     onChange={(e) => setSettings({ ...settings, brevo_sender_email: e.target.value })}
                   />

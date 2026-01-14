@@ -286,7 +286,7 @@ async function sendEmail_Resend(
   htmlContent?: string
 ): Promise<any> {
   const apiKey = settings.resend_api_key;
-  const fromEmail = settings.resend_from_email || "noreply@phindu.co.zm";
+  const fromEmail = settings.resend_from_email || "noreply@phindu.com";
   const fromName = settings.resend_from_name || "Phindu Finance";
 
   if (!apiKey) {

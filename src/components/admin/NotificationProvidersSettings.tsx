@@ -790,7 +790,7 @@ export const NotificationProvidersSettings = () => {
                           <Label>From Email</Label>
                           <Input
                             type="email"
-                            placeholder="noreply@phindu.co.zm"
+                            placeholder="noreply@phindu.com"
                             value={settings.sendgrid_from_email}
                             onChange={(e) => 
                               setSettings({ ...settings, sendgrid_from_email: e.target.value })

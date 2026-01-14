@@ -31,7 +31,7 @@ interface Message {
 const PHINDU_KNOWLEDGE = {
     general: {
         about: "Phindu Credit Solutions is a leading micro-lending platform in Zambia, offering personal and business loans with competitive rates and flexible terms. We're part of HOKMA INCS ZAMBIA LIMITED.",
-        contact: "You can reach us via email at support@phindu.co.zm or call +260 967 713 001. Our office is located in Lusaka, Zambia.",
+        contact: "You can reach us via email at info@phindu.com or call +260 967 713 001. Our office is located in Lusaka, Zambia.",
         hours: "Our customer service is available Monday to Friday, 8:00 AM to 5:00 PM Central Africa Time.",
     },
     loans: {

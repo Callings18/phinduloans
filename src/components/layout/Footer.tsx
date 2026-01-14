@@ -82,7 +82,7 @@ const Footer = () => {
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
                 <Mail size={16} className="text-primary" />
                 {(!companyInfo?.support_email || companyInfo?.support_email.includes('phindu.com'))
-                  ? "support@phindu.co.zm"
+                  ? "info@phindu.com"
                   : companyInfo?.support_email}
               </li>
               <li className="flex items-start gap-3 text-muted-foreground text-sm">
