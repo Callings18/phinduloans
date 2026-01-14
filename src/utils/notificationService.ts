@@ -2,10 +2,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type NotificationType = 'sms' | 'email' | 'whatsapp';
 
-interface NotificationSettings {
-  sms_enabled: boolean;
-  whatsapp_enabled: boolean;
-  email_enabled: boolean;
+interface BrevoSettings {
+  brevo_api_key: string;
+  brevo_sender_name: string;
+  brevo_sender_email: string;
+  brevo_sender_phone: string;
+  brevo_email_enabled: boolean;
+  brevo_sms_enabled: boolean;
+  brevo_whatsapp_enabled: boolean;
   notify_on_signup: boolean;
   notify_on_loan_approval: boolean;
   notify_on_loan_rejection: boolean;
@@ -24,15 +28,17 @@ interface SendNotificationParams {
   message: string;
   title?: string;
   htmlContent?: string;
+  templateId?: number;
+  templateParams?: Record<string, string>;
   eventType?: string;
 }
 
 class NotificationService {
-  private settings: NotificationSettings | null = null;
+  private settings: BrevoSettings | null = null;
   private settingsLoadedAt: number = 0;
   private settingsCacheDuration = 5 * 60 * 1000; // 5 minutes
 
-  async getSettings(): Promise<NotificationSettings | null> {
+  async getSettings(): Promise<BrevoSettings | null> {
     const now = Date.now();
     
     // Return cached settings if still valid
@@ -44,7 +50,7 @@ class NotificationService {
       const { data, error } = await supabase
         .from("system_settings")
         .select("value")
-        .eq("key", "notification_providers")
+        .eq("key", "brevo_settings")
         .maybeSingle();
 
       if (error) {
@@ -52,7 +58,7 @@ class NotificationService {
         return null;
       }
 
-      this.settings = data?.value as unknown as NotificationSettings || null;
+      this.settings = data?.value as unknown as BrevoSettings || null;
       this.settingsLoadedAt = now;
       return this.settings;
     } catch (error) {
@@ -68,7 +74,7 @@ class NotificationService {
     
     // Check if event type notifications are enabled
     if (params.eventType && settings) {
-      const eventKey = `notify_on_${params.eventType}` as keyof NotificationSettings;
+      const eventKey = `notify_on_${params.eventType}` as keyof BrevoSettings;
       const eventEnabled = settings[eventKey];
       if (eventEnabled === false) {
         console.log(`[Notification Service] ${params.eventType} notifications are disabled`);
@@ -79,41 +85,61 @@ class NotificationService {
     // Check if channel is enabled
     let enabled = false;
     if (params.type === 'sms' && settings) {
-      enabled = settings.sms_enabled;
+      enabled = settings.brevo_sms_enabled;
     } else if (params.type === 'whatsapp' && settings) {
-      enabled = settings.whatsapp_enabled;
+      enabled = settings.brevo_whatsapp_enabled;
     } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled;
+      enabled = settings.brevo_email_enabled;
     }
 
     if (!enabled) {
       console.log(`[Notification Service] ${params.type} notifications not enabled`);
+      await this.logNotification({
+        ...params,
+        status: 'disabled',
+        provider_response: { note: 'Channel not enabled' }
+      });
       return { success: false, message: "Channel not enabled" };
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("send-notification", {
+      const { data, error } = await supabase.functions.invoke("brevo-notification", {
         body: {
           type: params.type,
           to: params.to,
           subject: params.subject,
           message: params.message,
-          title: params.title,
           htmlContent: params.htmlContent,
+          templateId: params.templateId,
+          templateParams: params.templateParams,
           userId: params.userId,
+          eventType: params.eventType,
         },
       });
 
       if (error) throw error;
-      
-      if (!data?.success) {
-        throw new Error(data?.error || "Failed to send notification");
-      }
 
       return { success: true, data };
     } catch (error: any) {
       console.error("[Notification Service] Error sending notification:", error);
-      return { success: false, error: error.message };
+      return { success: false, error };
+    }
+  }
+
+  private async logNotification(params: SendNotificationParams & { status: string; provider_response?: any }) {
+    try {
+      await supabase.from('notification_logs').insert({
+        user_id: params.userId || null,
+        type: params.type,
+        recipient: params.to,
+        title: params.title || params.subject || "Notification",
+        message: params.message,
+        status: params.status,
+        sent_at: params.status === 'sent' ? new Date().toISOString() : null,
+        provider_response: params.provider_response || {}
+      });
+    } catch (error) {
+      console.error("[Notification Service] Error logging notification:", error);
     }
   }
 
@@ -126,14 +152,12 @@ class NotificationService {
     };
 
     if (params.phone) {
-      // Send SMS
       results.sms = await this.send({
         ...params,
         type: 'sms',
         to: params.phone,
       });
 
-      // Send WhatsApp
       results.whatsapp = await this.send({
         ...params,
         type: 'whatsapp',
@@ -153,12 +177,9 @@ class NotificationService {
     return results;
   }
 
-  // ============================================================================
-  // SPECIFIC NOTIFICATION METHODS
-  // ============================================================================
-
+  // Specific notification methods
   async sendSignupWelcome(userId: string, name: string, phone: string, email?: string) {
-    const message = `Welcome to Phindu Finance, ${name}! 🎉\n\nYour account has been created successfully. You can now apply for loans and manage your finances with ease.\n\nContact us at support@phindu.co.zm for any assistance.`;
+    const message = `Welcome to Phindu Finance, ${name}! Your account has been created successfully. You can now apply for loans and manage your finances with ease. Contact us at support@phindu.co.zm for any assistance.`;
     const subject = "Welcome to Phindu Finance!";
 
     return this.sendMultiChannel({
@@ -173,7 +194,7 @@ class NotificationService {
   }
 
   async sendLoanApproval(userId: string, borrowerName: string, amount: number, phone: string, email?: string) {
-    const message = `Congratulations ${borrowerName}! ✅\n\nYour loan application for K${amount.toLocaleString()} has been APPROVED.\n\nFunds will be disbursed shortly. Thank you for choosing Phindu Finance.`;
+    const message = `Congratulations ${borrowerName}! Your loan application for K${amount.toLocaleString()} has been APPROVED. Funds will be disbursed shortly. Thank you for choosing Phindu Finance.`;
     const subject = `Loan Approved - K${amount.toLocaleString()}`;
 
     return this.sendMultiChannel({
@@ -188,8 +209,8 @@ class NotificationService {
   }
 
   async sendLoanRejection(userId: string, borrowerName: string, phone: string, email?: string, reason?: string) {
-    const reasonText = reason ? `\n\nReason: ${reason}` : "";
-    const message = `Dear ${borrowerName},\n\nWe regret to inform you that your loan application was not approved at this time.${reasonText}\n\nPlease contact us for more information.\n\n- Phindu Finance`;
+    const reasonText = reason ? ` Reason: ${reason}` : "";
+    const message = `Dear ${borrowerName}, we regret to inform you that your loan application was not approved at this time.${reasonText} Please contact us for more information. - Phindu Finance`;
     const subject = "Loan Application Update";
 
     return this.sendMultiChannel({
@@ -204,7 +225,7 @@ class NotificationService {
   }
 
   async sendDisbursementConfirmation(userId: string, borrowerName: string, amount: number, reference: string, phone: string, email?: string) {
-    const message = `Dear ${borrowerName}, 💰\n\nK${amount.toLocaleString()} has been disbursed to your account.\n\nRef: ${reference}\n\nYour first repayment will be due in 30 days.\n\n- Phindu Finance`;
+    const message = `Dear ${borrowerName}, K${amount.toLocaleString()} has been disbursed to your account. Ref: ${reference}. Your first repayment will be due in 30 days. - Phindu Finance`;
     const subject = `Loan Disbursed - K${amount.toLocaleString()}`;
 
     return this.sendMultiChannel({
@@ -219,7 +240,7 @@ class NotificationService {
   }
 
   async sendPaymentConfirmation(userId: string, borrowerName: string, amount: number, remainingBalance: number, phone: string, email?: string) {
-    const message = `Dear ${borrowerName}, 🧾\n\nWe have received your payment of K${amount.toLocaleString()}.\n\nRemaining balance: K${remainingBalance.toLocaleString()}\n\nThank you!\n\n- Phindu Finance`;
+    const message = `Dear ${borrowerName}, we have received your payment of K${amount.toLocaleString()}. Remaining balance: K${remainingBalance.toLocaleString()}. Thank you! - Phindu Finance`;
     const subject = `Payment Received - K${amount.toLocaleString()}`;
 
     return this.sendMultiChannel({
@@ -234,7 +255,7 @@ class NotificationService {
   }
 
   async sendPaymentReminder(userId: string, borrowerName: string, amount: number, dueDate: string, phone: string, email?: string) {
-    const message = `Dear ${borrowerName}, ⏰\n\nThis is a reminder that your loan repayment of K${amount.toLocaleString()} is due on ${dueDate}.\n\nPlease ensure timely payment to avoid penalties.\n\n- Phindu Finance`;
+    const message = `Dear ${borrowerName}, this is a reminder that your loan repayment of K${amount.toLocaleString()} is due on ${dueDate}. Please ensure timely payment to avoid penalties. - Phindu Finance`;
     const subject = `Payment Reminder - Due ${dueDate}`;
 
     return this.sendMultiChannel({
@@ -249,7 +270,7 @@ class NotificationService {
   }
 
   async sendOverdueNotice(userId: string, borrowerName: string, amount: number, daysOverdue: number, phone: string, email?: string) {
-    const message = `Dear ${borrowerName}, ⚠️\n\nYour payment of K${amount.toLocaleString()} is ${daysOverdue} day(s) overdue.\n\nPlease make payment immediately to avoid additional penalties. Contact us if you need assistance.\n\n- Phindu Finance`;
+    const message = `Dear ${borrowerName}, your payment of K${amount.toLocaleString()} is ${daysOverdue} day(s) overdue. Please make payment immediately to avoid additional penalties. Contact us if you need assistance. - Phindu Finance`;
     const subject = `Overdue Payment Notice - ${daysOverdue} Days`;
 
     return this.sendMultiChannel({
@@ -264,7 +285,7 @@ class NotificationService {
   }
 
   async sendLoanCompletion(userId: string, borrowerName: string, phone: string, email?: string) {
-    const message = `Congratulations ${borrowerName}! 🎉\n\nYou have successfully completed all loan repayments. Your account is now clear.\n\nThank you for banking with Phindu Finance. You're welcome to apply for a new loan anytime!`;
+    const message = `Congratulations ${borrowerName}! You have successfully completed all loan repayments. Your account is now clear. Thank you for banking with Phindu Finance. You're welcome to apply for a new loan anytime!`;
     const subject = "Loan Completed - Congratulations!";
 
     return this.sendMultiChannel({
@@ -279,12 +300,12 @@ class NotificationService {
   }
 
   async sendCollectionReminder(userId: string, borrowerName: string, amount: number, escalationLevel: number, phone: string, email?: string) {
-    const urgency = escalationLevel >= 3 ? "⚠️ URGENT: " : "";
+    const urgency = escalationLevel >= 3 ? "URGENT: " : "";
     const action = escalationLevel >= 3 
       ? "Failure to respond may result in legal action." 
       : "Please contact us immediately to discuss payment arrangements.";
     
-    const message = `${urgency}Dear ${borrowerName},\n\nYour account has an outstanding balance of K${amount.toLocaleString()}.\n\n${action}\n\n- Phindu Finance Collections`;
+    const message = `${urgency}Dear ${borrowerName}, your account has an outstanding balance of K${amount.toLocaleString()}. ${action} - Phindu Finance Collections`;
     const subject = `${urgency}Collection Notice - Level ${escalationLevel}`;
 
     return this.sendMultiChannel({
@@ -298,29 +319,16 @@ class NotificationService {
     });
   }
 
-  // Send OTP via SMS only
+  // Send OTP
   async sendOTP(phone: string, otp: string) {
-    const message = `Your Phindu Finance verification code is: ${otp}\n\nThis code expires in 10 minutes. Do not share this code with anyone.`;
+    const message = `Your Phindu Finance verification code is: ${otp}. This code expires in 10 minutes. Do not share this code with anyone.`;
     
     return this.send({
       type: 'sms',
       to: phone,
       message,
       title: 'OTP Verification',
-    });
-  }
-
-  // Send custom notification
-  async sendCustom(params: {
-    phone?: string;
-    email?: string;
-    message: string;
-    subject?: string;
-    userId?: string;
-  }) {
-    return this.sendMultiChannel({
-      ...params,
-      title: "Custom Notification"
+      eventType: 'otp'
     });
   }
 }

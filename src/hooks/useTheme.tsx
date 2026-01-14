@@ -1,5 +1,6 @@
-// Custom theme hook for Phindu - v5 standard imports
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+// Custom theme hook for Phindu - cache-bust v3
+import * as React from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light" | "system";
 
@@ -26,7 +27,7 @@ function getInitialTheme(): Theme {
   return "dark";
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
   const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 
