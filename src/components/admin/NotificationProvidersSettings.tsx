@@ -514,6 +514,9 @@ export const NotificationProvidersSettings = () => {
                         <p className="text-xs text-muted-foreground">
                           Your registered Africa's Talking WhatsApp business number
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          Uses the Africa's Talking username and API key from the SMS tab.
+                        </p>
                       </div>
                     </div>
                   )}

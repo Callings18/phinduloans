@@ -28,6 +28,7 @@ interface NotificationSettings {
   // WhatsApp Settings  
   whatsapp_enabled?: boolean;
   whatsapp_provider?: string;
+  africastalking_whatsapp_number?: string;
   fonnte_api_token?: string;
   fonnte_device_id?: string;
   
@@ -217,6 +218,70 @@ async function sendWhatsApp_Fonnte(
 
   if (!result.status) {
     throw new Error(result.reason || result.detail || "Failed to send WhatsApp via Fonnte");
+  }
+
+  return result;
+}
+
+async function sendWhatsApp_AfricasTalking(
+  to: string,
+  message: string,
+  settings: NotificationSettings
+): Promise<any> {
+  const username = settings.africastalking_username;
+  const apiKey = settings.africastalking_api_key;
+  const waNumber = settings.africastalking_whatsapp_number;
+
+  if (!username || !apiKey || !waNumber) {
+    throw new Error("Africa's Talking WhatsApp credentials not configured");
+  }
+
+  // Format phone number for Zambia
+  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+  if (phone.startsWith("0")) {
+    phone = "+260" + phone.substring(1);
+  } else if (!phone.startsWith("+")) {
+    phone = "+260" + phone;
+  }
+
+  // Normalize WhatsApp number
+  let fromNumber = waNumber.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+  if (fromNumber.startsWith("0")) {
+    fromNumber = "+260" + fromNumber.substring(1);
+  } else if (!fromNumber.startsWith("+")) {
+    fromNumber = "+260" + fromNumber;
+  }
+
+  const atUrl = username === "sandbox"
+    ? "https://chat.sandbox.africastalking.com/whatsapp/message/send"
+    : "https://chat.africastalking.com/whatsapp/message/send";
+
+  const response = await fetch(atUrl, {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "apiKey": apiKey,
+    },
+    body: JSON.stringify({
+      username: username,
+      waNumber: fromNumber,
+      phoneNumber: phone,
+      body: {
+        message: message,
+      },
+    }),
+  });
+
+  const result = await response.json();
+  console.log("[WhatsApp - AfricasTalking] Response:", JSON.stringify(result));
+
+  if (!response.ok) {
+    throw new Error(result?.message || `Africa's Talking error: ${response.status}`);
+  }
+
+  if (!result?.status || result.status === "FAILED") {
+    throw new Error(result?.status || "Failed to send WhatsApp via Africa's Talking");
   }
 
   return result;
@@ -431,7 +496,9 @@ const handler = async (req: Request): Promise<Response> => {
         if (!settings.whatsapp_enabled) {
           throw new Error("WhatsApp notifications are disabled");
         }
-        if (provider === 'fonnte') {
+        if (provider === 'africastalking') {
+          result = await sendWhatsApp_AfricasTalking(to, message, settings);
+        } else if (provider === 'fonnte') {
           result = await sendWhatsApp_Fonnte(to, message, settings);
         } else if (provider === 'twilio') {
           result = await sendWhatsApp_Twilio(to, message, settings);
