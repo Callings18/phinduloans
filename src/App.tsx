@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/hooks/useTheme";
 import { AuthProvider } from "@/hooks/useAuth";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import Index from "./pages/Index";
@@ -39,56 +40,53 @@ import AdminCourtCases from "./pages/admin/AdminCourtCases";
 const queryClient = new QueryClient();
 
 function App() {
-  // Apply dark theme on mount
-  React.useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <PWAInstallPrompt />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/apply" element={<Apply />} />
-              <Route path="/calculator" element={<Calculator />} />
-              <Route path="/pre-qualify" element={<PreQualification />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/about-us" element={<About />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/login" element={<Auth />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/applications" element={<AdminApplications />} />
-              <Route path="/admin/borrowers" element={<AdminBorrowers />} />
-              <Route path="/admin/settings" element={<AdminSettings />} />
-              <Route path="/admin/employers" element={<AdminEmployers />} />
-              <Route path="/admin/disbursements" element={<AdminDisbursements />} />
-              <Route path="/admin/reports" element={<AdminReports />} />
-              <Route path="/admin/loan-products" element={<AdminLoanProducts />} />
-              <Route path="/admin/loans" element={<AdminLoans />} />
-              <Route path="/admin/repayments" element={<AdminRepayments />} />
-              <Route path="/admin/collections" element={<AdminCollections />} />
-              <Route path="/admin/staff" element={<AdminStaff />} />
-              <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
-              <Route path="/admin/write-offs" element={<AdminWriteOffs />} />
-              <Route path="/admin/bulk-repayments" element={<AdminBulkRepayments />} />
-              <Route path="/admin/contract-templates" element={<AdminContractTemplates />} />
-              <Route path="/admin/pmic" element={<AdminPMIC />} />
-              <Route path="/admin/accounts" element={<AdminAccounts />} />
-              <Route path="/admin/expenses" element={<AdminExpenses />} />
-              <Route path="/admin/court-cases" element={<AdminCourtCases />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <PWAInstallPrompt />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/apply" element={<Apply />} />
+                <Route path="/calculator" element={<Calculator />} />
+                <Route path="/pre-qualify" element={<PreQualification />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/about-us" element={<About />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/applications" element={<AdminApplications />} />
+                <Route path="/admin/borrowers" element={<AdminBorrowers />} />
+                <Route path="/admin/settings" element={<AdminSettings />} />
+                <Route path="/admin/employers" element={<AdminEmployers />} />
+                <Route path="/admin/disbursements" element={<AdminDisbursements />} />
+                <Route path="/admin/reports" element={<AdminReports />} />
+                <Route path="/admin/loan-products" element={<AdminLoanProducts />} />
+                <Route path="/admin/loans" element={<AdminLoans />} />
+                <Route path="/admin/repayments" element={<AdminRepayments />} />
+                <Route path="/admin/collections" element={<AdminCollections />} />
+                <Route path="/admin/staff" element={<AdminStaff />} />
+                <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+                <Route path="/admin/write-offs" element={<AdminWriteOffs />} />
+                <Route path="/admin/bulk-repayments" element={<AdminBulkRepayments />} />
+                <Route path="/admin/contract-templates" element={<AdminContractTemplates />} />
+                <Route path="/admin/pmic" element={<AdminPMIC />} />
+                <Route path="/admin/accounts" element={<AdminAccounts />} />
+                <Route path="/admin/expenses" element={<AdminExpenses />} />
+                <Route path="/admin/court-cases" element={<AdminCourtCases />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
