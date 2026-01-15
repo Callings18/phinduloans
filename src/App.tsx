@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import * as React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -36,7 +36,7 @@ import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
 
-// Inline Theme Context to avoid module loading issues
+// Inline Theme Context
 type Theme = "dark" | "light" | "system";
 
 interface ThemeContextType {
@@ -45,7 +45,7 @@ interface ThemeContextType {
   resolvedTheme: "dark" | "light";
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
 function getSystemTheme(): "dark" | "light" {
   if (typeof window !== "undefined") {
@@ -55,16 +55,16 @@ function getSystemTheme(): "dark" | "light" {
 }
 
 function InlineThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
+  const [theme, setThemeState] = React.useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("phindu-theme") as Theme | null;
       return stored || "dark";
     }
     return "dark";
   });
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+  const [resolvedTheme, setResolvedTheme] = React.useState<"dark" | "light">("dark");
 
-  useEffect(() => {
+  React.useEffect(() => {
     const root = document.documentElement;
     const resolved = theme === "system" ? getSystemTheme() : theme;
     
@@ -74,7 +74,7 @@ function InlineThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("phindu-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -93,7 +93,7 @@ function InlineThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(newTheme);
   };
 
-  const value = useMemo(
+  const value = React.useMemo(
     () => ({ theme, setTheme, resolvedTheme }),
     [theme, resolvedTheme]
   );
@@ -106,7 +106,7 @@ function InlineThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
+  const context = React.useContext(ThemeContext);
   if (context === undefined) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
