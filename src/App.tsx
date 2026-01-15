@@ -6,8 +6,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
-import { ThemeProvider } from "@/hooks/useTheme";
+import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
+
+// Themed Sonner wrapper that uses the theme context
+function ThemedSonner() {
+  const { resolvedTheme } = useTheme();
+  return <Sonner theme={resolvedTheme} />;
+}
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Calculator from "./pages/Calculator";
@@ -168,7 +174,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <Sonner />
+            <ThemedSonner />
             <PWAInstallPrompt />
             <BrowserRouter>
               <Routes>
