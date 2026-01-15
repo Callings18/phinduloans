@@ -1,10 +1,10 @@
-import * as React from "react";
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "@/hooks/useTheme";
+import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { AuthProvider } from "@/hooks/useAuth";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import Index from "./pages/Index";
@@ -37,6 +37,12 @@ import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
 
+// Themed Sonner wrapper that uses the theme context
+function ThemedSonner() {
+  const { resolvedTheme } = useTheme();
+  return <Sonner theme={resolvedTheme} />;
+}
+
 const queryClient = new QueryClient();
 
 function App() {
@@ -46,7 +52,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <Sonner />
+            <ThemedSonner />
             <PWAInstallPrompt />
             <BrowserRouter>
               <Routes>
