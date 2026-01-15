@@ -1,12 +1,12 @@
-import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider, useTheme } from "@/hooks/useTheme";
-import { AuthProvider } from "@/hooks/useAuth";
+import { ThemeProvider } from "@/hooks/useTheme";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
+import { AuthProvider } from "@/hooks/useAuth";
+
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Calculator from "./pages/Calculator";
@@ -36,12 +36,7 @@ import AdminPMIC from "./pages/admin/AdminPMIC";
 import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
-
-// Themed Sonner wrapper that uses the theme context
-function ThemedSonner() {
-  const { resolvedTheme } = useTheme();
-  return <Sonner theme={resolvedTheme} />;
-}
+import AdminWallets from "./pages/admin/AdminWallets";
 
 const queryClient = new QueryClient();
 
@@ -52,7 +47,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <ThemedSonner />
+            <Sonner />
             <PWAInstallPrompt />
             <BrowserRouter>
               <Routes>
@@ -86,6 +81,7 @@ function App() {
                 <Route path="/admin/accounts" element={<AdminAccounts />} />
                 <Route path="/admin/expenses" element={<AdminExpenses />} />
                 <Route path="/admin/court-cases" element={<AdminCourtCases />} />
+                <Route path="/admin/wallets" element={<AdminWallets />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
