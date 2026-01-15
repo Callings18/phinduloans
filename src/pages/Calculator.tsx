@@ -1,12 +1,12 @@
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ArrowRight, Info, Package, Loader2, Scale } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { calculateLoan, generateRepaymentSchedule, LoanProduct as LoanProductCalc, getInterestPeriodLabel } from "@/utils/loanCalculations";
@@ -16,6 +16,7 @@ const Calculator = () => {
   const [loanAmount, setLoanAmount] = useState(5000);
   const [loanTerm, setLoanTerm] = useState(6);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['active-loan-products'],
@@ -31,6 +32,19 @@ const Calculator = () => {
 
   const selectedProduct = products?.find(p => p.id === selectedProductId) || products?.[0];
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("loan-products-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_products" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["active-loan-products"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   // Build product config for calculations (only upfront fees, no potential charges)
   const productForCalc: LoanProductCalc = selectedProduct
     ? {
@@ -38,9 +52,10 @@ const Calculator = () => {
       interest_period: selectedProduct.interest_period as any,
       interest_type: selectedProduct.interest_type as any,
       processing_fee_percent: selectedProduct.processing_fee_percent,
+      enforcement_fee_percent: selectedProduct.enforcement_fee_percent,
       insurance_percent: selectedProduct.insurance_percent,
       vat_percent: selectedProduct.vat_percent,
-      platform_fee_percent: selectedProduct.platform_fee_percent, // This is legal fees
+      platform_fee_percent: selectedProduct.platform_fee_percent,
       grace_period_days: selectedProduct.grace_period_days,
     }
     : { interest_rate: 15, interest_period: 'monthly', interest_type: 'flat' };
@@ -180,29 +195,64 @@ const Calculator = () => {
                   <div className="p-4 rounded-xl bg-secondary/30 border border-border space-y-2">
                     <p className="text-sm font-semibold text-foreground mb-3">Upfront Fees (Deducted)</p>
                     <div className="space-y-2 text-sm">
-                      {/* Processing Fee */}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Processing Fee ({selectedProduct?.processing_fee_percent || 1}%)</span>
-                        <span className="font-semibold text-primary">
-                          K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
+                      {calculation.processingFee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Processing Fee ({selectedProduct?.processing_fee_percent || 0}%)
+                          </span>
+                          <span className="font-semibold text-primary">
+                            K{calculation.processingFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
 
-                      {/* Legal Fee - From database */}
-                      {(selectedProduct?.platform_fee_percent || 0) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Legal Fee ({selectedProduct?.platform_fee_percent}%)</span>
-                        <span className="font-semibold text-primary">
-                          K{(loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
+                      {calculation.enforcementFee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Enforcement/Legal Fee ({selectedProduct?.enforcement_fee_percent || 0}%)
+                          </span>
+                          <span className="font-semibold text-primary">
+                            K{calculation.enforcementFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+
+                      {calculation.platformFee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Platform Fee ({selectedProduct?.platform_fee_percent || 0}%)
+                          </span>
+                          <span className="font-semibold text-primary">
+                            K{calculation.platformFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+
+                      {calculation.insuranceFee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Insurance ({selectedProduct?.insurance_percent || 0}%)
+                          </span>
+                          <span className="font-semibold text-primary">
+                            K{calculation.insuranceFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+
+                      {calculation.vatAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent || 0}%)</span>
+                          <span className="font-semibold text-primary">
+                            K{calculation.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
                       )}
 
                       {/* Total Upfront Deductions */}
                       <div className="flex justify-between pt-2 border-t border-border/50">
                         <span className="text-muted-foreground font-medium">Total Deductions</span>
                         <span className="font-semibold text-primary">
-                          K{(calculation.processingFee + (loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{calculation.feesDeductedUpfront.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
 
@@ -210,7 +260,7 @@ const Calculator = () => {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount You Receive</span>
                         <span className="font-bold text-success">
-                          K{(loanAmount - calculation.processingFee - (loanAmount * (selectedProduct?.platform_fee_percent || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          K{calculation.disbursementAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>

@@ -40,6 +40,7 @@ interface LoanProduct {
     interest_period: string | null;
     interest_type: string | null;
     processing_fee_percent: number | null;
+    enforcement_fee_percent: number | null;
     insurance_percent: number | null;
     vat_percent: number | null;
     platform_fee_percent: number | null;
@@ -103,6 +104,7 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
                 interest_period: product.interest_period as any,
                 interest_type: product.interest_type as any,
                 processing_fee_percent: product.processing_fee_percent,
+                enforcement_fee_percent: product.enforcement_fee_percent,
                 insurance_percent: product.insurance_percent,
                 vat_percent: product.vat_percent,
                 platform_fee_percent: product.platform_fee_percent,

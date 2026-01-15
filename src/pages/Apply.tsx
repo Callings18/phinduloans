@@ -47,6 +47,7 @@ interface LoanProduct {
   interest_period: string | null;
   interest_type: string | null;
   processing_fee_percent: number | null;
+  enforcement_fee_percent: number | null;
   insurance_percent: number | null;
   vat_percent: number | null;
   platform_fee_percent: number | null;
@@ -326,30 +327,42 @@ const Apply = () => {
     });
   }, [clearDraft, toast]);
 
+  const fetchProducts = useCallback(async () => {
+    const { data } = await supabase
+      .from("loan_products")
+      .select("*")
+      .eq("is_active", true)
+      .order("min_amount", { ascending: true });
+
+    if (data && data.length > 0) {
+      setLoanProducts(data);
+      const productId = searchParams.get("product");
+      const found = data.find((p) => p.id === productId);
+      const product = found || data[0];
+      setSelectedProduct(product);
+      setFormData(prev => ({
+        ...prev,
+        loanAmount: product.min_amount,
+        loanTerm: product.min_term_months,
+      }));
+    }
+  }, [searchParams]);
+
   // Fetch loan products
   useEffect(() => {
-    const fetchProducts = async () => {
-      const { data } = await supabase
-        .from("loan_products")
-        .select("*")
-        .eq("is_active", true)
-        .order("min_amount", { ascending: true });
-
-      if (data && data.length > 0) {
-        setLoanProducts(data);
-        const productId = searchParams.get("product");
-        const found = data.find((p) => p.id === productId);
-        const product = found || data[0];
-        setSelectedProduct(product);
-        setFormData(prev => ({
-          ...prev,
-          loanAmount: product.min_amount,
-          loanTerm: product.min_term_months,
-        }));
-      }
-    };
     fetchProducts();
-  }, [searchParams]);
+
+    const channel = supabase
+      .channel("loan-products-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_products" }, () => {
+        fetchProducts();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchProducts]);
 
   // Autofill profile data if logged in and no draft
   useEffect(() => {
@@ -494,6 +507,7 @@ const Apply = () => {
       interest_period: selectedProduct.interest_period as any,
       interest_type: selectedProduct.interest_type as any,
       processing_fee_percent: selectedProduct.processing_fee_percent,
+      enforcement_fee_percent: selectedProduct.enforcement_fee_percent,
       insurance_percent: selectedProduct.insurance_percent,
       vat_percent: selectedProduct.vat_percent,
       platform_fee_percent: selectedProduct.platform_fee_percent,
@@ -1179,25 +1193,39 @@ const Apply = () => {
                           <p className="text-xs text-muted-foreground mb-2">Fees Deducted at Disbursement:</p>
                           {loanCalc.processingFee > 0 && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Processing Fee (2.5%)</span>
+                              <span className="text-muted-foreground">
+                                Processing Fee ({selectedProduct?.processing_fee_percent || 0}%)
+                              </span>
                               <span className="text-destructive">-K{loanCalc.processingFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            </div>
+                          )}
+                          {loanCalc.enforcementFee > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Enforcement/Legal Fee ({selectedProduct?.enforcement_fee_percent || 0}%)
+                              </span>
+                              <span className="text-destructive">-K{loanCalc.enforcementFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                           )}
                           {loanCalc.platformFee > 0 && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Legal/Admin Fee (10%)</span>
+                              <span className="text-muted-foreground">
+                                Platform Fee ({selectedProduct?.platform_fee_percent || 0}%)
+                              </span>
                               <span className="text-destructive">-K{loanCalc.platformFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                           )}
                           {loanCalc.insuranceFee > 0 && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Insurance</span>
+                              <span className="text-muted-foreground">
+                                Insurance ({selectedProduct?.insurance_percent || 0}%)
+                              </span>
                               <span className="text-destructive">-K{loanCalc.insuranceFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                           )}
                           {loanCalc.vatAmount > 0 && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">VAT</span>
+                              <span className="text-muted-foreground">VAT ({selectedProduct?.vat_percent || 0}%)</span>
                               <span className="text-destructive">-K{loanCalc.vatAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                           )}

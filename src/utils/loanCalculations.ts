@@ -13,6 +13,7 @@ export interface LoanProduct {
   interest_period?: InterestPeriod | null;
   interest_type?: InterestType | null;
   processing_fee_percent?: number | null;
+  enforcement_fee_percent?: number | null;
   insurance_percent?: number | null;
   vat_percent?: number | null;
   platform_fee_percent?: number | null;
@@ -27,6 +28,7 @@ export interface LoanCalculationResult {
   monthlyInterestRate: number;
   totalInterest: number;
   processingFee: number;
+  enforcementFee: number;
   insuranceFee: number;
   vatAmount: number;
   platformFee: number;
@@ -138,7 +140,10 @@ export function calculateLoan(
     (product.interest_period as InterestPeriod) || 'monthly'
   );
   
-  const interestType = (product.interest_type as InterestType) || 'flat';
+  const rawInterestType = (product.interest_type as string) || 'flat';
+  const interestType = (rawInterestType === 'reducing_balance'
+    ? 'reducing'
+    : rawInterestType) as InterestType;
   
   // Calculate interest based on type
   let totalInterest: number;
@@ -155,17 +160,18 @@ export function calculateLoan(
   
   // Calculate fees - these are DEDUCTED from disbursement, not added to repayment
   const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
+  const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
   const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
   const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
   
   // VAT on fees (not on principal or interest typically)
-  const vatableAmount = processingFee + platformFee;
+  const vatableAmount = processingFee + enforcementFee + platformFee;
   const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
   
-  const totalFees = processingFee + insuranceFee + platformFee + vatAmount;
+  const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
   
   // ALL fees are deducted upfront from disbursement
-  const feesDeductedUpfront = processingFee + insuranceFee + platformFee + vatAmount;
+  const feesDeductedUpfront = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
   const disbursementAmount = principal - feesDeductedUpfront;
   
   // Total repayment is just principal + interest (fees already deducted from disbursement)
@@ -179,6 +185,7 @@ export function calculateLoan(
     monthlyInterestRate: monthlyRate,
     totalInterest: Math.round(totalInterest * 100) / 100,
     processingFee: Math.round(processingFee * 100) / 100,
+    enforcementFee: Math.round(enforcementFee * 100) / 100,
     insuranceFee: Math.round(insuranceFee * 100) / 100,
     vatAmount: Math.round(vatAmount * 100) / 100,
     platformFee: Math.round(platformFee * 100) / 100,
