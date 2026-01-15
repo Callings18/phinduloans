@@ -1,4 +1,4 @@
-import * as React from "react";
+import React, { useState, useEffect, createContext, useContext, useMemo } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,7 +38,7 @@ import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
 
-// ============ Inline Auth Context ============
+// ============ Auth Context ============
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -52,13 +52,13 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function InlineAuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<User | null>(null);
-  const [session, setSession] = React.useState<Session | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [roles, setRoles] = React.useState<string[]>([]);
+function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [roles, setRoles] = useState<string[]>([]);
 
   const fetchUserRoles = async (userId: string) => {
     const { data, error } = await supabase
@@ -80,7 +80,7 @@ function InlineAuthProvider({ children }: { children: React.ReactNode }) {
     ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         setSession(currentSession);
@@ -139,15 +139,19 @@ function InlineAuthProvider({ children }: { children: React.ReactNode }) {
     setRoles([]);
   };
 
+  const value = useMemo(() => ({
+    user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut
+  }), [user, session, isLoading, roles, isAdmin, isStaff]);
+
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = React.useContext(AuthContext);
+  const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
@@ -161,7 +165,7 @@ function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <InlineAuthProvider>
+        <AuthProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -202,7 +206,7 @@ function App() {
               </Routes>
             </BrowserRouter>
           </TooltipProvider>
-        </InlineAuthProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

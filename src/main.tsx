@@ -1,5 +1,5 @@
-import * as React from "react";
-import * as ReactDOM from "react-dom/client";
+import React from "react";
+import ReactDOM from "react-dom/client";
 import "@fontsource/outfit/300.css";
 import "@fontsource/outfit/400.css";
 import "@fontsource/outfit/500.css";
