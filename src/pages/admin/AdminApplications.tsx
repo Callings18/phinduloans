@@ -948,148 +948,150 @@ const AdminApplications = () => {
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredApps && filteredApps.length > 0 ? (
-          <div className="space-y-4 tour-apps-list">
-            {filteredApps.map((app) => {
-              const config = statusConfig[app.status as keyof typeof statusConfig];
+          <>
+            <div className="space-y-4 tour-apps-list">
+              {filteredApps.map((app) => {
+                const config = statusConfig[app.status as keyof typeof statusConfig];
 
-              return (
-                <Card key={app.id} className={`glass border-border/50 hover:border-primary/30 transition-colors ${selectedApplications.includes(app.id) ? 'ring-2 ring-primary/50' : ''}`}>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        {/* Selection Checkbox */}
-                        <div className="flex items-center">
-                          <Checkbox
-                            checked={selectedApplications.includes(app.id)}
-                            onCheckedChange={() => toggleSelectApplication(app.id)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                          <User className="text-primary" size={24} />
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="font-semibold text-foreground">{app.full_name}</h4>
-                          <p className="text-muted-foreground text-sm">{app.email}</p>
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <CreditCard size={12} />
-                              K{Number(app.loan_amount).toLocaleString()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Briefcase size={12} />
-                              {app.employer_name || 'N/A'}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Calendar size={12} />
-                              {new Date(app.created_at).toLocaleDateString()}
-                            </span>
-                            <span className="flex items-center gap-1 text-primary">
-                              <UserCheck size={12} />
-                              {staffList?.find((s: any) => s.user_id === (app as any).assigned_to)?.profile?.full_name || 'Unassigned'}
-                            </span>
+                return (
+                  <Card key={app.id} className={`glass border-border/50 hover:border-primary/30 transition-colors ${selectedApplications.includes(app.id) ? 'ring-2 ring-primary/50' : ''}`}>
+                    <CardContent className="p-6">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          {/* Selection Checkbox */}
+                          <div className="flex items-center">
+                            <Checkbox
+                              checked={selectedApplications.includes(app.id)}
+                              onCheckedChange={() => toggleSelectApplication(app.id)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+                            <User className="text-primary" size={24} />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-foreground">{app.full_name}</h4>
+                            <p className="text-muted-foreground text-sm">{app.email}</p>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <CreditCard size={12} />
+                                K{Number(app.loan_amount).toLocaleString()}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Briefcase size={12} />
+                                {app.employer_name || 'N/A'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar size={12} />
+                                {new Date(app.created_at).toLocaleDateString()}
+                              </span>
+                              <span className="flex items-center gap-1 text-primary">
+                                <UserCheck size={12} />
+                                {staffList?.find((s: any) => s.user_id === (app as any).assigned_to)?.profile?.full_name || 'Unassigned'}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        {/* Source Badge */}
-                        {(() => {
-                          const src = (app as any).source as keyof typeof sourceConfig;
-                          const srcConfig = sourceConfig[src] || sourceConfig.website;
-                          return (
-                            <Badge variant="outline" className={`${srcConfig.color} border text-xs`}>
-                              {srcConfig.icon} {srcConfig.label}
-                            </Badge>
-                          );
-                        })()}
-                        {/* Status Badge */}
-                        <Badge className={`${config?.color} border`}>
-                          {config?.label}
-                        </Badge>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedApp(app);
-                            setAssigneeId((app as any).assigned_to || "");
-                            setIsViewOpen(true);
-                          }}
-                        >
-                          <Eye size={16} className="mr-1" />
-                          View
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {/* Source Badge */}
+                          {(() => {
+                            const src = (app as any).source as keyof typeof sourceConfig;
+                            const srcConfig = sourceConfig[src] || sourceConfig.website;
+                            return (
+                              <Badge variant="outline" className={`${srcConfig.color} border text-xs`}>
+                                {srcConfig.icon} {srcConfig.label}
+                              </Badge>
+                            );
+                          })()}
+                          {/* Status Badge */}
+                          <Badge className={`${config?.color} border`}>
+                            {config?.label}
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedApp(app);
+                              setAssigneeId((app as any).assigned_to || "");
+                              setIsViewOpen(true);
+                            }}
+                          >
+                            <Eye size={16} className="mr-1" />
+                            View
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-          
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 glass rounded-lg border-border/50">
-              <div className="text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} applications
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1 || isLoading}
-                >
-                  Previous
-                </Button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={currentPage === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className="w-10"
-                        disabled={isLoading}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || isLoading}
-                >
-                  Next
-                </Button>
-                <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }} disabled={isLoading}>
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
-          )}
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 glass rounded-lg border-border/50">
+                <div className="text-sm text-muted-foreground">
+                  Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} applications
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className="w-10"
+                          disabled={isLoading}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || isLoading}
+                  >
+                    Next
+                  </Button>
+                  <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }} disabled={isLoading}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <Card className="glass border-border/50">
             <CardContent className="p-12 text-center">

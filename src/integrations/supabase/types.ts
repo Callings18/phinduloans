@@ -2009,11 +2009,15 @@ export type Database = {
           city: string | null
           created_at: string
           email: string
+          email_reminders: boolean | null
           full_name: string | null
           id: string
           is_blacklisted: boolean | null
+          marketing: boolean | null
           nrc_number: string | null
+          payment_alerts: boolean | null
           phone: string | null
+          sms_reminders: boolean | null
           updated_at: string
         }
         Insert: {
@@ -2025,11 +2029,15 @@ export type Database = {
           city?: string | null
           created_at?: string
           email: string
+          email_reminders?: boolean | null
           full_name?: string | null
           id: string
           is_blacklisted?: boolean | null
+          marketing?: boolean | null
           nrc_number?: string | null
+          payment_alerts?: boolean | null
           phone?: string | null
+          sms_reminders?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -2041,11 +2049,15 @@ export type Database = {
           city?: string | null
           created_at?: string
           email?: string
+          email_reminders?: boolean | null
           full_name?: string | null
           id?: string
           is_blacklisted?: boolean | null
+          marketing?: boolean | null
           nrc_number?: string | null
+          payment_alerts?: boolean | null
           phone?: string | null
+          sms_reminders?: boolean | null
           updated_at?: string
         }
         Relationships: []
