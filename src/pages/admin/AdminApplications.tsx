@@ -176,20 +176,31 @@ const AdminApplications = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const { data: applications, isLoading } = useQuery({
-    queryKey: ['admin-applications', statusFilter],
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  const { data: applicationsData, isLoading } = useQuery({
+    queryKey: ['admin-applications', statusFilter, currentPage, pageSize],
     queryFn: async () => {
-      let query = supabase.from('loan_applications').select('*').order('created_at', { ascending: false });
+      let query = supabase
+        .from('loan_applications')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter as any);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data;
+      return { data: data || [], count: count || 0 };
     },
   });
+
+  const applications = applicationsData?.data || [];
+  const totalCount = applicationsData?.count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   // Placeholder for application docs - tables don't exist yet
   const applicationDocs: any[] = [];
@@ -668,7 +679,7 @@ const AdminApplications = () => {
     disburseMutation.mutate(disbursement);
   };
 
-  const filteredApps = applications?.filter(app => {
+  const filteredApps = applications?.filter((app: any) => {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch = !query ||
       (app.full_name?.toLowerCase() || '').includes(query) ||
@@ -789,7 +800,7 @@ const AdminApplications = () => {
 
       case 'export':
         // Export selected applications to CSV
-        const exportApps = applications?.filter(app => selectedApplications.includes(app.id));
+        const exportApps = applications?.filter((app: any) => selectedApplications.includes(app.id));
         if (exportApps && exportApps.length > 0) {
           const headers = ['Name', 'Email', 'Phone', 'NRC', 'Amount', 'Status', 'Date'];
           const rows = exportApps.map(app => [
@@ -1015,6 +1026,70 @@ const AdminApplications = () => {
               );
             })}
           </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 glass rounded-lg border-border/50">
+              <div className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} applications
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1 || isLoading}
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-10"
+                        disabled={isLoading}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || isLoading}
+                >
+                  Next
+                </Button>
+                <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }} disabled={isLoading}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         ) : (
           <Card className="glass border-border/50">
             <CardContent className="p-12 text-center">

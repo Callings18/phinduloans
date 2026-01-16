@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,6 +103,7 @@ const Apply = () => {
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   // Draft system
   const { draft, hasDraft, lastSaved, isSaving, saveDraft, clearDraft } = useApplicationDraft();
@@ -560,12 +562,36 @@ const Apply = () => {
           const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
           console.log(`[Apply] Uploading ${docType}: ${fileName}`);
           
+          // Set initial progress and simulate upload progress
+          setUploadProgress(prev => ({ ...prev, [docType]: 10 }));
+          
+          // Simulate progress (Supabase doesn't support onUploadProgress)
+          const progressInterval = setInterval(() => {
+            setUploadProgress(prev => {
+              const current = prev[docType] || 10;
+              if (current < 90) {
+                return { ...prev, [docType]: current + 10 };
+              }
+              return prev;
+            });
+          }, 200);
+          
           const { data, error: uploadErr } = await supabase.storage
             .from('loan-documents')
-            .upload(fileName, file);
+            .upload(fileName, file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+          
+          clearInterval(progressInterval);
 
           if (uploadErr) {
             console.error(`[Apply] Failed to upload ${docType}:`, uploadErr);
+            setUploadProgress(prev => {
+              const next = { ...prev };
+              delete next[docType];
+              return next;
+            });
             toast({
               title: "Document Upload Warning",
               description: `${docType} upload failed: ${uploadErr.message}. Application will continue.`,
@@ -573,6 +599,7 @@ const Apply = () => {
             });
           } else {
             console.log(`[Apply] Successfully uploaded ${docType}`);
+            setUploadProgress(prev => ({ ...prev, [docType]: 100 }));
             uploadedDocs.push({
               document_type: docType,
               file_url: fileName,
@@ -583,8 +610,23 @@ const Apply = () => {
           }
         } catch (err: any) {
           console.error(`[Apply] Upload error for ${docType}:`, err);
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[docType];
+            return next;
+          });
+          toast({
+            title: "Upload Error",
+            description: `Failed to upload ${docType}: ${err.message}`,
+            variant: "destructive",
+          });
         }
       }
+      
+      // Clear upload progress after a delay
+      setTimeout(() => {
+        setUploadProgress({});
+      }, 2000);
 
       // 2. Map employment type
       const employmentTypeMap: Record<string, "employed" | "self_employed" | "contract" | "other"> = {
@@ -1331,18 +1373,29 @@ const Apply = () => {
                                   className="hidden"
                                   onChange={(e) => handleDynamicFileUpload(doc.document_type, e.target.files?.[0] || null)}
                                 />
-                                {dynamicDocs[doc.document_type] ? (
-                                  <CheckCircle className="text-primary mb-2" size={32} />
+                                {uploadProgress[doc.document_type] !== undefined ? (
+                                  <>
+                                    <Loader2 className="text-primary mb-2 animate-spin" size={32} />
+                                    <Progress value={uploadProgress[doc.document_type]} className="w-full mb-2" />
+                                    <span className="text-xs text-primary">
+                                      Uploading... {Math.round(uploadProgress[doc.document_type])}%
+                                    </span>
+                                  </>
+                                ) : dynamicDocs[doc.document_type] ? (
+                                  <>
+                                    <CheckCircle className="text-primary mb-2" size={32} />
+                                    <span className="text-sm text-primary font-medium">Uploaded</span>
+                                    <span className="text-[10px] text-primary mt-1 truncate max-w-full italic">
+                                      {dynamicDocs[doc.document_type].name}
+                                    </span>
+                                  </>
                                 ) : (
-                                  <Upload className={errors[doc.document_type] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
-                                )}
-                                <span className={`text-sm ${errors[doc.document_type] ? "text-destructive" : "text-muted-foreground"}`}>
-                                  {errors[doc.document_type] || doc.description || `Upload ${doc.document_name}`}
-                                </span>
-                                {dynamicDocs[doc.document_type] && (
-                                  <span className="text-[10px] text-primary mt-1 truncate max-w-full italic">
-                                    {dynamicDocs[doc.document_type].name}
-                                  </span>
+                                  <>
+                                    <Upload className={errors[doc.document_type] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                                    <span className={`text-sm ${errors[doc.document_type] ? "text-destructive" : "text-muted-foreground"}`}>
+                                      {errors[doc.document_type] || doc.description || `Upload ${doc.document_name}`}
+                                    </span>
+                                  </>
                                 )}
                               </label>
                             )}

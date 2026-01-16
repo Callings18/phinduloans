@@ -32,6 +32,7 @@ import {
   Receipt,
   User,
   CreditCard,
+  Loader2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,25 +162,108 @@ const AdminDashboard = () => {
     },
   });
 
-  // Chart data
-  const chartData = [
-    { month: 'Jan', applications: 45, disbursements: 32, amount: 125000 },
-    { month: 'Feb', applications: 52, disbursements: 38, amount: 145000 },
-    { month: 'Mar', applications: 61, disbursements: 45, amount: 180000 },
-    { month: 'Apr', applications: 58, disbursements: 41, amount: 165000 },
-    { month: 'May', applications: 73, disbursements: 55, amount: 210000 },
-    { month: 'Jun', applications: 89, disbursements: 67, amount: 285000 },
-  ];
+  // Fetch chart data from database
+  const { data: chartData } = useQuery({
+    queryKey: ['admin-chart-data'],
+    queryFn: async () => {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      
+      // Get applications and disbursements for last 6 months
+      const [applicationsResult, disbursementsResult] = await Promise.all([
+        supabase
+          .from('loan_applications')
+          .select('created_at, loan_amount')
+          .gte('created_at', sixMonthsAgo.toISOString()),
+        supabase
+          .from('disbursements')
+          .select('created_at, amount')
+          .eq('status', 'completed')
+          .gte('created_at', sixMonthsAgo.toISOString()),
+      ]);
 
-  const weeklyData = [
-    { day: 'Mon', count: 12 },
-    { day: 'Tue', count: 19 },
-    { day: 'Wed', count: 15 },
-    { day: 'Thu', count: 22 },
-    { day: 'Fri', count: 18 },
-    { day: 'Sat', count: 8 },
-    { day: 'Sun', count: 5 },
-  ];
+      const applications = applicationsResult.data || [];
+      const disbursements = disbursementsResult.data || [];
+
+      // Group by month
+      const monthMap = new Map<string, { applications: number; disbursements: number; amount: number }>();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      // Initialize last 6 months
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const key = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        monthMap.set(key, { applications: 0, disbursements: 0, amount: 0 });
+      }
+
+      // Process applications
+      applications.forEach((app: any) => {
+        const date = new Date(app.created_at);
+        const key = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        const existing = monthMap.get(key);
+        if (existing) {
+          existing.applications++;
+        }
+      });
+
+      // Process disbursements
+      disbursements.forEach((disb: any) => {
+        const date = new Date(disb.created_at);
+        const key = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        const existing = monthMap.get(key);
+        if (existing) {
+          existing.disbursements++;
+          existing.amount += Number(disb.amount || 0);
+        }
+      });
+
+      return Array.from(monthMap.entries()).map(([month, data]) => ({
+        month,
+        applications: data.applications,
+        disbursements: data.disbursements,
+        amount: data.amount,
+      }));
+    },
+  });
+
+  // Fetch weekly data
+  const { data: weeklyData } = useQuery({
+    queryKey: ['admin-weekly-data'],
+    queryFn: async () => {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      
+      const { data, error } = await supabase
+        .from('loan_applications')
+        .select('created_at')
+        .gte('created_at', weekAgo.toISOString());
+
+      if (error) throw error;
+
+      const dayCounts: Record<string, number> = {
+        'Mon': 0,
+        'Tue': 0,
+        'Wed': 0,
+        'Thu': 0,
+        'Fri': 0,
+        'Sat': 0,
+        'Sun': 0,
+      };
+
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      
+      (data || []).forEach((app: any) => {
+        const date = new Date(app.created_at);
+        const dayName = dayNames[date.getDay()];
+        if (dayCounts[dayName] !== undefined) {
+          dayCounts[dayName]++;
+        }
+      });
+
+      return Object.entries(dayCounts).map(([day, count]) => ({ day, count }));
+    },
+  });
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -462,8 +546,9 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                {chartData && chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
                     <defs>
                       <linearGradient id="colorApps" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
@@ -504,6 +589,14 @@ const AdminDashboard = () => {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <div className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                      <p>Loading chart data...</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -516,24 +609,30 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weeklyData}>
-                    <Bar
-                      dataKey="count"
-                      fill="hsl(var(--primary))"
-                      radius={[6, 6, 0, 0]}
-                      opacity={0.9}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {weeklyData && weeklyData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={weeklyData}>
+                      <Bar
+                        dataKey="count"
+                        fill="hsl(var(--primary))"
+                        radius={[6, 6, 0, 0]}
+                        opacity={0.9}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                )}
               </div>
 
               {/* Quick Stats */}

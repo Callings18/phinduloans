@@ -45,6 +45,10 @@ interface Profile {
     address: string | null;
     city: string | null;
     avatar_url: string | null;
+    email_reminders?: boolean | null;
+    sms_reminders?: boolean | null;
+    payment_alerts?: boolean | null;
+    marketing?: boolean | null;
     created_at: string;
 }
 
@@ -70,6 +74,7 @@ const Profile = () => {
         payment_alerts: true,
         marketing: false,
     });
+    const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -186,6 +191,13 @@ const Profile = () => {
                 nrc_number: profile.nrc_number || "",
                 address: profile.address || "",
                 city: profile.city || "",
+            });
+            // Load notification preferences from profile
+            setNotifications({
+                email_reminders: profile.email_reminders ?? true,
+                sms_reminders: profile.sms_reminders ?? true,
+                payment_alerts: profile.payment_alerts ?? true,
+                marketing: profile.marketing ?? false,
             });
         }
     }, [profile]);
@@ -572,8 +584,46 @@ const Profile = () => {
                                     </div>
 
                                     <div className="flex justify-end">
-                                        <Button variant="hero">
-                                            <Save size={16} className="mr-2" />
+                                        <Button 
+                                            variant="hero"
+                                            onClick={async () => {
+                                                setIsSavingNotifications(true);
+                                                try {
+                                                    if (!user?.id) throw new Error('Not authenticated');
+                                                    const { error } = await supabase
+                                                        .from('profiles')
+                                                        .update({
+                                                            email_reminders: notifications.email_reminders,
+                                                            sms_reminders: notifications.sms_reminders,
+                                                            payment_alerts: notifications.payment_alerts,
+                                                            marketing: notifications.marketing,
+                                                        })
+                                                        .eq('id', user.id);
+
+                                                    if (error) throw error;
+                                                    
+                                                    queryClient.invalidateQueries({ queryKey: ['profile'] });
+                                                    toast({
+                                                        title: "Preferences Saved",
+                                                        description: "Your notification preferences have been updated successfully.",
+                                                    });
+                                                } catch (error: any) {
+                                                    toast({
+                                                        title: "Save Failed",
+                                                        description: error.message || "Failed to save notification preferences",
+                                                        variant: "destructive",
+                                                    });
+                                                } finally {
+                                                    setIsSavingNotifications(false);
+                                                }
+                                            }}
+                                            disabled={isSavingNotifications}
+                                        >
+                                            {isSavingNotifications ? (
+                                                <Loader2 size={16} className="mr-2 animate-spin" />
+                                            ) : (
+                                                <Save size={16} className="mr-2" />
+                                            )}
                                             Save Preferences
                                         </Button>
                                     </div>
