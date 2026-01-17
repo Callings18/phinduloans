@@ -37,6 +37,8 @@ import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
 import AdminWallets from "./pages/admin/AdminWallets";
+import AdminHR from "./pages/admin/AdminHR";
+import AdminPayroll from "./pages/admin/AdminPayroll";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +84,8 @@ function App() {
                 <Route path="/admin/expenses" element={<AdminExpenses />} />
                 <Route path="/admin/court-cases" element={<AdminCourtCases />} />
                 <Route path="/admin/wallets" element={<AdminWallets />} />
+                <Route path="/admin/hr" element={<AdminHR />} />
+                <Route path="/admin/payroll" element={<AdminPayroll />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

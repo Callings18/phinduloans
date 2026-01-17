@@ -216,9 +216,9 @@ const AdminEmployers = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Employees</h1>
+            <h1 className="text-3xl font-bold text-foreground">External Employers</h1>
             <p className="text-muted-foreground mt-1">
-              Manage your staff members and their roles
+              Manage external employers (companies where borrowers work)
             </p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {

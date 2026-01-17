@@ -27,6 +27,8 @@ import {
   Wallet,
   PiggyBank,
   Scale,
+  UserCircle,
+  DollarSign,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -103,6 +105,14 @@ const menuGroups: MenuGroup[] = [
     items: [
       { icon: BarChart3, label: "Reports", path: "/admin/reports" },
       { icon: History, label: "Audit Logs", path: "/admin/audit-logs" },
+    ],
+  },
+  {
+    label: "HR & Payroll",
+    defaultOpen: false,
+    items: [
+      { icon: UserCircle, label: "HR Management", path: "/admin/hr", adminOnly: true },
+      { icon: DollarSign, label: "Payroll", path: "/admin/payroll", adminOnly: true },
     ],
   },
   {
