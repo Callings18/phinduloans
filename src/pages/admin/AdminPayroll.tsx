@@ -159,23 +159,32 @@ const AdminPayroll = () => {
     queryKey: ["payroll-records", selectedPeriod?.id],
     queryFn: async () => {
       if (!selectedPeriod?.id) return [];
-      const { data, error } = await supabase
+      const { data: recordsData, error } = await supabase
         .from("payroll_records")
-        .select(`
-          *,
-          employee:employees!payroll_records_employee_id_fkey (
-            employee_number,
-            first_name,
-            last_name,
-            position,
-            department
-          )
-        `)
+        .select("*")
         .eq("payroll_period_id", selectedPeriod.id)
         .order("employee_id");
 
       if (error) throw error;
-      return data as PayrollRecord[];
+
+      // Fetch employee details separately
+      if (recordsData && recordsData.length > 0) {
+        const employeeIds = recordsData.map((r: any) => r.employee_id);
+        const { data: employeesData, error: empError } = await supabase
+          .from("employees")
+          .select("id, employee_number, first_name, last_name, position, department")
+          .in("id", employeeIds);
+
+        if (empError) throw empError;
+
+        // Merge employee data with records
+        return recordsData.map((record: any) => ({
+          ...record,
+          employees: employeesData?.find((e: any) => e.id === record.employee_id),
+        })) as PayrollRecord[];
+      }
+
+      return [];
     },
     enabled: !!selectedPeriod?.id,
   });
