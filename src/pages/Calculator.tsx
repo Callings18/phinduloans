@@ -27,7 +27,11 @@ const Calculator = () => {
         .eq('is_active', true);
       if (error) throw error;
       return data;
-    }
+    },
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchInterval: 30000, // Refetch every 30 seconds to catch updates
   });
 
   const selectedProduct = products?.find(p => p.id === selectedProductId) || products?.[0];
@@ -43,7 +47,7 @@ const Calculator = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient]); [queryClient]);
 
   // Build product config for calculations (only upfront fees, no potential charges)
   const productForCalc: LoanProductCalc = selectedProduct

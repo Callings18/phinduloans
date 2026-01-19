@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,6 +70,7 @@ interface QuickApplyProps {
 const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
@@ -92,7 +93,34 @@ const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
       if (error) throw error;
       return data as LoanProduct[];
     },
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchInterval: 30000, // Refetch every 30 seconds to catch updates
   });
+
+  // Real-time subscription to loan products changes
+  useEffect(() => {
+    const channel = supabase
+      .channel("loan-products-quick-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "loan_products",
+        },
+        () => {
+          // Invalidate and refetch when any loan product changes
+          queryClient.invalidateQueries({ queryKey: ["loan-products-quick"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Fetch previous application to check for existing documents
   const { data: previousApplication } = useQuery({

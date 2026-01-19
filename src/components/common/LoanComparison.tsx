@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -55,6 +55,7 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
     const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
     const [comparisonAmount, setComparisonAmount] = useState(10000);
     const [comparisonTerm, setComparisonTerm] = useState(12);
+    const queryClient = useQueryClient();
 
     // Fetch loan products
     const { data: loanProducts, isLoading } = useQuery({
@@ -69,7 +70,34 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
             if (error) throw error;
             return data as LoanProduct[];
         },
+        staleTime: 0, // Always fetch fresh data
+        refetchOnMount: true, // Refetch when component mounts
+        refetchOnWindowFocus: true, // Refetch when window regains focus
+        refetchInterval: 30000, // Refetch every 30 seconds to catch updates
     });
+
+    // Real-time subscription to loan products changes
+    useEffect(() => {
+        const channel = supabase
+            .channel("loan-products-comparison-changes")
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "loan_products",
+                },
+                () => {
+                    // Invalidate and refetch when any loan product changes
+                    queryClient.invalidateQueries({ queryKey: ["loan-products-comparison"] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [queryClient]);
 
     // Toggle product selection
     const toggleProduct = (productId: string) => {

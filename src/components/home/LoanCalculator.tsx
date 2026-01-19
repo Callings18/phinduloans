@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Link } from "react-router-dom";
 import { ArrowRight, Loader2, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calculateLoan, LoanProduct as LoanProductCalc } from "@/utils/loanCalculations";
 import { format, addMonths } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,7 @@ const LoanCalculator = () => {
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [loanAmount, setLoanAmount] = useState<string>("5000");
   const [loanTerm, setLoanTerm] = useState<string>("3");
+  const queryClient = useQueryClient();
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["loan-products-public"],
@@ -53,7 +54,33 @@ const LoanCalculator = () => {
       return data as LoanProduct[];
     },
     staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchInterval: 30000, // Refetch every 30 seconds to catch updates
   });
+
+  // Real-time subscription to loan products changes
+  useEffect(() => {
+    const channel = supabase
+      .channel("loan-products-public-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "loan_products",
+        },
+        () => {
+          // Invalidate and refetch when any loan product changes
+          queryClient.invalidateQueries({ queryKey: ["loan-products-public"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Set default product when products load
   useEffect(() => {
