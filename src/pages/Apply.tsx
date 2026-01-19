@@ -623,6 +623,42 @@ const Apply = () => {
         }
       }
       
+      // Upload collateral image if provided
+      let collateralImageUrl: string | null = null;
+      if (formData.collateralImage) {
+        try {
+          const fileExt = formData.collateralImage.name.split('.').pop();
+          const fileName = `${user.id}/collateral_${Date.now()}.${fileExt}`;
+          console.log(`[Apply] Uploading collateral image: ${fileName}`);
+          
+          const { data: collateralData, error: collateralErr } = await supabase.storage
+            .from('loan-documents')
+            .upload(fileName, formData.collateralImage, {
+              cacheControl: '3600',
+              upsert: false
+            });
+          
+          if (collateralErr) {
+            console.error('[Apply] Failed to upload collateral image:', collateralErr);
+            toast({
+              title: "Collateral Image Upload Warning",
+              description: `Collateral image upload failed: ${collateralErr.message}. Application will continue.`,
+              variant: "default",
+            });
+          } else {
+            console.log('[Apply] Successfully uploaded collateral image');
+            collateralImageUrl = fileName;
+          }
+        } catch (err: any) {
+          console.error('[Apply] Collateral image upload error:', err);
+          toast({
+            title: "Upload Error",
+            description: `Failed to upload collateral image: ${err.message}`,
+            variant: "destructive",
+          });
+        }
+      }
+
       // Clear upload progress after a delay
       setTimeout(() => {
         setUploadProgress({});
@@ -663,6 +699,7 @@ const Apply = () => {
         nrc_back_url: formData.reusedDocs['nrc_back'] || uploadedDocs.find(d => d.document_type === 'nrc_back')?.file_url || null,
         payslip_url: formData.reusedDocs['payslip'] || uploadedDocs.find(d => d.document_type === 'payslip')?.file_url || null,
         selfie_url: formData.reusedDocs['selfie'] || uploadedDocs.find(d => d.document_type === 'selfie')?.file_url || null,
+        collateral_image_url: collateralImageUrl,
         collateral_description: formData.collateralDescription || null,
         collateral_value: formData.collateralValue ? parseFloat(formData.collateralValue) : null,
         status: 'pending' as const,

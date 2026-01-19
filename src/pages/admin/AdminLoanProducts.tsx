@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
@@ -243,6 +243,111 @@ const AdminLoanProducts = () => {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const calculationTriggeredRef = useRef(false);
+
+  // Function to perform calculation preview
+  const performCalculation = () => {
+    const principalInput = document.getElementById('preview-principal') as HTMLInputElement;
+    const termInput = document.getElementById('preview-term') as HTMLInputElement;
+    
+    if (!principalInput || !termInput) return;
+    
+    const principal = Number(principalInput.value) || formData.min_amount;
+    const term = Number(termInput.value) || formData.min_term_months;
+
+    // Convert term to months based on term_unit
+    let termMonths = term;
+    if (formData.term_unit === 'days') termMonths = term / 30;
+    else if (formData.term_unit === 'weeks') termMonths = term / 4.33;
+    else if (formData.term_unit === 'years') termMonths = term * 12;
+
+    const result = calculateLoan(principal, termMonths, {
+      interest_rate: formData.interest_rate,
+      interest_period: formData.interest_period as any,
+      interest_type: formData.interest_type as any,
+      processing_fee_percent: formData.processing_fee_percent,
+      insurance_percent: formData.insurance_percent,
+      vat_percent: formData.vat_percent,
+      platform_fee_percent: formData.platform_fee_percent,
+      enforcement_fee_percent: formData.enforcement_fee_percent,
+    });
+
+    const previewResult = document.getElementById('preview-result');
+    if (previewResult) {
+      previewResult.innerHTML = `
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Principal</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.principal)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Interest (${formData.interest_rate}% ${getInterestPeriodLabel(formData.interest_period as any)})</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.totalInterest)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Processing Fee</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.processingFee)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Enforcement Fee</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.enforcementFee)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Insurance</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.insuranceFee)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">VAT</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.vatAmount)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Platform Fee</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.platformFee)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border">
+            <span class="text-muted-foreground">Total Fees (deducted)</span>
+            <p class="font-semibold text-foreground">${formatCurrency(result.feesDeductedUpfront)}</p>
+          </div>
+          <div class="p-3 rounded bg-emerald-500/10 border border-emerald-500/30">
+            <span class="text-muted-foreground">Borrower Receives</span>
+            <p class="font-bold text-emerald-500">${formatCurrency(result.disbursementAmount)}</p>
+          </div>
+          <div class="p-3 rounded bg-primary/10 border border-primary/30">
+            <span class="text-muted-foreground">Total Repayment</span>
+            <p class="font-bold text-primary">${formatCurrency(result.totalRepayment)}</p>
+          </div>
+          <div class="p-3 rounded bg-background border col-span-2">
+            <span class="text-muted-foreground">Monthly Payment (${termMonths.toFixed(1)} months)</span>
+            <p class="font-semibold text-lg text-foreground">${formatCurrency(result.monthlyPayment)} /month</p>
+          </div>
+          <div class="p-3 rounded bg-muted/50 border col-span-2 text-xs text-muted-foreground">
+            Effective Annual Rate: ${result.effectiveAnnualRate.toFixed(2)}% | Interest Type: ${formData.interest_type}
+          </div>
+        </div>
+      `;
+    }
+  };
+
+  // Auto-calculate when relevant fields change (only if dialog is open and calculation has been triggered once)
+  useEffect(() => {
+    if (isDialogOpen && calculationTriggeredRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        performCalculation();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    formData.interest_rate,
+    formData.interest_period,
+    formData.interest_type,
+    formData.processing_fee_percent,
+    formData.enforcement_fee_percent,
+    formData.insurance_percent,
+    formData.vat_percent,
+    formData.platform_fee_percent,
+    isDialogOpen
+  ]);
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["loan-products"],
@@ -422,10 +527,12 @@ const AdminLoanProducts = () => {
 
   const resetForm = () => {
     setFormData(defaultFormData);
+    calculationTriggeredRef.current = false; // Reset calculation trigger when resetting
   };
 
   const handleEdit = (product: LoanProduct) => {
     setEditingProduct(product);
+    calculationTriggeredRef.current = false; // Reset calculation trigger when editing
     setFormData({
       name: product.name,
       description: product.description || "",
@@ -1029,7 +1136,9 @@ const AdminLoanProducts = () => {
                       <Label>Interest Type</Label>
                       <Select
                         value={formData.interest_type}
-                        onValueChange={(v) => setFormData({ ...formData, interest_type: v })}
+                        onValueChange={(v) => {
+                          setFormData({ ...formData, interest_type: v });
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -1045,7 +1154,9 @@ const AdminLoanProducts = () => {
                       <Label>Interest Period</Label>
                       <Select
                         value={formData.interest_period}
-                        onValueChange={(v) => setFormData({ ...formData, interest_period: v })}
+                        onValueChange={(v) => {
+                          setFormData({ ...formData, interest_period: v });
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -1064,7 +1175,10 @@ const AdminLoanProducts = () => {
                         type="number"
                         step="0.1"
                         value={formData.interest_rate}
-                        onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value);
+                          setFormData({ ...formData, interest_rate: newValue });
+                        }}
                       />
                       <p className="text-xs text-muted-foreground">Rate per {formData.interest_period}</p>
                     </div>
@@ -1074,7 +1188,10 @@ const AdminLoanProducts = () => {
                         type="number"
                         step="0.1"
                         value={formData.processing_fee_percent}
-                        onChange={(e) => setFormData({ ...formData, processing_fee_percent: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value);
+                          setFormData({ ...formData, processing_fee_percent: newValue });
+                        }}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1083,7 +1200,10 @@ const AdminLoanProducts = () => {
                         type="number"
                         step="0.1"
                         value={formData.enforcement_fee_percent}
-                        onChange={(e) => setFormData({ ...formData, enforcement_fee_percent: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value);
+                          setFormData({ ...formData, enforcement_fee_percent: newValue });
+                        }}
                       />
                       <p className="text-xs text-muted-foreground">Deducted before disbursement</p>
                     </div>
@@ -1093,7 +1213,10 @@ const AdminLoanProducts = () => {
                         type="number"
                         step="0.1"
                         value={formData.insurance_percent}
-                        onChange={(e) => setFormData({ ...formData, insurance_percent: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value);
+                          setFormData({ ...formData, insurance_percent: newValue });
+                        }}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1102,7 +1225,10 @@ const AdminLoanProducts = () => {
                         type="number"
                         step="0.1"
                         value={formData.vat_percent}
-                        onChange={(e) => setFormData({ ...formData, vat_percent: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value);
+                          setFormData({ ...formData, vat_percent: newValue });
+                        }}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1111,7 +1237,10 @@ const AdminLoanProducts = () => {
                         type="number"
                         step="0.1"
                         value={formData.platform_fee_percent}
-                        onChange={(e) => setFormData({ ...formData, platform_fee_percent: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value);
+                          setFormData({ ...formData, platform_fee_percent: newValue });
+                        }}
                       />
                     </div>
                     <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
@@ -1447,63 +1576,8 @@ const AdminLoanProducts = () => {
                         variant="outline"
                         className="mt-4"
                         onClick={() => {
-                          const principal = Number((document.getElementById('preview-principal') as HTMLInputElement)?.value) || formData.min_amount;
-                          const term = Number((document.getElementById('preview-term') as HTMLInputElement)?.value) || formData.min_term_months;
-
-                          // Convert term to months based on term_unit
-                          let termMonths = term;
-                          if (formData.term_unit === 'days') termMonths = term / 30;
-                          else if (formData.term_unit === 'weeks') termMonths = term / 4.33;
-                          else if (formData.term_unit === 'years') termMonths = term * 12;
-
-                          const result = calculateLoan(principal, termMonths, {
-                            interest_rate: formData.interest_rate,
-                            interest_period: formData.interest_period as any,
-                            interest_type: formData.interest_type as any,
-                            processing_fee_percent: formData.processing_fee_percent,
-                            insurance_percent: formData.insurance_percent,
-                            vat_percent: formData.vat_percent,
-                            platform_fee_percent: formData.platform_fee_percent,
-                          });
-
-                          const previewResult = document.getElementById('preview-result');
-                          if (previewResult) {
-                            previewResult.innerHTML = `
-                              <div class="grid grid-cols-2 gap-3 text-sm">
-                                <div class="p-3 rounded bg-background border">
-                                  <span class="text-muted-foreground">Principal</span>
-                                  <p class="font-semibold text-foreground">${formatCurrency(result.principal)}</p>
-                                </div>
-                                <div class="p-3 rounded bg-background border">
-                                  <span class="text-muted-foreground">Interest (${formData.interest_rate}% ${getInterestPeriodLabel(formData.interest_period as any)})</span>
-                                  <p class="font-semibold text-foreground">${formatCurrency(result.totalInterest)}</p>
-                                </div>
-                                <div class="p-3 rounded bg-background border">
-                                  <span class="text-muted-foreground">Processing Fee</span>
-                                  <p class="font-semibold text-foreground">${formatCurrency(result.processingFee)}</p>
-                                </div>
-                                <div class="p-3 rounded bg-background border">
-                                  <span class="text-muted-foreground">Total Fees (deducted)</span>
-                                  <p class="font-semibold text-foreground">${formatCurrency(result.feesDeductedUpfront)}</p>
-                                </div>
-                                <div class="p-3 rounded bg-emerald-500/10 border border-emerald-500/30">
-                                  <span class="text-muted-foreground">Borrower Receives</span>
-                                  <p class="font-bold text-emerald-500">${formatCurrency(result.disbursementAmount)}</p>
-                                </div>
-                                <div class="p-3 rounded bg-primary/10 border border-primary/30">
-                                  <span class="text-muted-foreground">Total Repayment</span>
-                                  <p class="font-bold text-primary">${formatCurrency(result.totalRepayment)}</p>
-                                </div>
-                                <div class="p-3 rounded bg-background border col-span-2">
-                                  <span class="text-muted-foreground">Monthly Payment (${termMonths.toFixed(1)} months)</span>
-                                  <p class="font-semibold text-lg text-foreground">${formatCurrency(result.monthlyPayment)} /month</p>
-                                </div>
-                                <div class="p-3 rounded bg-muted/50 border col-span-2 text-xs text-muted-foreground">
-                                  Effective Annual Rate: ${result.effectiveAnnualRate.toFixed(2)}% | Interest Type: ${formData.interest_type}
-                                </div>
-                              </div>
-                            `;
-                          }
+                          calculationTriggeredRef.current = true;
+                          performCalculation();
                         }}
                       >
                         <Calculator size={16} className="mr-2" />
