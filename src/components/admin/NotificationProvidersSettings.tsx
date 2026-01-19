@@ -39,9 +39,12 @@ interface NotificationProviderSettings {
   
   // WhatsApp Settings
   whatsapp_enabled: boolean;
-  whatsapp_provider: "africastalking" | "twilio" | "none";
+  whatsapp_provider: "africastalking" | "twilio" | "respondio" | "none";
   africastalking_whatsapp_number: string;
   twilio_whatsapp_number: string;
+  respondio_api_key: string;
+  respondio_base_url: string;
+  respondio_whatsapp_channel_id: string;
   
   // Email Settings
   email_enabled: boolean;
@@ -81,6 +84,9 @@ const defaultSettings: NotificationProviderSettings = {
   whatsapp_provider: "none",
   africastalking_whatsapp_number: "",
   twilio_whatsapp_number: "",
+  respondio_api_key: "",
+  respondio_base_url: "https://api.respond.io/v3",
+  respondio_whatsapp_channel_id: "",
   
   email_enabled: false,
   email_provider: "none",
@@ -493,6 +499,7 @@ export const NotificationProvidersSettings = () => {
                       <SelectContent>
                         <SelectItem value="africastalking">Africa's Talking</SelectItem>
                         <SelectItem value="twilio">Twilio</SelectItem>
+                        <SelectItem value="respondio">Respond.io</SelectItem>
                         <SelectItem value="none">None (Disabled)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -537,6 +544,59 @@ export const NotificationProvidersSettings = () => {
                         <p className="text-xs text-muted-foreground">
                           Your Twilio WhatsApp-enabled number (format: whatsapp:+1234567890)
                         </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {settings.whatsapp_provider === "respondio" && (
+                    <div className="space-y-4 p-4 bg-muted rounded-lg">
+                      <h4 className="font-medium">Respond.io WhatsApp Business</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Send WhatsApp template messages via Respond.io. Your WhatsApp Business number must be connected to Respond.io as a channel.
+                      </p>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>API Key *</Label>
+                          <Input
+                            type="password"
+                            placeholder="your-respondio-api-key"
+                            value={settings.respondio_api_key}
+                            onChange={(e) => 
+                              setSettings({ ...settings, respondio_api_key: e.target.value })
+                            }
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Your Respond.io API key (found in Respond.io Settings → API)
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Base URL</Label>
+                          <Input
+                            type="text"
+                            placeholder="https://api.respond.io/v3"
+                            value={settings.respondio_base_url}
+                            onChange={(e) => 
+                              setSettings({ ...settings, respondio_base_url: e.target.value })
+                            }
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Respond.io API base URL (default: https://api.respond.io/v3)
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>WhatsApp Channel ID *</Label>
+                          <Input
+                            type="text"
+                            placeholder="channel-id-from-respondio"
+                            value={settings.respondio_whatsapp_channel_id}
+                            onChange={(e) => 
+                              setSettings({ ...settings, respondio_whatsapp_channel_id: e.target.value })
+                            }
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            The WhatsApp channel ID from Respond.io (found in Channels → WhatsApp → Channel ID)
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}

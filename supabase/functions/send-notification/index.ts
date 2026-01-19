@@ -15,6 +15,10 @@ interface NotificationRequest {
   title?: string;
   userId?: string;
   htmlContent?: string;
+  // Respond.io template parameters
+  templateName?: string;
+  templateLanguage?: string;
+  templateComponents?: any[];
 }
 
 interface NotificationSettings {
@@ -31,6 +35,9 @@ interface NotificationSettings {
   africastalking_whatsapp_number?: string;
   fonnte_api_token?: string;
   fonnte_device_id?: string;
+  respondio_api_key?: string;
+  respondio_base_url?: string;
+  respondio_whatsapp_channel_id?: string;
   
   // Email Settings
   email_enabled?: boolean;
@@ -335,6 +342,87 @@ async function sendWhatsApp_Twilio(
   return result;
 }
 
+/**
+ * Respond.io WhatsApp Business API
+ * Sends WhatsApp template messages via Respond.io
+ * Documentation: https://docs.respond.io/
+ */
+async function sendWhatsApp_RespondIO(
+  to: string,
+  message: string,
+  settings: NotificationSettings,
+  templateName?: string,
+  templateLanguage?: string,
+  templateComponents?: any[]
+): Promise<any> {
+  const apiKey = settings.respondio_api_key;
+  const baseUrl = settings.respondio_base_url || "https://api.respond.io/v3";
+  const channelId = settings.respondio_whatsapp_channel_id;
+
+  if (!apiKey || !channelId) {
+    throw new Error("Respond.io credentials not configured (apiKey and channelId required)");
+  }
+
+  // Format phone number to E.164 format
+  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+  if (phone.startsWith("0")) {
+    phone = "+260" + phone.substring(1);
+  } else if (!phone.startsWith("+")) {
+    phone = "+260" + phone;
+  }
+
+  // If template name is provided, send as template message
+  if (templateName) {
+    const payload: any = {
+      channelId: channelId,
+      to: phone,
+      template: {
+        name: templateName,
+        language: {
+          code: templateLanguage || "en",
+        },
+      },
+    };
+
+    if (templateComponents && templateComponents.length > 0) {
+      payload.template.components = templateComponents;
+    }
+
+    const response = await fetch(`${baseUrl}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    let result: any;
+
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      result = { error: responseText, status: response.status };
+    }
+
+    console.log("[WhatsApp - Respond.io] Template Response:", JSON.stringify(result));
+
+    if (!response.ok) {
+      const errorMessage = result?.message || result?.error || `HTTP ${response.status}`;
+      throw new Error(`Respond.io API error: ${errorMessage}`);
+    }
+
+    return result;
+  } else {
+    // Fallback to plain text message (if Respond.io supports it)
+    // Note: WhatsApp Business API typically requires templates for outbound messages
+    // This is a fallback for cases where template is not provided
+    throw new Error("Template name is required for Respond.io WhatsApp messages");
+  }
+}
+
 // ============================================================================
 // EMAIL PROVIDERS
 // ============================================================================
@@ -496,12 +584,26 @@ const handler = async (req: Request): Promise<Response> => {
         if (!settings.whatsapp_enabled) {
           throw new Error("WhatsApp notifications are disabled");
         }
+        // Extract template parameters from request if provided
+        const templateName = request.templateName;
+        const templateLanguage = request.templateLanguage || 'en';
+        const templateComponents = request.templateComponents;
+        
         if (provider === 'africastalking') {
           result = await sendWhatsApp_AfricasTalking(to, message, settings);
         } else if (provider === 'fonnte') {
           result = await sendWhatsApp_Fonnte(to, message, settings);
         } else if (provider === 'twilio') {
           result = await sendWhatsApp_Twilio(to, message, settings);
+        } else if (provider === 'respondio') {
+          result = await sendWhatsApp_RespondIO(
+            to, 
+            message, 
+            settings, 
+            templateName, 
+            templateLanguage, 
+            templateComponents
+          );
         } else {
           throw new Error(`Unsupported WhatsApp provider: ${provider}`);
         }
