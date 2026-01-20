@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
+import { notificationService } from "@/utils/notificationService";
 
 interface AuthContextType {
   user: User | null;
@@ -74,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -84,6 +85,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       },
     });
+
+    // Send welcome email if signup was successful
+    if (!error && data.user) {
+      try {
+        await notificationService.sendSignupWelcome(
+          data.user.id,
+          fullName,
+          '', // Phone not available at signup
+          email
+        );
+        console.log('[Auth] Welcome email sent successfully');
+      } catch (notifyError) {
+        console.error('[Auth] Failed to send welcome email:', notifyError);
+        // Don't fail signup if notification fails
+      }
+    }
 
     return { error: error as Error | null };
   };

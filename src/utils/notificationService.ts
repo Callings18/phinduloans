@@ -162,7 +162,162 @@ class NotificationService {
 
   async sendSignupWelcome(userId: string, name: string, phone: string, email?: string) {
     const message = `Welcome to Phindu Finance, ${name}! 🎉\n\nYour account has been created successfully. You can now apply for loans and manage your finances with ease.\n\nContact us at info@phindu.com for any assistance.`;
-    const subject = "Welcome to Phindu Finance!";
+    const subject = "🎉 Welcome to Phindu Finance - Your Financial Journey Starts Here!";
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f0f23;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1f4e 100%); padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+                <!-- Header with Logo -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 50%, #f97316 100%); border-radius: 20px 20px 0 0; padding: 40px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 32px; font-weight: 700; color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                      ✨ PHINDU FINANCE ✨
+                    </h1>
+                    <p style="margin: 10px 0 0; font-size: 14px; color: rgba(255,255,255,0.9); letter-spacing: 2px;">
+                      EMPOWERING YOUR FINANCIAL FUTURE
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Welcome Banner -->
+                <tr>
+                  <td style="background: linear-gradient(180deg, #1e1e3f 0%, #252550 100%); padding: 0;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="text-align: center; padding: 40px 30px;">
+                          <div style="width: 100px; height: 100px; margin: 0 auto 20px; background: linear-gradient(135deg, #8b5cf6, #d946ef); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 50px;">🎉</span>
+                          </div>
+                          <h2 style="margin: 0 0 10px; font-size: 28px; color: white; font-weight: 600;">
+                            Welcome, ${name}!
+                          </h2>
+                          <p style="margin: 0; font-size: 16px; color: #a78bfa;">
+                            Your account has been created successfully
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="background: #1a1a3e; padding: 40px 30px;">
+                    <p style="margin: 0 0 20px; font-size: 16px; color: #e2e8f0; line-height: 1.6;">
+                      We're thrilled to have you join the Phindu Finance family! Your journey to financial freedom starts now.
+                    </p>
+                    
+                    <!-- Features Grid -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                      <tr>
+                        <td style="padding: 15px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(217, 70, 239, 0.1)); border-radius: 12px; border-left: 4px solid #8b5cf6; margin-bottom: 15px;">
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="vertical-align: top; padding-right: 15px;">
+                                <span style="font-size: 24px;">💰</span>
+                              </td>
+                              <td>
+                                <h3 style="margin: 0 0 5px; color: #d8b4fe; font-size: 16px;">Quick Loan Applications</h3>
+                                <p style="margin: 0; color: #94a3b8; font-size: 14px;">Apply for loans in minutes with our simple process</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr><td style="height: 15px;"></td></tr>
+                      <tr>
+                        <td style="padding: 15px; background: linear-gradient(135deg, rgba(217, 70, 239, 0.2), rgba(249, 115, 22, 0.1)); border-radius: 12px; border-left: 4px solid #d946ef;">
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="vertical-align: top; padding-right: 15px;">
+                                <span style="font-size: 24px;">📊</span>
+                              </td>
+                              <td>
+                                <h3 style="margin: 0 0 5px; color: #f0abfc; font-size: 16px;">Track Your Progress</h3>
+                                <p style="margin: 0; color: #94a3b8; font-size: 14px;">Monitor your loans and payments from your dashboard</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr><td style="height: 15px;"></td></tr>
+                      <tr>
+                        <td style="padding: 15px; background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(139, 92, 246, 0.1)); border-radius: 12px; border-left: 4px solid #f97316;">
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="vertical-align: top; padding-right: 15px;">
+                                <span style="font-size: 24px;">🔒</span>
+                              </td>
+                              <td>
+                                <h3 style="margin: 0 0 5px; color: #fdba74; font-size: 16px;">Secure & Reliable</h3>
+                                <p style="margin: 0; color: #94a3b8; font-size: 14px;">Your data is protected with bank-grade security</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <!-- CTA Button -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                      <tr>
+                        <td align="center">
+                          <a href="https://loan-kindly-flow.lovable.app/dashboard" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%); color: white; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 30px; box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);">
+                            🚀 Access Your Dashboard
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Support Section -->
+                <tr>
+                  <td style="background: linear-gradient(180deg, #252550 0%, #1e1e3f 100%); padding: 30px; text-align: center; border-radius: 0 0 20px 20px;">
+                    <p style="margin: 0 0 15px; font-size: 14px; color: #a78bfa;">
+                      Need assistance? We're here to help!
+                    </p>
+                    <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                      <tr>
+                        <td style="padding: 0 15px;">
+                          <a href="mailto:info@phindu.com" style="color: #d8b4fe; text-decoration: none; font-size: 14px;">
+                            📧 info@phindu.com
+                          </a>
+                        </td>
+                        <td style="padding: 0 15px;">
+                          <a href="tel:+260123456789" style="color: #d8b4fe; text-decoration: none; font-size: 14px;">
+                            📞 +260 123 456 789
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <div style="margin-top: 25px; padding-top: 25px; border-top: 1px solid rgba(139, 92, 246, 0.3);">
+                      <p style="margin: 0; font-size: 12px; color: #64748b;">
+                        © ${new Date().getFullYear()} Phindu Finance. All rights reserved.
+                      </p>
+                      <p style="margin: 5px 0 0; font-size: 11px; color: #475569;">
+                        Lusaka, Zambia | Licensed by Bank of Zambia
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
 
     return this.sendMultiChannel({
       userId,
@@ -171,6 +326,7 @@ class NotificationService {
       message,
       subject,
       title: "Welcome",
+      htmlContent,
       eventType: "signup"
     });
   }
