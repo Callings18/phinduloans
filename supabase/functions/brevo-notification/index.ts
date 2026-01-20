@@ -16,6 +16,10 @@ interface BrevoNotificationRequest {
   templateParams?: Record<string, string>;
   userId?: string;
   eventType?: string;
+  attachment?: {
+    content: string; // Base64 encoded
+    name: string;
+  };
 }
 
 interface BrevoSettings {
@@ -54,7 +58,8 @@ async function sendEmailBrevo(
   htmlContent: string | undefined,
   settings: BrevoSettings,
   templateId?: number,
-  templateParams?: Record<string, string>
+  templateParams?: Record<string, string>,
+  attachment?: { content: string; name: string }
 ): Promise<any> {
   const apiKey = settings.brevo_api_key;
   const senderEmail = settings.brevo_sender_email;
@@ -89,6 +94,14 @@ async function sendEmailBrevo(
       textContent: message,
       htmlContent: htmlContent || `<html><body><p>${message.replace(/\n/g, '<br>')}</p></body></html>`
     };
+
+    // Add attachment if provided (for PDFs like contracts)
+    if (attachment) {
+      payload.attachment = [{
+        content: attachment.content,
+        name: attachment.name
+      }];
+    }
   }
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -235,7 +248,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const request: BrevoNotificationRequest = await req.json();
-    const { type, to, message, subject, htmlContent, templateId, templateParams, userId, eventType } = request;
+    const { type, to, message, subject, htmlContent, templateId, templateParams, userId, eventType, attachment } = request;
 
     if (!type || !to || !message) {
       return new Response(
@@ -288,7 +301,7 @@ const handler = async (req: Request): Promise<Response> => {
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
-      result = await sendEmailBrevo(to, subject, message, htmlContent, settings, templateId, templateParams);
+      result = await sendEmailBrevo(to, subject, message, htmlContent, settings, templateId, templateParams, attachment);
     } else if (type === 'sms') {
       result = await sendSMSBrevo(to, message, settings);
     } else if (type === 'whatsapp') {

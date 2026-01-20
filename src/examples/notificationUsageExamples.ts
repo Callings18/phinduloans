@@ -58,7 +58,7 @@ export async function example_sendEmail() {
 }
 
 // ============================================================================
-// Example 4: Send Multi-Channel Notification (SMS + Email + WhatsApp)
+// Example 4: Send Multi-Channel Notification (SMS + Email)
 // ============================================================================
 export async function example_sendMultiChannel() {
   const results = await notificationService.sendMultiChannel({
@@ -71,7 +71,6 @@ export async function example_sendMultiChannel() {
   } as any);
 
   console.log('SMS result:', results.sms);
-  console.log('WhatsApp result:', results.whatsapp);
   console.log('Email result:', results.email);
 }
 

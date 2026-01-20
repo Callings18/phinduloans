@@ -14,6 +14,8 @@ interface NotificationSettings {
   notify_on_payment_reminder: boolean;
   notify_on_overdue: boolean;
   notify_on_loan_completion: boolean;
+  notify_on_court_case: boolean;
+  notify_on_contract_sent: boolean;
 }
 
 interface SendNotificationParams {
@@ -25,6 +27,10 @@ interface SendNotificationParams {
   title?: string;
   htmlContent?: string;
   eventType?: string;
+  attachment?: {
+    content: string; // Base64 encoded
+    name: string;
+  };
 }
 
 class NotificationService {
@@ -44,7 +50,7 @@ class NotificationService {
       const { data, error } = await supabase
         .from("system_settings")
         .select("value")
-        .eq("key", "notification_providers")
+        .eq("key", "brevo_settings")
         .maybeSingle();
 
       if (error) {
@@ -76,14 +82,15 @@ class NotificationService {
       }
     }
 
-    // Check if channel is enabled
+    // Check if channel is enabled based on brevo settings
+    const brevoSettings = settings as any;
     let enabled = false;
-    if (params.type === 'sms' && settings) {
-      enabled = settings.sms_enabled;
-    } else if (params.type === 'whatsapp' && settings) {
-      enabled = settings.whatsapp_enabled;
-    } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled;
+    if (params.type === 'sms' && brevoSettings) {
+      enabled = brevoSettings.brevo_sms_enabled;
+    } else if (params.type === 'whatsapp' && brevoSettings) {
+      enabled = brevoSettings.brevo_whatsapp_enabled;
+    } else if (params.type === 'email' && brevoSettings) {
+      enabled = brevoSettings.brevo_email_enabled;
     }
 
     if (!enabled) {
@@ -92,7 +99,8 @@ class NotificationService {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("send-notification", {
+      // Use Brevo edge function for all notifications
+      const { data, error } = await supabase.functions.invoke("brevo-notification", {
         body: {
           type: params.type,
           to: params.to,
@@ -101,6 +109,8 @@ class NotificationService {
           title: params.title,
           htmlContent: params.htmlContent,
           userId: params.userId,
+          eventType: params.eventType,
+          attachment: params.attachment,
         },
       });
 
@@ -117,31 +127,24 @@ class NotificationService {
     }
   }
 
-  // Multi-channel send (SMS + Email + WhatsApp)
+  // Multi-channel send (SMS + Email)
   async sendMultiChannel(params: Omit<SendNotificationParams, 'type' | 'to'> & { phone?: string; email?: string }) {
     const results = {
       sms: null as any,
       email: null as any,
-      whatsapp: null as any
     };
 
     if (params.phone) {
-      // Send SMS
+      // Send SMS via Brevo
       results.sms = await this.send({
         ...params,
         type: 'sms',
         to: params.phone,
       });
-
-      // Send WhatsApp
-      results.whatsapp = await this.send({
-        ...params,
-        type: 'whatsapp',
-        to: params.phone,
-      });
     }
 
     if (params.email && params.subject) {
+      // Send Email via Brevo
       results.email = await this.send({
         ...params,
         type: 'email',
@@ -296,6 +299,174 @@ class NotificationService {
       title: `Collection Notice - Level ${escalationLevel}`,
       eventType: "overdue"
     });
+  }
+
+  // Send contract via email with PDF attachment
+  async sendContractEmail(
+    userId: string, 
+    borrowerName: string, 
+    borrowerEmail: string, 
+    loanAmount: number,
+    contractPdfBase64: string
+  ) {
+    const subject = `Your Loan Contract - K${loanAmount.toLocaleString()} - Phindu Finance`;
+    const message = `Dear ${borrowerName},\n\nPlease find attached your loan contract for K${loanAmount.toLocaleString()}.\n\nKindly review and sign the contract at your earliest convenience.\n\nIf you have any questions, please don't hesitate to contact us.\n\nBest regards,\nPhindu Finance Team`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1a1a2e; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0;">Phindu Finance</h1>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <h2>Dear ${borrowerName},</h2>
+          <p>Please find attached your loan contract for <strong>K${loanAmount.toLocaleString()}</strong>.</p>
+          <p>Kindly review and sign the contract at your earliest convenience.</p>
+          <p>If you have any questions, please don't hesitate to contact us.</p>
+          <br>
+          <p>Best regards,<br><strong>Phindu Finance Team</strong></p>
+        </div>
+        <div style="background: #1a1a2e; color: white; padding: 10px; text-align: center; font-size: 12px;">
+          <p>© 2024 Phindu Finance. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    return this.send({
+      userId,
+      type: 'email',
+      to: borrowerEmail,
+      subject,
+      message,
+      htmlContent,
+      eventType: 'contract_sent',
+      attachment: {
+        content: contractPdfBase64,
+        name: `Loan_Contract_${borrowerName.replace(/\s+/g, '_')}.pdf`
+      }
+    });
+  }
+
+  // Send court case notification to borrower
+  async sendCourtCaseNotificationToBorrower(
+    userId: string,
+    borrowerName: string,
+    borrowerPhone: string,
+    borrowerEmail: string,
+    claimAmount: number,
+    courtName?: string,
+    hearingDate?: string
+  ) {
+    const courtInfo = courtName ? `\n\nCourt: ${courtName}` : "";
+    const hearingInfo = hearingDate ? `\nHearing Date: ${hearingDate}` : "";
+    
+    const message = `Dear ${borrowerName},\n\n⚖️ LEGAL NOTICE\n\nDue to non-payment of your outstanding loan balance of K${claimAmount.toLocaleString()}, we have initiated legal proceedings against you.${courtInfo}${hearingInfo}\n\nTo avoid further legal action, please contact us immediately to settle your account.\n\n- Phindu Finance Legal Department`;
+    
+    const subject = `Legal Notice - Court Case Filed - K${claimAmount.toLocaleString()}`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #dc2626; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0;">⚖️ LEGAL NOTICE</h1>
+        </div>
+        <div style="padding: 20px; background: #fef2f2; border: 2px solid #dc2626;">
+          <h2>Dear ${borrowerName},</h2>
+          <p>Due to non-payment of your outstanding loan balance of <strong>K${claimAmount.toLocaleString()}</strong>, we have initiated legal proceedings against you.</p>
+          ${courtName ? `<p><strong>Court:</strong> ${courtName}</p>` : ''}
+          ${hearingDate ? `<p><strong>Hearing Date:</strong> ${hearingDate}</p>` : ''}
+          <p style="color: #dc2626; font-weight: bold;">To avoid further legal action, please contact us immediately to settle your account.</p>
+          <br>
+          <p>Phindu Finance Legal Department</p>
+        </div>
+      </div>
+    `;
+
+    return this.sendMultiChannel({
+      userId,
+      phone: borrowerPhone,
+      email: borrowerEmail,
+      message,
+      subject,
+      htmlContent,
+      eventType: 'court_case'
+    });
+  }
+
+  // Send court case notification to lawyer
+  async sendCourtCaseNotificationToLawyer(
+    lawyerName: string,
+    lawyerEmail: string,
+    lawyerPhone: string | undefined,
+    borrowerName: string,
+    claimAmount: number,
+    loanDetails: {
+      loanId: string;
+      phone: string;
+      email: string;
+      address?: string;
+    }
+  ) {
+    const subject = `New Court Case Assignment - ${borrowerName} - K${claimAmount.toLocaleString()}`;
+    
+    const message = `Dear ${lawyerName},\n\nA new court case has been assigned to you.\n\nDefendant: ${borrowerName}\nClaim Amount: K${claimAmount.toLocaleString()}\nContact: ${loanDetails.phone}\nEmail: ${loanDetails.email}\n\nPlease review the case details and proceed accordingly.\n\n- Phindu Finance`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1a1a2e; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0;">New Case Assignment</h1>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <h2>Dear ${lawyerName},</h2>
+          <p>A new court case has been assigned to you.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd; background: #f0f0f0;"><strong>Defendant</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${borrowerName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd; background: #f0f0f0;"><strong>Claim Amount</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">K${claimAmount.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd; background: #f0f0f0;"><strong>Contact Phone</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${loanDetails.phone}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd; background: #f0f0f0;"><strong>Contact Email</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${loanDetails.email}</td>
+            </tr>
+            ${loanDetails.address ? `<tr>
+              <td style="padding: 10px; border: 1px solid #ddd; background: #f0f0f0;"><strong>Address</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${loanDetails.address}</td>
+            </tr>` : ''}
+          </table>
+          <p>Please review the case details and proceed accordingly.</p>
+          <br>
+          <p>Best regards,<br><strong>Phindu Finance</strong></p>
+        </div>
+      </div>
+    `;
+
+    // Send email to lawyer
+    const emailResult = await this.send({
+      type: 'email',
+      to: lawyerEmail,
+      subject,
+      message,
+      htmlContent,
+      eventType: 'court_case'
+    });
+
+    // Also send SMS to lawyer if phone available
+    let smsResult = null;
+    if (lawyerPhone) {
+      smsResult = await this.send({
+        type: 'sms',
+        to: lawyerPhone,
+        message: `New case assigned: ${borrowerName}, K${claimAmount.toLocaleString()}. Check email for details. - Phindu Finance`
+      });
+    }
+
+    return { email: emailResult, sms: smsResult };
   }
 
   // Send OTP via SMS only
