@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
+import { notificationService } from "@/utils/notificationService";
 
 interface CourtCase {
   id: string;
@@ -119,6 +120,7 @@ const AdminCourtCases = () => {
     court_location: "",
     assigned_lawyer: "",
     lawyer_contact: "",
+    lawyer_email: "",
     status: "filed",
     filing_date: "",
     hearing_date: "",
@@ -186,10 +188,56 @@ const AdminCourtCases = () => {
     mutationFn: async (data: any) => {
       const { error } = await supabase.from("court_cases").insert(data);
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["court-cases"] });
       toast.success("Court case created successfully");
+      
+      // Get selected loan details for notifications
+      const selectedLoan = defaultedLoans?.find((l) => l.id === data.loan_id);
+      
+      if (selectedLoan) {
+        // Send notification to borrower
+        try {
+          await notificationService.sendCourtCaseNotificationToBorrower(
+            selectedLoan.user_id,
+            selectedLoan.full_name,
+            selectedLoan.phone,
+            selectedLoan.email,
+            data.claim_amount || selectedLoan.total_repayment,
+            data.court_name,
+            data.hearing_date ? format(new Date(data.hearing_date), 'PPP') : undefined
+          );
+          toast.success("Borrower notified about court case");
+        } catch (err) {
+          console.error("Failed to notify borrower:", err);
+        }
+
+        // Send notification to lawyer if assigned
+        if (data.assigned_lawyer && data.lawyer_contact) {
+          try {
+            // Determine if lawyer_contact is email or phone
+            const isEmail = data.lawyer_contact.includes('@');
+            await notificationService.sendCourtCaseNotificationToLawyer(
+              data.assigned_lawyer,
+              isEmail ? data.lawyer_contact : `${data.assigned_lawyer.replace(/\s+/g, '').toLowerCase()}@lawyer.com`,
+              !isEmail ? data.lawyer_contact : undefined,
+              selectedLoan.full_name,
+              data.claim_amount || selectedLoan.total_repayment,
+              {
+                loanId: selectedLoan.id,
+                phone: selectedLoan.phone,
+                email: selectedLoan.email,
+              }
+            );
+            toast.success("Lawyer notified about new case assignment");
+          } catch (err) {
+            console.error("Failed to notify lawyer:", err);
+          }
+        }
+      }
+
       setIsCreateDialogOpen(false);
       resetForm();
     },
@@ -223,6 +271,7 @@ const AdminCourtCases = () => {
       court_location: "",
       assigned_lawyer: "",
       lawyer_contact: "",
+      lawyer_email: "",
       status: "filed",
       filing_date: "",
       hearing_date: "",
@@ -294,6 +343,7 @@ const AdminCourtCases = () => {
       court_location: courtCase.court_location || "",
       assigned_lawyer: courtCase.assigned_lawyer || "",
       lawyer_contact: courtCase.lawyer_contact || "",
+      lawyer_email: "",
       status: courtCase.status,
       filing_date: courtCase.filing_date || "",
       hearing_date: courtCase.hearing_date || courtCase.next_hearing_date || "",
