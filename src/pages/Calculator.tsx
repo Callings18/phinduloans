@@ -47,7 +47,7 @@ const Calculator = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]); [queryClient]);
+  }, [queryClient]);
 
   // Build product config for calculations (only upfront fees, no potential charges)
   const productForCalc: LoanProductCalc = selectedProduct
