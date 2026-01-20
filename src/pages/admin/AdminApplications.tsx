@@ -2000,9 +2000,9 @@ const AdminApplications = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
                   if (selectedApp) {
-                    generateLoanContract({
+                    await generateLoanContract({
                       id: selectedApp.id,
                       full_name: selectedApp.full_name,
                       email: selectedApp.email,
@@ -2023,6 +2023,7 @@ const AdminApplications = () => {
                       collateral_description: selectedApp.collateral_description,
                       collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
                       created_at: selectedApp.created_at,
+                      loan_product_id: selectedApp.loan_product_id,
                     });
                   }
                 }}
@@ -2033,9 +2034,9 @@ const AdminApplications = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
                   if (selectedApp) {
-                    downloadLoanContract({
+                    await downloadLoanContract({
                       id: selectedApp.id,
                       full_name: selectedApp.full_name,
                       email: selectedApp.email,
@@ -2053,6 +2054,7 @@ const AdminApplications = () => {
                       collateral_description: selectedApp.collateral_description,
                       collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
                       created_at: selectedApp.created_at,
+                      loan_product_id: selectedApp.loan_product_id,
                     });
                   }
                 }}
@@ -2063,9 +2065,9 @@ const AdminApplications = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
                   if (selectedApp) {
-                    emailContract({
+                    await emailContract({
                       id: selectedApp.id,
                       full_name: selectedApp.full_name,
                       email: selectedApp.email,
@@ -2083,6 +2085,7 @@ const AdminApplications = () => {
                       collateral_description: selectedApp.collateral_description,
                       collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
                       created_at: selectedApp.created_at,
+                      loan_product_id: selectedApp.loan_product_id,
                     });
                   }
                 }}
@@ -2093,9 +2096,9 @@ const AdminApplications = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
                   if (selectedApp) {
-                    shareContractViaWhatsApp({
+                    await shareContractViaWhatsApp({
                       id: selectedApp.id,
                       full_name: selectedApp.full_name,
                       email: selectedApp.email,
@@ -2113,6 +2116,7 @@ const AdminApplications = () => {
                       collateral_description: selectedApp.collateral_description,
                       collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
                       created_at: selectedApp.created_at,
+                      loan_product_id: selectedApp.loan_product_id,
                     });
                   }
                 }}

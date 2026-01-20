@@ -786,17 +786,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     window.location.href = `mailto:${loan.email}?subject=${subject}&body=${body}`;
   };
 
-  const handleDownloadContract = () => {
-    downloadLoanContract(loan as any);
+  const handleDownloadContract = async () => {
+    await downloadLoanContract(loan as any);
     toast.success('Contract downloaded');
   };
 
-  const handleContractWhatsApp = () => {
-    shareContractViaWhatsApp(loan as any);
+  const handleContractWhatsApp = async () => {
+    await shareContractViaWhatsApp(loan as any);
   };
 
-  const handleContractEmail = () => {
-    emailContract(loan as any);
+  const handleContractEmail = async () => {
+    await emailContract(loan as any);
   };
 
   const getStatusBadge = (status: string) => {

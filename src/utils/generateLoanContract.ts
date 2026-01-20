@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LoanData {
   id: string;
@@ -21,16 +22,208 @@ interface LoanData {
   collateral_description?: string;
   collateral_value?: number;
   created_at: string;
+  loan_product_id?: string | null;
 }
 
-const createContractPDF = (loan: LoanData): jsPDF => {
+interface ContractTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  content: string;
+  placeholders: string[];
+  is_active: boolean;
+  loan_product_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Fetch the active template for a loan product
+const fetchActiveTemplate = async (loanProductId?: string | null): Promise<ContractTemplate | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('*')
+      .eq('key', 'contract_templates')
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const templates = data.value as unknown as ContractTemplate[] | null;
+    if (!templates || templates.length === 0) return null;
+
+    // Priority 1: Find active template linked to the specific loan product
+    if (loanProductId) {
+      const productTemplate = templates.find(
+        t => t.is_active && t.loan_product_id === loanProductId
+      );
+      if (productTemplate) return productTemplate;
+    }
+
+    // Priority 2: Find any active template for the loan product (even if not marked active but linked)
+    if (loanProductId) {
+      const linkedTemplate = templates.find(
+        t => t.loan_product_id === loanProductId && t.is_active
+      );
+      if (linkedTemplate) return linkedTemplate;
+    }
+
+    // Priority 3: Find a generic active template (no loan product linked)
+    const genericTemplate = templates.find(
+      t => t.is_active && !t.loan_product_id
+    );
+    if (genericTemplate) return genericTemplate;
+
+    // Priority 4: Return any active template
+    const anyActiveTemplate = templates.find(t => t.is_active);
+    if (anyActiveTemplate) return anyActiveTemplate;
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching contract template:', error);
+    return null;
+  }
+};
+
+// Replace placeholders in template content with actual loan data
+const replacePlaceholders = (content: string, loan: LoanData): string => {
+  const disbursementDate = new Date();
+  const firstPaymentDate = new Date();
+  firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+
+  const replacements: Record<string, string> = {
+    '{{borrower_name}}': loan.full_name,
+    '{{borrower_address}}': `${loan.address || 'N/A'}, ${loan.city || ''}`.trim().replace(/,$/, ''),
+    '{{borrower_nrc}}': loan.nrc_number,
+    '{{borrower_phone}}': loan.phone,
+    '{{borrower_email}}': loan.email,
+    '{{loan_amount}}': loan.loan_amount.toLocaleString(),
+    '{{loan_term}}': loan.loan_term_months.toString(),
+    '{{interest_rate}}': loan.interest_rate.toString(),
+    '{{monthly_payment}}': loan.monthly_payment.toLocaleString(),
+    '{{total_repayment}}': loan.total_repayment.toLocaleString(),
+    '{{disbursement_date}}': disbursementDate.toLocaleDateString('en-GB'),
+    '{{first_payment_date}}': firstPaymentDate.toLocaleDateString('en-GB'),
+    '{{company_name}}': 'Phindu Credit Solutions',
+    '{{company_address}}': 'Lusaka, Zambia',
+    '{{current_date}}': new Date().toLocaleDateString('en-GB'),
+    '{{loan_purpose}}': loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal',
+    '{{processing_fee}}': '0', // Can be enhanced to pull from product settings
+    '{{late_penalty}}': '5', // Can be enhanced to pull from product settings
+    '{{collateral_description}}': loan.collateral_description || 'N/A',
+    '{{collateral_value}}': (loan.collateral_value || 0).toLocaleString(),
+    '{{employer_name}}': loan.employer_name || 'N/A',
+    '{{job_title}}': loan.job_title || 'N/A',
+    '{{monthly_income}}': loan.monthly_income.toLocaleString(),
+    '{{contract_number}}': `PCS-${loan.id.slice(0, 8).toUpperCase()}`,
+  };
+
+  let result = content;
+  for (const [placeholder, value] of Object.entries(replacements)) {
+    result = result.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+  }
+
+  return result;
+};
+
+// Create PDF from template content
+const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   const contentWidth = pageWidth - margin * 2;
   let yPos = 20;
 
-  // Helper functions
+  // Helper function for centered text
+  const centerText = (text: string, y: number, fontSize: number = 12) => {
+    doc.setFontSize(fontSize);
+    const textWidth = doc.getStringUnitWidth(text) * fontSize / doc.internal.scaleFactor;
+    const x = (pageWidth - textWidth) / 2;
+    doc.text(text, x, y);
+  };
+
+  // Header - Gold/Amber color (RGB: 234, 179, 8)
+  doc.setFillColor(234, 179, 8);
+  doc.rect(0, 0, pageWidth, 40, 'F');
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  centerText('PHINDU CREDIT SOLUTIONS', 18, 20);
+  
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  centerText('LOAN AGREEMENT CONTRACT', 30, 12);
+  
+  doc.setTextColor(0, 0, 0);
+  yPos = 50;
+
+  // Contract Number & Date
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}`, margin, yPos);
+  doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - margin - 50, yPos);
+  yPos += 15;
+
+  // Split content by lines and render
+  const lines = content.split('\n');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+
+  for (const line of lines) {
+    // Check if we need a new page
+    if (yPos > 270) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Handle section headers (lines that are ALL CAPS or numbered sections)
+    const isSectionHeader = /^[0-9]+\.\s+[A-Z]/.test(line) || 
+                           (line === line.toUpperCase() && line.length > 3 && line.trim() !== '');
+    
+    if (isSectionHeader) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      yPos += 3;
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+    }
+
+    // Word wrap long lines
+    const wrappedLines = doc.splitTextToSize(line, contentWidth);
+    
+    for (const wrappedLine of wrappedLines) {
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+      doc.text(wrappedLine, margin, yPos);
+      yPos += 5;
+    }
+  }
+
+  // Footer
+  const lastPage = doc.internal.pages.length;
+  for (let i = 1; i <= lastPage; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    centerText('Phindu Credit Solutions - Money When You Need It', 285, 8);
+    centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', 289, 8);
+    doc.setTextColor(0, 0, 0);
+  }
+
+  return doc;
+};
+
+// Default template fallback (used when no custom template exists)
+const createDefaultContractPDF = (loan: LoanData): jsPDF => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = 20;
+
   const centerText = (text: string, y: number, fontSize: number = 12) => {
     doc.setFontSize(fontSize);
     const textWidth = doc.getStringUnitWidth(text) * fontSize / doc.internal.scaleFactor;
@@ -61,7 +254,7 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     yPos += 5;
   };
 
-  // Header - Gold/Amber color (RGB: 234, 179, 8 - matching warning/gold color)
+  // Header
   doc.setFillColor(234, 179, 8);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
@@ -77,14 +270,12 @@ const createContractPDF = (loan: LoanData): jsPDF => {
   doc.setTextColor(0, 0, 0);
   yPos = 50;
 
-  // Contract Number & Date
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(`Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}`, margin, yPos);
   doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - margin - 50, yPos);
   yPos += 15;
 
-  // Parties
   addSection('1. PARTIES TO THIS AGREEMENT', [
     'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
     '',
@@ -98,7 +289,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
   ]);
 
-  // Loan Details
   addSection('2. LOAN DETAILS', [
     `Principal Amount: K${loan.loan_amount.toLocaleString()}`,
     `Interest Rate: ${loan.interest_rate}% per annum`,
@@ -108,7 +298,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     `Loan Purpose: ${loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal'}`,
   ]);
 
-  // Employment Details
   if (loan.employer_name) {
     addSection('3. BORROWER EMPLOYMENT DETAILS', [
       `Employer: ${loan.employer_name}`,
@@ -117,7 +306,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     ]);
   }
 
-  // Collateral
   if (loan.collateral_description) {
     addSection('4. COLLATERAL/SECURITY', [
       `Description: ${loan.collateral_description}`,
@@ -127,7 +315,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     ]);
   }
 
-  // Terms and Conditions
   addSection(`${loan.collateral_description ? '5' : '4'}. TERMS AND CONDITIONS`, [
     '• The Borrower agrees to repay the loan in monthly installments as specified above.',
     '• Payments are due on the same date each month, starting one month from the disbursement date.',
@@ -137,7 +324,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     '• All disputes shall be resolved under the laws of Zambia.',
   ]);
 
-  // Representations
   addSection(`${loan.collateral_description ? '6' : '5'}. BORROWER REPRESENTATIONS`, [
     'The Borrower represents and warrants that:',
     '• All information provided in this application is true and accurate.',
@@ -146,7 +332,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
     '• The Borrower will notify the Lender of any change in employment or address.',
   ]);
 
-  // Signature Section
   if (yPos > 220) {
     doc.addPage();
     yPos = 20;
@@ -161,7 +346,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   
-  // Borrower signature
   doc.text('BORROWER:', margin, yPos);
   yPos += 10;
   doc.line(margin, yPos, margin + 80, yPos);
@@ -170,7 +354,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
   yPos += 5;
   doc.text('Date: ____________________', margin, yPos);
   
-  // Reset for Lender signature on same line
   yPos -= 20;
   doc.text('FOR PHINDU CREDIT SOLUTIONS:', pageWidth - margin - 80, yPos);
   yPos += 10;
@@ -180,7 +363,6 @@ const createContractPDF = (loan: LoanData): jsPDF => {
   yPos += 5;
   doc.text('Date: ____________________', pageWidth - margin - 80, yPos);
 
-  // Footer
   yPos = 285;
   doc.setFontSize(8);
   doc.setTextColor(100, 100, 100);
@@ -190,35 +372,49 @@ const createContractPDF = (loan: LoanData): jsPDF => {
   return doc;
 };
 
-// Open in new window for printing
-export const generateLoanContract = (loan: LoanData) => {
-  const doc = createContractPDF(loan);
+// Main function to create contract PDF (async to fetch template)
+const createContractPDF = async (loan: LoanData): Promise<jsPDF> => {
+  const template = await fetchActiveTemplate(loan.loan_product_id);
+  
+  if (template) {
+    console.log(`Using custom template: ${template.name} (ID: ${template.id})`);
+    const processedContent = replacePlaceholders(template.content, loan);
+    return createContractPDFFromTemplate(processedContent, loan);
+  } else {
+    console.log('No custom template found, using default template');
+    return createDefaultContractPDF(loan);
+  }
+};
+
+// Open in new window for printing (async version)
+export const generateLoanContract = async (loan: LoanData) => {
+  const doc = await createContractPDF(loan);
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   window.open(pdfUrl, '_blank');
 };
 
-// Download as PDF file
-export const downloadLoanContract = (loan: LoanData) => {
-  const doc = createContractPDF(loan);
+// Download as PDF file (async version)
+export const downloadLoanContract = async (loan: LoanData) => {
+  const doc = await createContractPDF(loan);
   const fileName = `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}_${loan.id.slice(0, 8)}.pdf`;
   doc.save(fileName);
 };
 
-// Get PDF as blob for email/sharing
-export const getLoanContractBlob = (loan: LoanData): Blob => {
-  const doc = createContractPDF(loan);
+// Get PDF as blob for email/sharing (async version)
+export const getLoanContractBlob = async (loan: LoanData): Promise<Blob> => {
+  const doc = await createContractPDF(loan);
   return doc.output('blob');
 };
 
-// Get PDF as base64 for email
-export const getLoanContractBase64 = (loan: LoanData): string => {
-  const doc = createContractPDF(loan);
+// Get PDF as base64 for email (async version)
+export const getLoanContractBase64 = async (loan: LoanData): Promise<string> => {
+  const doc = await createContractPDF(loan);
   return doc.output('datauristring');
 };
 
-// Share via WhatsApp (opens WhatsApp with message - user needs to manually attach the downloaded PDF)
-export const shareContractViaWhatsApp = (loan: LoanData) => {
+// Share via WhatsApp (async version)
+export const shareContractViaWhatsApp = async (loan: LoanData) => {
   const message = encodeURIComponent(
     `Hello ${loan.full_name},\n\n` +
     `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
@@ -231,19 +427,15 @@ export const shareContractViaWhatsApp = (loan: LoanData) => {
     `Phindu Credit Solutions`
   );
   
-  // Format phone for WhatsApp (remove spaces and ensure international format)
   const phone = loan.phone.replace(/\s+/g, '').replace(/^0/, '260');
   const whatsappUrl = `https://wa.me/${phone}?text=${message}`;
   
-  // First download the PDF so user can attach it
-  downloadLoanContract(loan);
-  
-  // Then open WhatsApp
+  await downloadLoanContract(loan);
   window.open(whatsappUrl, '_blank');
 };
 
-// Prepare mailto link with contract info
-export const emailContract = (loan: LoanData) => {
+// Prepare mailto link with contract info (async version)
+export const emailContract = async (loan: LoanData) => {
   const subject = encodeURIComponent(`Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`);
   const body = encodeURIComponent(
     `Dear ${loan.full_name},\n\n` +
@@ -262,10 +454,8 @@ export const emailContract = (loan: LoanData) => {
     `info@phinducredit.co.zm`
   );
   
-  // First download the PDF so user can attach it to email
-  downloadLoanContract(loan);
+  await downloadLoanContract(loan);
   
-  // Then open email client
   const mailtoUrl = `mailto:${loan.email}?subject=${subject}&body=${body}`;
   window.location.href = mailtoUrl;
 };
