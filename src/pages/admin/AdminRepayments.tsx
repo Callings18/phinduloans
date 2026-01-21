@@ -250,7 +250,7 @@ const AdminRepayments = () => {
       setSelectedRepayment(null);
       setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message || "Failed to record payment");
     },
   });
@@ -300,7 +300,7 @@ const AdminRepayments = () => {
       });
 
       toast.success('Receipt downloaded successfully');
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Failed to generate receipt');
     }
   };
@@ -448,7 +448,7 @@ const AdminRepayments = () => {
         setSelectedRepayments([]);
         break;
 
-      case 'send_reminder':
+      case 'send_reminder': {
         // Send payment reminders to selected borrowers
         const reminderReps = repayments?.filter(r => selectedRepayments.includes(r.id));
         for (const rep of reminderReps || []) {
@@ -465,8 +465,9 @@ const AdminRepayments = () => {
         toast.success(`Reminders sent to ${selectedRepayments.length} borrowers`);
         setSelectedRepayments([]);
         break;
+      }
 
-      case 'export':
+      case 'export': {
         // Export selected repayments to CSV
         const exportReps = repayments?.filter(r => selectedRepayments.includes(r.id));
         if (exportReps && exportReps.length > 0) {
@@ -490,6 +491,7 @@ const AdminRepayments = () => {
         }
         setSelectedRepayments([]);
         break;
+      }
 
       default:
         throw new Error('Unknown action');

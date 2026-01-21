@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -117,11 +117,7 @@ const AdminSettings = () => {
     }
   ];
 
-  useEffect(() => {
-    fetchAllSettings();
-  }, []);
-
-  const fetchAllSettings = async () => {
+  const fetchAllSettings = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Fetch Payment Settings
@@ -146,20 +142,28 @@ const AdminSettings = () => {
 
       if (sData) {
         sData.forEach(setting => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (setting.key === 'general_config') setGeneralConfig(setting.value as any);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (setting.key === 'company_info') setCompanyInfo(setting.value as any);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (setting.key === 'lending_rules') setLendingRules(setting.value as any);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (setting.key === 'notification_config') setNotificationConfig(setting.value as any);
         });
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching settings:", error);
       toast({ title: "Error", description: "Failed to load settings", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchAllSettings();
+  }, [fetchAllSettings]);
 
   const saveSystemSetting = async (key: string, value: any) => {
     const { error } = await supabase
@@ -194,7 +198,7 @@ const AdminSettings = () => {
       }
 
       toast({ title: "Success", description: "All settings saved successfully" });
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error saving settings:", error);
       toast({ title: "Error", description: "Failed to save settings", variant: "destructive" });
     } finally {
