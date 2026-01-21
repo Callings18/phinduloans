@@ -52,6 +52,13 @@ interface Profile {
     created_at: string;
 }
 
+interface LoanDocument {
+    document_type: string;
+    file_url: string;
+    created_at: string;
+    status?: string;
+}
+
 const Profile = () => {
     const { user, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
@@ -117,7 +124,7 @@ const Profile = () => {
       // Transform to document list format
       if (data && data[0]) {
         const app = data[0];
-        const docs: any[] = [];
+        const docs: LoanDocument[] = [];
         if (app.nrc_front_url) docs.push({ document_type: 'NRC Front', file_url: app.nrc_front_url, created_at: app.created_at });
         if (app.nrc_back_url) docs.push({ document_type: 'NRC Back', file_url: app.nrc_back_url, created_at: app.created_at });
         if (app.selfie_url) docs.push({ document_type: 'Selfie', file_url: app.selfie_url, created_at: app.created_at });
@@ -173,7 +180,7 @@ const Profile = () => {
                 description: "Your profile has been updated successfully.",
             });
         },
-        onError: (error: any) => {
+        onError: (error) => {
             toast({
                 title: "Update Failed",
                 description: error.message || "Failed to update profile",
@@ -425,9 +432,9 @@ const Profile = () => {
                                 <CardContent>
                                     {documents && documents.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {documents.map((doc: any) => (
+                                            {documents.map((doc: LoanDocument) => (
                                                 <div
-                                                    key={doc.id}
+                                                    key={doc.file_url}
                                                     className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 border border-border/50"
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -602,15 +609,16 @@ const Profile = () => {
 
                                                     if (error) throw error;
                                                     
-                                                    queryClient.invalidateQueries({ queryKey: ['profile'] });
+                                                    await queryClient.invalidateQueries({ queryKey: ['profile'] });
                                                     toast({
                                                         title: "Preferences Saved",
                                                         description: "Your notification preferences have been updated successfully.",
                                                     });
-                                                } catch (error: any) {
+                                                } catch (error) {
+                                                    const errorMessage = error instanceof Error ? error.message : "Failed to save notification preferences";
                                                     toast({
                                                         title: "Save Failed",
-                                                        description: error.message || "Failed to save notification preferences",
+                                                        description: errorMessage,
                                                         variant: "destructive",
                                                     });
                                                 } finally {

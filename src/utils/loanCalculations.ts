@@ -270,12 +270,14 @@ export function calculatePenalty(
   switch (frequency) {
     case 'daily':
       return overdueAmount * (penaltyRate / 100) * effectiveDaysOverdue;
-    case 'weekly':
+    case 'weekly': {
       const weeksOverdue = Math.ceil(effectiveDaysOverdue / 7);
       return overdueAmount * (penaltyRate / 100) * weeksOverdue;
-    case 'monthly':
+    }
+    case 'monthly': {
       const monthsOverdue = Math.ceil(effectiveDaysOverdue / 30);
       return overdueAmount * (penaltyRate / 100) * monthsOverdue;
+    }
     case 'one_time':
     default:
       return overdueAmount * (penaltyRate / 100);
