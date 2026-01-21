@@ -169,6 +169,31 @@ const AdminLoans = () => {
   const [firstRepaymentDate, setFirstRepaymentDate] = useState<string>(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
   const [createWithDisbursement, setCreateWithDisbursement] = useState<boolean>(false);
 
+  // Document upload state
+  const [documentFiles, setDocumentFiles] = useState<{
+    collateral_image_1: File | null;
+    collateral_image_2: File | null;
+    collateral_image_3: File | null;
+    bank_statement: File | null;
+    payslip_1: File | null;
+    payslip_2: File | null;
+    payslip_3: File | null;
+    nrc_front: File | null;
+    nrc_back: File | null;
+    selfie: File | null;
+  }>({
+    collateral_image_1: null,
+    collateral_image_2: null,
+    collateral_image_3: null,
+    bank_statement: null,
+    payslip_1: null,
+    payslip_2: null,
+    payslip_3: null,
+    nrc_front: null,
+    nrc_back: null,
+    selfie: null,
+  });
+
   // Edit Loan Form State
   const [editLoanAmount, setEditLoanAmount] = useState<string>("");
   const [editLoanTermMonths, setEditLoanTermMonths] = useState<string>("");
@@ -345,6 +370,23 @@ const AdminLoans = () => {
 
   const loanDetails = calculateLoanDetails();
 
+  // Upload document helper function
+  const uploadDocumentFile = async (file: File, folder: string, loanId: string): Promise<string | null> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${loanId}/${folder}/${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('loan-documents')
+      .upload(fileName, file);
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return null;
+    }
+
+    return fileName;
+  };
+
   // Create loan mutation
   const createLoanMutation = useMutation({
     mutationFn: async () => {
@@ -384,6 +426,67 @@ const AdminLoans = () => {
         .single();
 
       if (loanError) throw loanError;
+
+      const loanId = loanApp.id;
+
+      // Upload documents if provided
+      const documentUrls: Record<string, string | null> = {
+        collateral_image_url: null,
+        collateral_image_2_url: null,
+        collateral_image_3_url: null,
+        bank_statement_url: null,
+        payslip_url: null,
+        payslip_2_url: null,
+        payslip_3_url: null,
+        nrc_front_url: null,
+        nrc_back_url: null,
+        selfie_url: null,
+      };
+
+      // Upload collateral images
+      if (documentFiles.collateral_image_1) {
+        documentUrls.collateral_image_url = await uploadDocumentFile(documentFiles.collateral_image_1, 'collateral', loanId);
+      }
+      if (documentFiles.collateral_image_2) {
+        documentUrls.collateral_image_2_url = await uploadDocumentFile(documentFiles.collateral_image_2, 'collateral', loanId);
+      }
+      if (documentFiles.collateral_image_3) {
+        documentUrls.collateral_image_3_url = await uploadDocumentFile(documentFiles.collateral_image_3, 'collateral', loanId);
+      }
+
+      // Upload other documents
+      if (documentFiles.bank_statement) {
+        documentUrls.bank_statement_url = await uploadDocumentFile(documentFiles.bank_statement, 'bank_statement', loanId);
+      }
+      if (documentFiles.payslip_1) {
+        documentUrls.payslip_url = await uploadDocumentFile(documentFiles.payslip_1, 'payslips', loanId);
+      }
+      if (documentFiles.payslip_2) {
+        documentUrls.payslip_2_url = await uploadDocumentFile(documentFiles.payslip_2, 'payslips', loanId);
+      }
+      if (documentFiles.payslip_3) {
+        documentUrls.payslip_3_url = await uploadDocumentFile(documentFiles.payslip_3, 'payslips', loanId);
+      }
+      if (documentFiles.nrc_front) {
+        documentUrls.nrc_front_url = await uploadDocumentFile(documentFiles.nrc_front, 'nrc', loanId);
+      }
+      if (documentFiles.nrc_back) {
+        documentUrls.nrc_back_url = await uploadDocumentFile(documentFiles.nrc_back, 'nrc', loanId);
+      }
+      if (documentFiles.selfie) {
+        documentUrls.selfie_url = await uploadDocumentFile(documentFiles.selfie, 'selfie', loanId);
+      }
+
+      // Update loan with document URLs if any were uploaded
+      const hasDocuments = Object.values(documentUrls).some(url => url !== null);
+      if (hasDocuments) {
+        const updateData: Record<string, string> = {};
+        Object.entries(documentUrls).forEach(([key, value]) => {
+          if (value) updateData[key] = value;
+        });
+
+        await supabase.from('loan_applications').update(updateData).eq('id', loanId);
+      }
 
       // If creating with immediate disbursement
       if (createWithDisbursement) {
@@ -611,6 +714,18 @@ const AdminLoans = () => {
     setDisbursementDate(format(new Date(), "yyyy-MM-dd"));
     setFirstRepaymentDate(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
     setCreateWithDisbursement(false);
+    setDocumentFiles({
+      collateral_image_1: null,
+      collateral_image_2: null,
+      collateral_image_3: null,
+      bank_statement: null,
+      payslip_1: null,
+      payslip_2: null,
+      payslip_3: null,
+      nrc_front: null,
+      nrc_back: null,
+      selfie: null,
+    });
   };
 
   const resetDisbursementForm = () => {
@@ -1073,10 +1188,11 @@ const AdminLoans = () => {
           </DialogHeader>
 
           <Tabs defaultValue="borrower" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="borrower">Borrower</TabsTrigger>
               <TabsTrigger value="employment">Employment</TabsTrigger>
               <TabsTrigger value="loan">Loan Details</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="options">Options</TabsTrigger>
             </TabsList>
 
@@ -1228,6 +1344,118 @@ const AdminLoans = () => {
               )}
             </TabsContent>
 
+            <TabsContent value="documents" className="space-y-4 mt-4">
+              <div className="space-y-6">
+                {/* NRC Documents */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">NRC Documents</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm">NRC Front</Label>
+                      <div className="border-2 border-dashed border-border rounded-lg p-3">
+                        <Input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(e) => setDocumentFiles({
+                            ...documentFiles,
+                            nrc_front: e.target.files?.[0] || null
+                          })}
+                          className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                        {documentFiles.nrc_front && (
+                          <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.nrc_front.name}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">NRC Back</Label>
+                      <div className="border-2 border-dashed border-border rounded-lg p-3">
+                        <Input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(e) => setDocumentFiles({
+                            ...documentFiles,
+                            nrc_back: e.target.files?.[0] || null
+                          })}
+                          className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                        {documentFiles.nrc_back && (
+                          <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.nrc_back.name}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selfie */}
+                <div className="space-y-2">
+                  <Label>Selfie Photo</Label>
+                  <div className="border-2 border-dashed border-border rounded-lg p-3">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setDocumentFiles({
+                        ...documentFiles,
+                        selfie: e.target.files?.[0] || null
+                      })}
+                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    />
+                    {documentFiles.selfie && (
+                      <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.selfie.name}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bank Statement */}
+                <div className="space-y-2">
+                  <Label>Bank Statement</Label>
+                  <div className="border-2 border-dashed border-border rounded-lg p-3">
+                    <Input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setDocumentFiles({
+                        ...documentFiles,
+                        bank_statement: e.target.files?.[0] || null
+                      })}
+                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    />
+                    {documentFiles.bank_statement && (
+                      <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.bank_statement.name}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Upload recent bank statement (PDF or image)</p>
+                </div>
+
+                {/* Payslips */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">Payslips (3 months)</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[1, 2, 3].map((num) => (
+                      <div key={num} className="space-y-2">
+                        <Label className="text-sm">Payslip {num} {num === 1 ? '(Latest)' : ''}</Label>
+                        <div className="border-2 border-dashed border-border rounded-lg p-3">
+                          <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => setDocumentFiles({
+                              ...documentFiles,
+                              [`payslip_${num}` as keyof typeof documentFiles]: e.target.files?.[0] || null
+                            })}
+                            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                          />
+                          {documentFiles[`payslip_${num}` as keyof typeof documentFiles] && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Selected: {(documentFiles[`payslip_${num}` as keyof typeof documentFiles] as File)?.name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
             <TabsContent value="options" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 space-y-2">
@@ -1239,6 +1467,37 @@ const AdminLoans = () => {
                   <Input type="number" value={collateralValue} onChange={(e) => setCollateralValue(e.target.value)} placeholder="50000" />
                 </div>
               </div>
+
+              {/* Multiple Collateral Images */}
+              {collateralDescription && (
+                <div className="space-y-4 border-t pt-4">
+                  <Label className="text-base font-semibold">Collateral Images (Upload up to 3 or more)</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[1, 2, 3].map((num) => (
+                      <div key={num} className="space-y-2">
+                        <Label className="text-sm">Collateral Image {num}</Label>
+                        <div className="border-2 border-dashed border-border rounded-lg p-3">
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setDocumentFiles({
+                              ...documentFiles,
+                              [`collateral_image_${num}` as keyof typeof documentFiles]: e.target.files?.[0] || null
+                            })}
+                            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                          />
+                          {documentFiles[`collateral_image_${num}` as keyof typeof documentFiles] && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Selected: {(documentFiles[`collateral_image_${num}` as keyof typeof documentFiles] as File)?.name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Upload photos of the collateral. You can add more images after creating the loan.</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Admin Notes</Label>

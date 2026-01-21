@@ -31,8 +31,8 @@ const createClearancePDF = (loan: LoanData, completionDate: Date): jsPDF => {
     doc.text(text, x, y);
   };
 
-  // Header - Success Green
-  doc.setFillColor(34, 197, 94); // green-500
+  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
+  doc.setFillColor(255, 51, 153);
   doc.rect(0, 0, pageWidth, 50, 'F');
   
   doc.setTextColor(255, 255, 255);

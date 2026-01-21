@@ -54,7 +54,7 @@ class NotificationService {
         .maybeSingle();
 
       if (error) {
-        console.error("[Notification Service] Error loading settings:", error);
+        // Settings loading errors are non-critical, just return null
         return null;
       }
 
@@ -62,13 +62,14 @@ class NotificationService {
       this.settingsLoadedAt = now;
       return this.settings;
     } catch (error) {
-      console.error("[Notification Service] Error loading settings:", error);
+      // Settings loading errors are non-critical, just return null
       return null;
     }
   }
 
   async send(params: SendNotificationParams) {
-    console.log(`[Notification Service] Sending ${params.type} to ${params.to}: ${params.title || params.subject}`);
+    // Use error handler for better error tracking
+    const { handleError } = await import('@/utils/errorHandler');
 
     const settings = await this.getSettings();
     
@@ -77,7 +78,6 @@ class NotificationService {
       const eventKey = `notify_on_${params.eventType}` as keyof NotificationSettings;
       const eventEnabled = settings[eventKey];
       if (eventEnabled === false) {
-        console.log(`[Notification Service] ${params.eventType} notifications are disabled`);
         return { success: false, message: "Notification type disabled" };
       }
     }
@@ -94,7 +94,6 @@ class NotificationService {
     }
 
     if (!enabled) {
-      console.log(`[Notification Service] ${params.type} notifications not enabled`);
       return { success: false, message: "Channel not enabled" };
     }
 
@@ -122,7 +121,11 @@ class NotificationService {
 
       return { success: true, data };
     } catch (error: any) {
-      console.error("[Notification Service] Error sending notification:", error);
+      handleError(error, {
+        component: 'NotificationService',
+        action: `send_${params.type}`,
+        metadata: { recipient: params.to, eventType: params.eventType },
+      }, false); // Don't show toast for background notifications
       return { success: false, error: error.message };
     }
   }
@@ -134,15 +137,6 @@ class NotificationService {
       email: null as any,
     };
 
-    if (params.phone) {
-      // Send SMS via Brevo
-      results.sms = await this.send({
-        ...params,
-        type: 'sms',
-        to: params.phone,
-      });
-    }
-
     if (params.email && params.subject) {
       // Send Email via Brevo
       results.email = await this.send({
@@ -150,6 +144,30 @@ class NotificationService {
         type: 'email',
         to: params.email,
         subject: params.subject,
+      });
+
+      // If email was sent successfully, send SMS alert to check email
+      if (results.email?.success && params.phone) {
+        const smsMessage = params.message.includes('contract') || params.message.includes('document')
+          ? `Dear ${params.title || 'Customer'}, we have sent an important document to your email. Please check your inbox. - Phindu Finance`
+          : `Dear ${params.title || 'Customer'}, please check your email for an important update from Phindu Finance. - Phindu Finance`;
+        
+        results.sms = await this.send({
+          ...params,
+          type: 'sms',
+          to: params.phone,
+          message: smsMessage,
+          title: 'Email Alert',
+        });
+      }
+    }
+
+    // If no email was sent but phone is provided, send SMS directly
+    if (!params.email && params.phone) {
+      results.sms = await this.send({
+        ...params,
+        type: 'sms',
+        to: params.phone,
       });
     }
 
@@ -463,7 +481,8 @@ class NotificationService {
     borrowerName: string, 
     borrowerEmail: string, 
     loanAmount: number,
-    contractPdfBase64: string
+    contractPdfBase64: string,
+    borrowerPhone?: string
   ) {
     const subject = `Your Loan Contract - K${loanAmount.toLocaleString()} - Phindu Finance`;
     const message = `Dear ${borrowerName},\n\nPlease find attached your loan contract for K${loanAmount.toLocaleString()}.\n\nKindly review and sign the contract at your earliest convenience.\n\nIf you have any questions, please don't hesitate to contact us.\n\nBest regards,\nPhindu Finance Team`;
@@ -487,7 +506,8 @@ class NotificationService {
       </div>
     `;
 
-    return this.send({
+    // Send email
+    const emailResult = await this.send({
       userId,
       type: 'email',
       to: borrowerEmail,
@@ -500,6 +520,20 @@ class NotificationService {
         name: `Loan_Contract_${borrowerName.replace(/\s+/g, '_')}.pdf`
       }
     });
+
+    // Send SMS alert to check email
+    if (borrowerPhone) {
+      await this.send({
+        userId,
+        type: 'sms',
+        to: borrowerPhone,
+        message: `Dear ${borrowerName}, we have sent an important document (loan contract) to your email. Please check your inbox. - Phindu Finance`,
+        title: 'Email Alert',
+        eventType: 'contract_sent'
+      });
+    }
+
+    return emailResult;
   }
 
   // Send court case notification to borrower

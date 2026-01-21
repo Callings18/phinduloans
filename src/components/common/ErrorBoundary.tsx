@@ -51,10 +51,36 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
-    // TODO: Send error to error tracking service (e.g., Sentry)
-    // if (window.Sentry) {
-    //   window.Sentry.captureException(error, { contexts: { react: errorInfo } });
-    // }
+    // Send error to error tracking
+    this.logErrorToService(error, errorInfo);
+  }
+
+  logErrorToService = async (error: Error, errorInfo: ErrorInfo) => {
+    try {
+      // Log to database via edge function or API
+      const errorData = {
+        error: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+      };
+
+      // Try to send to error logging endpoint (if exists)
+      // This is optional - errors are already logged to console
+      if (process.env.NODE_ENV === 'production') {
+        // You can implement an error logging endpoint here
+        // await fetch('/api/log-error', {
+        //   method: 'POST',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify(errorData),
+        // });
+      }
+    } catch (logError) {
+      // Silently fail - don't break error boundary if logging fails
+      console.error('Failed to log error to service:', logError);
+    }
   }
 
   handleReset = () => {

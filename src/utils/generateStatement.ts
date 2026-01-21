@@ -25,10 +25,10 @@ export const generateAccountStatement = (data: LoanStatementData) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Header
+    // Header - App theme color
     doc.setFontSize(22);
-    doc.setTextColor(15, 12, 41); // Deep primary color
-    doc.text("LOANSPHERE", 14, 22);
+    doc.setTextColor(255, 51, 153); // App theme pink/magenta
+    doc.text("PHINDU FINANCE", 14, 22);
 
     doc.setFontSize(10);
     doc.setTextColor(100);
@@ -103,7 +103,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
             head: [["#", "Date", "Method", "Amount", "Status"]],
             body: tableData,
             theme: "striped",
-            headStyles: { fillColor: [15, 12, 41], textColor: [255, 255, 255] },
+            headStyles: { fillColor: [255, 51, 153], textColor: [255, 255, 255] },
             margin: { left: 14, right: 14 }
         });
     }

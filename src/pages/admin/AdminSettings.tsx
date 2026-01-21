@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 import { BrevoSettings } from "@/components/admin/BrevoSettings";
+import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonitor";
 
 interface PaymentSettings {
   id: string;
@@ -264,6 +265,9 @@ const AdminSettings = () => {
             </TabsTrigger>
             <TabsTrigger value="brevo" className="gap-2">
               <BellRing size={16} /> Brevo
+            </TabsTrigger>
+            <TabsTrigger value="queue" className="gap-2">
+              <BellRing size={16} /> Queue Monitor
             </TabsTrigger>
             <TabsTrigger value="integrations" className="gap-2">
               <Shield size={16} /> Integrations
@@ -709,6 +713,11 @@ const AdminSettings = () => {
           {/* Brevo Notification Settings */}
           <TabsContent value="brevo">
             <BrevoSettings />
+          </TabsContent>
+
+          {/* Notification Queue Monitor */}
+          <TabsContent value="queue">
+            <NotificationQueueMonitor />
           </TabsContent>
 
           {/* Integrations Settings (CRB & Guarantee) */}

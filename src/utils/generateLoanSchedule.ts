@@ -35,8 +35,8 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   const companyAddress = data.companyAddress || 'Lusaka, Zambia';
   const companyPhone = data.companyPhone || '+260 967 713 001';
 
-  // Header
-  doc.setFillColor(59, 130, 246);
+  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
+  doc.setFillColor(255, 51, 153);
   doc.rect(0, 0, pageWidth, 40, 'F');
 
   doc.setTextColor(255, 255, 255);
@@ -79,8 +79,8 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   doc.text(`Email: ${data.borrowerEmail}`, col1, y);
   doc.text(`Interest Rate: ${data.interestRate}% (${data.interestPeriod})`, col2, y);
 
-  // Summary Box
-  doc.setFillColor(59, 130, 246);
+  // Summary Box - App theme color
+  doc.setFillColor(255, 51, 153);
   doc.rect(15, 105, (pageWidth - 30) / 3, 25, 'F');
   doc.rect(15 + (pageWidth - 30) / 3, 105, (pageWidth - 30) / 3, 25, 'F');
   doc.rect(15 + 2 * (pageWidth - 30) / 3, 105, (pageWidth - 30) / 3, 25, 'F');
@@ -117,7 +117,7 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
     body: tableData,
     theme: 'striped',
     headStyles: {
-      fillColor: [59, 130, 246],
+      fillColor: [255, 51, 153],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
     },

@@ -527,7 +527,8 @@ const Apply = () => {
     console.log('[Apply] handleSubmit called', { user: user?.id, termsAccepted: formData.termsAccepted, dataConsent: formData.dataConsent });
     
     if (!user) {
-      console.error('[Apply] No user found - redirecting to auth');
+      const { handleError } = await import('@/utils/errorHandler');
+      handleError('User not authenticated', { component: 'Apply', action: 'submit_application' }, false);
       toast({
         title: "Login Required",
         description: "Please login or create an account to submit your application.",
@@ -586,7 +587,13 @@ const Apply = () => {
           clearInterval(progressInterval);
 
           if (uploadErr) {
-            console.error(`[Apply] Failed to upload ${docType}:`, uploadErr);
+            // Use error handler for better error tracking
+            const { handleError } = await import('@/utils/errorHandler');
+            handleError(uploadErr, {
+              component: 'Apply',
+              action: `upload_${docType}`,
+            });
+            
             setUploadProgress(prev => {
               const next = { ...prev };
               delete next[docType];
@@ -598,7 +605,7 @@ const Apply = () => {
               variant: "default",
             });
           } else {
-            console.log(`[Apply] Successfully uploaded ${docType}`);
+            // Success - no need to log
             setUploadProgress(prev => ({ ...prev, [docType]: 100 }));
             uploadedDocs.push({
               document_type: docType,
@@ -609,7 +616,8 @@ const Apply = () => {
             });
           }
         } catch (err: any) {
-          console.error(`[Apply] Upload error for ${docType}:`, err);
+          const { handleError } = await import('@/utils/errorHandler');
+          handleError(err, { component: 'Apply', action: `upload_${docType}` });
           setUploadProgress(prev => {
             const next = { ...prev };
             delete next[docType];
@@ -639,18 +647,19 @@ const Apply = () => {
             });
           
           if (collateralErr) {
-            console.error('[Apply] Failed to upload collateral image:', collateralErr);
+            const { handleError } = await import('@/utils/errorHandler');
+            handleError(collateralErr, { component: 'Apply', action: 'upload_collateral' });
             toast({
               title: "Collateral Image Upload Warning",
               description: `Collateral image upload failed: ${collateralErr.message}. Application will continue.`,
               variant: "default",
             });
           } else {
-            console.log('[Apply] Successfully uploaded collateral image');
             collateralImageUrl = fileName;
           }
         } catch (err: any) {
-          console.error('[Apply] Collateral image upload error:', err);
+          const { handleError } = await import('@/utils/errorHandler');
+          handleError(err, { component: 'Apply', action: 'upload_collateral' });
           toast({
             title: "Upload Error",
             description: `Failed to upload collateral image: ${err.message}`,
@@ -713,7 +722,8 @@ const Apply = () => {
       const { data: appData, error: appError } = await supabase.from('loan_applications').insert(applicationData).select().single();
 
       if (appError) {
-        console.error('[Apply] Database insert error:', appError);
+        const { handleError } = await import('@/utils/errorHandler');
+        handleError(appError, { component: 'Apply', action: 'save_application' });
         throw appError;
       }
 
@@ -746,7 +756,8 @@ const Apply = () => {
 
       navigate('/dashboard');
     } catch (error: any) {
-      console.error('[Apply] Submission failed with error:', error);
+      const { handleError } = await import('@/utils/errorHandler');
+      handleError(error, { component: 'Apply', action: 'submit_application' });
       toast({
         title: "Submission Failed",
         description: error.message || "Something went wrong. Please try again.",

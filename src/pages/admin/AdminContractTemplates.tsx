@@ -57,6 +57,8 @@ interface ContractTemplate {
   loan_product_id: string | null;
   created_at: string;
   updated_at: string;
+  file_url?: string | null;
+  file_type?: "text" | "docx";
 }
 
 const DEFAULT_PLACEHOLDERS = [
@@ -140,7 +142,10 @@ const AdminContractTemplates = () => {
     content: DEFAULT_TEMPLATE,
     loan_product_id: "",
     is_active: true,
+    file_type: "text" as "text" | "docx",
+    file_url: "",
   });
+  const [docxFile, setDocxFile] = useState<File | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -201,23 +206,52 @@ const AdminContractTemplates = () => {
     },
   });
 
+  // Upload DOCX file
+  const uploadDocxFile = async (file: File): Promise<string | null> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `contract-templates/${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('loan-documents')
+      .upload(fileName, file);
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      toast({ title: "Failed to upload file", description: uploadError.message, variant: "destructive" });
+      return null;
+    }
+
+    return fileName;
+  };
+
   // Create template
-  const handleCreate = () => {
-    if (!formData.name || !formData.content) {
+  const handleCreate = async () => {
+    if (!formData.name || (!formData.content && !docxFile)) {
       toast({ title: "Please fill in required fields", variant: "destructive" });
       return;
+    }
+
+    let fileUrl = formData.file_url;
+    
+    // Upload DOCX file if provided
+    if (docxFile && formData.file_type === 'docx') {
+      const uploadedUrl = await uploadDocxFile(docxFile);
+      if (!uploadedUrl) return; // Error already shown in uploadDocxFile
+      fileUrl = uploadedUrl;
     }
 
     const newTemplate: ContractTemplate = {
       id: crypto.randomUUID(),
       name: formData.name,
       description: formData.description || null,
-      content: formData.content,
-      placeholders: extractPlaceholders(formData.content),
+      content: formData.content || '', // Empty if using DOCX
+      placeholders: formData.file_type === 'text' ? extractPlaceholders(formData.content) : [],
       is_active: formData.is_active,
       loan_product_id: formData.loan_product_id || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      file_url: fileUrl || null,
+      file_type: formData.file_type,
     };
 
     const updatedTemplates = [...(templates || []), newTemplate];
@@ -235,10 +269,19 @@ const AdminContractTemplates = () => {
   };
 
   // Update template
-  const handleUpdate = () => {
-    if (!selectedTemplate || !formData.name || !formData.content) {
+  const handleUpdate = async () => {
+    if (!selectedTemplate || !formData.name || (!formData.content && !docxFile && formData.file_type === 'text')) {
       toast({ title: "Please fill in required fields", variant: "destructive" });
       return;
+    }
+
+    let fileUrl = formData.file_url;
+    
+    // Upload new DOCX file if provided
+    if (docxFile && formData.file_type === 'docx') {
+      const uploadedUrl = await uploadDocxFile(docxFile);
+      if (!uploadedUrl) return; // Error already shown
+      fileUrl = uploadedUrl;
     }
 
     const updatedTemplates = (templates || []).map(t => 
@@ -247,11 +290,13 @@ const AdminContractTemplates = () => {
             ...t,
             name: formData.name,
             description: formData.description || null,
-            content: formData.content,
-            placeholders: extractPlaceholders(formData.content),
+            content: formData.content || '',
+            placeholders: formData.file_type === 'text' ? extractPlaceholders(formData.content) : [],
             is_active: formData.is_active,
             loan_product_id: formData.loan_product_id || null,
             updated_at: new Date().toISOString(),
+            file_url: fileUrl || t.file_url || null,
+            file_type: formData.file_type,
           }
         : t
     );
@@ -314,7 +359,10 @@ const AdminContractTemplates = () => {
       content: DEFAULT_TEMPLATE,
       loan_product_id: "",
       is_active: true,
+      file_type: "text",
+      file_url: "",
     });
+    setDocxFile(null);
   };
 
   const openEditDialog = (template: ContractTemplate) => {
@@ -325,7 +373,10 @@ const AdminContractTemplates = () => {
       content: template.content,
       loan_product_id: template.loan_product_id || "",
       is_active: template.is_active,
+      file_type: (template as any).file_type || "text",
+      file_url: (template as any).file_url || "",
     });
+    setDocxFile(null);
     setIsEditOpen(true);
   };
 
@@ -499,19 +550,63 @@ const AdminContractTemplates = () => {
                 />
               </div>
 
+              {/* Template Type Selection */}
               <div className="space-y-2">
-                <Label>Contract Content *</Label>
-                <Textarea
-                  placeholder="Enter contract text with placeholders like {{borrower_name}}"
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  rows={20}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use placeholders like {"{{borrower_name}}"} for dynamic content
-                </p>
+                <Label>Template Type *</Label>
+                <Select 
+                  value={formData.file_type} 
+                  onValueChange={(v) => setFormData({ ...formData, file_type: v as "text" | "docx" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Text Template (Plain Text)</SelectItem>
+                    <SelectItem value="docx">DOCX File Upload</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {formData.file_type === 'text' ? (
+                <div className="space-y-2">
+                  <Label>Contract Content *</Label>
+                  <Textarea
+                    placeholder="Enter contract text with placeholders like {{borrower_name}}"
+                    value={formData.content}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                    rows={20}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use placeholders like {"{{borrower_name}}"} for dynamic content
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Upload DOCX Template *</Label>
+                  <div className="border-2 border-dashed border-border rounded-lg p-4">
+                    <Input
+                      type="file"
+                      accept=".docx,.doc"
+                      onChange={(e) => setDocxFile(e.target.files?.[0] || null)}
+                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    />
+                    {docxFile && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Selected: {docxFile.name}
+                      </p>
+                    )}
+                    {formData.file_url && !docxFile && (
+                      <p className="text-sm text-success mt-2">
+                        Current file: {formData.file_url.split('/').pop()}
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Upload your existing DOCX contract template. Placeholders like {"{{borrower_name}}"} will be replaced with actual loan data.
+                  </p>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="settings" className="space-y-4">

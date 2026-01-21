@@ -743,13 +743,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     toast.success('Loan schedule downloaded');
   };
 
-  const handleShareScheduleWhatsApp = () => {
+  const handleShareScheduleWhatsApp = async () => {
     // First download the schedule
     handleDownloadSchedule();
 
-    // Then open WhatsApp with message
-    const message = encodeURIComponent(
-      `Hello ${loan.full_name},\n\n` +
+    // Send via WhatsApp using notification service
+    const { notificationService } = await import('@/utils/notificationService');
+    
+    const message = `Hello ${loan.full_name},\n\n` +
       `Please find your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
       `Loan Details:\n` +
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
@@ -757,11 +758,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n\n` +
       `Please contact us if you have any questions.\n\n` +
-      `${settings?.companyInfo?.name || 'PHINDU Finance'}`
-    );
+      `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
-    const phone = loan.phone.replace(/\s+/g, '').replace(/^0/, '260');
-    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+    await notificationService.send({
+      userId: loan.user_id,
+      type: 'whatsapp',
+      to: loan.phone,
+      message: message,
+      title: 'Loan Repayment Schedule',
+      eventType: 'payment_reminder'
+    });
   };
 
   const handleEmailSchedule = () => {

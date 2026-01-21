@@ -62,10 +62,15 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   const contentWidth = pageWidth - margin * 2;
   let yPos = 20;
 
-  // Company Header
+  // Company Header - App theme color
+  doc.setFillColor(255, 51, 153);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text(companyName, pageWidth / 2, yPos, { align: "center" });
+  doc.text(companyName, pageWidth / 2, 18, { align: "center" });
+  doc.setTextColor(0, 0, 0);
+  yPos = 35;
 
   yPos += 7;
   doc.setFontSize(10);

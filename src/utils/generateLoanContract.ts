@@ -141,8 +141,8 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - Gold/Amber color (RGB: 234, 179, 8)
-  doc.setFillColor(234, 179, 8);
+  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
+  doc.setFillColor(255, 51, 153);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
   doc.setTextColor(0, 0, 0);
@@ -254,8 +254,8 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
     yPos += 5;
   };
 
-  // Header
-  doc.setFillColor(234, 179, 8);
+  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
+  doc.setFillColor(255, 51, 153);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
   doc.setTextColor(0, 0, 0);
@@ -413,10 +413,11 @@ export const getLoanContractBase64 = async (loan: LoanData): Promise<string> => 
   return doc.output('datauristring');
 };
 
-// Share via WhatsApp (async version)
+// Share via WhatsApp (async version) - Uses notification service
 export const shareContractViaWhatsApp = async (loan: LoanData) => {
-  const message = encodeURIComponent(
-    `Hello ${loan.full_name},\n\n` +
+  const { notificationService } = await import('@/utils/notificationService');
+  
+  const message = `Hello ${loan.full_name},\n\n` +
     `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
@@ -424,14 +425,31 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
     `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
     `- Term: ${loan.loan_term_months} months\n\n` +
     `Please sign and return the contract.\n\n` +
-    `Phindu Credit Solutions`
-  );
+    `Phindu Credit Solutions`;
   
-  const phone = loan.phone.replace(/\s+/g, '').replace(/^0/, '260');
-  const whatsappUrl = `https://wa.me/${phone}?text=${message}`;
+  // Get contract PDF as base64 for attachment
+  const contractBase64 = await getLoanContractBase64(loan);
   
-  await downloadLoanContract(loan);
-  window.open(whatsappUrl, '_blank');
+  // Send via WhatsApp using notification service
+  const result = await notificationService.send({
+    userId: loan.id, // Using loan id as fallback
+    type: 'whatsapp',
+    to: loan.phone,
+    message: message,
+    title: 'Loan Contract',
+    eventType: 'contract_sent',
+    attachment: {
+      content: contractBase64.split(',')[1] || contractBase64, // Remove data URI prefix if present
+      name: `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}.pdf`
+    }
+  });
+  
+  if (result.success) {
+    // Also download locally for admin reference
+    await downloadLoanContract(loan);
+  }
+  
+  return result;
 };
 
 // Prepare mailto link with contract info (async version)

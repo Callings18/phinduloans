@@ -155,7 +155,8 @@ const Dashboard = () => {
         repayments: loanRepayments
       });
     } catch (error) {
-      console.error("Failed to generate statement", error);
+      const { handleError } = await import('@/utils/errorHandler');
+      handleError(error, { component: 'Dashboard', action: 'generate_statement' });
     } finally {
       setIsGenerating(null);
     }
@@ -187,7 +188,8 @@ const Dashboard = () => {
         })),
       });
     } catch (error) {
-      console.error("Failed to generate schedule", error);
+      const { handleError } = await import('@/utils/errorHandler');
+      handleError(error, { component: 'Dashboard', action: 'generate_schedule' });
     } finally {
       setIsGenerating(null);
     }
