@@ -552,121 +552,85 @@ const Apply = () => {
     console.log('[Apply] Starting submission process...');
 
     try {
-      // 1. Upload Documents with better error handling
-      const uploadedDocs: any[] = [];
+      // 1. Upload Documents concurrently
       const docEntries = Object.entries(dynamicDocs);
-      console.log('[Apply] Documents to upload:', docEntries.map(([type]) => type));
+      const uploadPromises = docEntries.map(([docType, file]) =>
+        (async () => {
+          try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
+            console.log(`[Apply] Uploading ${docType}: ${fileName}`);
+            setUploadProgress(prev => ({ ...prev, [docType]: 10 }));
 
-      for (const [docType, file] of docEntries) {
-        try {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
-          console.log(`[Apply] Uploading ${docType}: ${fileName}`);
-          
-          // Set initial progress and simulate upload progress
-          setUploadProgress(prev => ({ ...prev, [docType]: 10 }));
-          
-          // Simulate progress (Supabase doesn't support onUploadProgress)
-          const progressInterval = setInterval(() => {
-            setUploadProgress(prev => {
-              const current = prev[docType] || 10;
-              if (current < 90) {
-                return { ...prev, [docType]: current + 10 };
-              }
-              return prev;
-            });
-          }, 200);
-          
-          const { data, error: uploadErr } = await supabase.storage
-            .from('loan-documents')
-            .upload(fileName, file, {
-              cacheControl: '3600',
-              upsert: false
-            });
-          
-          clearInterval(progressInterval);
+            // No need to simulate progress as uploads are now parallel
+            const { error: uploadErr } = await supabase.storage
+              .from('loan-documents')
+              .upload(fileName, file, { cacheControl: '3600', upsert: false });
 
-          if (uploadErr) {
-            // Use error handler for better error tracking
+            if (uploadErr) throw uploadErr;
+
+            setUploadProgress(prev => ({ ...prev, [docType]: 100 }));
+            return {
+              document_type: docType,
+              file_url: fileName,
+              file_name: file.name,
+              file_size: file.size,
+              file_type: file.type,
+            };
+          } catch (err: any) {
             const { handleError } = await import('@/utils/errorHandler');
-            handleError(uploadErr, {
-              component: 'Apply',
-              action: `upload_${docType}`,
-            });
-            
+            handleError(err, { component: 'Apply', action: `upload_${docType}` });
             setUploadProgress(prev => {
               const next = { ...prev };
               delete next[docType];
               return next;
             });
             toast({
-              title: "Document Upload Warning",
-              description: `${docType} upload failed: ${uploadErr.message}. Application will continue.`,
-              variant: "default",
+              title: "Upload Error",
+              description: `Failed to upload ${docType}: ${err.message}`,
+              variant: "destructive",
             });
-          } else {
-            // Success - no need to log
-            setUploadProgress(prev => ({ ...prev, [docType]: 100 }));
-            uploadedDocs.push({
-              document_type: docType,
-              file_url: fileName,
-              file_name: file.name,
-              file_size: file.size,
-              file_type: file.type
-            });
+            return null; // Return null on failure
           }
-        } catch (err: any) {
-          const { handleError } = await import('@/utils/errorHandler');
-          handleError(err, { component: 'Apply', action: `upload_${docType}` });
-          setUploadProgress(prev => {
-            const next = { ...prev };
-            delete next[docType];
-            return next;
-          });
-          toast({
-            title: "Upload Error",
-            description: `Failed to upload ${docType}: ${err.message}`,
-            variant: "destructive",
-          });
-        }
-      }
-      
-      // Upload collateral image if provided
-      let collateralImageUrl: string | null = null;
+        })()
+      );
+
+      // Also handle collateral image concurrently
       if (formData.collateralImage) {
-        try {
-          const fileExt = formData.collateralImage.name.split('.').pop();
-          const fileName = `${user.id}/collateral_${Date.now()}.${fileExt}`;
-          console.log(`[Apply] Uploading collateral image: ${fileName}`);
-          
-          const { data: collateralData, error: collateralErr } = await supabase.storage
-            .from('loan-documents')
-            .upload(fileName, formData.collateralImage, {
-              cacheControl: '3600',
-              upsert: false
-            });
-          
-          if (collateralErr) {
-            const { handleError } = await import('@/utils/errorHandler');
-            handleError(collateralErr, { component: 'Apply', action: 'upload_collateral' });
-            toast({
-              title: "Collateral Image Upload Warning",
-              description: `Collateral image upload failed: ${collateralErr.message}. Application will continue.`,
-              variant: "default",
-            });
-          } else {
-            collateralImageUrl = fileName;
-          }
-        } catch (err: any) {
-          const { handleError } = await import('@/utils/errorHandler');
-          handleError(err, { component: 'Apply', action: 'upload_collateral' });
-          toast({
-            title: "Upload Error",
-            description: `Failed to upload collateral image: ${err.message}`,
-            variant: "destructive",
-          });
-        }
+        uploadPromises.push(
+          (async () => {
+            try {
+              const file = formData.collateralImage as File;
+              const fileExt = file.name.split('.').pop();
+              const fileName = `${user.id}/collateral_${Date.now()}.${fileExt}`;
+              console.log(`[Apply] Uploading collateral image: ${fileName}`);
+
+              const { error: collateralErr } = await supabase.storage
+                .from('loan-documents')
+                .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+              if (collateralErr) throw collateralErr;
+
+              return { document_type: 'collateral', file_url: fileName };
+            } catch (err: any) {
+              const { handleError } = await import('@/utils/errorHandler');
+              handleError(err, { component: 'Apply', action: 'upload_collateral' });
+              toast({
+                title: "Collateral Image Upload Warning",
+                description: `Collateral image upload failed: ${err.message}. Application will continue.`,
+                variant: "default",
+              });
+              return null;
+            }
+          })()
+        );
       }
+
+      const uploadResults = await Promise.all(uploadPromises);
+      const successfulUploads = uploadResults.filter(Boolean);
+
+      const uploadedDocs = successfulUploads.filter(u => u && u.document_type !== 'collateral');
+      const collateralImageUrl = successfulUploads.find(u => u && u.document_type === 'collateral')?.file_url || null;
 
       // Clear upload progress after a delay
       setTimeout(() => {
