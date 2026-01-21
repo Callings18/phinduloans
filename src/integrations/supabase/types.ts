@@ -317,6 +317,50 @@ export type Database = {
           },
         ]
       }
+      contract_templates: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          is_active: boolean | null
+          loan_product_id: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          loan_product_id?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          loan_product_id?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_templates_loan_product_id_fkey"
+            columns: ["loan_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       court_case_events: {
         Row: {
           court_case_id: string
@@ -940,6 +984,8 @@ export type Database = {
           bank_statement_url: string | null
           city: string | null
           collateral_description: string | null
+          collateral_image_2_url: string | null
+          collateral_image_3_url: string | null
           collateral_image_url: string | null
           collateral_value: number | null
           contract_url: string | null
@@ -997,6 +1043,8 @@ export type Database = {
           bank_statement_url?: string | null
           city?: string | null
           collateral_description?: string | null
+          collateral_image_2_url?: string | null
+          collateral_image_3_url?: string | null
           collateral_image_url?: string | null
           collateral_value?: number | null
           contract_url?: string | null
@@ -1054,6 +1102,8 @@ export type Database = {
           bank_statement_url?: string | null
           city?: string | null
           collateral_description?: string | null
+          collateral_image_2_url?: string | null
+          collateral_image_3_url?: string | null
           collateral_image_url?: string | null
           collateral_value?: number | null
           contract_url?: string | null
@@ -1118,6 +1168,51 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "loan_products"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      loan_collateral_images: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_order: number
+          image_url: string
+          loan_application_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_order?: number
+          image_url: string
+          loan_application_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_order?: number
+          image_url?: string
+          loan_application_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_collateral_images_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_collateral_images_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
           },
         ]
       }
@@ -1573,6 +1668,7 @@ export type Database = {
           recipient: string
           sent_at: string | null
           status: string | null
+          subject: string | null
           title: string | null
           type: string
           user_id: string | null
@@ -1585,6 +1681,7 @@ export type Database = {
           recipient: string
           sent_at?: string | null
           status?: string | null
+          subject?: string | null
           title?: string | null
           type: string
           user_id?: string | null
@@ -1597,6 +1694,7 @@ export type Database = {
           recipient?: string
           sent_at?: string | null
           status?: string | null
+          subject?: string | null
           title?: string | null
           type?: string
           user_id?: string | null
@@ -2335,6 +2433,18 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      send_notification_via_edge_function: {
+        Args: {
+          p_event_type?: string
+          p_message: string
+          p_recipient: string
+          p_subject?: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

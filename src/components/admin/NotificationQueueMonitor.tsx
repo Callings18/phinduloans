@@ -11,13 +11,38 @@ export default function NotificationQueueMonitor() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch queue statistics
+  // Fetch queue statistics using direct queries instead of RPC
   const { data: queueStats, isLoading: statsLoading } = useQuery({
     queryKey: ['notification-queue-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_notification_queue_stats');
-      if (error) throw error;
-      return data?.[0] || { pending_count: 0, failed_count: 0, sent_today: 0, avg_retry_count: 0 };
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Get pending count
+      const { count: pendingCount } = await supabase
+        .from('notification_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      // Get failed count
+      const { count: failedCount } = await supabase
+        .from('notification_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'failed');
+      
+      // Get sent today count
+      const { count: sentToday } = await supabase
+        .from('notification_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'sent')
+        .gte('sent_at', today.toISOString());
+      
+      return {
+        pending_count: pendingCount || 0,
+        failed_count: failedCount || 0,
+        sent_today: sentToday || 0,
+        avg_retry_count: 0
+      };
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
