@@ -7,6 +7,7 @@
 export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type InterestType = 'flat' | 'reducing';
 export type PenaltyFrequency = 'daily' | 'weekly' | 'monthly' | 'one_time';
+export type TermUnit = 'days' | 'weeks' | 'months' | 'years';
 
 export interface LoanProduct {
   interest_rate: number;
@@ -21,11 +22,13 @@ export interface LoanProduct {
   penalty_frequency?: PenaltyFrequency | null;
   grace_period_days?: number | null;
   early_repayment_fee_percent?: number | null;
+  term_unit?: TermUnit | null; // NEW: Unit for loan term
 }
 
 export interface LoanCalculationResult {
   principal: number;
   monthlyInterestRate: number;
+  weeklyInterestRate?: number; // NEW: For weekly loans
   totalInterest: number;
   processingFee: number;
   enforcementFee: number;
@@ -40,7 +43,9 @@ export interface LoanCalculationResult {
   /** Total amount borrower repays (principal + interest only, fees already deducted) */
   totalRepayment: number;
   monthlyPayment: number;
+  weeklyPayment?: number; // NEW: For weekly loans
   effectiveAnnualRate: number;
+  paymentFrequency?: 'weekly' | 'monthly'; // NEW: Payment frequency
 }
 
 export interface RepaymentScheduleItem {
@@ -90,26 +95,38 @@ export function monthlyToAnnualRate(monthlyRate: number): number {
  */
 export function calculateFlatInterest(
   principal: number,
-  monthlyRate: number,
-  termMonths: number
+  rate: number,
+  term: number,
+  period: InterestPeriod = 'monthly'
 ): number {
-  return principal * (monthlyRate / 100) * termMonths;
+  return principal * (rate / 100) * term;
 }
 
 /**
- * Calculate reducing balance interest
- * Uses amortization formula for equal monthly payments
+ * Calculate flat interest for weekly loans
+ */
+export function calculateFlatInterestWeekly(
+  principal: number,
+  weeklyRate: number,
+  termWeeks: number
+): number {
+  return principal * (weeklyRate / 100) * termWeeks;
+}
+
+/**
+ * Calculate reducing balance payment
+ * Uses amortization formula for equal payments
  */
 export function calculateReducingBalancePayment(
   principal: number,
-  monthlyRate: number,
-  termMonths: number
+  rate: number,
+  term: number
 ): number {
-  const r = monthlyRate / 100;
-  if (r === 0) return principal / termMonths;
+  const r = rate / 100;
+  if (r === 0) return principal / term;
   
   // PMT = P × [r(1+r)^n] / [(1+r)^n – 1]
-  const payment = principal * (r * Math.pow(1 + r, termMonths)) / (Math.pow(1 + r, termMonths) - 1);
+  const payment = principal * (r * Math.pow(1 + r, term)) / (Math.pow(1 + r, term) - 1);
   return payment;
 }
 
@@ -118,44 +135,74 @@ export function calculateReducingBalancePayment(
  */
 export function calculateReducingBalanceInterest(
   principal: number,
-  monthlyRate: number,
-  termMonths: number
+  rate: number,
+  term: number
 ): number {
-  const monthlyPayment = calculateReducingBalancePayment(principal, monthlyRate, termMonths);
-  return (monthlyPayment * termMonths) - principal;
+  const payment = calculateReducingBalancePayment(principal, rate, term);
+  return (payment * term) - principal;
 }
 
 /**
  * Main loan calculation function
  * Handles all interest periods and types with fees
+ * Supports weekly and monthly payment frequencies
  */
 export function calculateLoan(
   principal: number,
-  termMonths: number,
-  product: LoanProduct
+  termValue: number, // Can be weeks or months depending on term_unit
+  product: LoanProduct,
+  termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
 ): LoanCalculationResult {
-  // Normalize interest rate to monthly
-  const monthlyRate = normalizeToMonthlyRate(
-    product.interest_rate,
-    (product.interest_period as InterestPeriod) || 'monthly'
-  );
-  
+  const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const rawInterestType = (product.interest_type as string) || 'flat';
   const interestType = (rawInterestType === 'reducing_balance'
     ? 'reducing'
     : rawInterestType) as InterestType;
   
-  // Calculate interest based on type
-  let totalInterest: number;
-  let monthlyPayment: number;
+  // Determine payment frequency based on term_unit
+  const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && interestPeriod === 'weekly');
   
-  if (interestType === 'reducing') {
-    monthlyPayment = calculateReducingBalancePayment(principal, monthlyRate, termMonths);
-    totalInterest = calculateReducingBalanceInterest(principal, monthlyRate, termMonths);
+  let totalInterest: number;
+  let monthlyPayment: number = 0;
+  let weeklyPayment: number = 0;
+  let monthlyRate: number = 0;
+  let weeklyRate: number = 0;
+  
+  if (isWeekly && interestPeriod === 'weekly') {
+    // For weekly loans with weekly interest: calculate per week, don't normalize
+    weeklyRate = product.interest_rate;
+    const termWeeks = termUnit === 'weeks' ? termValue : termValue * 4.33; // Convert months to weeks if needed
+    
+    if (interestType === 'reducing') {
+      weeklyPayment = calculateReducingBalancePayment(principal, weeklyRate, termWeeks);
+      totalInterest = calculateReducingBalanceInterest(principal, weeklyRate, termWeeks);
+    } else {
+      // Flat interest: Principal × Weekly Rate × Weeks
+      totalInterest = calculateFlatInterestWeekly(principal, weeklyRate, termWeeks);
+      weeklyPayment = (principal + totalInterest) / termWeeks;
+    }
+    
+    // Convert to monthly for display purposes
+    monthlyRate = weeklyRate * 4.33;
+    monthlyPayment = weeklyPayment * 4.33;
   } else {
-    // Flat interest
-    totalInterest = calculateFlatInterest(principal, monthlyRate, termMonths);
-    monthlyPayment = (principal + totalInterest) / termMonths;
+    // For monthly loans or weekly loans with monthly interest: normalize to monthly
+    monthlyRate = normalizeToMonthlyRate(product.interest_rate, interestPeriod);
+    const termMonths = termUnit === 'weeks' ? termValue / 4.33 : termValue; // Convert weeks to months if needed
+    
+    if (interestType === 'reducing') {
+      monthlyPayment = calculateReducingBalancePayment(principal, monthlyRate, termMonths);
+      totalInterest = calculateReducingBalanceInterest(principal, monthlyRate, termMonths);
+    } else {
+      // Flat interest
+      totalInterest = calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);
+      monthlyPayment = (principal + totalInterest) / termMonths;
+    }
+    
+    // For weekly payment frequency with monthly interest, calculate weekly payment
+    if (termUnit === 'weeks') {
+      weeklyPayment = monthlyPayment / 4.33;
+    }
   }
   
   // Calculate fees - these are DEDUCTED from disbursement, not added to repayment
@@ -177,12 +224,22 @@ export function calculateLoan(
   // Total repayment is just principal + interest (fees already deducted from disbursement)
   const totalRepayment = principal + totalInterest;
   
-  // Monthly payment based on what borrower repays (principal + interest)
-  const adjustedMonthlyPayment = totalRepayment / termMonths;
+  // Adjust payment amounts if needed
+  if (isWeekly && weeklyPayment > 0) {
+    // Recalculate weekly payment based on total repayment
+    const termWeeks = termUnit === 'weeks' ? termValue : termValue * 4.33;
+    weeklyPayment = totalRepayment / termWeeks;
+    monthlyPayment = weeklyPayment * 4.33;
+  } else if (monthlyPayment > 0) {
+    // Recalculate monthly payment based on total repayment
+    const termMonths = termUnit === 'weeks' ? termValue / 4.33 : termValue;
+    monthlyPayment = totalRepayment / termMonths;
+  }
   
   return {
     principal,
     monthlyInterestRate: monthlyRate,
+    weeklyInterestRate: isWeekly ? weeklyRate : undefined,
     totalInterest: Math.round(totalInterest * 100) / 100,
     processingFee: Math.round(processingFee * 100) / 100,
     enforcementFee: Math.round(enforcementFee * 100) / 100,
@@ -193,46 +250,71 @@ export function calculateLoan(
     feesDeductedUpfront: Math.round(feesDeductedUpfront * 100) / 100,
     disbursementAmount: Math.round(disbursementAmount * 100) / 100,
     totalRepayment: Math.round(totalRepayment * 100) / 100,
-    monthlyPayment: Math.round(adjustedMonthlyPayment * 100) / 100,
+    monthlyPayment: Math.round(monthlyPayment * 100) / 100,
+    weeklyPayment: isWeekly ? Math.round(weeklyPayment * 100) / 100 : undefined,
     effectiveAnnualRate: Math.round(monthlyToAnnualRate(monthlyRate) * 100) / 100,
+    paymentFrequency: isWeekly ? 'weekly' : 'monthly',
   };
 }
 
 /**
  * Generate amortization schedule
+ * Supports both weekly and monthly payment frequencies
  */
 export function generateRepaymentSchedule(
   principal: number,
-  termMonths: number,
+  termValue: number, // Can be weeks or months
   product: LoanProduct,
-  startDate: Date
+  startDate: Date,
+  termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
 ): RepaymentScheduleItem[] {
-  const monthlyRate = normalizeToMonthlyRate(
-    product.interest_rate,
-    (product.interest_period as InterestPeriod) || 'monthly'
-  );
-  
+  const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const interestType = (product.interest_type as InterestType) || 'flat';
-  const loanCalc = calculateLoan(principal, termMonths, product);
+  
+  // Determine if this is a weekly loan
+  const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && interestPeriod === 'weekly');
+  
+  // Calculate loan details
+  const loanCalc = calculateLoan(principal, termValue, product, termUnit);
   
   const schedule: RepaymentScheduleItem[] = [];
   let remainingBalance = principal;
   
-  for (let i = 1; i <= termMonths; i++) {
+  // Determine number of installments and payment amount
+  const numInstallments = termUnit === 'weeks' ? termValue : (termUnit === 'months' ? termValue : termValue);
+  const paymentAmount = isWeekly && loanCalc.weeklyPayment 
+    ? loanCalc.weeklyPayment 
+    : loanCalc.monthlyPayment;
+  
+  // Get the appropriate interest rate
+  const rate = isWeekly && loanCalc.weeklyInterestRate 
+    ? loanCalc.weeklyInterestRate 
+    : loanCalc.monthlyInterestRate;
+  
+  for (let i = 1; i <= numInstallments; i++) {
     const dueDate = new Date(startDate);
-    dueDate.setMonth(dueDate.getMonth() + i);
+    
+    // Calculate due date based on payment frequency
+    if (isWeekly) {
+      // Add weeks (7 days per week)
+      dueDate.setDate(dueDate.getDate() + (i * 7));
+    } else {
+      // Add months
+      dueDate.setMonth(dueDate.getMonth() + i);
+    }
     
     let interestPayment: number;
     let principalPayment: number;
     
     if (interestType === 'reducing') {
       // Interest on remaining balance
-      interestPayment = remainingBalance * (monthlyRate / 100);
-      principalPayment = loanCalc.monthlyPayment - interestPayment - (loanCalc.totalFees / termMonths);
+      const periodRate = isWeekly ? (rate / 100) : (rate / 100);
+      interestPayment = remainingBalance * periodRate;
+      principalPayment = paymentAmount - interestPayment;
     } else {
-      // Flat: equal interest each month
-      interestPayment = loanCalc.totalInterest / termMonths;
-      principalPayment = principal / termMonths;
+      // Flat: equal interest each period
+      interestPayment = loanCalc.totalInterest / numInstallments;
+      principalPayment = principal / numInstallments;
     }
     
     remainingBalance = Math.max(0, remainingBalance - principalPayment);
@@ -242,7 +324,7 @@ export function generateRepaymentSchedule(
       dueDate,
       principal: Math.round(principalPayment * 100) / 100,
       interest: Math.round(interestPayment * 100) / 100,
-      totalPayment: Math.round(loanCalc.monthlyPayment * 100) / 100,
+      totalPayment: Math.round(paymentAmount * 100) / 100,
       remainingBalance: Math.round(remainingBalance * 100) / 100,
     });
   }

@@ -345,9 +345,10 @@ const AdminLoans = () => {
     if (!selectedProduct || !loanAmount || !loanTermMonths) return null;
 
     const principal = Number(loanAmount);
-    const months = Number(loanTermMonths);
+    const termValue = Number(loanTermMonths);
+    const termUnit = (selectedProduct as any).term_unit || 'months';
 
-    const loanCalc = calculateLoan(principal, months, {
+    const loanCalc = calculateLoan(principal, termValue, {
       interest_rate: selectedProduct.interest_rate,
       interest_period: (selectedProduct as any).interest_period,
       interest_type: (selectedProduct as any).interest_type,
@@ -355,7 +356,8 @@ const AdminLoans = () => {
       insurance_percent: (selectedProduct as any).insurance_percent,
       vat_percent: (selectedProduct as any).vat_percent,
       platform_fee_percent: (selectedProduct as any).platform_fee_percent,
-    });
+      term_unit: termUnit,
+    }, termUnit as any);
 
     return {
       principal,
@@ -363,8 +365,10 @@ const AdminLoans = () => {
       processingFee: loanCalc.processingFee,
       totalRepayment: loanCalc.totalRepayment,
       monthlyPayment: loanCalc.monthlyPayment,
+      weeklyPayment: loanCalc.weeklyPayment,
       rate: selectedProduct.interest_rate,
       interestPeriod: getInterestPeriodLabel((selectedProduct as any).interest_period),
+      paymentFrequency: loanCalc.paymentFrequency,
     };
   };
 
@@ -681,9 +685,23 @@ const AdminLoans = () => {
     },
   });
 
-  // Delete mutation
+  // Delete mutation with restrictions
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // First check if loan can be deleted
+      const { data: loan, error: fetchError } = await supabase
+        .from('loan_applications')
+        .select('status')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      // Only allow deletion if loan is pending, rejected, or under_review
+      if (!loan || !['pending', 'rejected', 'under_review'].includes(loan.status)) {
+        throw new Error('Cannot delete loan. Only pending, rejected, or under review loans can be deleted.');
+      }
+      
       const { error } = await supabase.from('loan_applications').delete().eq('id', id);
       if (error) throw error;
     },
@@ -1694,19 +1712,34 @@ const AdminLoans = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Application</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the loan application for{" "}
-              <span className="font-semibold">{selectedLoan?.full_name}</span>?
-              This action cannot be undone.
+              {selectedLoan && !['pending', 'rejected', 'under_review'].includes(selectedLoan.status) ? (
+                <>
+                  <p className="text-destructive font-semibold mb-2">
+                    Cannot delete this loan. Only pending, rejected, or under review loans can be deleted.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Current status: <span className="font-semibold">{selectedLoan.status}</span>
+                  </p>
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete the loan application for{" "}
+                  <span className="font-semibold">{selectedLoan?.full_name}</span>?
+                  This action cannot be undone.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => selectedLoan && deleteMutation.mutate(selectedLoan.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
+            {selectedLoan && ['pending', 'rejected', 'under_review'].includes(selectedLoan.status) && (
+              <AlertDialogAction
+                onClick={() => selectedLoan && deleteMutation.mutate(selectedLoan.id)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

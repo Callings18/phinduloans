@@ -179,6 +179,23 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const { data: settings } = useSystemSettings();
 
+  // Fetch loan product to determine payment frequency
+  const { data: loanProduct } = useQuery({
+    queryKey: ["loan-product", loan?.loan_product_id],
+    queryFn: async () => {
+      if (!loan?.loan_product_id) return null;
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("term_unit, interest_period, repayment_frequency")
+        .eq("id", loan.loan_product_id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!loan?.loan_product_id,
+  });
+
   // Fetch repayments with new columns
   const { data: repayments, isLoading: repaymentsLoading } = useQuery({
     queryKey: ["loan-repayments", loan?.id],
@@ -195,6 +212,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
     enabled: !!loan,
   });
+
+  // Determine payment frequency
+  const termUnit = (loan as any)?.term_unit || loanProduct?.term_unit || 'months';
+  const interestPeriod = loanProduct?.interest_period || 'monthly';
+  const repaymentFrequency = loanProduct?.repayment_frequency || 'monthly';
+  const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && (interestPeriod === 'weekly' || repaymentFrequency === 'weekly'));
+  const isDaily = termUnit === 'days' || (termUnit === 'months' && (interestPeriod === 'daily' || repaymentFrequency === 'daily'));
 
   // Fetch disbursement
   const { data: disbursement } = useQuery({
@@ -499,16 +523,70 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
 
-      const monthlyPayment = loan.monthly_payment || (loan.total_repayment / loan.loan_term_months);
+      // Get loan product to check term_unit, interest_period, and repayment_frequency
+      const { data: product } = await supabase
+        .from("loan_products")
+        .select("term_unit, interest_period, repayment_frequency")
+        .eq("id", loan.loan_product_id)
+        .single();
+
+      const termUnit = (loan as any).term_unit || product?.term_unit || 'months';
+      const interestPeriod = product?.interest_period || 'monthly';
+      const repaymentFrequency = product?.repayment_frequency || 'monthly';
+      const isDaily = termUnit === 'days' || (termUnit === 'months' && (interestPeriod === 'daily' || repaymentFrequency === 'daily'));
+      const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && (interestPeriod === 'weekly' || repaymentFrequency === 'weekly'));
+
+      // Calculate payment amount and number of installments
+      let paymentAmount: number;
+      let numInstallments: number;
+      
+      if (isDaily) {
+        // For daily loans
+        if (termUnit === 'days') {
+          numInstallments = loan.loan_term_months; // loan_term_months represents days
+          paymentAmount = loan.total_repayment / numInstallments;
+        } else {
+          numInstallments = loan.loan_term_months * 30;
+          paymentAmount = (loan.monthly_payment || (loan.total_repayment / loan.loan_term_months)) / 30;
+        }
+      } else if (isWeekly) {
+        // For weekly loans
+        if (termUnit === 'weeks') {
+          numInstallments = loan.loan_term_months; // loan_term_months represents weeks
+          paymentAmount = loan.total_repayment / numInstallments;
+        } else {
+          numInstallments = loan.loan_term_months * 4;
+          paymentAmount = (loan.monthly_payment || (loan.total_repayment / loan.loan_term_months)) / 4.33;
+        }
+      } else {
+        // For monthly loans
+        numInstallments = loan.loan_term_months;
+        paymentAmount = loan.monthly_payment || (loan.total_repayment / loan.loan_term_months);
+      }
+
       const repaymentRecords = [];
       const startDate = new Date();
 
-      for (let i = 1; i <= loan.loan_term_months; i++) {
+      for (let i = 1; i <= numInstallments; i++) {
+        let dueDate: Date;
+        if (isDaily) {
+          // Add 1 day per installment
+          dueDate = new Date(startDate);
+          dueDate.setDate(dueDate.getDate() + i);
+        } else if (isWeekly) {
+          // Add 7 days per week
+          dueDate = new Date(startDate);
+          dueDate.setDate(dueDate.getDate() + (i * 7));
+        } else {
+          // Add months
+          dueDate = addMonths(startDate, i);
+        }
+
         repaymentRecords.push({
           loan_id: loan.id,
           user_id: loan.user_id,
-          amount: monthlyPayment,
-          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
+          amount: paymentAmount,
+          due_date: format(dueDate, "yyyy-MM-dd"),
           installment_number: i,
           status: "pending",
         });
@@ -1076,17 +1154,65 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </TableHeader>
                       <TableBody>
                         {repayments.map((rep) => {
-                          const isOverdue = rep.status === "pending" && new Date(rep.due_date) < new Date();
-                          const displayStatus = rep.is_reversed ? "reversed" : isOverdue ? "overdue" : rep.status;
+                          const today = new Date();
+                          const dueDate = new Date(rep.due_date);
+                          const isOverdue = rep.status === "pending" && dueDate < today;
+                          const isDue = rep.status === "pending" && dueDate.toDateString() === today.toDateString();
+                          const isUpcoming = rep.status === "pending" && dueDate > today;
+                          const daysOverdue = isOverdue ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                          
+                          const displayStatus = rep.is_reversed 
+                            ? "reversed" 
+                            : isOverdue 
+                              ? "overdue" 
+                              : isDue 
+                                ? "due" 
+                                : rep.status === "paid"
+                                  ? "paid"
+                                  : "pending";
                           const totalDue = rep.amount + (rep.penalty_amount || 0);
 
+                          // Format date based on frequency
+                          const dateFormat = isDaily ? "MMM dd, yyyy" : isWeekly ? "MMM dd, yyyy" : "MMM dd, yyyy";
+                          const dateDisplay = format(dueDate, dateFormat);
+
                           return (
-                            <TableRow key={rep.id} className={isOverdue ? "bg-destructive/5" : rep.is_reversed ? "bg-muted/50" : ""}>
+                            <TableRow 
+                              key={rep.id} 
+                              className={
+                                isOverdue 
+                                  ? "bg-destructive/10 border-l-4 border-l-destructive" 
+                                  : isDue 
+                                    ? "bg-warning/10 border-l-4 border-l-warning"
+                                    : rep.is_reversed 
+                                      ? "bg-muted/50 opacity-60" 
+                                      : rep.status === "paid"
+                                        ? "bg-success/5"
+                                        : ""
+                              }
+                            >
                               <TableCell className="font-medium">{rep.installment_number || "-"}</TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
-                                  {format(new Date(rep.due_date), "MMM dd, yyyy")}
-                                  {isOverdue && <AlertTriangle className="text-destructive" size={14} />}
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{dateDisplay}</span>
+                                    {isOverdue && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        <AlertTriangle size={10} className="mr-1" />
+                                        {daysOverdue} day{daysOverdue !== 1 ? 's' : ''} overdue
+                                      </Badge>
+                                    )}
+                                    {isDue && (
+                                      <Badge variant="outline" className="text-xs border-warning text-warning">
+                                        Due Today
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {isUpcoming && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))} day{Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) !== 1 ? 's' : ''} remaining
+                                    </span>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell className="font-medium">K{Number(rep.amount).toLocaleString()}</TableCell>
@@ -1094,23 +1220,53 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 {rep.penalty_amount ? `K${Number(rep.penalty_amount).toLocaleString()}` : "-"}
                               </TableCell>
                               <TableCell className="font-bold">K{totalDue.toLocaleString()}</TableCell>
-                              <TableCell>{getStatusBadge(displayStatus)}</TableCell>
                               <TableCell>
-                                {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy") : "-"}
+                                <div className="flex flex-col gap-1">
+                                  {getStatusBadge(displayStatus)}
+                                  {rep.status === "paid" && rep.paid_date && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Paid: {format(new Date(rep.paid_date), "MMM dd, yyyy")}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  {rep.paid_date ? (
+                                    <>
+                                      <span className="font-medium text-success">
+                                        {format(new Date(rep.paid_date), "MMM dd, yyyy")}
+                                      </span>
+                                      {rep.payment_method && (
+                                        <span className="text-xs text-muted-foreground capitalize">
+                                          {rep.payment_method.replace('_', ' ')}
+                                        </span>
+                                      )}
+                                      {rep.transaction_reference && (
+                                        <span className="text-xs text-muted-foreground font-mono">
+                                          Ref: {rep.transaction_reference}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">
                                   {rep.status === "pending" && !rep.is_reversed && (
                                     <Button
                                       size="sm"
-                                      variant="outline"
+                                      variant={isOverdue ? "destructive" : isDue ? "default" : "outline"}
                                       onClick={() => {
                                         setSelectedRepayment(rep);
                                         setPaymentAmount(totalDue.toString());
                                         setIsRecordPaymentOpen(true);
                                       }}
                                     >
-                                      <CheckCircle size={14} className="mr-1" /> Pay
+                                      <CheckCircle size={14} className="mr-1" /> 
+                                      {isOverdue ? "Pay Overdue" : isDue ? "Pay Now" : "Pay"}
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (

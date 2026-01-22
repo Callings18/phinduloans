@@ -231,9 +231,22 @@ const AdminBorrowers = () => {
     },
   });
 
-  // Delete borrower mutation
+  // Delete borrower mutation with safety checks
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // Check if borrower has active loans
+      const { data: activeLoans, error: loansError } = await supabase
+        .from('loan_applications')
+        .select('id, status')
+        .eq('user_id', id)
+        .in('status', ['active', 'disbursed', 'approved', 'completed']);
+      
+      if (loansError) throw loansError;
+      
+      if (activeLoans && activeLoans.length > 0) {
+        throw new Error(`Cannot delete borrower. This borrower has ${activeLoans.length} active or completed loan(s).`);
+      }
+      
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
     },
