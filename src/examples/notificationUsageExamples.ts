@@ -169,10 +169,10 @@ export async function example_loanCompletion() {
 }
 
 // ============================================================================
-// Example 11: Send Collection Reminder (Escalation)
+// Example 11: Send Collection Escalation Reminder
 // ============================================================================
 export async function example_collectionReminder() {
-  const results = await notificationService.sendCollectionReminder(
+  const results = await notificationService.sendCollectionEscalation(
     'user-uuid-here',
     'Peter Sakala',
     15000,                 // outstanding amount
@@ -181,7 +181,7 @@ export async function example_collectionReminder() {
     'peter@example.com'
   );
 
-  console.log('Collection reminder sent:', results);
+  console.log('Collection escalation sent:', results);
 }
 
 // ============================================================================

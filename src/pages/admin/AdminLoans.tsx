@@ -579,7 +579,8 @@ const AdminLoans = () => {
         notificationService.send({
           userId: selectedLoan.user_id,
           type: 'email',
-          recipient: selectedLoan.email,
+          to: selectedLoan.email,
+          subject: 'Loan Application Update',
           title: 'Loan Application Update',
           message: `Hello ${selectedLoan.full_name}, unfortunately your loan application has been rejected. Reason: ${variables.reason || 'Not disclosed'}.`
         });
@@ -628,7 +629,7 @@ const AdminLoans = () => {
         notificationService.send({
           userId: selectedLoan.user_id,
           type: 'sms',
-          recipient: selectedLoan.phone,
+          to: selectedLoan.phone,
           title: 'Loan Disbursed',
           message: `Hello ${selectedLoan.full_name}, your loan of K${Number(selectedLoan.loan_amount).toLocaleString()} has been disbursed. Please check your account.`
         });

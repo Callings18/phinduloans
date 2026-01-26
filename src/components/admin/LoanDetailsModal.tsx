@@ -115,6 +115,7 @@ interface Loan {
   settlement_date?: string | null;
   settlement_type?: string | null;
   early_settlement_fee?: number;
+  loan_product_id?: string | null;
 }
 
 interface Repayment {

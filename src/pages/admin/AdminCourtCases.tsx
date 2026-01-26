@@ -200,14 +200,13 @@ const AdminCourtCases = () => {
       if (selectedLoan) {
         // Send notification to borrower
         try {
-          await notificationService.sendCourtCaseNotificationToBorrower(
+          await notificationService.sendCourtCaseNotice(
             selectedLoan.user_id,
             selectedLoan.full_name,
-            selectedLoan.phone,
-            selectedLoan.email,
+            data.case_number || 'Pending',
             data.claim_amount || selectedLoan.total_repayment,
-            data.court_name,
-            data.hearing_date ? format(new Date(data.hearing_date), 'PPP') : undefined
+            selectedLoan.phone,
+            selectedLoan.email
           );
           toast.success("Borrower notified about court case");
         } catch (err) {
@@ -219,18 +218,15 @@ const AdminCourtCases = () => {
           try {
             // Determine if lawyer_contact is email or phone
             const isEmail = data.lawyer_contact.includes('@');
-            await notificationService.sendCourtCaseNotificationToLawyer(
-              data.assigned_lawyer,
-              isEmail ? data.lawyer_contact : `${data.assigned_lawyer.replace(/\s+/g, '').toLowerCase()}@lawyer.com`,
-              !isEmail ? data.lawyer_contact : undefined,
-              selectedLoan.full_name,
-              data.claim_amount || selectedLoan.total_repayment,
-              {
-                loanId: selectedLoan.id,
-                phone: selectedLoan.phone,
-                email: selectedLoan.email,
-              }
-            );
+            const lawyerEmail = isEmail ? data.lawyer_contact : undefined;
+            const lawyerPhone = !isEmail ? data.lawyer_contact : undefined;
+            
+            await notificationService.sendCustom({
+              email: lawyerEmail,
+              phone: lawyerPhone,
+              message: `NEW CASE ASSIGNMENT: You have been assigned a new case.\n\nBorrower: ${selectedLoan.full_name}\nAmount: K${(data.claim_amount || selectedLoan.total_repayment).toLocaleString()}\nCase Number: ${data.case_number || 'Pending'}\n\nBorrower Contact:\nPhone: ${selectedLoan.phone}\nEmail: ${selectedLoan.email}\n\n- Phindu Finance Legal`,
+              subject: `New Case Assignment - ${selectedLoan.full_name}`,
+            });
             toast.success("Lawyer notified about new case assignment");
           } catch (err) {
             console.error("Failed to notify lawyer:", err);
