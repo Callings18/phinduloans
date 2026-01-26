@@ -15,51 +15,59 @@ interface NotificationRequest {
   title?: string;
   userId?: string;
   htmlContent?: string;
-  // Respond.io template parameters
+  eventType?: string;
+  // Respond.io template parameters (optional fallback)
   templateName?: string;
   templateLanguage?: string;
   templateComponents?: any[];
 }
 
 interface NotificationSettings {
-  // SMS Settings
-  sms_enabled?: boolean;
-  sms_provider?: string;
-  africastalking_username?: string;
-  africastalking_api_key?: string;
-  africastalking_sender_id?: string;
-  
-  // WhatsApp Settings  
-  whatsapp_enabled?: boolean;
-  whatsapp_provider?: string;
-  africastalking_whatsapp_number?: string;
-  fonnte_api_token?: string;
-  fonnte_device_id?: string;
-  respondio_api_key?: string;
-  respondio_base_url?: string;
-  respondio_whatsapp_channel_id?: string;
-  
-  // Email Settings
-  email_enabled?: boolean;
-  email_provider?: string;
-  resend_api_key?: string;
-  resend_from_email?: string;
-  resend_from_name?: string;
-  
-  // Legacy settings (keeping for backwards compatibility)
+  // Twilio Settings (unified for SMS, WhatsApp, Email)
   twilio_account_sid?: string;
   twilio_auth_token?: string;
   twilio_phone_number?: string;
   twilio_whatsapp_number?: string;
+  twilio_messaging_service_sid?: string;
+  
+  // SendGrid (Twilio Email)
   sendgrid_api_key?: string;
   sendgrid_from_email?: string;
   sendgrid_from_name?: string;
-  smtp_host?: string;
-  smtp_port?: number;
-  smtp_username?: string;
-  smtp_password?: string;
-  smtp_from_email?: string;
-  smtp_from_name?: string;
+  
+  // Respond.io (optional fallback for WhatsApp)
+  respondio_api_key?: string;
+  respondio_base_url?: string;
+  respondio_whatsapp_channel_id?: string;
+  
+  // Channel enablement
+  sms_enabled?: boolean;
+  whatsapp_enabled?: boolean;
+  email_enabled?: boolean;
+  
+  // Provider selection (for flexibility)
+  sms_provider?: string;
+  whatsapp_provider?: string;
+  email_provider?: string;
+  
+  // Notification Event Triggers
+  notify_on_signup?: boolean;
+  notify_on_application_submitted?: boolean;
+  notify_on_application_under_review?: boolean;
+  notify_on_kyc_verification?: boolean;
+  notify_on_document_request?: boolean;
+  notify_on_loan_approval?: boolean;
+  notify_on_loan_rejection?: boolean;
+  notify_on_disbursement?: boolean;
+  notify_on_payment_received?: boolean;
+  notify_on_partial_payment?: boolean;
+  notify_on_payment_reminder?: boolean;
+  notify_on_overdue?: boolean;
+  notify_on_collection_escalation?: boolean;
+  notify_on_loan_restructured?: boolean;
+  notify_on_loan_completion?: boolean;
+  notify_on_statement_available?: boolean;
+  notify_on_promotion?: boolean;
 }
 
 async function getNotificationSettings(supabase: any): Promise<NotificationSettings> {
@@ -77,60 +85,20 @@ async function getNotificationSettings(supabase: any): Promise<NotificationSetti
   return data.value as NotificationSettings;
 }
 
-// ============================================================================
-// SMS PROVIDERS
-// ============================================================================
-
-async function sendSMS_AfricasTalking(
-  to: string,
-  message: string,
-  settings: NotificationSettings
-): Promise<any> {
-  const username = settings.africastalking_username;
-  const apiKey = settings.africastalking_api_key;
-  const senderId = settings.africastalking_sender_id || "PHINDU";
-
-  if (!username || !apiKey) {
-    throw new Error("Africa's Talking credentials not configured");
+// Format Zambian phone numbers
+function formatZambianPhone(phone: string): string {
+  let formatted = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+  if (formatted.startsWith("0")) {
+    formatted = "+260" + formatted.substring(1);
+  } else if (!formatted.startsWith("+")) {
+    formatted = "+260" + formatted;
   }
-
-  // Format phone number for Zambia
-  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (phone.startsWith("0")) {
-    phone = "+260" + phone.substring(1);
-  } else if (!phone.startsWith("+")) {
-    phone = "+260" + phone;
-  }
-
-  const atUrl = username === "sandbox" 
-    ? "https://api.sandbox.africastalking.com/version1/messaging"
-    : "https://api.africastalking.com/version1/messaging";
-
-  const formData = new URLSearchParams();
-  formData.append("username", username);
-  formData.append("to", phone);
-  formData.append("message", message);
-  formData.append("from", senderId);
-
-  const response = await fetch(atUrl, {
-    method: "POST",
-    headers: {
-      "apiKey": apiKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Accept": "application/json"
-    },
-    body: formData.toString()
-  });
-
-  const result = await response.json();
-  console.log("[SMS - AfricasTalking] Response:", JSON.stringify(result));
-
-  if (result.SMSMessageData?.Recipients?.[0]?.status !== "Success") {
-    throw new Error(result.SMSMessageData?.Recipients?.[0]?.statusCode || "Failed to send SMS");
-  }
-
-  return result;
+  return formatted;
 }
+
+// ============================================================================
+// TWILIO SMS
+// ============================================================================
 
 async function sendSMS_Twilio(
   to: string,
@@ -140,24 +108,28 @@ async function sendSMS_Twilio(
   const accountSid = settings.twilio_account_sid;
   const authToken = settings.twilio_auth_token;
   const fromNumber = settings.twilio_phone_number;
+  const messagingServiceSid = settings.twilio_messaging_service_sid;
 
-  if (!accountSid || !authToken || !fromNumber) {
+  if (!accountSid || !authToken) {
     throw new Error("Twilio credentials not configured");
   }
 
-  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (phone.startsWith("0")) {
-    phone = "+260" + phone.substring(1);
-  } else if (!phone.startsWith("+")) {
-    phone = "+260" + phone;
+  if (!fromNumber && !messagingServiceSid) {
+    throw new Error("Twilio phone number or messaging service SID required");
   }
 
+  const phone = formatZambianPhone(to);
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
   formData.append("To", phone);
-  formData.append("From", fromNumber);
   formData.append("Body", message);
+  
+  if (messagingServiceSid) {
+    formData.append("MessagingServiceSid", messagingServiceSid);
+  } else {
+    formData.append("From", fromNumber!);
+  }
 
   const auth = btoa(`${accountSid}:${authToken}`);
   
@@ -173,7 +145,7 @@ async function sendSMS_Twilio(
   const result = await response.json();
   console.log("[SMS - Twilio] Response:", JSON.stringify(result));
 
-  if (result.error_code) {
+  if (result.error_code || result.code) {
     throw new Error(result.message || "Failed to send SMS via Twilio");
   }
 
@@ -181,118 +153,8 @@ async function sendSMS_Twilio(
 }
 
 // ============================================================================
-// WHATSAPP PROVIDERS
+// TWILIO WHATSAPP
 // ============================================================================
-
-/**
- * Fonnte WhatsApp API - Very affordable (~$6/month unlimited)
- * Documentation: https://fonnte.com/api
- */
-async function sendWhatsApp_Fonnte(
-  to: string,
-  message: string,
-  settings: NotificationSettings
-): Promise<any> {
-  const apiToken = settings.fonnte_api_token;
-
-  if (!apiToken) {
-    throw new Error("Fonnte API token not configured");
-  }
-
-  // Format phone number - Fonnte accepts various formats
-  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (phone.startsWith("0")) {
-    phone = "260" + phone.substring(1); // Zambia country code without +
-  } else if (phone.startsWith("+")) {
-    phone = phone.substring(1); // Remove + prefix
-  }
-
-  const response = await fetch("https://api.fonnte.com/send", {
-    method: "POST",
-    headers: {
-      "Authorization": apiToken,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      target: phone,
-      message: message,
-      countryCode: "260", // Zambia
-    })
-  });
-
-  const result = await response.json();
-  console.log("[WhatsApp - Fonnte] Response:", JSON.stringify(result));
-
-  if (!result.status) {
-    throw new Error(result.reason || result.detail || "Failed to send WhatsApp via Fonnte");
-  }
-
-  return result;
-}
-
-async function sendWhatsApp_AfricasTalking(
-  to: string,
-  message: string,
-  settings: NotificationSettings
-): Promise<any> {
-  const username = settings.africastalking_username;
-  const apiKey = settings.africastalking_api_key;
-  const waNumber = settings.africastalking_whatsapp_number;
-
-  if (!username || !apiKey || !waNumber) {
-    throw new Error("Africa's Talking WhatsApp credentials not configured");
-  }
-
-  // Format phone number for Zambia
-  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (phone.startsWith("0")) {
-    phone = "+260" + phone.substring(1);
-  } else if (!phone.startsWith("+")) {
-    phone = "+260" + phone;
-  }
-
-  // Normalize WhatsApp number
-  let fromNumber = waNumber.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (fromNumber.startsWith("0")) {
-    fromNumber = "+260" + fromNumber.substring(1);
-  } else if (!fromNumber.startsWith("+")) {
-    fromNumber = "+260" + fromNumber;
-  }
-
-  const atUrl = username === "sandbox"
-    ? "https://chat.sandbox.africastalking.com/whatsapp/message/send"
-    : "https://chat.africastalking.com/whatsapp/message/send";
-
-  const response = await fetch(atUrl, {
-    method: "POST",
-    headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      "apiKey": apiKey,
-    },
-    body: JSON.stringify({
-      username: username,
-      waNumber: fromNumber,
-      phoneNumber: phone,
-      body: {
-        message: message,
-      },
-    }),
-  });
-
-  const result = await response.json();
-  console.log("[WhatsApp - AfricasTalking] Response:", JSON.stringify(result));
-
-  if (!response.ok) {
-    throw new Error(result?.message || `Africa's Talking error: ${response.status}`);
-  }
-
-  if (!result?.status || result.status === "FAILED") {
-    throw new Error(result?.status || "Failed to send WhatsApp via Africa's Talking");
-  }
-
-  return result;
-}
 
 async function sendWhatsApp_Twilio(
   to: string,
@@ -301,19 +163,18 @@ async function sendWhatsApp_Twilio(
 ): Promise<any> {
   const accountSid = settings.twilio_account_sid;
   const authToken = settings.twilio_auth_token;
-  const whatsappNumber = settings.twilio_whatsapp_number;
+  let whatsappNumber = settings.twilio_whatsapp_number;
 
   if (!accountSid || !authToken || !whatsappNumber) {
     throw new Error("Twilio WhatsApp credentials not configured");
   }
 
-  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (phone.startsWith("0")) {
-    phone = "+260" + phone.substring(1);
-  } else if (!phone.startsWith("+")) {
-    phone = "+260" + phone;
+  // Ensure WhatsApp number has correct format
+  if (!whatsappNumber.startsWith("whatsapp:")) {
+    whatsappNumber = `whatsapp:${whatsappNumber}`;
   }
 
+  const phone = formatZambianPhone(to);
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
@@ -335,7 +196,7 @@ async function sendWhatsApp_Twilio(
   const result = await response.json();
   console.log("[WhatsApp - Twilio] Response:", JSON.stringify(result));
 
-  if (result.error_code) {
+  if (result.error_code || result.code) {
     throw new Error(result.message || "Failed to send WhatsApp message via Twilio");
   }
 
@@ -343,7 +204,7 @@ async function sendWhatsApp_Twilio(
 }
 
 /**
- * Respond.io WhatsApp Business API
+ * Respond.io WhatsApp Business API (Optional fallback)
  * Sends WhatsApp template messages via Respond.io
  * Documentation: https://docs.respond.io/
  */
@@ -363,13 +224,7 @@ async function sendWhatsApp_RespondIO(
     throw new Error("Respond.io credentials not configured (apiKey and channelId required)");
   }
 
-  // Format phone number to E.164 format
-  let phone = to.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (phone.startsWith("0")) {
-    phone = "+260" + phone.substring(1);
-  } else if (!phone.startsWith("+")) {
-    phone = "+260" + phone;
-  }
+  const phone = formatZambianPhone(to);
 
   // If template name is provided, send as template message
   if (templateName) {
@@ -416,60 +271,13 @@ async function sendWhatsApp_RespondIO(
 
     return result;
   } else {
-    // Fallback to plain text message (if Respond.io supports it)
-    // Note: WhatsApp Business API typically requires templates for outbound messages
-    // This is a fallback for cases where template is not provided
     throw new Error("Template name is required for Respond.io WhatsApp messages");
   }
 }
 
 // ============================================================================
-// EMAIL PROVIDERS
+// TWILIO SENDGRID EMAIL
 // ============================================================================
-
-/**
- * Resend Email API - 3,000 free emails/month, very easy to use
- * Documentation: https://resend.com/docs
- */
-async function sendEmail_Resend(
-  to: string,
-  subject: string,
-  message: string,
-  settings: NotificationSettings,
-  htmlContent?: string
-): Promise<any> {
-  const apiKey = settings.resend_api_key;
-  const fromEmail = settings.resend_from_email || "noreply@phindu.com";
-  const fromName = settings.resend_from_name || "Phindu Finance";
-
-  if (!apiKey) {
-    throw new Error("Resend API key not configured");
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: `${fromName} <${fromEmail}>`,
-      to: [to],
-      subject: subject,
-      text: message,
-      html: htmlContent || `<p>${message.replace(/\n/g, '<br>')}</p>`,
-    }),
-  });
-
-  const result = await response.json();
-  console.log("[Email - Resend] Response:", JSON.stringify(result));
-
-  if (!response.ok) {
-    throw new Error(result.message || `Resend error: ${response.status}`);
-  }
-
-  return result;
-}
 
 async function sendEmail_SendGrid(
   to: string,
@@ -479,12 +287,15 @@ async function sendEmail_SendGrid(
   htmlContent?: string
 ): Promise<any> {
   const apiKey = settings.sendgrid_api_key;
-  const fromEmail = settings.sendgrid_from_email;
+  const fromEmail = settings.sendgrid_from_email || "noreply@phindu.com";
   const fromName = settings.sendgrid_from_name || "Phindu Finance";
 
-  if (!apiKey || !fromEmail) {
-    throw new Error("SendGrid credentials not configured");
+  if (!apiKey) {
+    throw new Error("SendGrid API key not configured");
   }
+
+  // Generate HTML if not provided
+  const html = htmlContent || generateEmailHtml(subject, message);
 
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
@@ -506,10 +317,10 @@ async function sendEmail_SendGrid(
           type: "text/plain",
           value: message,
         },
-        ...(htmlContent ? [{
+        {
           type: "text/html",
-          value: htmlContent,
-        }] : []),
+          value: html,
+        },
       ],
     }),
   });
@@ -517,11 +328,61 @@ async function sendEmail_SendGrid(
   if (!response.ok) {
     const error = await response.text();
     console.error("[Email - SendGrid] Error:", error);
-    throw new Error(`SendGrid error: ${response.status}`);
+    throw new Error(`SendGrid error: ${response.status} - ${error}`);
   }
 
   console.log("[Email - SendGrid] Sent successfully");
   return { success: true, messageId: response.headers.get("x-message-id") };
+}
+
+// Generate a nice HTML email template
+function generateEmailHtml(subject: string, message: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #E91E8C 0%, #FF6B9D 100%); padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">PHINDU</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Finance Made Simple</p>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 22px;">${subject}</h2>
+              <div style="color: #555555; font-size: 16px; line-height: 1.6;">
+                ${message.replace(/\n/g, '<br>')}
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8f8f8; padding: 20px 30px; text-align: center; border-top: 1px solid #eeeeee;">
+              <p style="color: #888888; font-size: 12px; margin: 0;">
+                © ${new Date().getFullYear()} Phindu Finance. All rights reserved.
+              </p>
+              <p style="color: #888888; font-size: 12px; margin: 10px 0 0 0;">
+                <a href="mailto:info@phindu.com" style="color: #E91E8C; text-decoration: none;">info@phindu.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 // ============================================================================
@@ -539,7 +400,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const request: NotificationRequest = await req.json();
-    const { type, provider: requestedProvider, to, message, subject, title, userId, htmlContent } = request;
+    const { type, to, message, subject, title, userId, htmlContent, eventType, templateName, templateLanguage, templateComponents } = request;
 
     if (!type || !to || !message) {
       return new Response(
@@ -550,62 +411,44 @@ const handler = async (req: Request): Promise<Response> => {
 
     const settings = await getNotificationSettings(supabase);
     
-    // Determine provider from settings or request
-    let provider = requestedProvider;
-    if (!provider) {
-      if (type === 'sms') {
-        provider = settings.sms_provider || 'africastalking';
-      } else if (type === 'whatsapp') {
-        provider = settings.whatsapp_provider || 'fonnte';
-      } else if (type === 'email') {
-        provider = settings.email_provider || 'resend';
+    // Check if event type is enabled (if provided)
+    if (eventType) {
+      const eventKey = `notify_on_${eventType}` as keyof NotificationSettings;
+      if (settings[eventKey] === false) {
+        console.log(`[Notification] Event type '${eventType}' is disabled`);
+        return new Response(
+          JSON.stringify({ success: false, message: `Notification for ${eventType} is disabled` }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
       }
     }
 
-    console.log(`[Notification] Sending ${type} via ${provider} to ${to}`);
+    // Determine provider - default to Twilio
+    const whatsappProvider = settings.whatsapp_provider || 'twilio';
+    
+    console.log(`[Notification] Sending ${type} to ${to}`);
 
     let result: any;
     let status = "sent";
+    let provider = "twilio";
 
     try {
-      // Route to appropriate provider
       if (type === 'sms') {
         if (!settings.sms_enabled) {
           throw new Error("SMS notifications are disabled");
         }
-        if (provider === 'africastalking') {
-          result = await sendSMS_AfricasTalking(to, message, settings);
-        } else if (provider === 'twilio') {
-          result = await sendSMS_Twilio(to, message, settings);
-        } else {
-          throw new Error(`Unsupported SMS provider: ${provider}`);
-        }
+        result = await sendSMS_Twilio(to, message, settings);
       } else if (type === 'whatsapp') {
         if (!settings.whatsapp_enabled) {
           throw new Error("WhatsApp notifications are disabled");
         }
-        // Extract template parameters from request if provided
-        const templateName = request.templateName;
-        const templateLanguage = request.templateLanguage || 'en';
-        const templateComponents = request.templateComponents;
         
-        if (provider === 'africastalking') {
-          result = await sendWhatsApp_AfricasTalking(to, message, settings);
-        } else if (provider === 'fonnte') {
-          result = await sendWhatsApp_Fonnte(to, message, settings);
-        } else if (provider === 'twilio') {
-          result = await sendWhatsApp_Twilio(to, message, settings);
-        } else if (provider === 'respondio') {
-          result = await sendWhatsApp_RespondIO(
-            to, 
-            message, 
-            settings, 
-            templateName, 
-            templateLanguage, 
-            templateComponents
-          );
+        // Use Twilio by default, Respond.io as fallback if configured
+        if (whatsappProvider === 'respondio' && settings.respondio_api_key) {
+          provider = 'respondio';
+          result = await sendWhatsApp_RespondIO(to, message, settings, templateName, templateLanguage, templateComponents);
         } else {
-          throw new Error(`Unsupported WhatsApp provider: ${provider}`);
+          result = await sendWhatsApp_Twilio(to, message, settings);
         }
       } else if (type === 'email') {
         if (!settings.email_enabled) {
@@ -617,13 +460,8 @@ const handler = async (req: Request): Promise<Response> => {
             { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
           );
         }
-        if (provider === 'resend') {
-          result = await sendEmail_Resend(to, subject, message, settings, htmlContent);
-        } else if (provider === 'sendgrid') {
-          result = await sendEmail_SendGrid(to, subject, message, settings, htmlContent);
-        } else {
-          throw new Error(`Unsupported email provider: ${provider}`);
-        }
+        provider = "sendgrid";
+        result = await sendEmail_SendGrid(to, subject, message, settings, htmlContent);
       } else {
         throw new Error(`Unsupported notification type: ${type}`);
       }
@@ -643,7 +481,7 @@ const handler = async (req: Request): Promise<Response> => {
         message: message,
         status: status,
         sent_at: status === "sent" ? new Date().toISOString() : null,
-        provider_response: { provider, ...result }
+        provider_response: { provider, eventType, ...result }
       });
     } catch (logError) {
       console.error("[Notification] Failed to log:", logError);

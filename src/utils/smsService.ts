@@ -1,4 +1,5 @@
-import { supabase } from "@/integrations/supabase/client";
+// Legacy SMS service - now uses the unified notification service with Twilio
+import { notificationService } from "./notificationService";
 
 export interface SMSParams {
   to: string | string[];
@@ -9,18 +10,32 @@ export interface SMSParams {
 
 export const smsService = {
   async send(params: SMSParams) {
-    console.log("[SMS Service] Sending SMS:", params);
+    console.log("[SMS Service] Sending SMS via Twilio:", params);
     
-    const { data, error } = await supabase.functions.invoke("send-sms", {
-      body: params
-    });
-
-    if (error) {
-      console.error("[SMS Service] Error:", error);
-      return { success: false, error };
+    // Handle array of recipients
+    if (Array.isArray(params.to)) {
+      const results = await Promise.all(
+        params.to.map(recipient =>
+          notificationService.send({
+            type: 'sms',
+            to: recipient,
+            message: params.message,
+            userId: params.userId,
+            title: params.title,
+          })
+        )
+      );
+      return { success: results.every(r => r.success), results };
     }
 
-    return { success: true, data };
+    // Single recipient
+    return notificationService.send({
+      type: 'sms',
+      to: params.to,
+      message: params.message,
+      userId: params.userId,
+      title: params.title,
+    });
   },
 
   async sendPaymentReminder(
@@ -30,12 +45,13 @@ export const smsService = {
     dueDate: string,
     userId?: string
   ) {
-    return this.send({
-      to: phone,
-      message: `Dear ${borrowerName}, this is a reminder that your loan repayment of K${amount.toLocaleString()} is due on ${dueDate}. Please ensure timely payment to avoid penalties. - Phindu Finance`,
-      userId,
-      title: "Payment Reminder"
-    });
+    return notificationService.sendPaymentReminder(
+      userId || '',
+      borrowerName,
+      amount,
+      dueDate,
+      phone
+    );
   },
 
   async sendOverdueNotice(
@@ -45,12 +61,13 @@ export const smsService = {
     daysOverdue: number,
     userId?: string
   ) {
-    return this.send({
-      to: phone,
-      message: `Dear ${borrowerName}, your payment of K${amount.toLocaleString()} is ${daysOverdue} day(s) overdue. Please make payment immediately to avoid additional penalties. Contact us if you need assistance. - Phindu Finance`,
-      userId,
-      title: "Overdue Notice"
-    });
+    return notificationService.sendOverdueNotice(
+      userId || '',
+      borrowerName,
+      amount,
+      daysOverdue,
+      phone
+    );
   },
 
   async sendLoanApproval(
@@ -59,12 +76,12 @@ export const smsService = {
     amount: number,
     userId?: string
   ) {
-    return this.send({
-      to: phone,
-      message: `Congratulations ${borrowerName}! Your loan application for K${amount.toLocaleString()} has been APPROVED. Funds will be disbursed shortly. Thank you for choosing Phindu Finance.`,
-      userId,
-      title: "Loan Approved"
-    });
+    return notificationService.sendLoanApproval(
+      userId || '',
+      borrowerName,
+      amount,
+      phone
+    );
   },
 
   async sendLoanRejection(
@@ -73,13 +90,13 @@ export const smsService = {
     reason?: string,
     userId?: string
   ) {
-    const reasonText = reason ? ` Reason: ${reason}` : "";
-    return this.send({
-      to: phone,
-      message: `Dear ${borrowerName}, we regret to inform you that your loan application was not approved at this time.${reasonText} Please contact us for more information. - Phindu Finance`,
-      userId,
-      title: "Loan Application Update"
-    });
+    return notificationService.sendLoanRejection(
+      userId || '',
+      borrowerName,
+      phone,
+      undefined, // email
+      reason
+    );
   },
 
   async sendDisbursementConfirmation(
@@ -89,12 +106,13 @@ export const smsService = {
     reference: string,
     userId?: string
   ) {
-    return this.send({
-      to: phone,
-      message: `Dear ${borrowerName}, K${amount.toLocaleString()} has been disbursed to your account. Ref: ${reference}. Your first repayment will be due in 30 days. - Phindu Finance`,
-      userId,
-      title: "Disbursement Confirmation"
-    });
+    return notificationService.sendDisbursementConfirmation(
+      userId || '',
+      borrowerName,
+      amount,
+      reference,
+      phone
+    );
   },
 
   async sendPaymentConfirmation(
@@ -104,12 +122,13 @@ export const smsService = {
     remainingBalance: number,
     userId?: string
   ) {
-    return this.send({
-      to: phone,
-      message: `Dear ${borrowerName}, we have received your payment of K${amount.toLocaleString()}. Remaining balance: K${remainingBalance.toLocaleString()}. Thank you! - Phindu Finance`,
-      userId,
-      title: "Payment Received"
-    });
+    return notificationService.sendPaymentConfirmation(
+      userId || '',
+      borrowerName,
+      amount,
+      remainingBalance,
+      phone
+    );
   },
 
   async sendLoanCompletion(
@@ -117,12 +136,11 @@ export const smsService = {
     borrowerName: string,
     userId?: string
   ) {
-    return this.send({
-      to: phone,
-      message: `Congratulations ${borrowerName}! You have successfully completed all loan repayments. Your account is now clear. Thank you for banking with Phindu Finance. You're welcome to apply for a new loan anytime!`,
-      userId,
-      title: "Loan Completed"
-    });
+    return notificationService.sendLoanCompletion(
+      userId || '',
+      borrowerName,
+      phone
+    );
   },
 
   async sendCollectionReminder(
@@ -132,16 +150,12 @@ export const smsService = {
     escalationLevel: number,
     userId?: string
   ) {
-    const urgency = escalationLevel >= 3 ? "URGENT: " : "";
-    const action = escalationLevel >= 3 
-      ? "Failure to respond may result in legal action." 
-      : "Please contact us immediately to discuss payment arrangements.";
-    
-    return this.send({
-      to: phone,
-      message: `${urgency}Dear ${borrowerName}, your account has an outstanding balance of K${amount.toLocaleString()}. ${action} - Phindu Finance Collections`,
-      userId,
-      title: `Collection Notice - Level ${escalationLevel}`
-    });
+    return notificationService.sendCollectionEscalation(
+      userId || '',
+      borrowerName,
+      amount,
+      escalationLevel,
+      phone
+    );
   }
 };
