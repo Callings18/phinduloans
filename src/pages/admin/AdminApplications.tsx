@@ -772,9 +772,10 @@ const AdminApplications = () => {
             await notificationService.send({
               userId: app.user_id,
               type: 'email',
+              to: app.email,
+              subject: 'Update on Your Loan Application',
               title: 'Update on Your Loan Application',
               message: inputValue || 'Your loan application status has been updated.',
-              recipient: app.email
             });
           }
         }
@@ -789,9 +790,9 @@ const AdminApplications = () => {
             await notificationService.send({
               userId: app.user_id,
               type: 'sms',
+              to: app.phone,
               title: 'Loan Application Update',
               message: inputValue || 'Your loan application status has been updated.',
-              recipient: app.phone
             });
           }
         }

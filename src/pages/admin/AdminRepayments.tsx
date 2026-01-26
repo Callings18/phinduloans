@@ -456,9 +456,9 @@ const AdminRepayments = () => {
             await notificationService.send({
               userId: rep.user_id,
               type: 'sms',
+              to: rep.loan_applications.phone,
               title: 'Payment Reminder',
               message: inputValue || `Dear ${rep.loan_applications.full_name}, your payment of K${Number(rep.amount).toLocaleString()} is due on ${format(new Date(rep.due_date), 'MMM dd, yyyy')}. Please make your payment to avoid penalties.`,
-              recipient: rep.loan_applications.phone
             });
           }
         }
