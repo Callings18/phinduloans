@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, createContext, useContext } from "react";
+import * as React from "react";
 
 type Theme = "dark" | "light" | "system";
 
@@ -8,7 +8,7 @@ interface ThemeContextType {
   resolvedTheme: "dark" | "light";
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
 function getSystemTheme(): "dark" | "light" {
   if (typeof window !== "undefined") {
@@ -18,16 +18,16 @@ function getSystemTheme(): "dark" | "light" {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
+  const [theme, setThemeState] = React.useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("phindu-theme") as Theme | null;
       return stored || "dark";
     }
     return "dark";
   });
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+  const [resolvedTheme, setResolvedTheme] = React.useState<"dark" | "light">("dark");
 
-  useEffect(() => {
+  React.useEffect(() => {
     const root = document.documentElement;
     const resolved = theme === "system" ? getSystemTheme() : theme;
     
@@ -37,7 +37,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("phindu-theme", theme);
   }, [theme]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -56,7 +56,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(newTheme);
   };
 
-  const value = useMemo(
+  const value = React.useMemo(
     () => ({ theme, setTheme, resolvedTheme }),
     [theme, resolvedTheme]
   );
@@ -69,7 +69,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
+  const context = React.useContext(ThemeContext);
   if (context === undefined) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
