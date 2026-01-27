@@ -1,3 +1,4 @@
+// Main v2 - cache bust
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/outfit/300.css";
