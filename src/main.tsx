@@ -8,7 +8,6 @@ import "@fontsource/outfit/700.css";
 import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "./index.css";
-import ErrorBoundary from "./components/common/ErrorBoundary.tsx";
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -26,8 +25,6 @@ if ('serviceWorker' in navigator) {
 const root = createRoot(document.getElementById("root")!);
 root.render(
   <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <App />
   </StrictMode>
 );
