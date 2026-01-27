@@ -123,6 +123,10 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
     window.location.href = '/';
   };
 
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="max-w-2xl w-full border-destructive/50">
@@ -160,7 +164,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="default"
-              onClick={onReset}
+              onClick={handleRefresh}
               className="flex-1"
             >
               <RefreshCw size={16} className="mr-2" />
