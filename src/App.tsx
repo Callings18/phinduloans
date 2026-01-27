@@ -1,13 +1,12 @@
-// App v2 - cache bust
+// Minimal App - v3 cache bust
 import * as React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import { AuthProvider } from "@/hooks/useAuth";
-import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 import Index from "./pages/Index";
 import About from "./pages/About";
@@ -42,7 +41,7 @@ import AdminWallets from "./pages/admin/AdminWallets";
 import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
 
-// Inline Theme Context to avoid module resolution issues
+// Inline Theme - no external module
 type Theme = "dark" | "light" | "system";
 
 interface ThemeContextType {
@@ -51,7 +50,15 @@ interface ThemeContextType {
   resolvedTheme: "dark" | "light";
 }
 
-const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = React.createContext<ThemeContextType>({
+  theme: "dark",
+  setTheme: () => {},
+  resolvedTheme: "dark",
+});
+
+export function useTheme() {
+  return React.useContext(ThemeContext);
+}
 
 function getSystemTheme(): "dark" | "light" {
   if (typeof window !== "undefined") {
@@ -68,8 +75,10 @@ function getStoredTheme(): Theme {
   return "dark";
 }
 
-function InlineThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<Theme>(getStoredTheme);
+const queryClient = new QueryClient();
+
+function App() {
+  const [theme, setTheme] = React.useState<Theme>(() => getStoredTheme());
   const [resolvedTheme, setResolvedTheme] = React.useState<"dark" | "light">("dark");
 
   React.useEffect(() => {
@@ -97,81 +106,61 @@ function InlineThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mediaQuery.removeEventListener("change", handler);
   }, [theme]);
 
-  const value = React.useMemo(
-    () => ({ theme, setTheme: setThemeState, resolvedTheme }),
+  const themeValue = React.useMemo(
+    () => ({ theme, setTheme, resolvedTheme }),
     [theme, resolvedTheme]
   );
 
   return (
-    <ThemeContext.Provider value={value}>
-      {children}
+    <ThemeContext.Provider value={themeValue}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <PWAInstallPrompt />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/apply" element={<Apply />} />
+                <Route path="/calculator" element={<Calculator />} />
+                <Route path="/pre-qualify" element={<PreQualification />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/about-us" element={<About />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/applications" element={<AdminApplications />} />
+                <Route path="/admin/borrowers" element={<AdminBorrowers />} />
+                <Route path="/admin/settings" element={<AdminSettings />} />
+                <Route path="/admin/employers" element={<AdminEmployers />} />
+                <Route path="/admin/disbursements" element={<AdminDisbursements />} />
+                <Route path="/admin/reports" element={<AdminReports />} />
+                <Route path="/admin/loan-products" element={<AdminLoanProducts />} />
+                <Route path="/admin/loans" element={<AdminLoans />} />
+                <Route path="/admin/repayments" element={<AdminRepayments />} />
+                <Route path="/admin/collections" element={<AdminCollections />} />
+                <Route path="/admin/staff" element={<AdminStaff />} />
+                <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+                <Route path="/admin/write-offs" element={<AdminWriteOffs />} />
+                <Route path="/admin/bulk-repayments" element={<AdminBulkRepayments />} />
+                <Route path="/admin/contract-templates" element={<AdminContractTemplates />} />
+                <Route path="/admin/pmic" element={<AdminPMIC />} />
+                <Route path="/admin/accounts" element={<AdminAccounts />} />
+                <Route path="/admin/expenses" element={<AdminExpenses />} />
+                <Route path="/admin/court-cases" element={<AdminCourtCases />} />
+                <Route path="/admin/wallets" element={<AdminWallets />} />
+                <Route path="/admin/hr" element={<AdminHR />} />
+                <Route path="/admin/payroll" element={<AdminPayroll />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </ThemeContext.Provider>
-  );
-}
-
-export function useTheme() {
-  const context = React.useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider");
-  }
-  return context;
-}
-
-const queryClient = new QueryClient();
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <InlineThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <PWAInstallPrompt />
-              <BrowserRouter>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/apply" element={<Apply />} />
-                  <Route path="/calculator" element={<Calculator />} />
-                  <Route path="/pre-qualify" element={<PreQualification />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/about-us" element={<About />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/login" element={<Auth />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/admin" element={<AdminDashboard />} />
-                  <Route path="/admin/applications" element={<AdminApplications />} />
-                  <Route path="/admin/borrowers" element={<AdminBorrowers />} />
-                  <Route path="/admin/settings" element={<AdminSettings />} />
-                  <Route path="/admin/employers" element={<AdminEmployers />} />
-                  <Route path="/admin/disbursements" element={<AdminDisbursements />} />
-                  <Route path="/admin/reports" element={<AdminReports />} />
-                  <Route path="/admin/loan-products" element={<AdminLoanProducts />} />
-                  <Route path="/admin/loans" element={<AdminLoans />} />
-                  <Route path="/admin/repayments" element={<AdminRepayments />} />
-                  <Route path="/admin/collections" element={<AdminCollections />} />
-                  <Route path="/admin/staff" element={<AdminStaff />} />
-                  <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
-                  <Route path="/admin/write-offs" element={<AdminWriteOffs />} />
-                  <Route path="/admin/bulk-repayments" element={<AdminBulkRepayments />} />
-                  <Route path="/admin/contract-templates" element={<AdminContractTemplates />} />
-                  <Route path="/admin/pmic" element={<AdminPMIC />} />
-                  <Route path="/admin/accounts" element={<AdminAccounts />} />
-                  <Route path="/admin/expenses" element={<AdminExpenses />} />
-                  <Route path="/admin/court-cases" element={<AdminCourtCases />} />
-                  <Route path="/admin/wallets" element={<AdminWallets />} />
-                  <Route path="/admin/hr" element={<AdminHR />} />
-                  <Route path="/admin/payroll" element={<AdminPayroll />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
-            </TooltipProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </InlineThemeProvider>
-    </ErrorBoundary>
   );
 }
 
