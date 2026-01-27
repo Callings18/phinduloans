@@ -31,18 +31,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface NotificationProviderSettings {
-  // Twilio Settings (unified provider)
-  twilio_account_sid: string;
-  twilio_auth_token: string;
-  twilio_phone_number: string;
-  twilio_whatsapp_number: string;
-  twilio_messaging_service_sid: string;
-  
-  // SendGrid (Twilio Email)
-  sendgrid_api_key: string;
-  sendgrid_from_email: string;
-  sendgrid_from_name: string;
-  
   // Channel enablement
   sms_enabled: boolean;
   whatsapp_enabled: boolean;
@@ -77,22 +65,10 @@ interface NotificationProviderSettings {
 }
 
 const defaultSettings: NotificationProviderSettings = {
-  // Twilio
-  twilio_account_sid: "",
-  twilio_auth_token: "",
-  twilio_phone_number: "",
-  twilio_whatsapp_number: "",
-  twilio_messaging_service_sid: "",
-  
-  // SendGrid
-  sendgrid_api_key: "",
-  sendgrid_from_email: "",
-  sendgrid_from_name: "Phindu Finance",
-  
   // Channels
-  sms_enabled: false,
-  whatsapp_enabled: false,
-  email_enabled: false,
+  sms_enabled: true,
+  whatsapp_enabled: true,
+  email_enabled: true,
   
   // Events - Account & Application
   notify_on_signup: true,
@@ -287,17 +263,6 @@ export const NotificationProvidersSettings = () => {
     }
   };
 
-  const getChannelStatus = () => {
-    const configured = settings.twilio_account_sid && settings.twilio_auth_token;
-    return {
-      sms: configured && settings.twilio_phone_number,
-      whatsapp: configured && settings.twilio_whatsapp_number,
-      email: settings.sendgrid_api_key && settings.sendgrid_from_email,
-    };
-  };
-
-  const channelStatus = getChannelStatus();
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -313,36 +278,32 @@ export const NotificationProvidersSettings = () => {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
-            Twilio Notification System
+            Twilio Unified Notification System
           </CardTitle>
           <CardDescription>
-            All notifications (SMS, WhatsApp, Email) are powered by Twilio for reliability and global reach
+            All notifications (SMS, WhatsApp, Email) are powered by Twilio. Credentials are securely stored as environment secrets.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Badge variant={channelStatus.sms ? "default" : "secondary"} className="gap-1">
+            <Badge variant={settings.sms_enabled ? "default" : "secondary"} className="gap-1">
               <Phone className="h-3 w-3" />
-              SMS {channelStatus.sms ? "Ready" : "Not Configured"}
+              SMS {settings.sms_enabled ? "Enabled" : "Disabled"}
             </Badge>
-            <Badge variant={channelStatus.whatsapp ? "default" : "secondary"} className="gap-1">
+            <Badge variant={settings.whatsapp_enabled ? "default" : "secondary"} className="gap-1">
               <MessageSquare className="h-3 w-3" />
-              WhatsApp {channelStatus.whatsapp ? "Ready" : "Not Configured"}
+              WhatsApp {settings.whatsapp_enabled ? "Enabled" : "Disabled"}
             </Badge>
-            <Badge variant={channelStatus.email ? "default" : "secondary"} className="gap-1">
+            <Badge variant={settings.email_enabled ? "default" : "secondary"} className="gap-1">
               <Mail className="h-3 w-3" />
-              Email {channelStatus.email ? "Ready" : "Not Configured"}
+              Email {settings.email_enabled ? "Enabled" : "Disabled"}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="twilio" className="w-full">
+      <Tabs defaultValue="channels" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="twilio">
-            <Settings2 className="h-4 w-4 mr-2" />
-            Twilio Config
-          </TabsTrigger>
           <TabsTrigger value="channels">
             <Zap className="h-4 w-4 mr-2" />
             Channels
@@ -351,321 +312,216 @@ export const NotificationProvidersSettings = () => {
             <Bell className="h-4 w-4 mr-2" />
             Event Triggers
           </TabsTrigger>
+          <TabsTrigger value="test">
+            <Send className="h-4 w-4 mr-2" />
+            Test
+          </TabsTrigger>
         </TabsList>
 
-        {/* Twilio Configuration */}
-        <TabsContent value="twilio">
-          <div className="space-y-6">
-            {/* Twilio Core Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  Twilio SMS & WhatsApp
-                </CardTitle>
-                <CardDescription>
-                  Configure your Twilio account for SMS and WhatsApp messaging
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Account SID</Label>
-                    <Input
-                      type="text"
-                      placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      value={settings.twilio_account_sid}
-                      onChange={(e) => setSettings({ ...settings, twilio_account_sid: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Found in your Twilio Console dashboard</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Auth Token</Label>
-                    <Input
-                      type="password"
-                      placeholder="Your auth token"
-                      value={settings.twilio_auth_token}
-                      onChange={(e) => setSettings({ ...settings, twilio_auth_token: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Keep this secret - never share publicly</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>SMS Phone Number</Label>
-                    <Input
-                      type="text"
-                      placeholder="+1234567890"
-                      value={settings.twilio_phone_number}
-                      onChange={(e) => setSettings({ ...settings, twilio_phone_number: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Your Twilio phone number for SMS</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WhatsApp Number</Label>
-                    <Input
-                      type="text"
-                      placeholder="whatsapp:+14155238886"
-                      value={settings.twilio_whatsapp_number}
-                      onChange={(e) => setSettings({ ...settings, twilio_whatsapp_number: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Include "whatsapp:" prefix</p>
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Messaging Service SID (Optional)</Label>
-                    <Input
-                      type="text"
-                      placeholder="MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      value={settings.twilio_messaging_service_sid}
-                      onChange={(e) => setSettings({ ...settings, twilio_messaging_service_sid: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Use if you have a Twilio Messaging Service configured</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* SendGrid Email Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5" />
-                  Twilio SendGrid Email
-                </CardTitle>
-                <CardDescription>
-                  Configure SendGrid (Twilio's email service) for email notifications
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>SendGrid API Key</Label>
-                    <Input
-                      type="password"
-                      placeholder="SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      value={settings.sendgrid_api_key}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_api_key: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Create at sendgrid.com → Settings → API Keys</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>From Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="noreply@phindu.com"
-                      value={settings.sendgrid_from_email}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_from_email: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Must be verified in SendGrid</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>From Name</Label>
-                    <Input
-                      type="text"
-                      placeholder="Phindu Finance"
-                      value={settings.sendgrid_from_name}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_from_name: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Channel Enablement & Testing */}
+        {/* Channel Configuration */}
         <TabsContent value="channels">
           <Card>
             <CardHeader>
-              <CardTitle>Enable & Test Channels</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Settings2 className="h-5 w-5" />
+                Channel Settings
+              </CardTitle>
               <CardDescription>
-                Enable notification channels and test they're working correctly
+                Enable or disable notification channels. Twilio credentials are configured as secure environment secrets.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Test Recipients */}
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Test Phone Number</Label>
-                  <Input
-                    type="tel"
-                    placeholder="+260977123456"
-                    value={testPhone}
-                    onChange={(e) => setTestPhone(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Test Email Address</Label>
-                  <Input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* SMS Channel */}
+              {/* SMS */}
               <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${settings.sms_enabled ? 'bg-primary/10' : 'bg-muted'}`}>
-                    <Phone className={`h-5 w-5 ${settings.sms_enabled ? 'text-primary' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div>
-                    <Label className="font-medium">SMS Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Send text messages via Twilio</p>
-                  </div>
-                </div>
                 <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => testChannel('sms')}
-                    disabled={!settings.sms_enabled || testingChannel === 'sms' || !channelStatus.sms}
-                  >
-                    {testingChannel === 'sms' && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Test
-                  </Button>
-                  <Switch
-                    checked={settings.sms_enabled}
-                    onCheckedChange={(checked) => setSettings({ ...settings, sms_enabled: checked })}
-                    disabled={!channelStatus.sms}
-                  />
-                </div>
-              </div>
-
-              {/* WhatsApp Channel */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${settings.whatsapp_enabled ? 'bg-green-500/10' : 'bg-muted'}`}>
-                    <MessageSquare className={`h-5 w-5 ${settings.whatsapp_enabled ? 'text-green-500' : 'text-muted-foreground'}`} />
+                  <div className="p-2 rounded-full bg-primary/10">
+                    <Phone className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <Label className="font-medium">WhatsApp Notifications</Label>
+                    <h4 className="font-medium">SMS Notifications</h4>
+                    <p className="text-sm text-muted-foreground">Send SMS via Twilio</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={settings.sms_enabled}
+                  onCheckedChange={(checked) => setSettings({ ...settings, sms_enabled: checked })}
+                />
+              </div>
+
+              {/* WhatsApp */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-green-500/10">
+                    <MessageSquare className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium">WhatsApp Notifications</h4>
                     <p className="text-sm text-muted-foreground">Send WhatsApp messages via Twilio</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => testChannel('whatsapp')}
-                    disabled={!settings.whatsapp_enabled || testingChannel === 'whatsapp' || !channelStatus.whatsapp}
-                  >
-                    {testingChannel === 'whatsapp' && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Test
-                  </Button>
-                  <Switch
-                    checked={settings.whatsapp_enabled}
-                    onCheckedChange={(checked) => setSettings({ ...settings, whatsapp_enabled: checked })}
-                    disabled={!channelStatus.whatsapp}
-                  />
-                </div>
+                <Switch
+                  checked={settings.whatsapp_enabled}
+                  onCheckedChange={(checked) => setSettings({ ...settings, whatsapp_enabled: checked })}
+                />
               </div>
 
-              {/* Email Channel */}
+              {/* Email */}
               <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${settings.email_enabled ? 'bg-blue-500/10' : 'bg-muted'}`}>
-                    <Mail className={`h-5 w-5 ${settings.email_enabled ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-blue-500/10">
+                    <Mail className="h-5 w-5 text-blue-500" />
                   </div>
                   <div>
-                    <Label className="font-medium">Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Send emails via Twilio SendGrid</p>
+                    <h4 className="font-medium">Email Notifications</h4>
+                    <p className="text-sm text-muted-foreground">Send emails via SendGrid (Twilio)</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => testChannel('email')}
-                    disabled={!settings.email_enabled || testingChannel === 'email' || !channelStatus.email}
-                  >
-                    {testingChannel === 'email' && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Test
-                  </Button>
-                  <Switch
-                    checked={settings.email_enabled}
-                    onCheckedChange={(checked) => setSettings({ ...settings, email_enabled: checked })}
-                    disabled={!channelStatus.email}
-                  />
-                </div>
+                <Switch
+                  checked={settings.email_enabled}
+                  onCheckedChange={(checked) => setSettings({ ...settings, email_enabled: checked })}
+                />
               </div>
 
-              {(!channelStatus.sms || !channelStatus.whatsapp || !channelStatus.email) && (
-                <div className="flex items-start gap-2 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
-                  <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                  <div className="text-sm text-yellow-700 dark:text-yellow-400">
-                    <p className="font-medium">Some channels need configuration</p>
-                    <p>Go to "Twilio Config" tab to set up missing credentials.</p>
-                  </div>
-                </div>
-              )}
+              <Separator />
+              
+              <div className="p-4 rounded-lg bg-muted/50">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Secure Credentials
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Twilio Account SID, Auth Token, phone numbers, and SendGrid API key are stored as secure environment secrets. 
+                  Contact your administrator to update these credentials.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Event Triggers */}
         <TabsContent value="events">
-          <div className="space-y-6">
+          <div className="space-y-4">
             {eventGroups.map((group) => (
               <Card key={group.title}>
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <group.icon className="h-5 w-5 text-primary" />
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <group.icon className="h-4 w-4" />
                     {group.title}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {group.events.map((event) => (
-                    <div key={event.key} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <event.icon className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <Label className="font-medium cursor-pointer">{event.label}</Label>
-                          <p className="text-xs text-muted-foreground">{event.description}</p>
+                <CardContent>
+                  <div className="space-y-3">
+                    {group.events.map((event) => (
+                      <div key={event.key} className="flex items-center justify-between p-3 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <event.icon className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">{event.label}</p>
+                            <p className="text-xs text-muted-foreground">{event.description}</p>
+                          </div>
                         </div>
+                        <Switch
+                          checked={settings[event.key as keyof NotificationProviderSettings] as boolean}
+                          onCheckedChange={(checked) => 
+                            setSettings({ ...settings, [event.key]: checked })
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={settings[event.key as keyof NotificationProviderSettings] as boolean}
-                        onCheckedChange={(checked) => setSettings({ ...settings, [event.key]: checked })}
-                      />
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         </TabsContent>
+
+        {/* Test Notifications */}
+        <TabsContent value="test">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Send className="h-5 w-5" />
+                Test Notifications
+              </CardTitle>
+              <CardDescription>
+                Send a test notification to verify your Twilio configuration is working
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Test Phone */}
+              <div className="space-y-3">
+                <Label>Test Phone Number</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="+260977123456"
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => testChannel('sms')}
+                    disabled={testingChannel === 'sms' || !settings.sms_enabled}
+                  >
+                    {testingChannel === 'sms' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Phone className="h-4 w-4" />
+                    )}
+                    <span className="ml-2">SMS</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => testChannel('whatsapp')}
+                    disabled={testingChannel === 'whatsapp' || !settings.whatsapp_enabled}
+                  >
+                    {testingChannel === 'whatsapp' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MessageSquare className="h-4 w-4" />
+                    )}
+                    <span className="ml-2">WhatsApp</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Test Email */}
+              <div className="space-y-3">
+                <Label>Test Email Address</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="test@example.com"
+                    value={testEmail}
+                    onChange={(e) => setTestEmail(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => testChannel('email')}
+                    disabled={testingChannel === 'email' || !settings.email_enabled}
+                  >
+                    {testingChannel === 'email' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Mail className="h-4 w-4" />
+                    )}
+                    <span className="ml-2">Email</span>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Save Button */}
-      <div className="flex justify-end gap-2 pt-4 border-t">
-        <Button variant="outline" onClick={() => setSettings(savedSettings || defaultSettings)}>
-          Reset Changes
-        </Button>
+      <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saveSettings.isPending}>
-          {saveSettings.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          Save Notification Settings
+          {saveSettings.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Settings
         </Button>
       </div>
-
-      {/* Setup Instructions */}
-      <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-lg text-blue-700 dark:text-blue-400">
-            <AlertCircle className="h-5 w-5" />
-            Twilio Setup Guide
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-700 dark:text-blue-400 space-y-2">
-          <p><strong>1. Create Twilio Account:</strong> Sign up at <a href="https://www.twilio.com" target="_blank" rel="noopener" className="underline">twilio.com</a></p>
-          <p><strong>2. Get Credentials:</strong> Find Account SID and Auth Token in your Twilio Console dashboard</p>
-          <p><strong>3. SMS:</strong> Buy a phone number from Twilio Console → Phone Numbers → Buy a Number</p>
-          <p><strong>4. WhatsApp:</strong> Set up WhatsApp sandbox or apply for WhatsApp Business API in Twilio Console</p>
-          <p><strong>5. Email:</strong> Create a SendGrid account (owned by Twilio) at <a href="https://sendgrid.com" target="_blank" rel="noopener" className="underline">sendgrid.com</a>, verify sender, and create API key</p>
-        </CardContent>
-      </Card>
     </div>
   );
 };

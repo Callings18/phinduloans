@@ -8,7 +8,6 @@ const corsHeaders = {
 
 interface NotificationRequest {
   type: 'sms' | 'email' | 'whatsapp';
-  provider?: string;
   to: string;
   message: string;
   subject?: string;
@@ -16,39 +15,13 @@ interface NotificationRequest {
   userId?: string;
   htmlContent?: string;
   eventType?: string;
-  // Respond.io template parameters (optional fallback)
-  templateName?: string;
-  templateLanguage?: string;
-  templateComponents?: any[];
 }
 
 interface NotificationSettings {
-  // Twilio Settings (unified for SMS, WhatsApp, Email)
-  twilio_account_sid?: string;
-  twilio_auth_token?: string;
-  twilio_phone_number?: string;
-  twilio_whatsapp_number?: string;
-  twilio_messaging_service_sid?: string;
-  
-  // SendGrid (Twilio Email)
-  sendgrid_api_key?: string;
-  sendgrid_from_email?: string;
-  sendgrid_from_name?: string;
-  
-  // Respond.io (optional fallback for WhatsApp)
-  respondio_api_key?: string;
-  respondio_base_url?: string;
-  respondio_whatsapp_channel_id?: string;
-  
-  // Channel enablement
+  // Channel enablement (from system_settings)
   sms_enabled?: boolean;
   whatsapp_enabled?: boolean;
   email_enabled?: boolean;
-  
-  // Provider selection (for flexibility)
-  sms_provider?: string;
-  whatsapp_provider?: string;
-  email_provider?: string;
   
   // Notification Event Triggers
   notify_on_signup?: boolean;
@@ -68,6 +41,20 @@ interface NotificationSettings {
   notify_on_loan_completion?: boolean;
   notify_on_statement_available?: boolean;
   notify_on_promotion?: boolean;
+  notify_on_court_case?: boolean;
+  notify_on_contract_sent?: boolean;
+}
+
+// Get Twilio credentials from environment
+function getTwilioCredentials() {
+  return {
+    accountSid: Deno.env.get("TWILIO_ACCOUNT_SID"),
+    authToken: Deno.env.get("TWILIO_AUTH_TOKEN"),
+    phoneNumber: Deno.env.get("TWILIO_PHONE_NUMBER"),
+    whatsappNumber: Deno.env.get("TWILIO_WHATSAPP_NUMBER"),
+    sendgridApiKey: Deno.env.get("SENDGRID_API_KEY"),
+    sendgridFromEmail: Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com",
+  };
 }
 
 async function getNotificationSettings(supabase: any): Promise<NotificationSettings> {
@@ -100,38 +87,26 @@ function formatZambianPhone(phone: string): string {
 // TWILIO SMS
 // ============================================================================
 
-async function sendSMS_Twilio(
-  to: string,
-  message: string,
-  settings: NotificationSettings
-): Promise<any> {
-  const accountSid = settings.twilio_account_sid;
-  const authToken = settings.twilio_auth_token;
-  const fromNumber = settings.twilio_phone_number;
-  const messagingServiceSid = settings.twilio_messaging_service_sid;
-
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio credentials not configured");
+async function sendSMS_Twilio(to: string, message: string): Promise<any> {
+  const creds = getTwilioCredentials();
+  
+  if (!creds.accountSid || !creds.authToken) {
+    throw new Error("Twilio credentials not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)");
   }
 
-  if (!fromNumber && !messagingServiceSid) {
-    throw new Error("Twilio phone number or messaging service SID required");
+  if (!creds.phoneNumber) {
+    throw new Error("Twilio phone number not configured (TWILIO_PHONE_NUMBER)");
   }
 
   const phone = formatZambianPhone(to);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
   formData.append("To", phone);
+  formData.append("From", creds.phoneNumber);
   formData.append("Body", message);
-  
-  if (messagingServiceSid) {
-    formData.append("MessagingServiceSid", messagingServiceSid);
-  } else {
-    formData.append("From", fromNumber!);
-  }
 
-  const auth = btoa(`${accountSid}:${authToken}`);
+  const auth = btoa(`${creds.accountSid}:${creds.authToken}`);
   
   const response = await fetch(url, {
     method: "POST",
@@ -156,33 +131,32 @@ async function sendSMS_Twilio(
 // TWILIO WHATSAPP
 // ============================================================================
 
-async function sendWhatsApp_Twilio(
-  to: string,
-  message: string,
-  settings: NotificationSettings
-): Promise<any> {
-  const accountSid = settings.twilio_account_sid;
-  const authToken = settings.twilio_auth_token;
-  let whatsappNumber = settings.twilio_whatsapp_number;
+async function sendWhatsApp_Twilio(to: string, message: string): Promise<any> {
+  const creds = getTwilioCredentials();
 
-  if (!accountSid || !authToken || !whatsappNumber) {
-    throw new Error("Twilio WhatsApp credentials not configured");
+  if (!creds.accountSid || !creds.authToken) {
+    throw new Error("Twilio credentials not configured");
+  }
+
+  if (!creds.whatsappNumber) {
+    throw new Error("Twilio WhatsApp number not configured (TWILIO_WHATSAPP_NUMBER)");
   }
 
   // Ensure WhatsApp number has correct format
-  if (!whatsappNumber.startsWith("whatsapp:")) {
-    whatsappNumber = `whatsapp:${whatsappNumber}`;
+  let whatsappFrom = creds.whatsappNumber;
+  if (!whatsappFrom.startsWith("whatsapp:")) {
+    whatsappFrom = `whatsapp:${whatsappFrom}`;
   }
 
   const phone = formatZambianPhone(to);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
   formData.append("To", `whatsapp:${phone}`);
-  formData.append("From", whatsappNumber);
+  formData.append("From", whatsappFrom);
   formData.append("Body", message);
 
-  const auth = btoa(`${accountSid}:${authToken}`);
+  const auth = btoa(`${creds.accountSid}:${creds.authToken}`);
   
   const response = await fetch(url, {
     method: "POST",
@@ -203,78 +177,6 @@ async function sendWhatsApp_Twilio(
   return result;
 }
 
-/**
- * Respond.io WhatsApp Business API (Optional fallback)
- * Sends WhatsApp template messages via Respond.io
- * Documentation: https://docs.respond.io/
- */
-async function sendWhatsApp_RespondIO(
-  to: string,
-  message: string,
-  settings: NotificationSettings,
-  templateName?: string,
-  templateLanguage?: string,
-  templateComponents?: any[]
-): Promise<any> {
-  const apiKey = settings.respondio_api_key;
-  const baseUrl = settings.respondio_base_url || "https://api.respond.io/v3";
-  const channelId = settings.respondio_whatsapp_channel_id;
-
-  if (!apiKey || !channelId) {
-    throw new Error("Respond.io credentials not configured (apiKey and channelId required)");
-  }
-
-  const phone = formatZambianPhone(to);
-
-  // If template name is provided, send as template message
-  if (templateName) {
-    const payload: any = {
-      channelId: channelId,
-      to: phone,
-      template: {
-        name: templateName,
-        language: {
-          code: templateLanguage || "en",
-        },
-      },
-    };
-
-    if (templateComponents && templateComponents.length > 0) {
-      payload.template.components = templateComponents;
-    }
-
-    const response = await fetch(`${baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await response.text();
-    let result: any;
-
-    try {
-      result = JSON.parse(responseText);
-    } catch (e) {
-      result = { error: responseText, status: response.status };
-    }
-
-    console.log("[WhatsApp - Respond.io] Template Response:", JSON.stringify(result));
-
-    if (!response.ok) {
-      const errorMessage = result?.message || result?.error || `HTTP ${response.status}`;
-      throw new Error(`Respond.io API error: ${errorMessage}`);
-    }
-
-    return result;
-  } else {
-    throw new Error("Template name is required for Respond.io WhatsApp messages");
-  }
-}
-
 // ============================================================================
 // TWILIO SENDGRID EMAIL
 // ============================================================================
@@ -283,15 +185,12 @@ async function sendEmail_SendGrid(
   to: string,
   subject: string,
   message: string,
-  settings: NotificationSettings,
   htmlContent?: string
 ): Promise<any> {
-  const apiKey = settings.sendgrid_api_key;
-  const fromEmail = settings.sendgrid_from_email || "noreply@phindu.com";
-  const fromName = settings.sendgrid_from_name || "Phindu Finance";
+  const creds = getTwilioCredentials();
 
-  if (!apiKey) {
-    throw new Error("SendGrid API key not configured");
+  if (!creds.sendgridApiKey) {
+    throw new Error("SendGrid API key not configured (SENDGRID_API_KEY)");
   }
 
   // Generate HTML if not provided
@@ -300,7 +199,7 @@ async function sendEmail_SendGrid(
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${creds.sendgridApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -309,8 +208,8 @@ async function sendEmail_SendGrid(
         subject: subject,
       }],
       from: {
-        email: fromEmail,
-        name: fromName,
+        email: creds.sendgridFromEmail,
+        name: "Phindu Finance",
       },
       content: [
         {
@@ -400,7 +299,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const request: NotificationRequest = await req.json();
-    const { type, to, message, subject, title, userId, htmlContent, eventType, templateName, templateLanguage, templateComponents } = request;
+    const { type, to, message, subject, title, userId, htmlContent, eventType } = request;
 
     if (!type || !to || !message) {
       return new Response(
@@ -423,35 +322,25 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Determine provider - default to Twilio
-    const whatsappProvider = settings.whatsapp_provider || 'twilio';
-    
-    console.log(`[Notification] Sending ${type} to ${to}`);
+    console.log(`[Notification] Sending ${type} to ${to} via Twilio`);
 
     let result: any;
     let status = "sent";
-    let provider = "twilio";
+    const provider = type === 'email' ? 'sendgrid' : 'twilio';
 
     try {
       if (type === 'sms') {
-        if (!settings.sms_enabled) {
+        if (settings.sms_enabled === false) {
           throw new Error("SMS notifications are disabled");
         }
-        result = await sendSMS_Twilio(to, message, settings);
+        result = await sendSMS_Twilio(to, message);
       } else if (type === 'whatsapp') {
-        if (!settings.whatsapp_enabled) {
+        if (settings.whatsapp_enabled === false) {
           throw new Error("WhatsApp notifications are disabled");
         }
-        
-        // Use Twilio by default, Respond.io as fallback if configured
-        if (whatsappProvider === 'respondio' && settings.respondio_api_key) {
-          provider = 'respondio';
-          result = await sendWhatsApp_RespondIO(to, message, settings, templateName, templateLanguage, templateComponents);
-        } else {
-          result = await sendWhatsApp_Twilio(to, message, settings);
-        }
+        result = await sendWhatsApp_Twilio(to, message);
       } else if (type === 'email') {
-        if (!settings.email_enabled) {
+        if (settings.email_enabled === false) {
           throw new Error("Email notifications are disabled");
         }
         if (!subject) {
@@ -460,8 +349,7 @@ const handler = async (req: Request): Promise<Response> => {
             { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
           );
         }
-        provider = "sendgrid";
-        result = await sendEmail_SendGrid(to, subject, message, settings, htmlContent);
+        result = await sendEmail_SendGrid(to, subject, message, htmlContent);
       } else {
         throw new Error(`Unsupported notification type: ${type}`);
       }
@@ -500,7 +388,7 @@ const handler = async (req: Request): Promise<Response> => {
     );
 
   } catch (error: any) {
-    console.error("[Notification] Error:", error);
+    console.error("[Notification] Handler error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
