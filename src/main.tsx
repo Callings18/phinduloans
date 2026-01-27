@@ -1,5 +1,5 @@
-// Main v2 - cache bust
-import { StrictMode } from "react";
+// Main v3 - force rebuild 2026-01-27
+import * as React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/outfit/300.css";
 import "@fontsource/outfit/400.css";
@@ -25,7 +25,7 @@ if ('serviceWorker' in navigator) {
 
 const root = createRoot(document.getElementById("root")!);
 root.render(
-  <StrictMode>
+  <React.StrictMode>
     <App />
-  </StrictMode>
+  </React.StrictMode>
 );
