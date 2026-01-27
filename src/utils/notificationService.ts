@@ -34,17 +34,6 @@ interface NotificationSettings {
   whatsapp_enabled: boolean;
   email_enabled: boolean;
   
-  // Twilio credentials
-  twilio_account_sid?: string;
-  twilio_auth_token?: string;
-  twilio_phone_number?: string;
-  twilio_whatsapp_number?: string;
-  
-  // SendGrid
-  sendgrid_api_key?: string;
-  sendgrid_from_email?: string;
-  sendgrid_from_name?: string;
-  
   // Event triggers
   notify_on_signup: boolean;
   notify_on_application_submitted: boolean;
