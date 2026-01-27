@@ -1,9 +1,9 @@
-const CACHE_NAME = 'phindu-loans-v1';
+const CACHE_NAME = 'phindu-credit-v2';
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.jpg',
+  '/favicon.png',
   '/favicon.ico',
   '/placeholder.svg'
 ];
@@ -71,9 +71,9 @@ self.addEventListener('activate', (event) => {
 // Push notification event
 self.addEventListener('push', (event) => {
   const options = {
-    body: event.data ? event.data.text() : 'New notification from Phindu Loans',
-    icon: '/favicon.jpg',
-    badge: '/favicon.jpg',
+    body: event.data ? event.data.text() : 'New notification from Phindu Credit',
+    icon: '/favicon.png',
+    badge: '/favicon.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -83,18 +83,18 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore',
         title: 'View Details',
-        icon: '/favicon.jpg'
+        icon: '/favicon.png'
       },
       {
         action: 'close',
         title: 'Close',
-        icon: '/favicon.jpg'
+        icon: '/favicon.png'
       }
     ]
   };
 
   event.waitUntil(
-    self.registration.showNotification('Phindu Loans', options)
+    self.registration.showNotification('Phindu Credit', options)
   );
 });
 

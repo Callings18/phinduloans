@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -25,11 +24,11 @@ import {
   FileSignature,
   Landmark,
   Wallet,
-  PiggyBank,
   Scale,
   UserCircle,
   DollarSign,
 } from "lucide-react";
+import phinduLogo from "@/assets/phindu-logo.png";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -153,19 +152,19 @@ const AdminSidebar = () => {
       <div className="h-20 flex items-center justify-between px-4 border-b border-sidebar-border shrink-0">
         {!collapsed && (
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center">
-              <Sparkles className="text-primary-foreground" size={20} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sidebar-foreground font-bold text-lg leading-tight">PHINDU</span>
-              <span className="text-muted-foreground text-xs">Admin Portal</span>
-            </div>
+            <img
+              src={phinduLogo}
+              alt="Phindu Credit"
+              className="h-10 object-contain"
+            />
           </div>
         )}
         {collapsed && (
-          <div className="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center mx-auto">
-            <Sparkles className="text-primary-foreground" size={20} />
-          </div>
+          <img
+            src={phinduLogo}
+            alt="Phindu"
+            className="h-8 w-8 object-contain mx-auto rounded"
+          />
         )}
       </div>
 

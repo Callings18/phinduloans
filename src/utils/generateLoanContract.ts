@@ -103,7 +103,7 @@ const replacePlaceholders = (content: string, loan: LoanData): string => {
     '{{total_repayment}}': loan.total_repayment.toLocaleString(),
     '{{disbursement_date}}': disbursementDate.toLocaleDateString('en-GB'),
     '{{first_payment_date}}': firstPaymentDate.toLocaleDateString('en-GB'),
-    '{{company_name}}': 'Phindu Credit Solutions',
+    '{{company_name}}': 'Phindu Credit Solutions Limited',
     '{{company_address}}': 'Lusaka, Zambia',
     '{{current_date}}': new Date().toLocaleDateString('en-GB'),
     '{{loan_purpose}}': loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal',
@@ -141,14 +141,14 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
-  doc.setFillColor(255, 51, 153);
+  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  doc.setFillColor(107, 26, 58);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  centerText('PHINDU CREDIT SOLUTIONS', 18, 20);
+  centerText('PHINDU CREDIT SOLUTIONS LIMITED', 18, 20);
   
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
@@ -207,8 +207,8 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
   for (let i = 1; i <= lastPage; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    centerText('Phindu Credit Solutions - Money When You Need It', 285, 8);
+    doc.setTextColor(107, 26, 58);
+    centerText('Phindu Credit Solutions Limited - Money When You Need It', 285, 8);
     centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', 289, 8);
     doc.setTextColor(0, 0, 0);
   }
@@ -254,14 +254,14 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
     yPos += 5;
   };
 
-  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
-  doc.setFillColor(255, 51, 153);
+  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  doc.setFillColor(107, 26, 58);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  centerText('PHINDU CREDIT SOLUTIONS', 18, 20);
+  centerText('PHINDU CREDIT SOLUTIONS LIMITED', 18, 20);
   
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
@@ -279,7 +279,7 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
   addSection('1. PARTIES TO THIS AGREEMENT', [
     'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
     '',
-    'LENDER: Phindu Credit Solutions',
+    'LENDER: Phindu Credit Solutions Limited',
     'Address: Lusaka, Zambia',
     '',
     `BORROWER: ${loan.full_name}`,
@@ -355,7 +355,7 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
   doc.text('Date: ____________________', margin, yPos);
   
   yPos -= 20;
-  doc.text('FOR PHINDU CREDIT SOLUTIONS:', pageWidth - margin - 80, yPos);
+  doc.text('FOR PHINDU CREDIT SOLUTIONS LTD:', pageWidth - margin - 80, yPos);
   yPos += 10;
   doc.line(pageWidth - margin - 80, yPos, pageWidth - margin, yPos);
   yPos += 5;
@@ -365,8 +365,8 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
 
   yPos = 285;
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  centerText('Phindu Credit Solutions - Money When You Need It', yPos, 8);
+  doc.setTextColor(107, 26, 58);
+  centerText('Phindu Credit Solutions Limited - Money When You Need It', yPos, 8);
   centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', yPos + 4, 8);
 
   return doc;
@@ -425,7 +425,7 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
     `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
     `- Term: ${loan.loan_term_months} months\n\n` +
     `Please sign and return the contract.\n\n` +
-    `Phindu Credit Solutions`;
+    `Phindu Credit Solutions Limited`;
   
   // Get contract PDF as base64 for attachment
   const contractBase64 = await getLoanContractBase64(loan);
@@ -468,7 +468,7 @@ export const emailContract = async (loan: LoanData) => {
     `Please review, sign, and return the contract at your earliest convenience.\n\n` +
     `If you have any questions, please don't hesitate to contact us.\n\n` +
     `Best regards,\n` +
-    `Phindu Credit Solutions\n` +
+    `Phindu Credit Solutions Limited\n` +
     `info@phinducredit.co.zm`
   );
   
