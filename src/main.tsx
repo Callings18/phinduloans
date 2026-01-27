@@ -1,4 +1,4 @@
-// Main v3 - force rebuild 2026-01-27
+// Main v5 - force complete rebuild
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/outfit/300.css";
