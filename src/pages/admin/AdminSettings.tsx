@@ -24,11 +24,13 @@ import {
   Building2,
   ShieldCheck,
   BellRing,
-  Shield
+  Shield,
+  Phone
 } from "lucide-react";
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 import { BrevoSettings } from "@/components/admin/BrevoSettings";
 import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonitor";
+import NotificationSettingsPanel from "@/components/admin/NotificationSettingsPanel";
 
 interface PaymentSettings {
   id: string;
@@ -262,6 +264,9 @@ const AdminSettings = () => {
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2">
               <BellRing size={16} /> Notifications
+            </TabsTrigger>
+            <TabsTrigger value="twilio" className="gap-2">
+              <Phone size={16} /> Twilio/SendGrid
             </TabsTrigger>
             <TabsTrigger value="brevo" className="gap-2">
               <BellRing size={16} /> Brevo
@@ -708,6 +713,11 @@ const AdminSettings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Twilio/SendGrid Notification Settings */}
+          <TabsContent value="twilio">
+            <NotificationSettingsPanel />
           </TabsContent>
 
           {/* Brevo Notification Settings */}
