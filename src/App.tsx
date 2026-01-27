@@ -1,9 +1,9 @@
+import * as React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "@/hooks/useTheme";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import { AuthProvider } from "@/hooks/useAuth";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
@@ -41,12 +41,87 @@ import AdminWallets from "./pages/admin/AdminWallets";
 import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
 
+// Inline Theme Context to avoid module resolution issues
+type Theme = "dark" | "light" | "system";
+
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  resolvedTheme: "dark" | "light";
+}
+
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
+
+function getSystemTheme(): "dark" | "light" {
+  if (typeof window !== "undefined") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "dark";
+}
+
+function getStoredTheme(): Theme {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("phindu-theme") as Theme | null;
+    return stored || "dark";
+  }
+  return "dark";
+}
+
+function InlineThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = React.useState<Theme>(getStoredTheme);
+  const [resolvedTheme, setResolvedTheme] = React.useState<"dark" | "light">("dark");
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const resolved = theme === "system" ? getSystemTheme() : theme;
+    
+    setResolvedTheme(resolved);
+    root.classList.remove("light", "dark");
+    root.classList.add(resolved);
+    localStorage.setItem("phindu-theme", theme);
+  }, [theme]);
+
+  React.useEffect(() => {
+    if (theme !== "system") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      const newTheme = e.matches ? "dark" : "light";
+      setResolvedTheme(newTheme);
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(newTheme);
+    };
+
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, [theme]);
+
+  const value = React.useMemo(
+    () => ({ theme, setTheme: setThemeState, resolvedTheme }),
+    [theme, resolvedTheme]
+  );
+
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = React.useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+  return context;
+}
+
 const queryClient = new QueryClient();
 
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
+      <InlineThemeProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <TooltipProvider>
@@ -94,7 +169,7 @@ function App() {
             </TooltipProvider>
           </AuthProvider>
         </QueryClientProvider>
-      </ThemeProvider>
+      </InlineThemeProvider>
     </ErrorBoundary>
   );
 }
