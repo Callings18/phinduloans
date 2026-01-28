@@ -136,7 +136,7 @@ async function sendSMS_Twilio(to: string, message: string, creds?: any): Promise
     throw new Error("Twilio phone number not configured (TWILIO_PHONE_NUMBER)");
   }
 
-  const phone = formatZambianPhone(to);
+  const phone = formatPhoneNumber(to);
   const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
@@ -185,7 +185,7 @@ async function sendWhatsApp_Twilio(to: string, message: string, mediaUrl?: strin
     whatsappFrom = `whatsapp:${whatsappFrom}`;
   }
 
-  const phone = formatZambianPhone(to);
+  const phone = formatPhoneNumber(to);
   const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
