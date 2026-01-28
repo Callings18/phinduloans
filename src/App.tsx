@@ -1,4 +1,4 @@
-// App v8 - explicit React imports to avoid dual instance
+// App v9 - force rebuild 2026-01-29T00:30
 import { createContext, useContext, useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
