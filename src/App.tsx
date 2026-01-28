@@ -1,4 +1,4 @@
-// App v5 - force complete rebuild
+// App v6 - cache bust 2026-01-28T15:20
 import * as React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

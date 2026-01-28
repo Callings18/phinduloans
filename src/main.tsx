@@ -1,4 +1,4 @@
-// Main v6 - force complete rebuild 2026-01-28
+// Main v7 - cache bust 2026-01-28T15:20
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/outfit/300.css";

@@ -1,4 +1,4 @@
-// vite.config.ts v8 - force deps rebuild 2026-01-28
+// vite.config.ts v9 - cache bust 2026-01-28T15:20
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
