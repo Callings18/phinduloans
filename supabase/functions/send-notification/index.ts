@@ -95,14 +95,30 @@ function getTwilioCredentialsSync() {
   };
 }
 
-function formatZambianPhone(phone: string): string {
-  let formatted = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  if (formatted.startsWith("0")) {
-    formatted = "+260" + formatted.substring(1);
-  } else if (!formatted.startsWith("+")) {
-    formatted = "+260" + formatted;
+function formatPhoneNumber(phone: string): string {
+  // Clean up the phone number - remove spaces and non-digit characters (except +)
+  let formatted = phone.trim().replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+  
+  // Handle various Zambian number formats
+  if (formatted.startsWith("+260")) {
+    // Already in international format
+    return formatted;
+  } else if (formatted.startsWith("260")) {
+    // Has country code without +
+    return "+" + formatted;
+  } else if (formatted.startsWith("0")) {
+    // Local format starting with 0
+    return "+260" + formatted.substring(1);
+  } else if (formatted.length === 9 && !formatted.startsWith("+")) {
+    // 9-digit number without leading 0 (e.g., 976664789)
+    return "+260" + formatted;
+  } else if (formatted.startsWith("+")) {
+    // Already has + prefix (non-Zambian international number)
+    return formatted;
+  } else {
+    // Assume it's a Zambian number without prefix
+    return "+260" + formatted;
   }
-  return formatted;
 }
 
 // ============================================================================
