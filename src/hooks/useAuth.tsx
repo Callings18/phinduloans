@@ -1,4 +1,4 @@
-// useAuth v2 - force rebuild 2026-01-27
+// useAuth v3 - force rebuild 2026-01-28
 import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
