@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import AdminSidebar from "./AdminSidebar";
 import PhinduAI from "../common/PhinduAI";
+import AdminRealTimeNotifications from "./AdminRealTimeNotifications";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -43,6 +44,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         </div>
       </main>
       <PhinduAI />
+      <AdminRealTimeNotifications />
     </div>
   );
 };
