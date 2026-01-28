@@ -9,9 +9,11 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw, AlertTriangle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -150,6 +152,26 @@ const Apply = () => {
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Check for existing active loan (block duplicate applications)
+  const { data: existingActiveLoan } = useQuery({
+    queryKey: ["existing-active-loan", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, full_name, loan_amount, loan_term_months, status, created_at, nrc_number, phone")
+        .eq("user_id", user.id)
+        .in("status", ["pending", "under_review", "approved", "disbursed", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       if (error) return null;
       return data;
     },
@@ -847,6 +869,58 @@ const Apply = () => {
               </p>
             )}
           </div>
+
+          {/* Existing Active Loan Block */}
+          {existingActiveLoan && (
+            <div className="max-w-2xl mx-auto mb-12">
+              <Alert className="border-warning bg-warning/10">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+                <AlertDescription>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-2">
+                        You Already Have an Active Loan
+                      </h3>
+                      <p className="text-muted-foreground text-sm">
+                        Our records show that you already have a loan that is currently being processed or active. 
+                        You cannot apply for another loan until your current loan is completed.
+                      </p>
+                    </div>
+                    <Card className="bg-card border-border">
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Loan Amount</p>
+                            <p className="font-semibold">K{existingActiveLoan.loan_amount?.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Status</p>
+                            <Badge className="capitalize">{existingActiveLoan.status}</Badge>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Term</p>
+                            <p className="font-semibold">{existingActiveLoan.loan_term_months} months</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Applied On</p>
+                            <p className="font-semibold">{format(new Date(existingActiveLoan.created_at), 'MMM dd, yyyy')}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <div className="flex gap-3">
+                      <Button variant="outline" asChild>
+                        <a href="/dashboard">View My Loan</a>
+                      </Button>
+                      <Button variant="ghost" asChild>
+                        <a href="/">Go Home</a>
+                      </Button>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
 
           {/* Auto-save indicator */}
           {draftChecked && (

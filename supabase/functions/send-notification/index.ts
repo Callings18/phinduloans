@@ -7,23 +7,32 @@ const corsHeaders = {
 };
 
 interface NotificationRequest {
-  type: 'sms' | 'email' | 'whatsapp';
-  to: string;
-  message: string;
+  type: 'sms' | 'email' | 'whatsapp' | 'admin_contract_signed';
+  to?: string;
+  message?: string;
   subject?: string;
   title?: string;
   userId?: string;
   htmlContent?: string;
   eventType?: string;
+  // For admin_contract_signed
+  loanId?: string;
+  borrowerName?: string;
+  borrowerPhone?: string;
+  borrowerEmail?: string;
+  loanAmount?: number;
+  signatureUrl?: string;
+  // For WhatsApp with media
+  mediaUrl?: string;
 }
 
 interface NotificationSettings {
-  // Channel enablement (from system_settings)
   sms_enabled?: boolean;
   whatsapp_enabled?: boolean;
   email_enabled?: boolean;
-  
-  // Notification Event Triggers
+  admin_phone?: string;
+  admin_email?: string;
+  admin_whatsapp?: string;
   notify_on_signup?: boolean;
   notify_on_application_submitted?: boolean;
   notify_on_application_under_review?: boolean;
@@ -45,7 +54,6 @@ interface NotificationSettings {
   notify_on_contract_sent?: boolean;
 }
 
-// Get Twilio credentials from environment
 function getTwilioCredentials() {
   return {
     accountSid: Deno.env.get("TWILIO_ACCOUNT_SID"),
@@ -72,7 +80,6 @@ async function getNotificationSettings(supabase: any): Promise<NotificationSetti
   return data.value as NotificationSettings;
 }
 
-// Format Zambian phone numbers
 function formatZambianPhone(phone: string): string {
   let formatted = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   if (formatted.startsWith("0")) {
@@ -128,10 +135,10 @@ async function sendSMS_Twilio(to: string, message: string): Promise<any> {
 }
 
 // ============================================================================
-// TWILIO WHATSAPP
+// TWILIO WHATSAPP (with optional media support)
 // ============================================================================
 
-async function sendWhatsApp_Twilio(to: string, message: string): Promise<any> {
+async function sendWhatsApp_Twilio(to: string, message: string, mediaUrl?: string): Promise<any> {
   const creds = getTwilioCredentials();
 
   if (!creds.accountSid || !creds.authToken) {
@@ -142,7 +149,6 @@ async function sendWhatsApp_Twilio(to: string, message: string): Promise<any> {
     throw new Error("Twilio WhatsApp number not configured (TWILIO_WHATSAPP_NUMBER)");
   }
 
-  // Ensure WhatsApp number has correct format
   let whatsappFrom = creds.whatsappNumber;
   if (!whatsappFrom.startsWith("whatsapp:")) {
     whatsappFrom = `whatsapp:${whatsappFrom}`;
@@ -155,6 +161,11 @@ async function sendWhatsApp_Twilio(to: string, message: string): Promise<any> {
   formData.append("To", `whatsapp:${phone}`);
   formData.append("From", whatsappFrom);
   formData.append("Body", message);
+  
+  // Add media URL if provided (for PDFs, images, etc.)
+  if (mediaUrl) {
+    formData.append("MediaUrl", mediaUrl);
+  }
 
   const auth = btoa(`${creds.accountSid}:${creds.authToken}`);
   
@@ -178,14 +189,15 @@ async function sendWhatsApp_Twilio(to: string, message: string): Promise<any> {
 }
 
 // ============================================================================
-// TWILIO SENDGRID EMAIL
+// TWILIO SENDGRID EMAIL (with optional attachment)
 // ============================================================================
 
 async function sendEmail_SendGrid(
   to: string,
   subject: string,
   message: string,
-  htmlContent?: string
+  htmlContent?: string,
+  attachment?: { content: string; filename: string; type?: string }
 ): Promise<any> {
   const creds = getTwilioCredentials();
 
@@ -193,8 +205,38 @@ async function sendEmail_SendGrid(
     throw new Error("SendGrid API key not configured (SENDGRID_API_KEY)");
   }
 
-  // Generate HTML if not provided
   const html = htmlContent || generateEmailHtml(subject, message);
+
+  const emailPayload: any = {
+    personalizations: [{
+      to: [{ email: to }],
+      subject: subject,
+    }],
+    from: {
+      email: creds.sendgridFromEmail,
+      name: "Phindu Finance",
+    },
+    content: [
+      {
+        type: "text/plain",
+        value: message,
+      },
+      {
+        type: "text/html",
+        value: html,
+      },
+    ],
+  };
+
+  // Add attachment if provided
+  if (attachment) {
+    emailPayload.attachments = [{
+      content: attachment.content,
+      filename: attachment.filename,
+      type: attachment.type || "application/pdf",
+      disposition: "attachment",
+    }];
+  }
 
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
@@ -202,26 +244,7 @@ async function sendEmail_SendGrid(
       "Authorization": `Bearer ${creds.sendgridApiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      personalizations: [{
-        to: [{ email: to }],
-        subject: subject,
-      }],
-      from: {
-        email: creds.sendgridFromEmail,
-        name: "Phindu Finance",
-      },
-      content: [
-        {
-          type: "text/plain",
-          value: message,
-        },
-        {
-          type: "text/html",
-          value: html,
-        },
-      ],
-    }),
+    body: JSON.stringify(emailPayload),
   });
 
   if (!response.ok) {
@@ -234,7 +257,6 @@ async function sendEmail_SendGrid(
   return { success: true, messageId: response.headers.get("x-message-id") };
 }
 
-// Generate a nice HTML email template
 function generateEmailHtml(subject: string, message: string): string {
   return `
 <!DOCTYPE html>
@@ -249,14 +271,12 @@ function generateEmailHtml(subject: string, message: string): string {
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #E91E8C 0%, #FF6B9D 100%); padding: 30px; text-align: center;">
+            <td style="background: linear-gradient(135deg, #6B1A3A 0%, #9B2D5A 100%); padding: 30px; text-align: center;">
               <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">PHINDU</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Finance Made Simple</p>
+              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Credit Solutions Limited</p>
             </td>
           </tr>
-          <!-- Content -->
           <tr>
             <td style="padding: 40px 30px;">
               <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 22px;">${subject}</h2>
@@ -265,14 +285,13 @@ function generateEmailHtml(subject: string, message: string): string {
               </div>
             </td>
           </tr>
-          <!-- Footer -->
           <tr>
             <td style="background-color: #f8f8f8; padding: 20px 30px; text-align: center; border-top: 1px solid #eeeeee;">
               <p style="color: #888888; font-size: 12px; margin: 0;">
-                © ${new Date().getFullYear()} Phindu Finance. All rights reserved.
+                © ${new Date().getFullYear()} Phindu Credit Solutions Limited. All rights reserved.
               </p>
               <p style="color: #888888; font-size: 12px; margin: 10px 0 0 0;">
-                <a href="mailto:info@phindu.com" style="color: #E91E8C; text-decoration: none;">info@phindu.com</a>
+                <a href="mailto:info@phinducredit.co.zm" style="color: #6B1A3A; text-decoration: none;">info@phinducredit.co.zm</a>
               </p>
             </td>
           </tr>
@@ -282,6 +301,80 @@ function generateEmailHtml(subject: string, message: string): string {
   </table>
 </body>
 </html>`;
+}
+
+// ============================================================================
+// ADMIN CONTRACT SIGNED NOTIFICATION
+// ============================================================================
+
+async function handleAdminContractSigned(
+  supabase: any,
+  request: NotificationRequest,
+  settings: NotificationSettings
+): Promise<any> {
+  const { borrowerName, borrowerPhone, loanId, loanAmount, signatureUrl } = request;
+  
+  const adminPhone = settings.admin_phone || settings.admin_whatsapp;
+  const adminEmail = settings.admin_email;
+  
+  const loanRef = `LOAN-${loanId?.slice(0, 8).toUpperCase()}`;
+  
+  const message = `📝 CONTRACT SIGNED\n\n` +
+    `Borrower: ${borrowerName}\n` +
+    `Loan Ref: ${loanRef}\n` +
+    `Amount: K${loanAmount?.toLocaleString()}\n\n` +
+    `The borrower has digitally signed the contract. Please review and proceed with disbursement.\n\n` +
+    `- Phindu Credit Solutions`;
+
+  const results: any = { sms: null, whatsapp: null, email: null };
+
+  // Send SMS to admin
+  if (adminPhone && settings.sms_enabled !== false) {
+    try {
+      results.sms = await sendSMS_Twilio(adminPhone, message);
+    } catch (err: any) {
+      console.error("[Admin Notification] SMS failed:", err.message);
+      results.sms = { error: err.message };
+    }
+  }
+
+  // Send WhatsApp to admin
+  if (adminPhone && settings.whatsapp_enabled !== false) {
+    try {
+      results.whatsapp = await sendWhatsApp_Twilio(adminPhone, message);
+    } catch (err: any) {
+      console.error("[Admin Notification] WhatsApp failed:", err.message);
+      results.whatsapp = { error: err.message };
+    }
+  }
+
+  // Send Email to admin
+  if (adminEmail && settings.email_enabled !== false) {
+    try {
+      results.email = await sendEmail_SendGrid(
+        adminEmail,
+        `Contract Signed - ${loanRef} by ${borrowerName}`,
+        message.replace(/📝 /g, '')
+      );
+    } catch (err: any) {
+      console.error("[Admin Notification] Email failed:", err.message);
+      results.email = { error: err.message };
+    }
+  }
+
+  // Log the notification
+  await supabase.from("notification_logs").insert({
+    user_id: null,
+    type: "admin_notification",
+    recipient: adminPhone || adminEmail || "admin",
+    title: "Contract Signed Notification",
+    message: message,
+    status: "sent",
+    sent_at: new Date().toISOString(),
+    provider_response: results
+  });
+
+  return results;
 }
 
 // ============================================================================
@@ -299,7 +392,18 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const request: NotificationRequest = await req.json();
-    const { type, to, message, subject, title, userId, htmlContent, eventType } = request;
+    const { type, to, message, subject, title, userId, htmlContent, eventType, mediaUrl } = request;
+
+    const settings = await getNotificationSettings(supabase);
+
+    // Handle admin contract signed notification
+    if (type === 'admin_contract_signed') {
+      const result = await handleAdminContractSigned(supabase, request, settings);
+      return new Response(
+        JSON.stringify({ success: true, result }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     if (!type || !to || !message) {
       return new Response(
@@ -308,8 +412,6 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const settings = await getNotificationSettings(supabase);
-    
     // Check if event type is enabled (if provided)
     if (eventType) {
       const eventKey = `notify_on_${eventType}` as keyof NotificationSettings;
@@ -338,7 +440,7 @@ const handler = async (req: Request): Promise<Response> => {
         if (settings.whatsapp_enabled === false) {
           throw new Error("WhatsApp notifications are disabled");
         }
-        result = await sendWhatsApp_Twilio(to, message);
+        result = await sendWhatsApp_Twilio(to, message, mediaUrl);
       } else if (type === 'email') {
         if (settings.email_enabled === false) {
           throw new Error("Email notifications are disabled");
