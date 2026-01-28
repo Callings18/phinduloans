@@ -1,4 +1,4 @@
-// vite.config.ts v9 - cache bust 2026-01-28T15:20
+// vite.config.ts v10 - force cache invalidation 2026-01-28T16:35
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => ({
     force: true,
     esbuildOptions: {
       target: "esnext",
+      // Cache buster to force re-optimization
+      define: { '__VITE_CACHE_BUST__': '"v4-20260128"' },
     },
   },
   build: {
