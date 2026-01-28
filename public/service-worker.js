@@ -1,4 +1,4 @@
-const CACHE_NAME = 'phindu-credit-v2';
+const CACHE_NAME = 'phindu-credit-v3';
 const urlsToCache = [
   '/',
   '/index.html',
