@@ -36,6 +36,19 @@ interface NotificationProviderSettings {
   whatsapp_enabled: boolean;
   email_enabled: boolean;
   
+  // Twilio Credentials (editable via Admin)
+  twilio_account_sid?: string;
+  twilio_auth_token?: string;
+  twilio_phone_number?: string;
+  twilio_whatsapp_number?: string;
+  sendgrid_api_key?: string;
+  sendgrid_from_email?: string;
+  
+  // Admin notification recipients
+  admin_phone?: string;
+  admin_email?: string;
+  admin_whatsapp?: string;
+  
   // Notification Event Triggers - Account & Application
   notify_on_signup: boolean;
   notify_on_application_submitted: boolean;
@@ -69,6 +82,19 @@ const defaultSettings: NotificationProviderSettings = {
   sms_enabled: true,
   whatsapp_enabled: true,
   email_enabled: true,
+  
+  // Twilio Credentials (empty - will fallback to env secrets if not set)
+  twilio_account_sid: "",
+  twilio_auth_token: "",
+  twilio_phone_number: "",
+  twilio_whatsapp_number: "",
+  sendgrid_api_key: "",
+  sendgrid_from_email: "",
+  
+  // Admin notification recipients
+  admin_phone: "",
+  admin_email: "",
+  admin_whatsapp: "",
   
   // Events - Account & Application
   notify_on_signup: true,
@@ -303,14 +329,18 @@ export const NotificationProvidersSettings = () => {
       </Card>
 
       <Tabs defaultValue="channels" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="channels">
             <Zap className="h-4 w-4 mr-2" />
             Channels
           </TabsTrigger>
+          <TabsTrigger value="credentials">
+            <Shield className="h-4 w-4 mr-2" />
+            Credentials
+          </TabsTrigger>
           <TabsTrigger value="events">
             <Bell className="h-4 w-4 mr-2" />
-            Event Triggers
+            Events
           </TabsTrigger>
           <TabsTrigger value="test">
             <Send className="h-4 w-4 mr-2" />
@@ -387,11 +417,164 @@ export const NotificationProvidersSettings = () => {
               <div className="p-4 rounded-lg bg-muted/50">
                 <h4 className="font-medium mb-2 flex items-center gap-2">
                   <Shield className="h-4 w-4 text-primary" />
-                  Secure Credentials
+                  Credentials Management
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  Twilio Account SID, Auth Token, phone numbers, and SendGrid API key are stored as secure environment secrets. 
-                  Contact your administrator to update these credentials.
+                  You can configure Twilio and SendGrid credentials in the "Credentials" tab. 
+                  Settings are saved to the database and take effect immediately.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Credentials Configuration */}
+        <TabsContent value="credentials">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Twilio & SendGrid Credentials
+              </CardTitle>
+              <CardDescription>
+                Configure your Twilio and SendGrid API credentials. Changes take effect immediately after saving.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Twilio Section */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2 text-primary">
+                  <Phone className="h-4 w-4" />
+                  Twilio (SMS & WhatsApp)
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="twilio_sid">Account SID</Label>
+                    <Input
+                      id="twilio_sid"
+                      placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      value={settings.twilio_account_sid || ""}
+                      onChange={(e) => setSettings({ ...settings, twilio_account_sid: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="twilio_token">Auth Token</Label>
+                    <Input
+                      id="twilio_token"
+                      type="password"
+                      placeholder="••••••••••••••••••••••••••••••••"
+                      value={settings.twilio_auth_token || ""}
+                      onChange={(e) => setSettings({ ...settings, twilio_auth_token: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="twilio_phone">SMS Phone Number</Label>
+                    <Input
+                      id="twilio_phone"
+                      placeholder="+15551234567"
+                      value={settings.twilio_phone_number || ""}
+                      onChange={(e) => setSettings({ ...settings, twilio_phone_number: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="twilio_whatsapp">WhatsApp Number</Label>
+                    <Input
+                      id="twilio_whatsapp"
+                      placeholder="+15551234567"
+                      value={settings.twilio_whatsapp_number || ""}
+                      onChange={(e) => setSettings({ ...settings, twilio_whatsapp_number: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* SendGrid Section */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2 text-primary">
+                  <Mail className="h-4 w-4" />
+                  SendGrid (Email)
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sendgrid_key">API Key</Label>
+                    <Input
+                      id="sendgrid_key"
+                      type="password"
+                      placeholder="SG.xxxxxxxxxxxxxxxx"
+                      value={settings.sendgrid_api_key || ""}
+                      onChange={(e) => setSettings({ ...settings, sendgrid_api_key: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sendgrid_from">From Email</Label>
+                    <Input
+                      id="sendgrid_from"
+                      type="email"
+                      placeholder="noreply@yourcompany.com"
+                      value={settings.sendgrid_from_email || ""}
+                      onChange={(e) => setSettings({ ...settings, sendgrid_from_email: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Admin Notification Recipients */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2 text-primary">
+                  <Bell className="h-4 w-4" />
+                  Admin Notification Recipients
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Configure where admin notifications (e.g., contract signed alerts) are sent.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="admin_phone">Admin Phone (SMS)</Label>
+                    <Input
+                      id="admin_phone"
+                      placeholder="+260977123456"
+                      value={settings.admin_phone || ""}
+                      onChange={(e) => setSettings({ ...settings, admin_phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin_whatsapp">Admin WhatsApp</Label>
+                    <Input
+                      id="admin_whatsapp"
+                      placeholder="+260977123456"
+                      value={settings.admin_whatsapp || ""}
+                      onChange={(e) => setSettings({ ...settings, admin_whatsapp: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin_email">Admin Email</Label>
+                    <Input
+                      id="admin_email"
+                      type="email"
+                      placeholder="admin@yourcompany.com"
+                      value={settings.admin_email || ""}
+                      onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
+                <h4 className="font-medium mb-2 flex items-center gap-2 text-warning">
+                  <AlertCircle className="h-4 w-4" />
+                  Important
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Credentials saved here are stored in the database and override environment secrets. 
+                  Leave fields empty to use the default environment secrets. 
+                  Changes take effect immediately after saving - no redeployment required.
                 </p>
               </div>
             </CardContent>
