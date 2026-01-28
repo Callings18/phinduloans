@@ -1,4 +1,4 @@
-// Main v7 - cache bust 2026-01-28T15:20
+// Main v8 - disable SW to fix cache issue 2026-01-28T16:50
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/outfit/300.css";
@@ -10,16 +10,13 @@ import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "./index.css";
 
-// Register Service Worker for PWA
+// Unregister any existing service workers to clear cache
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then((registration) => {
-        console.log('SW registered: ', registration);
-      })
-      .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
-      });
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+      console.log('SW unregistered:', registration.scope);
+    }
   });
 }
 
