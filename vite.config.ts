@@ -1,4 +1,4 @@
-// vite.config.ts v11 - fix React 18 dedupe 2026-01-28T16:40
+// vite.config.ts v12 - force full cache rebuild 2026-01-28T18:35
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
     force: true,
     esbuildOptions: {
       target: "esnext",
-      define: { '__VITE_CACHE_BUST__': '"v5-20260128T1640"' },
+      define: { '__VITE_CACHE_BUST__': '"v6-20260128T1835"' },
     },
   },
   build: {
