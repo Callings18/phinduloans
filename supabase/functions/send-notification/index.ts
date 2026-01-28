@@ -54,7 +54,37 @@ interface NotificationSettings {
   notify_on_contract_sent?: boolean;
 }
 
-function getTwilioCredentials() {
+// Get Twilio credentials - first from DB settings, then fallback to env secrets
+async function getTwilioCredentials(supabase: any): Promise<{
+  accountSid: string;
+  authToken: string;
+  phoneNumber: string;
+  whatsappNumber: string;
+  sendgridApiKey: string;
+  sendgridFromEmail: string;
+}> {
+  // Try to get from database first
+  const { data } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_providers")
+    .maybeSingle();
+
+  const dbSettings = data?.value || {};
+  
+  // Return DB values if set, otherwise fallback to env secrets
+  return {
+    accountSid: dbSettings.twilio_account_sid || Deno.env.get("TWILIO_ACCOUNT_SID") || "",
+    authToken: dbSettings.twilio_auth_token || Deno.env.get("TWILIO_AUTH_TOKEN") || "",
+    phoneNumber: dbSettings.twilio_phone_number || Deno.env.get("TWILIO_PHONE_NUMBER") || "",
+    whatsappNumber: dbSettings.twilio_whatsapp_number || Deno.env.get("TWILIO_WHATSAPP_NUMBER") || "",
+    sendgridApiKey: dbSettings.sendgrid_api_key || Deno.env.get("SENDGRID_API_KEY") || "",
+    sendgridFromEmail: dbSettings.sendgrid_from_email || Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com",
+  };
+}
+
+// Legacy sync function for functions that can't await
+function getTwilioCredentialsSync() {
   return {
     accountSid: Deno.env.get("TWILIO_ACCOUNT_SID"),
     authToken: Deno.env.get("TWILIO_AUTH_TOKEN"),
@@ -63,21 +93,6 @@ function getTwilioCredentials() {
     sendgridApiKey: Deno.env.get("SENDGRID_API_KEY"),
     sendgridFromEmail: Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com",
   };
-}
-
-async function getNotificationSettings(supabase: any): Promise<NotificationSettings> {
-  const { data, error } = await supabase
-    .from("system_settings")
-    .select("value")
-    .eq("key", "notification_providers")
-    .maybeSingle();
-
-  if (error || !data) {
-    console.error("[Notification] Error loading settings:", error);
-    return {};
-  }
-
-  return data.value as NotificationSettings;
 }
 
 function formatZambianPhone(phone: string): string {
@@ -94,26 +109,26 @@ function formatZambianPhone(phone: string): string {
 // TWILIO SMS
 // ============================================================================
 
-async function sendSMS_Twilio(to: string, message: string): Promise<any> {
-  const creds = getTwilioCredentials();
+async function sendSMS_Twilio(to: string, message: string, creds?: any): Promise<any> {
+  const credentials = creds || getTwilioCredentialsSync();
   
-  if (!creds.accountSid || !creds.authToken) {
+  if (!credentials.accountSid || !credentials.authToken) {
     throw new Error("Twilio credentials not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)");
   }
 
-  if (!creds.phoneNumber) {
+  if (!credentials.phoneNumber) {
     throw new Error("Twilio phone number not configured (TWILIO_PHONE_NUMBER)");
   }
 
   const phone = formatZambianPhone(to);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`;
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
   formData.append("To", phone);
-  formData.append("From", creds.phoneNumber);
+  formData.append("From", credentials.phoneNumber);
   formData.append("Body", message);
 
-  const auth = btoa(`${creds.accountSid}:${creds.authToken}`);
+  const auth = btoa(`${credentials.accountSid}:${credentials.authToken}`);
   
   const response = await fetch(url, {
     method: "POST",
@@ -138,24 +153,24 @@ async function sendSMS_Twilio(to: string, message: string): Promise<any> {
 // TWILIO WHATSAPP (with optional media support)
 // ============================================================================
 
-async function sendWhatsApp_Twilio(to: string, message: string, mediaUrl?: string): Promise<any> {
-  const creds = getTwilioCredentials();
+async function sendWhatsApp_Twilio(to: string, message: string, mediaUrl?: string, creds?: any): Promise<any> {
+  const credentials = creds || getTwilioCredentialsSync();
 
-  if (!creds.accountSid || !creds.authToken) {
+  if (!credentials.accountSid || !credentials.authToken) {
     throw new Error("Twilio credentials not configured");
   }
 
-  if (!creds.whatsappNumber) {
+  if (!credentials.whatsappNumber) {
     throw new Error("Twilio WhatsApp number not configured (TWILIO_WHATSAPP_NUMBER)");
   }
 
-  let whatsappFrom = creds.whatsappNumber;
+  let whatsappFrom = credentials.whatsappNumber;
   if (!whatsappFrom.startsWith("whatsapp:")) {
     whatsappFrom = `whatsapp:${whatsappFrom}`;
   }
 
   const phone = formatZambianPhone(to);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`;
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
   
   const formData = new URLSearchParams();
   formData.append("To", `whatsapp:${phone}`);
@@ -167,7 +182,7 @@ async function sendWhatsApp_Twilio(to: string, message: string, mediaUrl?: strin
     formData.append("MediaUrl", mediaUrl);
   }
 
-  const auth = btoa(`${creds.accountSid}:${creds.authToken}`);
+  const auth = btoa(`${credentials.accountSid}:${credentials.authToken}`);
   
   const response = await fetch(url, {
     method: "POST",
@@ -197,11 +212,12 @@ async function sendEmail_SendGrid(
   subject: string,
   message: string,
   htmlContent?: string,
-  attachment?: { content: string; filename: string; type?: string }
+  attachment?: { content: string; filename: string; type?: string },
+  creds?: any
 ): Promise<any> {
-  const creds = getTwilioCredentials();
+  const credentials = creds || getTwilioCredentialsSync();
 
-  if (!creds.sendgridApiKey) {
+  if (!credentials.sendgridApiKey) {
     throw new Error("SendGrid API key not configured (SENDGRID_API_KEY)");
   }
 
@@ -213,7 +229,7 @@ async function sendEmail_SendGrid(
       subject: subject,
     }],
     from: {
-      email: creds.sendgridFromEmail,
+      email: credentials.sendgridFromEmail,
       name: "Phindu Finance",
     },
     content: [
@@ -241,7 +257,7 @@ async function sendEmail_SendGrid(
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${creds.sendgridApiKey}`,
+      "Authorization": `Bearer ${credentials.sendgridApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(emailPayload),
@@ -255,6 +271,21 @@ async function sendEmail_SendGrid(
 
   console.log("[Email - SendGrid] Sent successfully");
   return { success: true, messageId: response.headers.get("x-message-id") };
+}
+
+async function getNotificationSettings(supabase: any): Promise<NotificationSettings> {
+  const { data, error } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_providers")
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error("[Notification] Error loading settings:", error);
+    return {};
+  }
+
+  return data.value as NotificationSettings;
 }
 
 function generateEmailHtml(subject: string, message: string): string {
