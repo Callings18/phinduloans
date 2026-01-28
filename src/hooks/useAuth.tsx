@@ -1,4 +1,4 @@
-// useAuth v5 - explicit hooks import to avoid dual React instance
+// useAuth v6 - force rebuild 2026-01-29T00:30
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
