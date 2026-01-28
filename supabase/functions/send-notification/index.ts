@@ -258,41 +258,132 @@ async function sendEmail_SendGrid(
 }
 
 function generateEmailHtml(subject: string, message: string): string {
+  const currentYear = new Date().getFullYear();
+  
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${subject}</title>
+  <!--[if mso]>
+  <style type="text/css">
+    table {border-collapse: collapse;}
+    td, th {font-family: Arial, sans-serif;}
+  </style>
+  <![endif]-->
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px 0;">
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%); min-height: 100vh;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%); padding: 40px 20px;">
     <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+      <td align="center" valign="top">
+        <!-- Main Container -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%;">
+          <!-- Header with Logo -->
           <tr>
-            <td style="background: linear-gradient(135deg, #6B1A3A 0%, #9B2D5A 100%); padding: 30px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">PHINDU</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Credit Solutions Limited</p>
+            <td style="padding: 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, #6B1A3A 0%, #9B2D5A 50%, #6B1A3A 100%); border-radius: 16px 16px 0 0; overflow: hidden;">
+                <!-- Glossy overlay effect -->
+                <tr>
+                  <td style="padding: 40px 30px; text-align: center; position: relative;">
+                    <!-- Shine effect -->
+                    <div style="position: absolute; top: 0; left: 0; right: 0; height: 50%; background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 100%);"></div>
+                    
+                    <!-- Logo Text -->
+                    <h1 style="color: #ffffff; margin: 0; font-size: 36px; font-weight: 800; letter-spacing: 3px; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                      PHINDU
+                    </h1>
+                    <p style="color: rgba(255,255,255,0.95); margin: 8px 0 0 0; font-size: 14px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase;">
+                      Credit Solutions Limited
+                    </p>
+                    
+                    <!-- Decorative line -->
+                    <div style="width: 60px; height: 3px; background: rgba(255,255,255,0.5); margin: 20px auto 0; border-radius: 2px;"></div>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+          
+          <!-- Main Content -->
           <tr>
-            <td style="padding: 40px 30px;">
-              <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 22px;">${subject}</h2>
-              <div style="color: #555555; font-size: 16px; line-height: 1.6;">
-                ${message.replace(/\n/g, '<br>')}
-              </div>
+            <td style="padding: 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%); box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                <tr>
+                  <td style="padding: 45px 40px;">
+                    <!-- Subject Title -->
+                    <h2 style="color: #1a1a2e; margin: 0 0 25px 0; font-size: 24px; font-weight: 700; border-left: 4px solid #6B1A3A; padding-left: 15px;">
+                      ${subject}
+                    </h2>
+                    
+                    <!-- Message Content -->
+                    <div style="color: #444444; font-size: 16px; line-height: 1.8; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 12px; border: 1px solid #e9ecef;">
+                      ${message.replace(/\n/g, '<br>')}
+                    </div>
+                    
+                    <!-- CTA Button -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 35px;">
+                      <tr>
+                        <td align="center">
+                          <a href="https://phinducredit.co.zm" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #6B1A3A 0%, #9B2D5A 100%); color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 30px; font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(107,26,58,0.35);">
+                            Visit Your Account
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+          
+          <!-- Footer -->
           <tr>
-            <td style="background-color: #f8f8f8; padding: 20px 30px; text-align: center; border-top: 1px solid #eeeeee;">
-              <p style="color: #888888; font-size: 12px; margin: 0;">
-                © ${new Date().getFullYear()} Phindu Credit Solutions Limited. All rights reserved.
-              </p>
-              <p style="color: #888888; font-size: 12px; margin: 10px 0 0 0;">
-                <a href="mailto:info@phinducredit.co.zm" style="color: #6B1A3A; text-decoration: none;">info@phinducredit.co.zm</a>
-              </p>
+            <td style="padding: 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, #1a1a2e 0%, #0f0f23 100%); border-radius: 0 0 16px 16px;">
+                <tr>
+                  <td style="padding: 35px 30px; text-align: center;">
+                    <!-- Contact Info -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+                      <tr>
+                        <td align="center">
+                          <p style="color: #9ca3af; font-size: 13px; margin: 0 0 8px 0;">
+                            📞 +260 XXX XXX XXX &nbsp;&nbsp;|&nbsp;&nbsp; 📧 info@phinducredit.co.zm
+                          </p>
+                          <p style="color: #9ca3af; font-size: 13px; margin: 0;">
+                            📍 Lusaka, Zambia
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <!-- Divider -->
+                    <div style="height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(107,26,58,0.5) 50%, transparent 100%); margin: 20px 0;"></div>
+                    
+                    <!-- Copyright -->
+                    <p style="color: #6b7280; font-size: 12px; margin: 0 0 10px 0;">
+                      © ${currentYear} Phindu Credit Solutions Limited. All rights reserved.
+                    </p>
+                    
+                    <!-- Legal Links -->
+                    <p style="margin: 0;">
+                      <a href="#" style="color: #9B2D5A; text-decoration: none; font-size: 11px; margin: 0 10px;">Privacy Policy</a>
+                      <span style="color: #4b5563;">|</span>
+                      <a href="#" style="color: #9B2D5A; text-decoration: none; font-size: 11px; margin: 0 10px;">Terms of Service</a>
+                      <span style="color: #4b5563;">|</span>
+                      <a href="#" style="color: #9B2D5A; text-decoration: none; font-size: 11px; margin: 0 10px;">Unsubscribe</a>
+                    </p>
+                    
+                    <!-- Regulatory Note -->
+                    <p style="color: #6b7280; font-size: 10px; margin: 15px 0 0 0; line-height: 1.5;">
+                      Phindu Credit Solutions Limited is a licensed financial services provider<br>
+                      regulated by the Bank of Zambia.
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
