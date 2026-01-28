@@ -1,5 +1,5 @@
-// useAuth v4 - cache bust 2026-01-28T15:20
-import * as React from "react";
+// useAuth v5 - explicit hooks import to avoid dual React instance
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
 import { notificationService } from "@/utils/notificationService";
@@ -17,15 +17,15 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<User | null>(null);
-  const [session, setSession] = React.useState<Session | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [roles, setRoles] = React.useState<string[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [roles, setRoles] = useState<string[]>([]);
 
-  const fetchUserRoles = async (userId: string) => {
+  const fetchUserRoles = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -36,16 +36,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return [];
     }
     return data.map(r => r.role);
-  };
+  }, []);
 
-  const hasRole = (role: string) => roles.includes(role);
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
-
-  const isStaff = roles.some(role =>
-    ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
+  const hasRole = useCallback((role: string) => roles.includes(role), [roles]);
+  
+  const isAdmin = useMemo(() => 
+    roles.includes('admin') || roles.includes('super_admin'), 
+    [roles]
   );
 
-  React.useEffect(() => {
+  const isStaff = useMemo(() => 
+    roles.some(role =>
+      ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
+    ),
+    [roles]
+  );
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         setSession(currentSession);
@@ -71,9 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchUserRoles]);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
 
     const { data, error } = await supabase.auth.signUp({
@@ -87,42 +94,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    // Send welcome email if signup was successful
     if (!error && data.user) {
       try {
         await notificationService.sendSignupWelcome(
           data.user.id,
           fullName,
-          '', // Phone not available at signup
+          '',
           email
         );
         console.log('[Auth] Welcome email sent successfully');
       } catch (notifyError) {
         console.error('[Auth] Failed to send welcome email:', notifyError);
-        // Don't fail signup if notification fails
       }
     }
 
     return { error: error as Error | null };
-  };
+  }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     return { error: error as Error | null };
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setRoles([]);
-  };
+  }, []);
 
-  const value = React.useMemo(() => ({
+  const value = useMemo(() => ({
     user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut
-  }), [user, session, isLoading, roles, isAdmin, isStaff]);
+  }), [user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut]);
 
   return (
     <AuthContext.Provider value={value}>
@@ -132,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = React.useContext(AuthContext);
+  const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
