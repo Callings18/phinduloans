@@ -136,19 +136,27 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
   apiToken: string;
   senderId: string;
 }> {
-  // Try to get from database first
-  const { data } = await supabase
+  // Try to get from notification_providers first
+  const { data: providersData } = await supabase
     .from("system_settings")
     .select("value")
     .eq("key", "notification_providers")
     .maybeSingle();
 
-  const dbSettings = data?.value || {};
+  // Also check notification_config (from AdminSettings page)
+  const { data: configData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_config")
+    .maybeSingle();
+
+  const providers = providersData?.value || {};
+  const config = configData?.value || {};
   
   return {
-    apiUrl: dbSettings.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3",
-    apiToken: dbSettings.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
-    senderId: dbSettings.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu",
+    apiUrl: providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3",
+    apiToken: providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
+    senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu",
   };
 }
 
@@ -357,18 +365,38 @@ async function sendEmail_SendGrid(
 }
 
 async function getNotificationSettings(supabase: any): Promise<NotificationSettings> {
-  const { data, error } = await supabase
+  // Get notification_providers settings
+  const { data: providersData, error: providersError } = await supabase
     .from("system_settings")
     .select("value")
     .eq("key", "notification_providers")
     .maybeSingle();
 
-  if (error || !data) {
-    console.error("[Notification] Error loading settings:", error);
-    return {};
+  // Also get notification_config settings (from AdminSettings page)
+  const { data: configData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_config")
+    .maybeSingle();
+
+  if (providersError) {
+    console.error("[Notification] Error loading settings:", providersError);
   }
 
-  return data.value as NotificationSettings;
+  const providers = providersData?.value || {};
+  const config = configData?.value || {};
+
+  // Merge settings: notification_providers takes priority, but check notification_config for sms_provider
+  // Map notification_config's sms_provider to our format
+  let smsProvider = providers.sms_provider;
+  if (!smsProvider && config.sms_provider) {
+    smsProvider = config.sms_provider;
+  }
+
+  return {
+    ...providers,
+    sms_provider: smsProvider,
+  } as NotificationSettings;
 }
 
 // Check user notification preferences from profiles table
