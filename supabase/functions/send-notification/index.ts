@@ -52,6 +52,12 @@ interface NotificationSettings {
   notify_on_promotion?: boolean;
   notify_on_court_case?: boolean;
   notify_on_contract_sent?: boolean;
+  // SMS Provider Selection
+  sms_provider?: 'twilio' | 'excitesms';
+  // ExciteSMS Credentials
+  excitesms_api_url?: string;
+  excitesms_api_token?: string;
+  excitesms_sender_id?: string;
 }
 
 // Get Twilio credentials - first from DB settings, then fallback to env secrets
@@ -119,6 +125,67 @@ function formatPhoneNumber(phone: string): string {
     // Assume it's a Zambian number without prefix
     return "+260" + formatted;
   }
+}
+
+// ============================================================================
+// EXCITESMS
+// ============================================================================
+
+async function getExciteSmsCredentials(supabase: any): Promise<{
+  apiUrl: string;
+  apiToken: string;
+  senderId: string;
+}> {
+  // Try to get from database first
+  const { data } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_providers")
+    .maybeSingle();
+
+  const dbSettings = data?.value || {};
+  
+  return {
+    apiUrl: dbSettings.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3",
+    apiToken: dbSettings.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
+    senderId: dbSettings.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu",
+  };
+}
+
+async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promise<any> {
+  if (!creds.apiToken) {
+    throw new Error("ExciteSMS API token not configured (EXCITESMS_API_TOKEN)");
+  }
+
+  // ExciteSMS requires phone number without + prefix
+  const phone = formatPhoneNumber(to).replace("+", "");
+  const url = `${creds.apiUrl}/sms/send`;
+
+  console.log(`[SMS - ExciteSMS] Sending to ${phone} via ${url}`);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${creds.apiToken}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({
+      recipient: phone,
+      sender_id: creds.senderId,
+      type: "plain",
+      message: message,
+    }),
+  });
+
+  const result = await response.json();
+  console.log("[SMS - ExciteSMS] Response:", JSON.stringify(result));
+
+  if (result.status === "error") {
+    throw new Error(result.message || "Failed to send SMS via ExciteSMS");
+  }
+
+  return result;
 }
 
 // ============================================================================
@@ -304,6 +371,91 @@ async function getNotificationSettings(supabase: any): Promise<NotificationSetti
   return data.value as NotificationSettings;
 }
 
+// Check user notification preferences from profiles table
+async function checkUserPreferences(
+  supabase: any, 
+  userId: string | undefined, 
+  notificationType: string,
+  eventType?: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  // If no userId, allow notification (e.g., for admin notifications or guest notifications)
+  if (!userId) {
+    return { allowed: true };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("email_reminders, sms_reminders, payment_alerts, marketing")
+      .eq("id", userId)
+      .single();
+
+    if (error || !data) {
+      console.log("[Notification] Could not fetch user preferences, allowing notification");
+      return { allowed: true };
+    }
+
+    // Map event types to preference categories
+    const paymentRelatedEvents = [
+      'payment_reminder', 
+      'payment_received', 
+      'partial_payment', 
+      'overdue',
+      'collection_escalation'
+    ];
+    const marketingEvents = ['promotion'];
+    
+    const isPaymentRelated = paymentRelatedEvents.includes(eventType || '');
+    const isMarketing = marketingEvents.includes(eventType || '');
+
+    // Check based on notification type and event category
+    if (notificationType === 'sms' || notificationType === 'whatsapp') {
+      // For marketing, check marketing preference
+      if (isMarketing && data.marketing === false) {
+        return { allowed: false, reason: "User has disabled marketing notifications" };
+      }
+      // For payment-related, check both payment_alerts and sms_reminders
+      if (isPaymentRelated) {
+        if (data.payment_alerts === false) {
+          return { allowed: false, reason: "User has disabled payment alerts" };
+        }
+        if (data.sms_reminders === false) {
+          return { allowed: false, reason: "User has disabled SMS reminders" };
+        }
+      }
+      // For general notifications, check sms_reminders
+      if (data.sms_reminders === false) {
+        return { allowed: false, reason: "User has disabled SMS reminders" };
+      }
+    }
+
+    if (notificationType === 'email') {
+      // For marketing, check marketing preference
+      if (isMarketing && data.marketing === false) {
+        return { allowed: false, reason: "User has disabled marketing notifications" };
+      }
+      // For payment-related, check both payment_alerts and email_reminders
+      if (isPaymentRelated) {
+        if (data.payment_alerts === false) {
+          return { allowed: false, reason: "User has disabled payment alerts" };
+        }
+        if (data.email_reminders === false) {
+          return { allowed: false, reason: "User has disabled email reminders" };
+        }
+      }
+      // For general notifications, check email_reminders
+      if (data.email_reminders === false) {
+        return { allowed: false, reason: "User has disabled email reminders" };
+      }
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    console.error("[Notification] Error checking user preferences:", err);
+    return { allowed: true }; // Allow on error to not block notifications
+  }
+}
+
 function generateEmailHtml(subject: string, message: string): string {
   const currentYear = new Date().getFullYear();
   
@@ -469,7 +621,13 @@ async function handleAdminContractSigned(
   // Send SMS to admin
   if (adminPhone && settings.sms_enabled !== false) {
     try {
-      results.sms = await sendSMS_Twilio(adminPhone, message);
+      const smsProvider = settings.sms_provider || Deno.env.get("SMS_PROVIDER") || 'twilio';
+      if (smsProvider === 'excitesms') {
+        const exciteCreds = await getExciteSmsCredentials(supabase);
+        results.sms = await sendSMS_ExciteSMS(adminPhone, message, exciteCreds);
+      } else {
+        results.sms = await sendSMS_Twilio(adminPhone, message);
+      }
     } catch (err: any) {
       console.error("[Admin Notification] SMS failed:", err.message);
       results.sms = { error: err.message };
@@ -562,18 +720,57 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    console.log(`[Notification] Sending ${type} to ${to} via Twilio`);
+    // Check user preferences (if userId is provided)
+    const userPrefs = await checkUserPreferences(supabase, userId, type, eventType);
+    if (!userPrefs.allowed) {
+      console.log(`[Notification] Blocked by user preference: ${userPrefs.reason}`);
+      
+      // Log the blocked notification
+      try {
+        await supabase.from("notification_logs").insert({
+          user_id: userId || null,
+          type: type,
+          recipient: to,
+          title: title || subject || "Notification",
+          message: message,
+          status: "disabled",
+          event_type: eventType,
+          provider_response: { blocked_reason: userPrefs.reason }
+        });
+      } catch (logError) {
+        console.error("[Notification] Failed to log blocked notification:", logError);
+      }
+      
+      return new Response(
+        JSON.stringify({ success: false, message: userPrefs.reason }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`[Notification] Sending ${type} to ${to}`);
 
     let result: any;
     let status = "sent";
-    const provider = type === 'email' ? 'sendgrid' : 'twilio';
+    const smsProviderName = settings.sms_provider || Deno.env.get("SMS_PROVIDER") || 'twilio';
+    const provider = type === 'email' ? 'sendgrid' : (type === 'sms' ? smsProviderName : 'twilio');
 
     try {
       if (type === 'sms') {
         if (settings.sms_enabled === false) {
           throw new Error("SMS notifications are disabled");
         }
-        result = await sendSMS_Twilio(to, message);
+        
+        // Check which SMS provider to use (priority: DB settings > env var > default 'twilio')
+        const smsProvider = settings.sms_provider || Deno.env.get("SMS_PROVIDER") || 'twilio';
+        console.log(`[Notification] Using SMS provider: ${smsProvider}`);
+        
+        if (smsProvider === 'excitesms') {
+          const exciteCreds = await getExciteSmsCredentials(supabase);
+          result = await sendSMS_ExciteSMS(to, message, exciteCreds);
+        } else {
+          const twilioCreds = await getTwilioCredentials(supabase);
+          result = await sendSMS_Twilio(to, message, twilioCreds);
+        }
       } else if (type === 'whatsapp') {
         if (settings.whatsapp_enabled === false) {
           throw new Error("WhatsApp notifications are disabled");
@@ -608,8 +805,9 @@ const handler = async (req: Request): Promise<Response> => {
         title: title || subject || "Notification",
         message: message,
         status: status,
+        event_type: eventType,
         sent_at: status === "sent" ? new Date().toISOString() : null,
-        provider_response: { provider, eventType, ...result }
+        provider_response: { provider, ...result }
       });
     } catch (logError) {
       console.error("[Notification] Failed to log:", logError);
