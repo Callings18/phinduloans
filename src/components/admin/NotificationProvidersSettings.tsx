@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -36,6 +37,9 @@ interface NotificationProviderSettings {
   whatsapp_enabled: boolean;
   email_enabled: boolean;
   
+  // SMS Provider Selection
+  sms_provider: 'twilio' | 'excitesms';
+  
   // Twilio Credentials (editable via Admin)
   twilio_account_sid?: string;
   twilio_auth_token?: string;
@@ -43,6 +47,11 @@ interface NotificationProviderSettings {
   twilio_whatsapp_number?: string;
   sendgrid_api_key?: string;
   sendgrid_from_email?: string;
+  
+  // ExciteSMS Credentials
+  excitesms_api_url?: string;
+  excitesms_api_token?: string;
+  excitesms_sender_id?: string;
   
   // Admin notification recipients
   admin_phone?: string;
@@ -83,6 +92,9 @@ const defaultSettings: NotificationProviderSettings = {
   whatsapp_enabled: true,
   email_enabled: true,
   
+  // SMS Provider Selection
+  sms_provider: 'twilio',
+  
   // Twilio Credentials (empty - will fallback to env secrets if not set)
   twilio_account_sid: "",
   twilio_auth_token: "",
@@ -90,6 +102,11 @@ const defaultSettings: NotificationProviderSettings = {
   twilio_whatsapp_number: "",
   sendgrid_api_key: "",
   sendgrid_from_email: "",
+  
+  // ExciteSMS Credentials (empty - will fallback to env secrets if not set)
+  excitesms_api_url: "https://gateway.excitesms.com/api/v3",
+  excitesms_api_token: "",
+  excitesms_sender_id: "Phindu",
   
   // Admin notification recipients
   admin_phone: "",
@@ -304,17 +321,17 @@ export const NotificationProvidersSettings = () => {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
-            Twilio Unified Notification System
+            Notification System
           </CardTitle>
           <CardDescription>
-            All notifications (SMS, WhatsApp, Email) are powered by Twilio. Credentials are securely stored as environment secrets.
+            SMS via Twilio or ExciteSMS, WhatsApp via Twilio, Email via SendGrid. Configure providers in the Credentials tab.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
             <Badge variant={settings.sms_enabled ? "default" : "secondary"} className="gap-1">
               <Phone className="h-3 w-3" />
-              SMS {settings.sms_enabled ? "Enabled" : "Disabled"}
+              SMS {settings.sms_enabled ? `(${settings.sms_provider === 'excitesms' ? 'ExciteSMS' : 'Twilio'})` : "Disabled"}
             </Badge>
             <Badge variant={settings.whatsapp_enabled ? "default" : "secondary"} className="gap-1">
               <MessageSquare className="h-3 w-3" />
@@ -362,20 +379,49 @@ export const NotificationProvidersSettings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* SMS */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-primary/10">
-                    <Phone className="h-5 w-5 text-primary" />
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <Phone className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium">SMS Notifications</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Send SMS via {settings.sms_provider === 'excitesms' ? 'ExciteSMS' : 'Twilio'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium">SMS Notifications</h4>
-                    <p className="text-sm text-muted-foreground">Send SMS via Twilio</p>
-                  </div>
+                  <Switch
+                    checked={settings.sms_enabled}
+                    onCheckedChange={(checked) => setSettings({ ...settings, sms_enabled: checked })}
+                  />
                 </div>
-                <Switch
-                  checked={settings.sms_enabled}
-                  onCheckedChange={(checked) => setSettings({ ...settings, sms_enabled: checked })}
-                />
+                
+                {/* SMS Provider Selection */}
+                {settings.sms_enabled && (
+                  <div className="ml-12 space-y-2">
+                    <Label htmlFor="sms_provider">SMS Provider</Label>
+                    <Select
+                      value={settings.sms_provider}
+                      onValueChange={(value: 'twilio' | 'excitesms') => setSettings({ ...settings, sms_provider: value })}
+                    >
+                      <SelectTrigger id="sms_provider" className="w-full md:w-[250px]">
+                        <SelectValue placeholder="Select SMS Provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="twilio">Twilio</SelectItem>
+                        <SelectItem value="excitesms">ExciteSMS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.sms_provider === 'excitesms' 
+                        ? 'Using ExciteSMS gateway for SMS delivery' 
+                        : 'Using Twilio for SMS delivery'}
+                      {' '}(Can also be set via SMS_PROVIDER env var)
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* WhatsApp */}
@@ -491,6 +537,57 @@ export const NotificationProvidersSettings = () => {
 
               <Separator />
 
+              {/* ExciteSMS Section */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2 text-primary">
+                  <Phone className="h-4 w-4" />
+                  ExciteSMS (Alternative SMS Provider)
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Configure ExciteSMS as an alternative SMS provider. Select it in the Channels tab or set SMS_PROVIDER=excitesms env var.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="excitesms_api_url">API URL</Label>
+                    <Input
+                      id="excitesms_api_url"
+                      placeholder="https://gateway.excitesms.com/api/v3"
+                      value={settings.excitesms_api_url || ""}
+                      onChange={(e) => setSettings({ ...settings, excitesms_api_url: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="excitesms_api_token">API Token</Label>
+                    <Input
+                      id="excitesms_api_token"
+                      type="password"
+                      placeholder="••••••••••••••••••••••••••••••••"
+                      value={settings.excitesms_api_token || ""}
+                      onChange={(e) => setSettings({ ...settings, excitesms_api_token: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="excitesms_sender_id">Sender ID</Label>
+                    <Input
+                      id="excitesms_sender_id"
+                      placeholder="Phindu"
+                      value={settings.excitesms_sender_id || ""}
+                      onChange={(e) => setSettings({ ...settings, excitesms_sender_id: e.target.value })}
+                    />
+                  </div>
+                </div>
+                
+                {settings.sms_provider === 'excitesms' && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10">
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-primary font-medium">ExciteSMS is currently the active SMS provider</span>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
               {/* SendGrid Section */}
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2 text-primary">
@@ -571,10 +668,13 @@ export const NotificationProvidersSettings = () => {
                   <AlertCircle className="h-4 w-4" />
                   Important
                 </h4>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground mb-2">
                   Credentials saved here are stored in the database and override environment secrets. 
                   Leave fields empty to use the default environment secrets. 
                   Changes take effect immediately after saving - no redeployment required.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Environment variables:</strong> SMS_PROVIDER (twilio/excitesms), EXCITESMS_API_URL, EXCITESMS_API_TOKEN, EXCITESMS_SENDER_ID
                 </p>
               </div>
             </CardContent>
