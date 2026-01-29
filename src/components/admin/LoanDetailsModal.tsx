@@ -826,8 +826,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     // First download the schedule
     handleDownloadSchedule();
 
-    // Send via WhatsApp using notification service
-    const { notificationService } = await import('@/utils/notificationService');
+    // Send via WhatsApp directly via Twilio
+    const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
     
     const message = `Hello ${loan.full_name},\n\n` +
       `Please find your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
@@ -839,21 +839,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `Please contact us if you have any questions.\n\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
-    await notificationService.send({
-      userId: loan.user_id,
-      type: 'whatsapp',
-      to: loan.phone,
-      message: message,
-      title: 'Loan Repayment Schedule',
-      eventType: 'payment_reminder'
-    });
+    await sendWhatsAppDirect(loan.phone, message, 'Loan Repayment Schedule');
   };
 
-  const handleEmailSchedule = () => {
+  const handleEmailSchedule = async () => {
     handleDownloadSchedule();
 
-    const subject = encodeURIComponent(`Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`);
-    const body = encodeURIComponent(
+    // Send via Email directly via SendGrid
+    const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+    
+    const subject = `Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`;
+    const message = 
       `Dear ${loan.full_name},\n\n` +
       `Please find attached your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
       `Loan Details:\n` +
@@ -865,10 +861,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
       `Please contact us if you have any questions.\n\n` +
       `Best regards,\n` +
-      `${settings?.companyInfo?.name || 'PHINDU Finance'}`
-    );
+      `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
-    window.location.href = `mailto:${loan.email}?subject=${subject}&body=${body}`;
+    await sendEmailDirect(loan.email, subject, message);
   };
 
   const handleDownloadContract = async () => {
