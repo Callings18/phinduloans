@@ -176,9 +176,34 @@ export default function NotificationSettingsPanel() {
     setProcessing(true);
     let successCount = 0;
     let failCount = 0;
+    let skippedCount = 0;
 
     try {
       for (const notification of pendingQueue) {
+        // Validate required fields before sending
+        if (!notification.type || !notification.recipient || !notification.message) {
+          console.warn(`Skipping notification ${notification.id}: missing required fields`, {
+            hasType: !!notification.type,
+            hasRecipient: !!notification.recipient,
+            hasMessage: !!notification.message,
+          });
+          
+          // Mark as failed with validation error
+          await supabase
+            .from("notification_logs")
+            .update({ 
+              status: "failed", 
+              provider_response: { 
+                error: "Missing required fields (type, recipient, or message)",
+                validationError: true 
+              } 
+            })
+            .eq("id", notification.id);
+          
+          skippedCount++;
+          continue;
+        }
+
         try {
           const { data, error } = await supabase.functions.invoke("send-notification", {
             body: {
@@ -219,7 +244,12 @@ export default function NotificationSettingsPanel() {
         }
       }
 
-      toast.success(`Processed ${successCount} notifications${failCount > 0 ? `, ${failCount} failed` : ""}`);
+      const statusParts = [];
+      if (successCount > 0) statusParts.push(`${successCount} sent`);
+      if (failCount > 0) statusParts.push(`${failCount} failed`);
+      if (skippedCount > 0) statusParts.push(`${skippedCount} skipped (missing data)`);
+      
+      toast.success(`Processed: ${statusParts.join(", ")}`);
       refetchQueue();
       queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     } catch (error: any) {
