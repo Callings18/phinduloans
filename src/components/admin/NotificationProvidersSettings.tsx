@@ -277,13 +277,17 @@ export const NotificationProvidersSettings = () => {
       return;
     }
 
+    // Determine which provider will be used for the test
+    const smsProviderName = settings.sms_provider === 'excitesms' ? 'ExciteSMS' : 'Twilio';
+    const providerName = channel === 'email' ? 'SendGrid' : (channel === 'sms' ? smsProviderName : 'Twilio WhatsApp');
+
     setTestingChannel(channel);
     try {
       const { data, error } = await supabase.functions.invoke("send-notification", {
         body: {
           type: channel,
           to: recipient,
-          message: `Test ${channel.toUpperCase()} from Phindu Finance notification system. Time: ${new Date().toLocaleString()}`,
+          message: `Test ${channel.toUpperCase()} from Phindu Finance via ${providerName}. Time: ${new Date().toLocaleString()}`,
           subject: channel === 'email' ? "Test Email from Phindu Finance" : undefined,
         },
       });
@@ -293,7 +297,7 @@ export const NotificationProvidersSettings = () => {
       
       toast({
         title: `${channel.toUpperCase()} Test Successful`,
-        description: `Test message sent to ${recipient}`,
+        description: `Test message sent to ${recipient} via ${providerName}`,
       });
     } catch (error: any) {
       toast({
@@ -727,7 +731,8 @@ export const NotificationProvidersSettings = () => {
                 Test Notifications
               </CardTitle>
               <CardDescription>
-                Send a test notification to verify your Twilio configuration is working
+                Send a test notification to verify your configuration is working.
+                SMS will use {settings.sms_provider === 'excitesms' ? 'ExciteSMS' : 'Twilio'}.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
