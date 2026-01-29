@@ -413,12 +413,13 @@ export const getLoanContractBase64 = async (loan: LoanData): Promise<string> => 
   return doc.output('datauristring');
 };
 
-// Share via WhatsApp (async version) - Uses notification service
+// Share via WhatsApp (async version) - Sends directly via Twilio
 export const shareContractViaWhatsApp = async (loan: LoanData) => {
-  const { notificationService } = await import('@/utils/notificationService');
+  const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
+  const { toast } = await import('sonner');
   
   const message = `Hello ${loan.full_name},\n\n` +
-    `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
+    `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
@@ -427,37 +428,28 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
     `Please sign and return the contract.\n\n` +
     `Phindu Credit Solutions Limited`;
   
-  // Get contract PDF as base64 for attachment
-  const contractBase64 = await getLoanContractBase64(loan);
+  // Download contract locally for admin reference
+  await downloadLoanContract(loan);
   
-  // Send via WhatsApp using notification service
-  const result = await notificationService.send({
-    userId: loan.id, // Using loan id as fallback
-    type: 'whatsapp',
-    to: loan.phone,
-    message: message,
-    title: 'Loan Contract',
-    eventType: 'contract_sent',
-    attachment: {
-      content: contractBase64.split(',')[1] || contractBase64, // Remove data URI prefix if present
-      name: `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}.pdf`
-    }
-  });
-  
-  if (result.success) {
-    // Also download locally for admin reference
-    await downloadLoanContract(loan);
-  }
+  // Send WhatsApp message directly via Twilio
+  const result = await sendWhatsAppDirect(
+    loan.phone,
+    message,
+    'Loan Contract'
+  );
   
   return result;
 };
 
-// Prepare mailto link with contract info (async version)
+// Send contract via Email using SendGrid (through edge function)
 export const emailContract = async (loan: LoanData) => {
-  const subject = encodeURIComponent(`Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`);
-  const body = encodeURIComponent(
+  const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+  const { toast } = await import('sonner');
+  
+  const subject = `Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`;
+  const message = 
     `Dear ${loan.full_name},\n\n` +
-    `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
+    `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
@@ -469,11 +461,17 @@ export const emailContract = async (loan: LoanData) => {
     `If you have any questions, please don't hesitate to contact us.\n\n` +
     `Best regards,\n` +
     `Phindu Credit Solutions Limited\n` +
-    `info@phinducredit.co.zm`
-  );
+    `info@phinducredit.co.zm`;
   
+  // Download contract locally for admin reference
   await downloadLoanContract(loan);
   
-  const mailtoUrl = `mailto:${loan.email}?subject=${subject}&body=${body}`;
-  window.location.href = mailtoUrl;
+  // Send email via SendGrid
+  const result = await sendEmailDirect(
+    loan.email,
+    subject,
+    message
+  );
+  
+  return result;
 };
