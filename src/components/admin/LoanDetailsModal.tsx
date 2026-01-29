@@ -79,6 +79,7 @@ import {
   Send,
   FileDown,
   Edit,
+  Smartphone,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
@@ -879,6 +880,67 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     await emailContract(loan as any);
   };
 
+  // SMS via ExciteSMS
+  const handleContractSMS = async () => {
+    if (!loan.phone) {
+      toast.error("No phone number available");
+      return;
+    }
+
+    const message = `Dear ${loan.full_name}, your loan contract (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. Monthly payment: K${(loan.monthly_payment || 0).toLocaleString()}. Term: ${loan.loan_term_months} months. Please check your email for the full contract. Contact us for any questions. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("excite-sms", {
+        body: {
+          to: loan.phone,
+          message,
+          userId: loan.user_id,
+          title: "Loan Contract Notification"
+        }
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`SMS sent to ${loan.phone}`);
+      } else {
+        toast.error(data?.message || "Failed to send SMS");
+      }
+    } catch (error: any) {
+      console.error("[SMS] Error:", error);
+      toast.error(error.message || "Failed to send SMS");
+    }
+  };
+
+  const handleScheduleSMS = async () => {
+    if (!loan.phone) {
+      toast.error("No phone number available");
+      return;
+    }
+
+    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("excite-sms", {
+        body: {
+          to: loan.phone,
+          message,
+          userId: loan.user_id,
+          title: "Loan Schedule Notification"
+        }
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`SMS sent to ${loan.phone}`);
+      } else {
+        toast.error(data?.message || "Failed to send SMS");
+      }
+    } catch (error: any) {
+      console.error("[SMS] Error:", error);
+      toast.error(error.message || "Failed to send SMS");
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const config: Record<string, { color: string; icon: any }> = {
       active: { color: "bg-success/20 text-success border-success/30", icon: Activity },
@@ -1510,6 +1572,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <Button size="sm" variant="outline" onClick={handleDownloadContract}>
                           <Download size={14} className="mr-1" /> Download Contract
                         </Button>
+                        <Button size="sm" variant="outline" onClick={handleContractSMS}>
+                          <Smartphone size={14} className="mr-1" /> SMS
+                        </Button>
                         <Button size="sm" variant="outline" onClick={handleContractWhatsApp}>
                           <Share2 size={14} className="mr-1" /> WhatsApp
                         </Button>
@@ -1539,6 +1604,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardContent className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={handleDownloadSchedule} disabled={!repayments?.length}>
                         <FileDown size={14} className="mr-1" /> Download PDF
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleScheduleSMS} disabled={!repayments?.length}>
+                        <Smartphone size={14} className="mr-1" /> SMS
                       </Button>
                       <Button size="sm" variant="outline" onClick={handleShareScheduleWhatsApp} disabled={!repayments?.length}>
                         <Share2 size={14} className="mr-1" /> WhatsApp
