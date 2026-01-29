@@ -1,4 +1,4 @@
-// vite.config.ts v16 - add jsx-runtime dedup 2026-01-29T11:15
+// vite.config.ts v17 - force cache clear 2026-01-29T21:30
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
