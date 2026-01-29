@@ -294,6 +294,26 @@ const AdminLoans = () => {
     },
   });
 
+  // Check if selected borrower has an existing active loan (duplicate prevention)
+  const { data: borrowerExistingLoan } = useQuery({
+    queryKey: ["borrower-existing-loan", selectedBorrowerId],
+    queryFn: async () => {
+      if (!selectedBorrowerId) return null;
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, loan_amount, status, created_at")
+        .eq("user_id", selectedBorrowerId)
+        .in("status", ["pending", "under_review", "approved", "disbursed", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return null;
+      return data;
+    },
+    enabled: !!selectedBorrowerId,
+  });
+
   // Fetch loan products
   const { data: loanProducts } = useQuery({
     queryKey: ["admin-loan-products"],
@@ -396,6 +416,11 @@ const AdminLoans = () => {
     mutationFn: async () => {
       if (!selectedBorrower || !selectedProduct || !loanDetails) {
         throw new Error("Please fill in all required fields");
+      }
+
+      // Check for duplicate loan - prevent admin from creating loan for borrower with existing active loan
+      if (borrowerExistingLoan) {
+        throw new Error("This borrower already has an active or pending loan. Cannot create a new loan until the existing one is completed.");
       }
 
       const { data: loanApp, error: loanError } = await supabase
@@ -1232,7 +1257,29 @@ const AdminLoans = () => {
                 </Select>
               </div>
 
-              {selectedBorrower && (
+              {/* Duplicate Loan Warning */}
+              {borrowerExistingLoan && (
+                <Card className="border-destructive bg-destructive/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="text-destructive h-5 w-5 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-destructive mb-1">Cannot Create Loan</h4>
+                        <p className="text-sm text-destructive/90 mb-2">
+                          This borrower already has an active/pending loan and cannot receive a new loan until the existing one is completed.
+                        </p>
+                        <div className="text-sm space-y-1">
+                          <p><span className="text-muted-foreground">Existing Loan Amount:</span> <span className="font-medium">K{Number(borrowerExistingLoan.loan_amount).toLocaleString()}</span></p>
+                          <p><span className="text-muted-foreground">Status:</span> <Badge variant="outline" className="ml-1">{borrowerExistingLoan.status}</Badge></p>
+                          <p><span className="text-muted-foreground">Applied:</span> <span className="font-medium">{format(new Date(borrowerExistingLoan.created_at), "MMM dd, yyyy")}</span></p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedBorrower && !borrowerExistingLoan && (
                 <Card className="bg-secondary/30">
                   <CardContent className="p-4">
                     <h4 className="font-semibold mb-3">Borrower Details</h4>
@@ -1569,10 +1616,14 @@ const AdminLoans = () => {
 
           <DialogFooter className="gap-2 mt-4">
             <Button variant="outline" onClick={() => setIsAddLoanOpen(false)}>Cancel</Button>
-            <Button onClick={() => createLoanMutation.mutate()} disabled={createLoanMutation.isPending}>
+            <Button 
+              onClick={() => createLoanMutation.mutate()} 
+              disabled={createLoanMutation.isPending || !!borrowerExistingLoan}
+              title={borrowerExistingLoan ? "Cannot create loan - borrower has existing active loan" : undefined}
+            >
               {createLoanMutation.isPending && <Loader2 className="mr-2 animate-spin" size={16} />}
               <Plus size={16} className="mr-1" />
-              Create Loan
+              {borrowerExistingLoan ? "Cannot Create Loan" : "Create Loan"}
             </Button>
           </DialogFooter>
         </DialogContent>
