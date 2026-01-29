@@ -1,6 +1,6 @@
-// Main v10 - force rebuild 2026-01-29T00:30
+// Main v11 - explicit React namespace 2026-01-29T09:00
 import * as React from "react";
-import { createRoot } from "react-dom/client";
+import * as ReactDOM from "react-dom/client";
 import "@fontsource/outfit/300.css";
 import "@fontsource/outfit/400.css";
 import "@fontsource/outfit/500.css";
@@ -20,7 +20,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-const root = createRoot(document.getElementById("root")!);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(
   <React.StrictMode>
     <App />

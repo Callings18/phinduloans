@@ -1,5 +1,5 @@
-// useAuth v6 - force rebuild 2026-01-29T00:30
-import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
+// useAuth v7 - explicit React namespace 2026-01-29T09:00
+import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
 import { notificationService } from "@/utils/notificationService";
@@ -17,15 +17,15 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [roles, setRoles] = useState<string[]>([]);
+  const [user, setUser] = React.useState<User | null>(null);
+  const [session, setSession] = React.useState<Session | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [roles, setRoles] = React.useState<string[]>([]);
 
-  const fetchUserRoles = useCallback(async (userId: string) => {
+  const fetchUserRoles = React.useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -38,21 +38,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data.map(r => r.role);
   }, []);
 
-  const hasRole = useCallback((role: string) => roles.includes(role), [roles]);
+  const hasRole = React.useCallback((role: string) => roles.includes(role), [roles]);
   
-  const isAdmin = useMemo(() => 
+  const isAdmin = React.useMemo(() => 
     roles.includes('admin') || roles.includes('super_admin'), 
     [roles]
   );
 
-  const isStaff = useMemo(() => 
+  const isStaff = React.useMemo(() => 
     roles.some(role =>
       ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
     ),
     [roles]
   );
 
-  useEffect(() => {
+  React.useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         setSession(currentSession);
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchUserRoles]);
 
-  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
+  const signUp = React.useCallback(async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
 
     const { data, error } = await supabase.auth.signUp({
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error as Error | null };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = React.useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -120,12 +120,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error as Error | null };
   }, []);
 
-  const signOut = useCallback(async () => {
+  const signOut = React.useCallback(async () => {
     await supabase.auth.signOut();
     setRoles([]);
   }, []);
 
-  const value = useMemo(() => ({
+  const value = React.useMemo(() => ({
     user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut
   }), [user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut]);
 
@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context = React.useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
