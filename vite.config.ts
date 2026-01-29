@@ -1,4 +1,4 @@
-// vite.config.ts v17 - force cache clear 2026-01-29T21:30
+// vite.config.ts v18 - aggressive cache reset 2026-01-29T23:00
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -14,10 +14,11 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    dedupe: ["react", "react-dom", "react/jsx-runtime"],
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
+  cacheDir: "node_modules/.vite_v18",
   optimizeDeps: {
-    include: ["react", "react-dom", "react/jsx-runtime"],
+    include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
     force: true,
   },
   build: {
