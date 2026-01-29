@@ -1,4 +1,4 @@
-// vite.config.ts v18 - aggressive cache reset 2026-01-29T23:00
+// vite.config.ts v19 - explicit react alias 2026-01-29T23:05
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -13,10 +13,11 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "react": path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
-  cacheDir: "node_modules/.vite_v18",
   optimizeDeps: {
     include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
     force: true,
