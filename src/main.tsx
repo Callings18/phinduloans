@@ -1,4 +1,4 @@
-// Main v11 - explicit React namespace 2026-01-29T09:00
+// Main v12 - simplified 2026-01-29T10:30
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
 import "@fontsource/outfit/300.css";

@@ -1,4 +1,4 @@
-// App v10 - explicit React namespace 2026-01-29T09:00
+// App v11 - simplified 2026-01-29T10:30
 import * as React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

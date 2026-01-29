@@ -1,4 +1,4 @@
-// useAuth v7 - explicit React namespace 2026-01-29T09:00
+// useAuth v8 - simplified 2026-01-29T10:30
 import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
