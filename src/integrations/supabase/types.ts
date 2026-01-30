@@ -1737,6 +1737,42 @@ export type Database = {
         }
         Relationships: []
       }
+      otp_codes: {
+        Row: {
+          attempts: number
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          max_attempts: number
+          phone: string
+          purpose: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          code: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          max_attempts?: number
+          phone: string
+          purpose?: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_attempts?: number
+          phone?: string
+          purpose?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       payment_gateway_settings: {
         Row: {
           api_key: string | null
@@ -2427,6 +2463,7 @@ export type Database = {
         Args: { p_repayment_id: string }
         Returns: number
       }
+      cleanup_expired_otps: { Args: never; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
