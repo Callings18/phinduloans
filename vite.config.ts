@@ -1,4 +1,4 @@
-// vite.config.ts v21 - forced single react instance 2026-01-30T05:25
+// vite.config.ts v22 - forced single react instance 2026-01-30T12:15
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
