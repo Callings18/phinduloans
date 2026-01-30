@@ -147,7 +147,7 @@ serve(async (req) => {
       if (!existingProfile) {
         return new Response(
           JSON.stringify({ success: false, error: "No account found with this phone number. Please sign up first." }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
