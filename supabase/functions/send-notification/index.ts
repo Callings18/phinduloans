@@ -630,19 +630,79 @@ async function handleAdminContractSigned(
   request: NotificationRequest,
   settings: NotificationSettings
 ): Promise<any> {
-  const { borrowerName, borrowerPhone, loanId, loanAmount, signatureUrl } = request;
+  const { borrowerName, borrowerPhone, borrowerEmail, loanId, loanAmount, signatureUrl } = request;
   
   const adminPhone = settings.admin_phone || settings.admin_whatsapp;
   const adminEmail = settings.admin_email;
   
   const loanRef = `LOAN-${loanId?.slice(0, 8).toUpperCase()}`;
   
+  // Generate signed URL for the signature file if available
+  let signedContractUrl = "";
+  if (signatureUrl) {
+    try {
+      const { data: signedData } = await supabase.storage
+        .from('loan-documents')
+        .createSignedUrl(signatureUrl, 86400); // 24 hour expiry
+      
+      if (signedData?.signedUrl) {
+        signedContractUrl = signedData.signedUrl;
+      }
+    } catch (err) {
+      console.error("[Admin Notification] Failed to get signed URL:", err);
+    }
+  }
+  
   const message = `📝 CONTRACT SIGNED\n\n` +
     `Borrower: ${borrowerName}\n` +
+    `Phone: ${borrowerPhone || 'N/A'}\n` +
+    `Email: ${borrowerEmail || 'N/A'}\n` +
     `Loan Ref: ${loanRef}\n` +
     `Amount: K${loanAmount?.toLocaleString()}\n\n` +
     `The borrower has digitally signed the contract. Please review and proceed with disbursement.\n\n` +
     `- Phindu Credit Solutions`;
+
+  // Enhanced email content with link to view signature
+  const emailHtmlContent = `
+    <h2 style="color: #6B1A3A;">📝 Contract Signed - Action Required</h2>
+    <p>A borrower has signed their loan contract and is awaiting disbursement.</p>
+    
+    <table style="border-collapse: collapse; margin: 20px 0; width: 100%;">
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Borrower</strong></td>
+        <td style="padding: 10px; border: 1px solid #ddd;">${borrowerName}</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Phone</strong></td>
+        <td style="padding: 10px; border: 1px solid #ddd;">${borrowerPhone || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Email</strong></td>
+        <td style="padding: 10px; border: 1px solid #ddd;">${borrowerEmail || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Loan Reference</strong></td>
+        <td style="padding: 10px; border: 1px solid #ddd;">${loanRef}</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Loan Amount</strong></td>
+        <td style="padding: 10px; border: 1px solid #ddd;">K${loanAmount?.toLocaleString()}</td>
+      </tr>
+    </table>
+    
+    ${signedContractUrl ? `
+      <p><strong>View Signed Contract:</strong></p>
+      <p><a href="${signedContractUrl}" style="display: inline-block; background: linear-gradient(135deg, #6B1A3A 0%, #9B2D5A 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Download Signature</a></p>
+      <p style="font-size: 12px; color: #666;">This link expires in 24 hours.</p>
+    ` : ''}
+    
+    <p style="margin-top: 20px;">Please log in to the admin dashboard to review the application and proceed with disbursement.</p>
+    
+    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+      - Phindu Credit Solutions<br>
+      Automated Notification System
+    </p>
+  `;
 
   const results: any = { sms: null, whatsapp: null, email: null };
 
@@ -672,13 +732,14 @@ async function handleAdminContractSigned(
     }
   }
 
-  // Send Email to admin
+  // Send Email to admin with rich HTML content
   if (adminEmail && settings.email_enabled !== false) {
     try {
       results.email = await sendEmail_SendGrid(
         adminEmail,
-        `Contract Signed - ${loanRef} by ${borrowerName}`,
-        message.replace(/📝 /g, '')
+        `🔔 Action Required: Contract Signed - ${loanRef} by ${borrowerName}`,
+        message.replace(/📝 /g, ''),
+        emailHtmlContent
       );
     } catch (err: any) {
       console.error("[Admin Notification] Email failed:", err.message);
@@ -686,16 +747,25 @@ async function handleAdminContractSigned(
     }
   }
 
-  // Log the notification
+  // Log the notification with loan details for reference
   await supabase.from("notification_logs").insert({
     user_id: null,
     type: "admin_notification",
     recipient: adminPhone || adminEmail || "admin",
-    title: "Contract Signed Notification",
+    title: `Contract Signed: ${borrowerName} - ${loanRef}`,
     message: message,
+    subject: `Contract signed by ${borrowerName}`,
     status: "sent",
     sent_at: new Date().toISOString(),
-    provider_response: results
+    event_type: "contract_signed",
+    provider_response: { 
+      ...results, 
+      loanId, 
+      borrowerName, 
+      borrowerPhone, 
+      signatureUrl,
+      signedContractUrl: signedContractUrl || null
+    }
   });
 
   return results;
