@@ -153,8 +153,14 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
   const providers = providersData?.value || {};
   const config = configData?.value || {};
   
+  // Prioritize correct URL - note: domain is .tech not .com
+  const apiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.tech/api/v3";
+  
+  // Fix common URL mistake (.com vs .tech)
+  const correctedApiUrl = apiUrl.replace("gateway.excitesms.com", "gateway.excitesms.tech");
+  
   return {
-    apiUrl: providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3",
+    apiUrl: correctedApiUrl,
     apiToken: providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
     senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu",
   };
