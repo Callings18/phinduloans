@@ -1,4 +1,4 @@
-// vite.config.ts v22 - forced single react instance 2026-01-30T12:15
+// vite.config.ts v23 - forced cache clear 2026-01-31T11:00
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -24,12 +24,12 @@ export default defineConfig(({ mode }) => ({
     include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
     force: true,
     esbuildOptions: {
-      // Ensure consistent React resolution
       define: {
         global: 'globalThis',
       },
     },
   },
+  cacheDir: ".vite-cache-v23",
   esbuild: {
     jsxInject: undefined,
   },
