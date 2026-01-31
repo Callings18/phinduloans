@@ -186,7 +186,34 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
     }),
   });
 
-  const result = await response.json();
+  // Check content-type BEFORE attempting to parse as JSON
+  const contentType = response.headers.get("content-type") || "";
+  const responseText = await response.text();
+  
+  console.log(`[SMS - ExciteSMS] Status: ${response.status}, Content-Type: ${contentType}`);
+  console.log(`[SMS - ExciteSMS] Response preview: ${responseText.substring(0, 200)}`);
+
+  // Handle non-JSON responses
+  if (!contentType.includes("application/json")) {
+    // Check for common HTML patterns indicating error pages
+    if (responseText.trim().startsWith("<!") || responseText.includes("<html")) {
+      throw new Error(
+        `ExciteSMS API returned HTML instead of JSON (Status: ${response.status}). ` +
+        `This may indicate: auth failure, wrong endpoint, or server error. ` +
+        `Check API URL and token configuration.`
+      );
+    }
+    throw new Error(`ExciteSMS unexpected response format: ${contentType}. Response: ${responseText.substring(0, 100)}`);
+  }
+
+  // Now safely parse as JSON
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch (parseError) {
+    throw new Error(`ExciteSMS returned invalid JSON. Response: ${responseText.substring(0, 100)}`);
+  }
+  
   console.log("[SMS - ExciteSMS] Response:", JSON.stringify(result));
 
   if (result.status === "error") {
