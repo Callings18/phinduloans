@@ -413,10 +413,53 @@ export const getLoanContractBase64 = async (loan: LoanData): Promise<string> => 
   return doc.output('datauristring');
 };
 
-// Share via WhatsApp (async version) - Sends directly via Twilio
+// Upload PDF to storage and get public URL for WhatsApp media
+export const uploadContractToStorage = async (loan: LoanData): Promise<string | null> => {
+  try {
+    const doc = await createContractPDF(loan);
+    const pdfBlob = doc.output('blob');
+    
+    const fileName = `contracts/contract_${loan.id}_${Date.now()}.pdf`;
+    
+    // Upload to Supabase storage
+    const { error: uploadError } = await supabase.storage
+      .from('loan-documents')
+      .upload(fileName, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Failed to upload contract to storage:', uploadError);
+      return null;
+    }
+
+    // Get signed URL for access (valid for 1 hour)
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from('loan-documents')
+      .createSignedUrl(fileName, 3600); // 1 hour expiry
+
+    if (signedError || !signedData?.signedUrl) {
+      console.error('Failed to get signed URL:', signedError);
+      return null;
+    }
+
+    return signedData.signedUrl;
+  } catch (error) {
+    console.error('Error uploading contract:', error);
+    return null;
+  }
+};
+
+// Share via WhatsApp (async version) - Sends PDF directly via Twilio
 export const shareContractViaWhatsApp = async (loan: LoanData) => {
   const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
   const { toast } = await import('sonner');
+  
+  toast.info('Preparing contract PDF...');
+  
+  // Upload PDF to storage and get URL
+  const pdfUrl = await uploadContractToStorage(loan);
   
   const message = `Hello ${loan.full_name},\n\n` +
     `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
@@ -425,18 +468,19 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
     `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
     `- Term: ${loan.loan_term_months} months\n\n` +
-    `Please sign and return the contract.\n\n` +
+    `Please review, sign and return the contract.\n\n` +
     `Phindu Credit Solutions Limited`;
   
-  // Download contract locally for admin reference
-  await downloadLoanContract(loan);
-  
-  // Send WhatsApp message directly via Twilio
+  // Send WhatsApp message with PDF attachment if URL is available
   const result = await sendWhatsAppDirect(
     loan.phone,
     message,
-    'Loan Contract'
+    'Loan Contract',
+    pdfUrl || undefined // Pass the PDF URL as media attachment
   );
+  
+  // Also download locally for admin reference
+  await downloadLoanContract(loan);
   
   return result;
 };
@@ -471,6 +515,21 @@ export const emailContract = async (loan: LoanData) => {
     loan.email,
     subject,
     message
+  );
+  
+  return result;
+};
+
+// Send contract via SMS
+export const smsContract = async (loan: LoanData, companyName?: string) => {
+  const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
+  
+  const message = `Dear ${loan.full_name}, your loan contract (Ref: PCS-${loan.id.slice(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. Monthly payment: K${loan.monthly_payment.toLocaleString()}. Term: ${loan.loan_term_months} months. Please check your email/WhatsApp for the full contract. - ${companyName || 'Phindu Finance'}`;
+  
+  const result = await sendSMSDirect(
+    loan.phone,
+    message,
+    'Loan Contract Notification'
   );
   
   return result;

@@ -86,7 +86,7 @@ import DocumentVerificationTab from "./DocumentVerificationTab";
 import GuarantorTab from "./GuarantorTab";
 import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { downloadLoanContract, shareContractViaWhatsApp, emailContract } from "@/utils/generateLoanContract";
+import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract } from "@/utils/generateLoanContract";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 
@@ -880,35 +880,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     await emailContract(loan as any);
   };
 
-  // SMS via ExciteSMS
+  // SMS via unified notification service
   const handleContractSMS = async () => {
     if (!loan.phone) {
       toast.error("No phone number available");
       return;
     }
-
-    const message = `Dear ${loan.full_name}, your loan contract (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. Monthly payment: K${(loan.monthly_payment || 0).toLocaleString()}. Term: ${loan.loan_term_months} months. Please check your email for the full contract. Contact us for any questions. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
-
-    try {
-      const { data, error } = await supabase.functions.invoke("excite-sms", {
-        body: {
-          to: loan.phone,
-          message,
-          userId: loan.user_id,
-          title: "Loan Contract Notification"
-        }
-      });
-
-      if (error) throw error;
-      if (data?.success) {
-        toast.success(`SMS sent to ${loan.phone}`);
-      } else {
-        toast.error(data?.message || "Failed to send SMS");
-      }
-    } catch (error: any) {
-      console.error("[SMS] Error:", error);
-      toast.error(error.message || "Failed to send SMS");
-    }
+    await smsContract(loan as any, settings?.companyInfo?.name || 'PHINDU Finance');
   };
 
   const handleScheduleSMS = async () => {
