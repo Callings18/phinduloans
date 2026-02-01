@@ -1,4 +1,4 @@
-// vite.config.ts v23 - forced cache clear 2026-01-31T11:00
+// vite.config.ts v24 - forced cache clear 2026-02-01T21:20
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  cacheDir: ".vite-cache-v23",
+  cacheDir: ".vite-cache-v24",
   esbuild: {
     jsxInject: undefined,
   },
