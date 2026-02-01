@@ -661,6 +661,7 @@ export type Database = {
           id: string
           loan_id: string
           mobile_money_number: string | null
+          source_account_id: string | null
           status: string | null
           transaction_reference: string | null
         }
@@ -673,6 +674,7 @@ export type Database = {
           id?: string
           loan_id: string
           mobile_money_number?: string | null
+          source_account_id?: string | null
           status?: string | null
           transaction_reference?: string | null
         }
@@ -685,6 +687,7 @@ export type Database = {
           id?: string
           loan_id?: string
           mobile_money_number?: string | null
+          source_account_id?: string | null
           status?: string | null
           transaction_reference?: string | null
         }
@@ -702,6 +705,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "overdue_loans_view"
             referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "disbursements_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -980,8 +990,13 @@ export type Database = {
         Row: {
           address: string | null
           admin_notes: string | null
+          admin_signed: boolean | null
+          admin_signed_at: string | null
+          admin_signed_by: string | null
           assigned_to: string | null
           bank_statement_url: string | null
+          borrower_signed: boolean | null
+          borrower_signed_at: string | null
           city: string | null
           collateral_description: string | null
           collateral_image_2_url: string | null
@@ -1039,8 +1054,13 @@ export type Database = {
         Insert: {
           address?: string | null
           admin_notes?: string | null
+          admin_signed?: boolean | null
+          admin_signed_at?: string | null
+          admin_signed_by?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
+          borrower_signed?: boolean | null
+          borrower_signed_at?: string | null
           city?: string | null
           collateral_description?: string | null
           collateral_image_2_url?: string | null
@@ -1098,8 +1118,13 @@ export type Database = {
         Update: {
           address?: string | null
           admin_notes?: string | null
+          admin_signed?: boolean | null
+          admin_signed_at?: string | null
+          admin_signed_by?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
+          borrower_signed?: boolean | null
+          borrower_signed_at?: string | null
           city?: string | null
           collateral_description?: string | null
           collateral_image_2_url?: string | null
