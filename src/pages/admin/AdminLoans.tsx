@@ -139,7 +139,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("applications");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -910,23 +910,22 @@ const AdminLoans = () => {
     );
   };
 
-  // Filter loans based on active tab - Only show actual disbursed loans, not applications
+  // Filter loans based on active tab
   const getFilteredLoans = () => {
     let filtered = loans || [];
 
-    // Always exclude application statuses (pending, under_review, approved, rejected)
-    // Only show actual disbursed loans
-    filtered = filtered.filter(l => !["pending", "under_review", "approved", "rejected"].includes(l.status));
-
-    // Tab-based filtering within actual loans
-    if (activeTab === "active") {
+    // Tab-based filtering
+    if (activeTab === "applications") {
+      // Applications tab shows pending, under_review, approved, rejected
+      filtered = filtered.filter(l => ["pending", "under_review", "approved", "rejected"].includes(l.status));
+    } else if (activeTab === "active") {
+      // Active tab shows disbursed and active loans
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
       filtered = filtered.filter(l => l.status === "completed");
     } else if (activeTab === "defaulted") {
       filtered = filtered.filter(l => l.status === "defaulted");
     }
-    // No else needed - "all" tab will show all disbursed loans (active, completed, defaulted)
 
     // Status filter within tab
     if (statusFilter !== "all") {
