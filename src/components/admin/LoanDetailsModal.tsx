@@ -117,6 +117,13 @@ interface Loan {
   settlement_type?: string | null;
   early_settlement_fee?: number;
   loan_product_id?: string | null;
+  // Contract signing fields
+  signed_contract_url?: string | null;
+  signed_contract_uploaded_at?: string | null;
+  borrower_signed?: boolean;
+  borrower_signed_at?: string | null;
+  admin_signed?: boolean;
+  admin_signed_at?: string | null;
 }
 
 interface Repayment {
@@ -1136,6 +1143,141 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Contract Signing Status - for approved loans */}
+                {(loan.status === "approved" || loan.signed_contract_url) && (
+                  <Card className={`border-2 ${
+                    loan.borrower_signed && loan.admin_signed 
+                      ? "border-success/50 bg-success/5" 
+                      : "border-warning/50 bg-warning/5"
+                  }`}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <FileText size={16} /> Contract Signing Status
+                      </CardTitle>
+                      <CardDescription>
+                        {loan.borrower_signed && loan.admin_signed 
+                          ? "Contract has been signed by both parties - ready for disbursement"
+                          : "Contract must be signed by both parties before disbursement"
+                        }
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Borrower Signature */}
+                        <div className={`p-3 rounded-lg border ${loan.borrower_signed || loan.signed_contract_url ? "bg-success/10 border-success/30" : "bg-muted border-border"}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            {loan.borrower_signed || loan.signed_contract_url ? (
+                              <CheckCircle size={16} className="text-success" />
+                            ) : (
+                              <Clock size={16} className="text-muted-foreground" />
+                            )}
+                            <span className="font-medium text-sm">Borrower Signature</span>
+                          </div>
+                          {loan.borrower_signed || loan.signed_contract_url ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-success">Signed</p>
+                              {loan.borrower_signed_at && (
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(loan.borrower_signed_at), "MMM dd, yyyy HH:mm")}
+                                </p>
+                              )}
+                              {loan.signed_contract_url && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-7 text-xs mt-2"
+                                  onClick={async () => {
+                                    const { data } = await supabase.storage
+                                      .from('loan-documents')
+                                      .createSignedUrl(loan.signed_contract_url!, 3600);
+                                    if (data?.signedUrl) {
+                                      window.open(data.signedUrl, '_blank');
+                                    } else {
+                                      toast.error('Could not retrieve signed contract');
+                                    }
+                                  }}
+                                >
+                                  <Download size={12} className="mr-1" /> View Signature
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Awaiting borrower signature</p>
+                          )}
+                        </div>
+
+                        {/* Admin Signature */}
+                        <div className={`p-3 rounded-lg border ${loan.admin_signed ? "bg-success/10 border-success/30" : "bg-muted border-border"}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            {loan.admin_signed ? (
+                              <CheckCircle size={16} className="text-success" />
+                            ) : (
+                              <Clock size={16} className="text-muted-foreground" />
+                            )}
+                            <span className="font-medium text-sm">Admin Signature</span>
+                          </div>
+                          {loan.admin_signed ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-success">Signed & Verified</p>
+                              {loan.admin_signed_at && (
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(loan.admin_signed_at), "MMM dd, yyyy HH:mm")}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">Pending admin verification</p>
+                              {(loan.borrower_signed || loan.signed_contract_url) && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-7 text-xs"
+                                  onClick={async () => {
+                                    const { error } = await supabase
+                                      .from('loan_applications')
+                                      .update({
+                                        admin_signed: true,
+                                        admin_signed_at: new Date().toISOString(),
+                                        borrower_signed: true, // Ensure borrower is also marked
+                                        borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || new Date().toISOString(),
+                                      })
+                                      .eq('id', loan.id);
+                                    
+                                    if (error) {
+                                      toast.error('Failed to sign contract');
+                                    } else {
+                                      toast.success('Contract signed by admin - ready for disbursement!');
+                                      queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
+                                    }
+                                  }}
+                                >
+                                  <Shield size={12} className="mr-1" /> Sign & Verify
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Status Summary */}
+                      {!(loan.borrower_signed && loan.admin_signed) && !loan.signed_contract_url && (
+                        <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle size={16} className="text-warning mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium">Disbursement Locked</p>
+                              <p className="text-xs text-muted-foreground">
+                                The borrower must sign the contract first, then admin must verify and counter-sign before disbursement can proceed.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               {/* Repayments Tab */}

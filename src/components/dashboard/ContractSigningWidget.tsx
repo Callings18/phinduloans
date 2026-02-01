@@ -84,6 +84,8 @@ export default function ContractSigningWidget({ userId }: Props) {
         .update({
           signed_contract_url: fileName,
           signed_contract_uploaded_at: new Date().toISOString(),
+          borrower_signed: true,
+          borrower_signed_at: new Date().toISOString(),
         })
         .eq("id", selectedLoan.id);
 
