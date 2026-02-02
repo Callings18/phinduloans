@@ -233,6 +233,23 @@ const defaultFormData = {
   eligible_locations: null as string[] | null,
 };
 
+// Type for preview calculation result
+interface PreviewCalculation {
+  principal: number;
+  totalInterest: number;
+  processingFee: number;
+  enforcementFee: number;
+  insuranceFee: number;
+  vatAmount: number;
+  platformFee: number;
+  feesDeductedUpfront: number;
+  disbursementAmount: number;
+  totalRepayment: number;
+  monthlyPayment: number;
+  effectiveAnnualRate: number;
+  termMonths: number;
+}
+
 const AdminLoanProducts = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -240,20 +257,19 @@ const AdminLoanProducts = () => {
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState<LoanProduct | null>(null);
   const [configuringProduct, setConfiguringProduct] = useState<LoanProduct | null>(null);
   const [formData, setFormData] = useState(defaultFormData);
+  // State-based preview calculation (replaces innerHTML for security)
+  const [previewPrincipal, setPreviewPrincipal] = useState<number>(0);
+  const [previewTerm, setPreviewTerm] = useState<number>(0);
+  const [previewResult, setPreviewResult] = useState<PreviewCalculation | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const calculationTriggeredRef = useRef(false);
 
-  // Function to perform calculation preview
+  // Function to perform calculation preview (uses React state instead of innerHTML for security)
   const performCalculation = () => {
-    const principalInput = document.getElementById('preview-principal') as HTMLInputElement;
-    const termInput = document.getElementById('preview-term') as HTMLInputElement;
-    
-    if (!principalInput || !termInput) return;
-    
-    const principal = Number(principalInput.value) || formData.min_amount;
-    const term = Number(termInput.value) || formData.min_term_months;
+    const principal = previewPrincipal || formData.min_amount;
+    const term = previewTerm || formData.min_term_months;
 
     // Convert term to months based on term_unit
     let termMonths = term;
@@ -272,66 +288,27 @@ const AdminLoanProducts = () => {
       enforcement_fee_percent: formData.enforcement_fee_percent,
     });
 
-    const previewResult = document.getElementById('preview-result');
-    if (previewResult) {
-      previewResult.innerHTML = `
-        <div class="grid grid-cols-2 gap-3 text-sm">
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Principal</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.principal)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Interest (${formData.interest_rate}% ${getInterestPeriodLabel(formData.interest_period as any)})</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.totalInterest)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Processing Fee</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.processingFee)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Enforcement Fee</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.enforcementFee)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Insurance</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.insuranceFee)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">VAT</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.vatAmount)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Platform Fee</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.platformFee)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border">
-            <span class="text-muted-foreground">Total Fees (deducted)</span>
-            <p class="font-semibold text-foreground">${formatCurrency(result.feesDeductedUpfront)}</p>
-          </div>
-          <div class="p-3 rounded bg-emerald-500/10 border border-emerald-500/30">
-            <span class="text-muted-foreground">Borrower Receives</span>
-            <p class="font-bold text-emerald-500">${formatCurrency(result.disbursementAmount)}</p>
-          </div>
-          <div class="p-3 rounded bg-primary/10 border border-primary/30">
-            <span class="text-muted-foreground">Total Repayment</span>
-            <p class="font-bold text-primary">${formatCurrency(result.totalRepayment)}</p>
-          </div>
-          <div class="p-3 rounded bg-background border col-span-2">
-            <span class="text-muted-foreground">Monthly Payment (${termMonths.toFixed(1)} months)</span>
-            <p class="font-semibold text-lg text-foreground">${formatCurrency(result.monthlyPayment)} /month</p>
-          </div>
-          <div class="p-3 rounded bg-muted/50 border col-span-2 text-xs text-muted-foreground">
-            Effective Annual Rate: ${result.effectiveAnnualRate.toFixed(2)}% | Interest Type: ${formData.interest_type}
-          </div>
-        </div>
-      `;
-    }
+    // Update state instead of using innerHTML (secure approach)
+    setPreviewResult({
+      principal: result.principal,
+      totalInterest: result.totalInterest,
+      processingFee: result.processingFee,
+      enforcementFee: result.enforcementFee,
+      insuranceFee: result.insuranceFee,
+      vatAmount: result.vatAmount,
+      platformFee: result.platformFee,
+      feesDeductedUpfront: result.feesDeductedUpfront,
+      disbursementAmount: result.disbursementAmount,
+      totalRepayment: result.totalRepayment,
+      monthlyPayment: result.monthlyPayment,
+      effectiveAnnualRate: result.effectiveAnnualRate,
+      termMonths,
+    });
   };
 
   // Auto-calculate when relevant fields change (only if dialog is open and calculation has been triggered once)
   useEffect(() => {
     if (isDialogOpen && calculationTriggeredRef.current) {
-      // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         performCalculation();
       }, 100);
@@ -1556,8 +1533,8 @@ const AdminLoanProducts = () => {
                           <Label>Sample Principal (K)</Label>
                           <Input
                             type="number"
-                            id="preview-principal"
-                            defaultValue={formData.min_amount}
+                            value={previewPrincipal || formData.min_amount}
+                            onChange={(e) => setPreviewPrincipal(Number(e.target.value))}
                             placeholder="e.g., 5000"
                           />
                         </div>
@@ -1565,8 +1542,8 @@ const AdminLoanProducts = () => {
                           <Label>Sample Term ({formData.term_unit})</Label>
                           <Input
                             type="number"
-                            id="preview-term"
-                            defaultValue={formData.min_term_months}
+                            value={previewTerm || formData.min_term_months}
+                            onChange={(e) => setPreviewTerm(Number(e.target.value))}
                             placeholder="e.g., 6"
                           />
                         </div>
@@ -1585,12 +1562,67 @@ const AdminLoanProducts = () => {
                       </Button>
                     </div>
 
-                    <div id="preview-result" className="p-4 rounded-lg bg-muted/30 border border-border/50 min-h-[200px] flex items-center justify-center text-muted-foreground">
-                      Click "Calculate Preview" to see results
+                    {/* React state-based preview result (secure - no innerHTML) */}
+                    <div className="p-4 rounded-lg bg-muted/30 border border-border/50 min-h-[200px]">
+                      {previewResult ? (
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Principal</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.principal)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Interest ({formData.interest_rate}% {getInterestPeriodLabel(formData.interest_period as any)})</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.totalInterest)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Processing Fee</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.processingFee)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Enforcement Fee</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.enforcementFee)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Insurance</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.insuranceFee)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">VAT</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.vatAmount)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Platform Fee</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.platformFee)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border">
+                            <span className="text-muted-foreground">Total Fees (deducted)</span>
+                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.feesDeductedUpfront)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-success/10 border border-success/30">
+                            <span className="text-muted-foreground">Borrower Receives</span>
+                            <p className="font-bold text-success">{formatCurrency(previewResult.disbursementAmount)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
+                            <span className="text-muted-foreground">Total Repayment</span>
+                            <p className="font-bold text-primary">{formatCurrency(previewResult.totalRepayment)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-background border col-span-2">
+                            <span className="text-muted-foreground">Monthly Payment ({previewResult.termMonths.toFixed(1)} months)</span>
+                            <p className="font-semibold text-lg text-foreground">{formatCurrency(previewResult.monthlyPayment)} /month</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50 border col-span-2 text-xs text-muted-foreground">
+                            Effective Annual Rate: {previewResult.effectiveAnnualRate.toFixed(2)}% | Interest Type: {formData.interest_type}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                          Click "Calculate Preview" to see results
+                        </div>
+                      )}
                     </div>
 
-                    <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm">
-                      <p className="font-medium text-yellow-600 dark:text-yellow-400 mb-1">⚠️ Formula Details</p>
+                    <div className="p-4 rounded-lg bg-warning/10 border border-warning/30 text-sm">
+                      <p className="font-medium text-warning mb-1">⚠️ Formula Details</p>
                       <ul className="text-muted-foreground space-y-1">
                         <li>• <strong>Flat Rate:</strong> Interest = Principal × Rate × Term</li>
                         <li>• <strong>Reducing Balance:</strong> Uses amortization formula (PMT)</li>
