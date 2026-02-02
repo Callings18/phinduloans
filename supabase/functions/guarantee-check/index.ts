@@ -32,6 +32,34 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // AUTHORIZATION CHECK: Verify calling user has permission
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Authorization header required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if user has staff role (admin, super_admin, loan_officer, credit_officer)
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+
+    const staffRoles = ["admin", "super_admin", "loan_officer", "credit_officer"];
+    const isStaff = roles?.some(r => staffRoles.includes(r.role));
+
     const body: GuaranteeCheckRequest = await req.json();
     const { 
       loan_id, 
@@ -45,6 +73,22 @@ serve(async (req) => {
       guarantee_provider,
       guarantee_percentage = 80
     } = body;
+
+    // If not staff, verify user owns the loan
+    if (!isStaff) {
+      const { data: loan } = await supabase
+        .from("loan_applications")
+        .select("user_id")
+        .eq("id", loan_id)
+        .single();
+
+      if (!loan || loan.user_id !== user.id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized - you don't have permission for this loan" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // Validate required fields
     if (!loan_id || !borrower_nrc || !loan_amount) {
