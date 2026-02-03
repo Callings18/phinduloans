@@ -15,17 +15,16 @@
     <meta name="author" content="Phindu Credit Solutions" />
     <meta name="keywords" content="loans Zambia, personal loans, salary loans, quick loans, mobile money loans, Lusaka loans, credit solutions" />
     <link rel="canonical" href="https://phinducredit.co.zm" />
-    <!-- Cache bust v26 - 20260203T1830 FORCE REACT SINGLETON -->
+    <!-- Cache bust v27 - 20260203T1915 COMPLETE REACT ISOLATION -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0, private" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="-1" />
     <script>
-      // Force clear all caches and storage on load
+      // Aggressive cache clearing
       if ('caches' in window) {
         caches.keys().then(names => names.forEach(name => caches.delete(name)));
       }
-      // Clear session storage
-      try { sessionStorage.clear(); } catch(e) {}
+      try { sessionStorage.clear(); localStorage.removeItem('vite:hot'); } catch(e) {}
     </script>
 
     <meta property="og:title" content="Phindu Credit Solutions - Fast Personal & Salary Loans in Zambia" />
@@ -57,6 +56,6 @@
 
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx?v=26-singleton"></script>
+    <script type="module" src="/src/main.tsx?v=27-isolated"></script>
   </body>
 </html>
