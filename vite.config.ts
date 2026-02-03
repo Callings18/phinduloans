@@ -1,8 +1,12 @@
-// vite.config.ts v26 - aggressive React singleton 2026-02-03T18:30
+// vite.config.ts v27 - complete React isolation 2026-02-03T19:15
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+
+// Force single React instance
+const reactPath = path.resolve(__dirname, "node_modules/react");
+const reactDomPath = path.resolve(__dirname, "node_modules/react-dom");
 
 export default defineConfig(({ mode }) => ({
   server: {
@@ -13,26 +17,18 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "react": path.resolve(__dirname, "node_modules/react"),
-      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
-      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
-      "react/jsx-dev-runtime": path.resolve(__dirname, "node_modules/react/jsx-dev-runtime"),
+      "react": reactPath,
+      "react-dom": reactDomPath,
+      "react/jsx-runtime": path.join(reactPath, "jsx-runtime"),
+      "react/jsx-dev-runtime": path.join(reactPath, "jsx-dev-runtime"),
     },
-    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "scheduler"],
   },
   optimizeDeps: {
     include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
     force: true,
-    esbuildOptions: {
-      define: {
-        global: 'globalThis',
-      },
-    },
   },
-  cacheDir: ".vite-cache-v26",
-  esbuild: {
-    jsxInject: undefined,
-  },
+  cacheDir: ".vite-cache-v27",
   build: {
     commonjsOptions: {
       include: [/node_modules/],
@@ -40,8 +36,10 @@ export default defineConfig(({ mode }) => ({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+        manualChunks: (id) => {
+          if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) {
+            return 'react-vendor';
+          }
         },
       },
     },
