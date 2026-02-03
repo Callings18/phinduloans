@@ -49,7 +49,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Get ExciteSMS credentials from secrets
     const apiToken = Deno.env.get("EXCITESMS_API_TOKEN");
     const senderId = Deno.env.get("EXCITESMS_SENDER_ID") || "PHINDU";
-    const apiUrl = Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.tech/api/v3/sms/send";
+    const apiUrl = Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3/sms/send";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
