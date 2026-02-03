@@ -209,6 +209,7 @@ const AdminLoans = () => {
     account_number: "",
     mobile_money_number: "",
     transaction_reference: "",
+    source_account_id: "", // Source account to deduct funds from
   });
 
   // Quick Payment State
@@ -355,6 +356,21 @@ const AdminLoans = () => {
         profile: profiles?.find(p => p.id === role.user_id)
       }));
     }
+  });
+
+  // Fetch active accounts for disbursement source
+  const { data: accounts } = useQuery({
+    queryKey: ["active-accounts-for-disbursement"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("is_active", true)
+        .order("account_name", { ascending: true });
+
+      if (error) throw error;
+      return data as { id: string; account_name: string; balance: number; account_type: string }[];
+    },
   });
 
   const selectedBorrower = borrowers?.find(b => b.id === selectedBorrowerId);
@@ -623,18 +639,56 @@ const AdminLoans = () => {
   // Disburse mutation
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
+      const disbursementAmount = selectedLoan!.loan_amount;
+      
+      // Validate source account if provided
+      if (data.source_account_id) {
+        const sourceAccount = accounts?.find(a => a.id === data.source_account_id);
+        if (!sourceAccount) throw new Error("Source account not found");
+        if (sourceAccount.balance < disbursementAmount) {
+          throw new Error(`Insufficient balance in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}`);
+        }
+      }
+
+      // Create disbursement record with source account
       const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedLoan!.id,
-        amount: selectedLoan!.loan_amount,
+        amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
         account_number: data.account_number || null,
         mobile_money_number: data.mobile_money_number || null,
         transaction_reference: data.transaction_reference || null,
+        source_account_id: data.source_account_id || null,
         status: 'completed',
         disbursed_at: new Date().toISOString(),
       });
 
       if (disbError) throw disbError;
+
+      // Deduct from source account if provided
+      if (data.source_account_id) {
+        const sourceAccount = accounts?.find(a => a.id === data.source_account_id);
+        if (sourceAccount) {
+          const { error: accountError } = await supabase
+            .from("accounts")
+            .update({ balance: sourceAccount.balance - disbursementAmount })
+            .eq("id", data.source_account_id);
+
+          if (accountError) throw accountError;
+
+          // Record account transaction
+          await supabase.from("account_transactions").insert({
+            account_id: data.source_account_id,
+            transaction_type: "disbursement",
+            amount: disbursementAmount,
+            balance_before: sourceAccount.balance,
+            balance_after: sourceAccount.balance - disbursementAmount,
+            reference_type: "loan_disbursement",
+            reference_id: selectedLoan!.id,
+            notes: `Loan disbursement to ${selectedLoan!.full_name}`,
+          });
+        }
+      }
 
       const { error: loanError } = await supabase
         .from('loan_applications')
@@ -649,6 +703,8 @@ const AdminLoans = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
+      queryClient.invalidateQueries({ queryKey: ['active-accounts-for-disbursement'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
 
       if (selectedLoan) {
         notificationService.send({
@@ -660,7 +716,7 @@ const AdminLoans = () => {
         });
       }
 
-      toast.success("Loan disbursed successfully");
+      toast.success("Loan disbursed successfully and account balance updated");
       setIsDisburseOpen(false);
       setSelectedLoan(null);
       resetDisbursementForm();
@@ -778,6 +834,7 @@ const AdminLoans = () => {
       account_number: "",
       mobile_money_number: "",
       transaction_reference: "",
+      source_account_id: "",
     });
   };
 
@@ -815,6 +872,10 @@ const AdminLoans = () => {
   };
 
   const handleDisburse = () => {
+    if (!disbursement.source_account_id) {
+      toast.error("Please select a source account for disbursement");
+      return;
+    }
     if (!disbursement.transaction_reference) {
       toast.error("Please enter a transaction reference");
       return;
@@ -1698,6 +1759,31 @@ const AdminLoans = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Source Account *</Label>
+              <Select
+                value={disbursement.source_account_id}
+                onValueChange={(v) => setDisbursement({ ...disbursement, source_account_id: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select account to disburse from" /></SelectTrigger>
+                <SelectContent>
+                  {accounts?.map((account) => (
+                    <SelectItem 
+                      key={account.id} 
+                      value={account.id}
+                      disabled={account.balance < (selectedLoan?.loan_amount || 0)}
+                    >
+                      {account.account_name} - K{account.balance.toLocaleString()} ({account.account_type})
+                      {account.balance < (selectedLoan?.loan_amount || 0) && " (Insufficient)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                This account will be debited K{Number(selectedLoan?.loan_amount || 0).toLocaleString()}
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>Disbursement Method</Label>
               <Select
