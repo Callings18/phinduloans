@@ -1,4 +1,4 @@
-// vite.config.ts v25 - forced cache clear 2026-02-03T17:20
+// vite.config.ts v26 - aggressive React singleton 2026-02-03T18:30
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  cacheDir: ".vite-cache-v25",
+  cacheDir: ".vite-cache-v26",
   esbuild: {
     jsxInject: undefined,
   },
@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          react: ['react', 'react-dom'],
+          'react-vendor': ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
         },
       },
     },
