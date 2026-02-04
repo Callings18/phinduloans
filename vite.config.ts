@@ -17,13 +17,13 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
   optimizeDeps: {
-    include: ["react", "react-dom"],
+    include: ["react", "react-dom", "react/jsx-runtime"],
     force: true,
   },
-  cacheDir: ".vite-cache-v28",
+  cacheDir: ".vite-cache-v29",
   build: {
     commonjsOptions: {
       include: [/node_modules/],
