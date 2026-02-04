@@ -91,7 +91,23 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
     }),
   });
 
-  const result = await response.json();
+  const contentType = response.headers.get("content-type") || "";
+  const responseText = await response.text();
+  let result: any;
+  if (contentType.includes("application/json")) {
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      throw new Error(`ExciteSMS returned invalid JSON. Response: ${responseText.substring(0, 100)}`);
+    }
+  } else {
+    if (responseText.trim().startsWith("<!") || responseText.includes("<html")) {
+      throw new Error(
+        `ExciteSMS returned HTML (Status: ${response.status}). Check API URL and token (auth failure or wrong endpoint).`
+      );
+    }
+    throw new Error(`ExciteSMS unexpected response: ${contentType}. ${responseText.substring(0, 100)}`);
+  }
   console.log("[OTP - ExciteSMS] Response:", JSON.stringify(result));
 
   if (result.status === "error") {

@@ -40,20 +40,45 @@ function formatZambianPhone(phone: string): string {
   return cleaned;
 }
 
+async function getExciteSmsCredentials(supabase: any): Promise<{
+  apiUrl: string;
+  apiToken: string;
+  senderId: string;
+}> {
+  const { data: providersData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_providers")
+    .maybeSingle();
+  const { data: configData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_config")
+    .maybeSingle();
+  const providers = providersData?.value || {};
+  const config = configData?.value || {};
+  const baseUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
+  const apiUrl = baseUrl.includes("/sms/send") ? baseUrl : baseUrl.replace(/\/?$/, "") + "/sms/send";
+  return {
+    apiUrl,
+    apiToken: providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
+    senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu",
+  };
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get ExciteSMS credentials from secrets
-    const apiToken = Deno.env.get("EXCITESMS_API_TOKEN");
-    const senderId = Deno.env.get("EXCITESMS_SENDER_ID") || "PHINDU";
-    const apiUrl = Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3/sms/send";
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Get ExciteSMS credentials from DB (Admin Settings) or env
+    const creds = await getExciteSmsCredentials(supabase);
+    const { apiToken, senderId, apiUrl } = creds;
 
     const { to, message, userId, title }: ExciteSMSRequest = await req.json();
 
@@ -110,11 +135,23 @@ const handler = async (req: Request): Promise<Response> => {
           body: JSON.stringify({
             recipient: recipient,
             sender_id: senderId,
+            type: "plain",
             message: message,
           })
         });
 
-        const result = await response.json();
+        const contentType = response.headers.get("content-type") || "";
+        const responseText = await response.text();
+        let result: any;
+        if (contentType.includes("application/json")) {
+          try {
+            result = JSON.parse(responseText);
+          } catch {
+            result = { status: "error", message: "Invalid JSON response" };
+          }
+        } else {
+          result = { status: "error", message: `Unexpected response (${response.status}): ${responseText.substring(0, 100)}` };
+        }
         console.log(`[ExciteSMS] Response for ${recipient}:`, JSON.stringify(result));
 
         const isSuccess = response.ok && (result.status === "success" || result.success === true);
