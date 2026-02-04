@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,17 +15,10 @@
     <meta name="author" content="Phindu Credit Solutions" />
     <meta name="keywords" content="loans Zambia, personal loans, salary loans, quick loans, mobile money loans, Lusaka loans, credit solutions" />
     <link rel="canonical" href="https://phinducredit.co.zm" />
-    <!-- Cache bust v27 - 20260203T1915 COMPLETE REACT ISOLATION -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0, private" />
+    <!-- Cache bust v28 - 20260204T0900 CLEAN -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="-1" />
-    <script>
-      // Aggressive cache clearing
-      if ('caches' in window) {
-        caches.keys().then(names => names.forEach(name => caches.delete(name)));
-      }
-      try { sessionStorage.clear(); localStorage.removeItem('vite:hot'); } catch(e) {}
-    </script>
+    <meta http-equiv="Expires" content="0" />
 
     <meta property="og:title" content="Phindu Credit Solutions - Fast Personal & Salary Loans in Zambia" />
     <meta property="og:description" content="Get quick personal and salary loans in Zambia. Apply online, get approved in 24 hours, and receive funds via mobile money." />
@@ -56,6 +49,6 @@
 
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx?v=27-isolated"></script>
+    <script type="module" src="/src/main.tsx?v=28"></script>
   </body>
 </html>

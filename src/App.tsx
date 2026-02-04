@@ -1,5 +1,5 @@
-// App v11 - simplified 2026-01-29T10:30
-import * as React from "react";
+// App v28 - clean React hooks 2026-02-04
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -50,14 +50,14 @@ interface ThemeContextType {
   resolvedTheme: "dark" | "light";
 }
 
-const ThemeContext = React.createContext<ThemeContextType>({
+const ThemeContext = createContext<ThemeContextType>({
   theme: "dark",
   setTheme: () => {},
   resolvedTheme: "dark",
 });
 
 export function useTheme() {
-  return React.useContext(ThemeContext);
+  return useContext(ThemeContext);
 }
 
 function getSystemTheme(): "dark" | "light" {
@@ -78,10 +78,10 @@ function getStoredTheme(): Theme {
 const queryClient = new QueryClient();
 
 function App() {
-  const [theme, setTheme] = React.useState<Theme>(() => getStoredTheme());
-  const [resolvedTheme, setResolvedTheme] = React.useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 
-  React.useEffect(() => {
+  useEffect(() => {
     const root = document.documentElement;
     const resolved = theme === "system" ? getSystemTheme() : theme;
     
@@ -91,7 +91,7 @@ function App() {
     localStorage.setItem("phindu-theme", theme);
   }, [theme]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -106,7 +106,7 @@ function App() {
     return () => mediaQuery.removeEventListener("change", handler);
   }, [theme]);
 
-  const themeValue = React.useMemo(
+  const themeValue = useMemo(
     () => ({ theme, setTheme, resolvedTheme }),
     [theme, resolvedTheme]
   );
