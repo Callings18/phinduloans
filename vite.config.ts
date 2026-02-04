@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
     include: ["react", "react-dom", "react/jsx-runtime"],
     force: true,
   },
-  cacheDir: ".vite-cache-v29",
+  cacheDir: ".vite-cache-v30",
   build: {
     commonjsOptions: {
       include: [/node_modules/],
