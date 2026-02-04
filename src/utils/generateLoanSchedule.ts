@@ -133,8 +133,8 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
     },
   });
 
-  // Footer
-  const finalY = (doc as any).lastAutoTable.finalY + 15;
+  // Footer (optional chaining in case lastAutoTable is missing)
+  const finalY = ((doc as any).lastAutoTable?.finalY ?? 130) + 15;
   doc.setFontSize(8);
   doc.setTextColor(100, 100, 100);
   doc.text('This is a computer-generated document and does not require a signature.', pageWidth / 2, finalY, { align: 'center' });
