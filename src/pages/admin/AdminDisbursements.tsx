@@ -162,7 +162,8 @@ const AdminDisbursements = () => {
         throw new Error(`Insufficient balance in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}`);
       }
 
-      // Create disbursement record with source account
+      // Create disbursement record with source account (status pending).
+      // Account deduction happens only when status is set to "completed" (via DB trigger).
       const { error: disbError } = await supabase.from("disbursements").insert({
         loan_id: selectedLoan,
         amount: disbursementAmount,
@@ -174,33 +175,13 @@ const AdminDisbursements = () => {
       });
 
       if (disbError) throw disbError;
-
-      // Deduct from source account balance
-      const { error: accountError } = await supabase
-        .from("accounts")
-        .update({ balance: sourceAccount.balance - disbursementAmount })
-        .eq("id", formData.source_account_id);
-
-      if (accountError) throw accountError;
-
-      // Record account transaction
-      await supabase.from("account_transactions").insert({
-        account_id: formData.source_account_id,
-        transaction_type: "disbursement",
-        amount: disbursementAmount,
-        balance_before: sourceAccount.balance,
-        balance_after: sourceAccount.balance - disbursementAmount,
-        reference_type: "loan_disbursement",
-        reference_id: selectedLoan,
-        notes: `Loan disbursement to ${loan.full_name}`,
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
       queryClient.invalidateQueries({ queryKey: ["approved-loans-for-disbursement"] });
       queryClient.invalidateQueries({ queryKey: ["active-accounts"] }); // Refresh account balances
       queryClient.invalidateQueries({ queryKey: ["accounts"] }); // Refresh all accounts
-      toast.success("Disbursement created and account balance updated");
+      toast.success("Disbursement created. Mark as completed to deduct from the source account.");
       resetForm();
       setIsDialogOpen(false);
     },
@@ -235,10 +216,13 @@ const AdminDisbursements = () => {
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
-      toast.success("Disbursement status updated");
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["account_transactions"] });
+      toast.success(variables.status === "completed" ? "Disbursement completed and account balance updated" : "Disbursement status updated");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to update status");
