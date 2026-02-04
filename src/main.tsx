@@ -1,6 +1,6 @@
-// Main v12 - simplified 2026-01-29T10:30
-import * as React from "react";
-import * as ReactDOM from "react-dom/client";
+// Main v28 - clean React import 2026-02-04
+import React from "react";
+import ReactDOM from "react-dom/client";
 import "@fontsource/outfit/300.css";
 import "@fontsource/outfit/400.css";
 import "@fontsource/outfit/500.css";
@@ -15,13 +15,11 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) {
       registration.unregister();
-      console.log('SW unregistered:', registration.scope);
     }
   });
 }
 
-const root = ReactDOM.createRoot(document.getElementById("root")!);
-root.render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
