@@ -67,6 +67,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp } from "@/utils/generateLoanContract";
 import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
+import ApplicationDocumentsTab from "@/components/admin/ApplicationDocumentsTab";
 import GuidedTour from "@/components/common/GuidedTour";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
@@ -1691,81 +1692,7 @@ const AdminApplications = () => {
               </TabsContent>
 
               <TabsContent value="documents" className="space-y-4 mt-4">
-                {/* Payslip Password */}
-                {selectedApp.payslip_password && (
-                  <Card className="bg-warning/10 border-warning/30">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <ShieldCheck size={16} className="text-warning" />
-                        <span className="text-sm font-semibold text-warning">Payslip Password</span>
-                      </div>
-                      <p className="text-lg font-mono font-bold text-foreground select-all">{selectedApp.payslip_password}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Use this password to open the borrower's payslip PDF files</p>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* All Attached Documents */}
-                {(() => {
-                  const allDocs = [
-                    { label: "NRC Front", url: selectedApp.nrc_front_url, icon: "🪪" },
-                    { label: "NRC Back", url: selectedApp.nrc_back_url, icon: "🪪" },
-                    { label: "Selfie / Photo ID", url: selectedApp.selfie_url, icon: "📸" },
-                    { label: "Payslip 1 (Latest)", url: selectedApp.payslip_url, icon: "📄" },
-                    { label: "Payslip 2", url: selectedApp.payslip_2_url, icon: "📄" },
-                    { label: "Payslip 3", url: selectedApp.payslip_3_url, icon: "📄" },
-                    { label: "Bank Statement", url: selectedApp.bank_statement_url, icon: "🏦" },
-                    { label: "Employer Letter", url: selectedApp.employer_letter_url, icon: "✉️" },
-                    { label: "Collateral Image 1", url: selectedApp.collateral_image_url, icon: "🖼️" },
-                    { label: "Collateral Image 2", url: selectedApp.collateral_image_2_url, icon: "🖼️" },
-                    { label: "Collateral Image 3", url: selectedApp.collateral_image_3_url, icon: "🖼️" },
-                    { label: "Signed Contract", url: selectedApp.signed_contract_url, icon: "📝" },
-                    { label: "Generated Contract", url: selectedApp.contract_url, icon: "📋" },
-                  ].filter(d => d.url);
-
-                  if (allDocs.length === 0) {
-                    return (
-                      <div className="py-12 text-center border-2 border-dashed rounded-xl border-border bg-secondary/10">
-                        <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2 opacity-20" />
-                        <p className="text-muted-foreground text-sm">No documents attached to this application.</p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {allDocs.map((doc) => (
-                        <Card key={doc.label} className="bg-secondary/20 border-border/30 hover:border-primary/30 transition-colors">
-                          <CardContent className="p-3 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{doc.icon}</span>
-                              <span className="text-sm text-foreground font-medium">{doc.label}</span>
-                            </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={async () => {
-                                const signedUrl = await getSignedUrl(doc.url);
-                                if (signedUrl) {
-                                  window.open(signedUrl, '_blank');
-                                } else {
-                                  toast({
-                                    title: "Error",
-                                    description: "Failed to load document. Please try again.",
-                                    variant: "destructive"
-                                  });
-                                }
-                              }}
-                            >
-                              <ExternalLink size={12} className="mr-1" />
-                              View
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  );
-                })()}
+                <ApplicationDocumentsTab selectedApp={selectedApp} />
               </TabsContent>
 
               <TabsContent value="risk" className="space-y-4 mt-4">
