@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { notificationService } from "@/utils/notifications";
+import { getSignedUrl } from "@/utils/storageHelpers";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
