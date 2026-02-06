@@ -1,4 +1,4 @@
-// vite.config.ts v28 - minimal clean config 2026-02-04
+// vite.config.ts v32 - force React deduplication 2026-02-06
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
     include: ["react", "react-dom", "react/jsx-runtime"],
     force: true,
   },
-  cacheDir: ".vite-cache-v31",
+  cacheDir: ".vite-cache-v32",
   build: {
     commonjsOptions: {
       include: [/node_modules/],
