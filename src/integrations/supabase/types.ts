@@ -109,6 +109,100 @@ export type Database = {
         }
         Relationships: []
       }
+      application_documents: {
+        Row: {
+          application_id: string
+          borrower_id: string
+          created_at: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          is_required: boolean | null
+          loan_product_id: string | null
+          mime_type: string | null
+          month_tag: string | null
+          notes: string | null
+          payslip_password: string | null
+          status: string | null
+          updated_at: string
+          uploaded_at: string
+          uploaded_by: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          application_id: string
+          borrower_id: string
+          created_at?: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          is_required?: boolean | null
+          loan_product_id?: string | null
+          mime_type?: string | null
+          month_tag?: string | null
+          notes?: string | null
+          payslip_password?: string | null
+          status?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          application_id?: string
+          borrower_id?: string
+          created_at?: string
+          doc_label?: string
+          doc_type?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          is_required?: boolean | null
+          loan_product_id?: string | null
+          mime_type?: string | null
+          month_tag?: string | null
+          notes?: string | null
+          payslip_password?: string | null
+          status?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_documents_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_documents_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "application_documents_loan_product_id_fkey"
+            columns: ["loan_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -145,6 +239,60 @@ export type Database = {
           new_values?: Json | null
           old_values?: Json | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      borrower_document_vault: {
+        Row: {
+          borrower_id: string
+          created_at: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          is_verified: boolean | null
+          mime_type: string | null
+          notes: string | null
+          updated_at: string
+          uploaded_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          borrower_id: string
+          created_at?: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          is_verified?: boolean | null
+          mime_type?: string | null
+          notes?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          borrower_id?: string
+          created_at?: string
+          doc_label?: string
+          doc_type?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          is_verified?: boolean | null
+          mime_type?: string | null
+          notes?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: []
       }
@@ -1390,6 +1538,7 @@ export type Database = {
           product_code: string | null
           repayment_frequency: string | null
           repayment_methods: string[] | null
+          required_documents: Json | null
           requirements: string[] | null
           status: string | null
           term_unit: string
@@ -1455,6 +1604,7 @@ export type Database = {
           product_code?: string | null
           repayment_frequency?: string | null
           repayment_methods?: string[] | null
+          required_documents?: Json | null
           requirements?: string[] | null
           status?: string | null
           term_unit?: string
@@ -1520,6 +1670,7 @@ export type Database = {
           product_code?: string | null
           repayment_frequency?: string | null
           repayment_methods?: string[] | null
+          required_documents?: Json | null
           requirements?: string[] | null
           status?: string | null
           term_unit?: string

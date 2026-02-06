@@ -795,19 +795,20 @@ const Apply = () => {
             (pd.doc_type || pd.document_type) === docType
           );
 
+          const cfgAny = docConfig as any;
           return {
             borrower_id: user.id,
             application_id: appData.id,
             loan_product_id: selectedProduct?.id || null,
             doc_type: docType.toUpperCase(),
-            doc_label: docConfig?.doc_label || docConfig?.document_name || docType,
+            doc_label: cfgAny?.doc_label || cfgAny?.document_name || docType,
             file_url: doc.file_url,
             file_name: doc.file_name,
             mime_type: doc.file_type,
             file_size: doc.file_size,
-            uploaded_by: 'borrower',
-            is_required: docConfig?.is_mandatory || false,
-            status: 'uploaded',
+            uploaded_by: 'borrower' as const,
+            is_required: cfgAny?.is_mandatory || false,
+            status: 'uploaded' as const,
             payslip_password: docType.toLowerCase().includes('payslip') ? payslipPasswords[docType] : null,
           };
         });
@@ -823,7 +824,7 @@ const Apply = () => {
           handleError(docsError, {
             component: 'Apply',
             action: 'save_documents',
-            context: { applicationId: appData.id }
+            metadata: { applicationId: appData.id }
           });
         } else {
           console.log('[Apply] Documents saved successfully:', documentRecords.length);
