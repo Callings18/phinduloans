@@ -18,7 +18,7 @@ interface VerifyOTPRequest {
 
 function formatPhoneNumber(phone: string): string {
   let formatted = phone.trim().replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  
+
   if (formatted.startsWith("+260")) {
     return formatted;
   } else if (formatted.startsWith("260")) {
@@ -42,7 +42,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -83,7 +83,7 @@ serve(async (req) => {
       console.log("[Verify OTP] OTP expired");
       await supabase.from("otp_codes").delete().eq("id", otpRecord.id);
       return new Response(
-        JSON.stringify({ success: false, error: "OTP has expired. Please request a new code." }),
+        JSON.stringify({ success: false, error: "OTP expired. Please request a new code." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -108,7 +108,7 @@ serve(async (req) => {
     if (otpRecord.code !== code) {
       console.log("[Verify OTP] Invalid code");
       return new Response(
-        JSON.stringify({ success: false, error: "Invalid OTP code. Please try again." }),
+        JSON.stringify({ success: false, error: "Invalid OTP." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -150,8 +150,8 @@ serve(async (req) => {
           .eq("id", newUser.user.id);
 
         return new Response(
-          JSON.stringify({ 
-            success: true, 
+          JSON.stringify({
+            success: true,
             message: "Account created successfully",
             userId: newUser.user.id,
             verified: true,
@@ -161,8 +161,8 @@ serve(async (req) => {
       } else {
         // Passwordless signup - just verify the phone for now
         return new Response(
-          JSON.stringify({ 
-            success: true, 
+          JSON.stringify({
+            success: true,
             message: "Phone verified successfully",
             verified: true,
             phone: formattedPhone,
@@ -179,8 +179,9 @@ serve(async (req) => {
         .maybeSingle();
 
       if (!profile) {
+        console.log(`[Verify OTP] No account found for phone: ${formattedPhone}`);
         return new Response(
-          JSON.stringify({ success: false, error: "No account found with this phone number" }),
+          JSON.stringify({ success: false, error: "No account found for this number/email." }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -204,8 +205,8 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: "Login successful",
           verified: true,
           userId: profile.id,

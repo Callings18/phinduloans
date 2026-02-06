@@ -115,6 +115,34 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
+  // Real-time subscription for loan status changes
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('loan-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'loan_applications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('[Dashboard] Real-time update received:', payload);
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['user-loans', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['user-repayments', user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
+
   const { data: repayments } = useQuery({
     queryKey: ['user-repayments', user?.id],
     queryFn: async () => {
@@ -370,8 +398,8 @@ const Dashboard = () => {
           <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="tour-apply">
               {user && profile && (
-                <QuickApply 
-                  userId={user.id} 
+                <QuickApply
+                  userId={user.id}
                   profile={profile}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
                 />

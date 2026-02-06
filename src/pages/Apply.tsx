@@ -106,22 +106,52 @@ const Apply = () => {
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [payslipPasswords, setPayslipPasswords] = useState<Record<string, string>>({}); // Store payslip passwords
 
   // Draft system
   const { draft, hasDraft, lastSaved, isSaving, saveDraft, clearDraft } = useApplicationDraft();
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [draftChecked, setDraftChecked] = useState(false);
 
-  // Standard required documents for all loan products
-  const productDocs = [
-    { document_type: 'nrc_front', document_name: 'NRC Front', is_mandatory: true, display_order: 1 },
-    { document_type: 'nrc_back', document_name: 'NRC Back', is_mandatory: true, display_order: 2 },
-    { document_type: 'selfie', document_name: 'Selfie Photo', is_mandatory: true, display_order: 3 },
-    { document_type: 'payslip', document_name: 'Latest Payslip', is_mandatory: true, display_order: 4 },
-    { document_type: 'bank_statement', document_name: 'Bank Statement (3 months)', is_mandatory: false, display_order: 5 },
-    { document_type: 'employer_letter', document_name: 'Employment Letter', is_mandatory: false, display_order: 6 },
-  ];
-  const docsLoading = false;
+  // Fetch required documents from selected loan product
+  // This replaces the hardcoded productDocs array
+  const { data: productDocs, isLoading: docsLoading } = useQuery({
+    queryKey: ['product-documents', selectedProduct?.id],
+    queryFn: async () => {
+      if (!selectedProduct?.id) return [];
+
+      const { data, error } = await supabase
+        .from('loan_products')
+        .select('required_documents')
+        .eq('id', selectedProduct.id)
+        .single();
+
+      if (error) {
+        console.error('[Apply] Error fetching product documents:', error);
+        // Fallback to default documents
+        return [
+          { doc_type: 'NRC_FRONT', doc_label: 'NRC Front', is_mandatory: true, display_order: 1 },
+          { doc_type: 'NRC_BACK', doc_label: 'NRC Back', is_mandatory: true, display_order: 2 },
+          { doc_type: 'SELFIE', doc_label: 'Selfie Photo', is_mandatory: true, display_order: 3 },
+        ];
+      }
+
+      // Parse required_documents and ensure it's an array
+      const requiredDocs = data?.required_documents;
+      if (Array.isArray(requiredDocs) && requiredDocs.length > 0) {
+        return requiredDocs.sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+      }
+
+      // Fallback to default if no documents configured
+      return [
+        { doc_type: 'NRC_FRONT', doc_label: 'NRC Front', is_mandatory: true, display_order: 1 },
+        { doc_type: 'NRC_BACK', doc_label: 'NRC Back', is_mandatory: true, display_order: 2 },
+        { doc_type: 'SELFIE', doc_label: 'Selfie Photo', is_mandatory: true, display_order: 3 },
+        { doc_type: 'PAYSLIP', doc_label: 'Latest Payslip', is_mandatory: true, display_order: 4, allow_multiple: true, max_count: 3 },
+      ];
+    },
+    enabled: !!selectedProduct?.id,
+  });
 
   // Fetch user profile for autofill
   const { data: profile } = useQuery({
@@ -547,7 +577,7 @@ const Apply = () => {
 
   const handleSubmit = async () => {
     console.log('[Apply] handleSubmit called', { user: user?.id, termsAccepted: formData.termsAccepted, dataConsent: formData.dataConsent });
-    
+
     if (!user) {
       const { handleError } = await import('@/utils/errorHandler');
       handleError('User not authenticated', { component: 'Apply', action: 'submit_application' }, false);
@@ -584,10 +614,10 @@ const Apply = () => {
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
           console.log(`[Apply] Uploading ${docType}: ${fileName}`);
-          
+
           // Set initial progress and simulate upload progress
           setUploadProgress(prev => ({ ...prev, [docType]: 10 }));
-          
+
           // Simulate progress (Supabase doesn't support onUploadProgress)
           const progressInterval = setInterval(() => {
             setUploadProgress(prev => {
@@ -598,14 +628,14 @@ const Apply = () => {
               return prev;
             });
           }, 200);
-          
+
           const { data, error: uploadErr } = await supabase.storage
             .from('loan-documents')
             .upload(fileName, file, {
               cacheControl: '3600',
               upsert: false
             });
-          
+
           clearInterval(progressInterval);
 
           if (uploadErr) {
@@ -615,7 +645,7 @@ const Apply = () => {
               component: 'Apply',
               action: `upload_${docType}`,
             });
-            
+
             setUploadProgress(prev => {
               const next = { ...prev };
               delete next[docType];
@@ -652,7 +682,7 @@ const Apply = () => {
           });
         }
       }
-      
+
       // Upload collateral image if provided
       let collateralImageUrl: string | null = null;
       if (formData.collateralImage) {
@@ -660,14 +690,14 @@ const Apply = () => {
           const fileExt = formData.collateralImage.name.split('.').pop();
           const fileName = `${user.id}/collateral_${Date.now()}.${fileExt}`;
           console.log(`[Apply] Uploading collateral image: ${fileName}`);
-          
+
           const { data: collateralData, error: collateralErr } = await supabase.storage
             .from('loan-documents')
             .upload(fileName, formData.collateralImage, {
               cacheControl: '3600',
               upsert: false
             });
-          
+
           if (collateralErr) {
             const { handleError } = await import('@/utils/errorHandler');
             handleError(collateralErr, { component: 'Apply', action: 'upload_collateral' });
@@ -882,7 +912,7 @@ const Apply = () => {
                         You Already Have an Active Loan
                       </h3>
                       <p className="text-muted-foreground text-sm">
-                        Our records show that you already have a loan that is currently being processed or active. 
+                        Our records show that you already have a loan that is currently being processed or active.
                         You cannot apply for another loan until your current loan is completed.
                       </p>
                     </div>
@@ -1538,8 +1568,8 @@ const Apply = () => {
                         <FileText className="text-info mt-0.5" size={20} />
                         <div className="text-sm text-muted-foreground">
                           <p className="font-medium text-foreground mb-1">Payslip Password Required</p>
-                          All government payslips are secured with passwords. Please enter your payslip password 
-                          to allow verification. Your information is kept confidential and used strictly for 
+                          All government payslips are secured with passwords. Please enter your payslip password
+                          to allow verification. Your information is kept confidential and used strictly for
                           processing your application.
                         </div>
                       </div>
@@ -1560,54 +1590,53 @@ const Apply = () => {
 
                   {/* Latest 3 Months Payslips - Not required for Business and Personal loans */}
                   {selectedProduct && !selectedProduct.name?.toLowerCase().includes('business') && !selectedProduct.name?.toLowerCase().includes('personal') && (
-                  <div className="pt-6 border-t border-border">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Latest Payslips (3 Months) *</h3>
-                    <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {getLastThreeMonths().map((month, index) => (
-                        <div key={month.key} className="space-y-2">
-                          <Label className={errors[month.key] ? "text-destructive" : ""}>
-                            {month.label} {index === 0 && "(Latest)"}
-                            {index === 0 && " *"}
-                          </Label>
-                          <label
-                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
-                              formData[month.key as keyof typeof formData]
-                                ? "border-primary bg-primary/10 shadow-glow"
-                                : errors[month.key]
-                                  ? "border-destructive bg-destructive/5"
-                                  : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                            }`}
-                          >
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png"
-                              className="hidden"
-                              onChange={(e) => updateFormData(month.key, e.target.files?.[0] || null)}
-                            />
-                            {formData[month.key as keyof typeof formData] ? (
-                              <>
-                                <CheckCircle className="text-primary mb-2" size={32} />
-                                <span className="text-sm text-primary font-medium text-center">Uploaded</span>
-                                <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-full">
-                                  {(formData[month.key as keyof typeof formData] as File)?.name}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <Upload className={errors[month.key] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
-                                <span className={`text-sm ${errors[month.key] ? "text-destructive" : "text-muted-foreground"} text-center`}>
-                                  {errors[month.key] || `Upload payslip`}
-                                </span>
-                                <span className="text-xs text-muted-foreground mt-1">PDF, JPG, or PNG</span>
-                              </>
-                            )}
-                          </label>
-                        </div>
-                      ))}
+                    <div className="pt-6 border-t border-border">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Latest Payslips (3 Months) *</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {getLastThreeMonths().map((month, index) => (
+                          <div key={month.key} className="space-y-2">
+                            <Label className={errors[month.key] ? "text-destructive" : ""}>
+                              {month.label} {index === 0 && "(Latest)"}
+                              {index === 0 && " *"}
+                            </Label>
+                            <label
+                              className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[month.key as keyof typeof formData]
+                                  ? "border-primary bg-primary/10 shadow-glow"
+                                  : errors[month.key]
+                                    ? "border-destructive bg-destructive/5"
+                                    : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                                }`}
+                            >
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={(e) => updateFormData(month.key, e.target.files?.[0] || null)}
+                              />
+                              {formData[month.key as keyof typeof formData] ? (
+                                <>
+                                  <CheckCircle className="text-primary mb-2" size={32} />
+                                  <span className="text-sm text-primary font-medium text-center">Uploaded</span>
+                                  <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-full">
+                                    {(formData[month.key as keyof typeof formData] as File)?.name}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className={errors[month.key] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                                  <span className={`text-sm ${errors[month.key] ? "text-destructive" : "text-muted-foreground"} text-center`}>
+                                    {errors[month.key] || `Upload payslip`}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground mt-1">PDF, JPG, or PNG</span>
+                                </>
+                              )}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">* At least the latest month's payslip is required</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">* At least the latest month's payslip is required</p>
-                  </div>
                   )}
 
                   {/* Collateral Details - still manual if needed */}
@@ -1633,16 +1662,15 @@ const Apply = () => {
                           />
                         </div>
                       </div>
-                      
+
                       {/* Collateral Photo Upload */}
                       <div className="space-y-2 mt-6">
                         <Label>Collateral Photo</Label>
                         <label
-                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
-                            formData.collateralImage
+                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData.collateralImage
                               ? "border-primary bg-primary/10 shadow-glow"
                               : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                          }`}
+                            }`}
                         >
                           <input
                             type="file"

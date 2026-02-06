@@ -13,7 +13,7 @@ interface OTPRequest {
 
 function formatPhoneNumber(phone: string): string {
   let formatted = phone.trim().replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-  
+
   if (formatted.startsWith("+260")) {
     return formatted;
   } else if (formatted.startsWith("260")) {
@@ -53,12 +53,12 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
 
   const providers = providersData?.value || {};
   const config = configData?.value || {};
-  
+
   // Correct URL is .com (verified from ExciteSMS login page)
   const apiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
   // Ensure we use .com (the correct domain)
   const correctedApiUrl = apiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com");
-  
+
   return {
     apiUrl: correctedApiUrl,
     apiToken: providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
@@ -125,7 +125,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -166,9 +166,10 @@ serve(async (req) => {
         .maybeSingle();
 
       if (!existingProfile) {
+        console.log(`[OTP] No account found for phone: ${formattedPhone}`);
         return new Response(
-          JSON.stringify({ success: false, error: "No account found with this phone number. Please sign up first." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ success: false, error: "No account found for this number/email. Please sign up first." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
@@ -221,8 +222,8 @@ serve(async (req) => {
     console.log(`[OTP] Successfully sent to ${formattedPhone}`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: "OTP sent successfully",
         expiresIn: 300, // 5 minutes in seconds
       }),
