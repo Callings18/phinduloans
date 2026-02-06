@@ -183,7 +183,10 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
 
   // ExciteSMS requires phone number without + prefix
   const phone = formatPhoneNumber(to).replace("+", "");
-  const url = `${creds.apiUrl}/sms/send`;
+  
+  // Ensure no trailing slash on apiUrl before adding path
+  const baseUrl = creds.apiUrl.replace(/\/+$/, "");
+  const url = `${baseUrl}/sms/send`;
 
   console.log(`[SMS - ExciteSMS] Sending to ${phone} via ${url}`);
 
