@@ -203,9 +203,6 @@ const AdminApplications = () => {
   const totalCount = applicationsData?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  // Placeholder for application docs - tables don't exist yet
-  const applicationDocs: any[] = [];
-
   // Placeholder for workflow data - tables don't exist yet  
   const workflowStages: any[] = [];
   const workflowTransitions: any[] = [];
@@ -1694,88 +1691,58 @@ const AdminApplications = () => {
               </TabsContent>
 
               <TabsContent value="documents" className="space-y-4 mt-4">
-                {/* Dynamic Documents */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {applicationDocs && applicationDocs.length > 0 ? (
-                    applicationDocs.map((doc: any) => (
-                      <Card key={doc.id} className="bg-secondary/30 border-border/50">
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <FileText size={18} className="text-muted-foreground" />
-                              <span className="text-foreground font-medium uppercase text-xs">
-                                {doc.document_type.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                            <span className="text-xs text-muted-foreground truncate max-w-[200px]">{doc.file_name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={
-                              doc.status === 'verified' ? "bg-green-500/10 text-green-500 border-green-500/20" :
-                                doc.status === 'rejected' ? "bg-red-500/10 text-red-500 border-red-500/20" :
-                                  "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                            }>
-                              {doc.status}
-                            </Badge>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={async () => {
-                                const signedUrl = await getSignedUrl(doc.file_url);
-                                if (signedUrl) {
-                                  window.open(signedUrl, '_blank');
-                                } else {
-                                  toast({
-                                    title: "Error",
-                                    description: "Failed to load document. Please try again.",
-                                    variant: "destructive"
-                                  });
-                                }
-                              }}
-                            >
-                              <ExternalLink size={14} className="mr-1" />
-                              View
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  ) : (
-                    <div className="col-span-2 py-12 text-center border-2 border-dashed rounded-xl border-border bg-secondary/10">
-                      <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2 opacity-20" />
-                      <p className="text-muted-foreground text-sm">No dynamic documents found for this application.</p>
-                      <p className="text-xs text-muted-foreground/60">Check legacy folder if application is old.</p>
-                    </div>
-                  )}
-                </div>
+                {/* Payslip Password */}
+                {selectedApp.payslip_password && (
+                  <Card className="bg-warning/10 border-warning/30">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck size={16} className="text-warning" />
+                        <span className="text-sm font-semibold text-warning">Payslip Password</span>
+                      </div>
+                      <p className="text-lg font-mono font-bold text-foreground select-all">{selectedApp.payslip_password}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Use this password to open the borrower's payslip PDF files</p>
+                    </CardContent>
+                  </Card>
+                )}
 
-                {/* Legacy Documents (fallback) */}
-                {(selectedApp.nrc_front_url || selectedApp.nrc_back_url || selectedApp.selfie_url || selectedApp.payslip_url) && (
-                  <div className="pt-6 border-t border-border mt-4">
-                    <h4 className="text-sm font-semibold mb-4 flex items-center gap-2 text-muted-foreground">
-                      <Link2 size={16} />
-                      Legacy / Standard Documents
-                    </h4>
+                {/* All Attached Documents */}
+                {(() => {
+                  const allDocs = [
+                    { label: "NRC Front", url: selectedApp.nrc_front_url, icon: "🪪" },
+                    { label: "NRC Back", url: selectedApp.nrc_back_url, icon: "🪪" },
+                    { label: "Selfie / Photo ID", url: selectedApp.selfie_url, icon: "📸" },
+                    { label: "Payslip 1 (Latest)", url: selectedApp.payslip_url, icon: "📄" },
+                    { label: "Payslip 2", url: selectedApp.payslip_2_url, icon: "📄" },
+                    { label: "Payslip 3", url: selectedApp.payslip_3_url, icon: "📄" },
+                    { label: "Bank Statement", url: selectedApp.bank_statement_url, icon: "🏦" },
+                    { label: "Employer Letter", url: selectedApp.employer_letter_url, icon: "✉️" },
+                    { label: "Collateral Image 1", url: selectedApp.collateral_image_url, icon: "🖼️" },
+                    { label: "Collateral Image 2", url: selectedApp.collateral_image_2_url, icon: "🖼️" },
+                    { label: "Collateral Image 3", url: selectedApp.collateral_image_3_url, icon: "🖼️" },
+                    { label: "Signed Contract", url: selectedApp.signed_contract_url, icon: "📝" },
+                    { label: "Generated Contract", url: selectedApp.contract_url, icon: "📋" },
+                  ].filter(d => d.url);
+
+                  if (allDocs.length === 0) {
+                    return (
+                      <div className="py-12 text-center border-2 border-dashed rounded-xl border-border bg-secondary/10">
+                        <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-2 opacity-20" />
+                        <p className="text-muted-foreground text-sm">No documents attached to this application.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {[
-                        { label: "NRC Front", url: selectedApp.nrc_front_url },
-                        { label: "NRC Back", url: selectedApp.nrc_back_url },
-                        { label: "Selfie", url: selectedApp.selfie_url },
-                        { label: "Payslip 1", url: selectedApp.payslip_url },
-                        { label: "Payslip 2", url: selectedApp.payslip_2_url },
-                        { label: "Payslip 3", url: selectedApp.payslip_3_url },
-                        { label: "Bank Statement", url: selectedApp.bank_statement_url },
-                        { label: "Employer Letter", url: selectedApp.employer_letter_url },
-                        { label: "Collateral Image", url: selectedApp.collateral_image_url },
-                      ].filter(d => d.url).map((doc) => (
-                        <Card key={doc.label} className="bg-secondary/20 border-border/30">
+                      {allDocs.map((doc) => (
+                        <Card key={doc.label} className="bg-secondary/20 border-border/30 hover:border-primary/30 transition-colors">
                           <CardContent className="p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText size={16} className="text-muted-foreground" />
-                              <span className="text-sm text-foreground">{doc.label}</span>
+                              <span className="text-lg">{doc.icon}</span>
+                              <span className="text-sm text-foreground font-medium">{doc.label}</span>
                             </div>
                             <Button 
-                              variant="ghost" 
+                              variant="outline" 
                               size="sm" 
                               onClick={async () => {
                                 const signedUrl = await getSignedUrl(doc.url);
@@ -1797,8 +1764,8 @@ const AdminApplications = () => {
                         </Card>
                       ))}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </TabsContent>
 
               <TabsContent value="risk" className="space-y-4 mt-4">
