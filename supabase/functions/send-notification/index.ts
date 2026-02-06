@@ -69,23 +69,30 @@ async function getTwilioCredentials(supabase: any): Promise<{
   sendgridApiKey: string;
   sendgridFromEmail: string;
 }> {
-  // Try to get from database first
-  const { data } = await supabase
+  // Try to get from both notification_providers AND notification_config
+  const { data: providersData } = await supabase
     .from("system_settings")
     .select("value")
     .eq("key", "notification_providers")
     .maybeSingle();
 
-  const dbSettings = data?.value || {};
+  const { data: configData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_config")
+    .maybeSingle();
+
+  const providers = providersData?.value || {};
+  const config = configData?.value || {};
   
-  // Return DB values if set, otherwise fallback to env secrets
+  // Return values checking both DB sources, then env secrets as fallback
   return {
-    accountSid: dbSettings.twilio_account_sid || Deno.env.get("TWILIO_ACCOUNT_SID") || "",
-    authToken: dbSettings.twilio_auth_token || Deno.env.get("TWILIO_AUTH_TOKEN") || "",
-    phoneNumber: dbSettings.twilio_phone_number || Deno.env.get("TWILIO_PHONE_NUMBER") || "",
-    whatsappNumber: dbSettings.twilio_whatsapp_number || Deno.env.get("TWILIO_WHATSAPP_NUMBER") || "",
-    sendgridApiKey: dbSettings.sendgrid_api_key || Deno.env.get("SENDGRID_API_KEY") || "",
-    sendgridFromEmail: dbSettings.sendgrid_from_email || Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com",
+    accountSid: (providers.twilio_account_sid || config.twilio_sid || Deno.env.get("TWILIO_ACCOUNT_SID") || "").trim(),
+    authToken: (providers.twilio_auth_token || config.twilio_token || Deno.env.get("TWILIO_AUTH_TOKEN") || "").trim(),
+    phoneNumber: (providers.twilio_phone_number || config.twilio_phone_number || Deno.env.get("TWILIO_PHONE_NUMBER") || "+15304548702").trim(),
+    whatsappNumber: (providers.twilio_whatsapp_number || config.twilio_whatsapp_number || Deno.env.get("TWILIO_WHATSAPP_NUMBER") || "+15558992764").trim(),
+    sendgridApiKey: (providers.sendgrid_api_key || config.sendgrid_api_key || Deno.env.get("SENDGRID_API_KEY") || "").trim(),
+    sendgridFromEmail: (providers.sendgrid_from_email || config.sendgrid_from_email || Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com").trim(),
   };
 }
 

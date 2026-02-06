@@ -408,7 +408,8 @@ const AdminApplications = () => {
           selectedApp.user_id,
           selectedApp.full_name,
           selectedApp.phone,
-          variables.reason
+          selectedApp.email,  // Fixed: Pass email here, not reason
+          variables.reason    // Reason should be 5th param
         );
       }
 
