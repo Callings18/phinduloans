@@ -511,14 +511,18 @@ const Apply = () => {
           loanTerm: formData.loanTerm,
         });
       } else if (step === 4) {
-        // Dynamic documents validation
+        // Dynamic documents validation based on product requirements
         let hasErrors = false;
         const newDocErrors: Record<string, string> = {};
 
         productDocs?.forEach((doc: any) => {
+          const docType = doc.doc_type || doc.document_type; // Support both field names
+          const docLabel = doc.doc_label || doc.document_name || docType;
+          const isMandatory = doc.is_mandatory;
+
           // Check if mandatory AND not uploaded AND not being reused
-          if (doc.is_mandatory && !dynamicDocs[doc.document_type] && !formData.reusedDocs[doc.document_type]) {
-            newDocErrors[doc.document_type] = `${doc.document_name} is required`;
+          if (isMandatory && !dynamicDocs[docType] && !formData.reusedDocs[docType]) {
+            newDocErrors[docType] = `${docLabel} is required`;
             hasErrors = true;
           }
         });
@@ -780,6 +784,51 @@ const Apply = () => {
       }
 
       console.log('[Apply] Application created successfully:', appData?.id);
+
+      // 3.5. Save all documents to application_documents table
+      if (appData?.id && uploadedDocs.length > 0) {
+        console.log('[Apply] Saving documents to application_documents table...');
+
+        const documentRecords = uploadedDocs.map((doc: any) => {
+          const docType = doc.document_type;
+          const docConfig = productDocs?.find((pd: any) =>
+            (pd.doc_type || pd.document_type) === docType
+          );
+
+          return {
+            borrower_id: user.id,
+            application_id: appData.id,
+            loan_product_id: selectedProduct?.id || null,
+            doc_type: docType.toUpperCase(),
+            doc_label: docConfig?.doc_label || docConfig?.document_name || docType,
+            file_url: doc.file_url,
+            file_name: doc.file_name,
+            mime_type: doc.file_type,
+            file_size: doc.file_size,
+            uploaded_by: 'borrower',
+            is_required: docConfig?.is_mandatory || false,
+            status: 'uploaded',
+            payslip_password: docType.toLowerCase().includes('payslip') ? payslipPasswords[docType] : null,
+          };
+        });
+
+        const { error: docsError } = await supabase
+          .from('application_documents')
+          .insert(documentRecords);
+
+        if (docsError) {
+          console.error('[Apply] Error saving documents:', docsError);
+          // Don't fail the application, just log the error
+          const { handleError } = await import('@/utils/errorHandler');
+          handleError(docsError, {
+            component: 'Apply',
+            action: 'save_documents',
+            context: { applicationId: appData.id }
+          });
+        } else {
+          console.log('[Apply] Documents saved successfully:', documentRecords.length);
+        }
+      }
 
       // 4. Update profile
       console.log('[Apply] Updating user profile...');
@@ -1579,8 +1628,12 @@ const Apply = () => {
                       <Input
                         type="password"
                         placeholder="Enter your payslip password"
-                        value={(formData as any).payslipPassword || ""}
-                        onChange={(e) => updateFormData("payslipPassword", e.target.value)}
+                        value={payslipPasswords['payslip'] || payslipPasswords['PAYSLIP'] || ""}
+                        onChange={(e) => setPayslipPasswords(prev => ({
+                          ...prev,
+                          'payslip': e.target.value,
+                          'PAYSLIP': e.target.value
+                        }))}
                       />
                       <p className="text-xs text-muted-foreground">
                         This password is used to open your password-protected payslip PDF for verification
@@ -1602,10 +1655,10 @@ const Apply = () => {
                             </Label>
                             <label
                               className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[month.key as keyof typeof formData]
-                                  ? "border-primary bg-primary/10 shadow-glow"
-                                  : errors[month.key]
-                                    ? "border-destructive bg-destructive/5"
-                                    : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                                ? "border-primary bg-primary/10 shadow-glow"
+                                : errors[month.key]
+                                  ? "border-destructive bg-destructive/5"
+                                  : "border-border hover:border-primary/50 hover:bg-secondary/50"
                                 }`}
                             >
                               <input
@@ -1668,8 +1721,8 @@ const Apply = () => {
                         <Label>Collateral Photo</Label>
                         <label
                           className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData.collateralImage
-                              ? "border-primary bg-primary/10 shadow-glow"
-                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                            ? "border-primary bg-primary/10 shadow-glow"
+                            : "border-border hover:border-primary/50 hover:bg-secondary/50"
                             }`}
                         >
                           <input
