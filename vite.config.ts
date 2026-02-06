@@ -1,4 +1,4 @@
-// vite.config.ts v33 - explicit React path aliases 2026-02-06
+// vite.config.ts v36 - force single React instance 2026-02-06
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
     include: ["react", "react-dom", "react/jsx-runtime"],
     force: true,
   },
-  cacheDir: ".vite-cache-v34",
+  cacheDir: ".vite-cache-v36",
   build: {
     commonjsOptions: {
       include: [/node_modules/],
