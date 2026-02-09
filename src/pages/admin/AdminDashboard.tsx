@@ -295,25 +295,25 @@ const AdminDashboard = () => {
   const { data: officerStats = [] } = useQuery({
     queryKey: ["officer-loan-stats", periodStart.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10)],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("officer_loan_stats", {
+      const { data, error } = await (supabase.rpc as any)("officer_loan_stats", {
         p_period_start: periodStart.toISOString().slice(0, 10),
         p_period_end: periodEnd.toISOString().slice(0, 10),
       });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
 
   const { data: parData } = useQuery({
     queryKey: ["portfolio-at-risk"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("portfolio_at_risk", { p_as_of_date: new Date().toISOString().slice(0, 10) });
+      const { data, error } = await (supabase.rpc as any)("portfolio_at_risk", { p_as_of_date: new Date().toISOString().slice(0, 10) });
       if (error) throw error;
       return Array.isArray(data) && data[0] ? data[0] : null;
     },
   });
 
-  const officerIds = [...new Set((officerStats as { officer_id: string }[]).map((s) => s.officer_id).filter(Boolean))];
+  const officerIds = [...new Set((officerStats as any[]).map((s: any) => s.officer_id).filter(Boolean))];
   const { data: officerProfiles = [] } = useQuery({
     queryKey: ["officer-profiles", officerIds],
     queryFn: async () => {
@@ -326,7 +326,7 @@ const AdminDashboard = () => {
   });
   const getOfficerName = (id: string) => officerProfiles.find((p: { id: string }) => p.id === id)?.full_name || (officerProfiles.find((p: { id: string }) => p.id === id)?.email) || id?.slice(0, 8);
 
-  const myStats = user ? (officerStats as { officer_id: string }[]).find((s) => s.officer_id === user.id) : null;
+  const myStats = user ? (officerStats as any[]).find((s: any) => s.officer_id === user.id) : null;
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -563,7 +563,7 @@ const AdminDashboard = () => {
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
               <p className="text-muted-foreground text-xs font-medium mb-1">PAR (Portfolio at Risk)</p>
-              <p className="text-2xl font-bold text-foreground">{parData?.par_percent != null ? `${parData.par_percent}%` : "—"}</p>
+              <p className="text-2xl font-bold text-foreground">{(parData as any)?.par_percent != null ? `${(parData as any).par_percent}%` : "—"}</p>
               <p className="text-xs text-muted-foreground mt-1">Overdue / outstanding</p>
             </CardContent>
           </Card>
@@ -603,7 +603,7 @@ const AdminDashboard = () => {
         )}
 
         {/* Team performance */}
-        {officerStats.length > 0 && (
+        {(officerStats as any[]).length > 0 && (
           <Card className="border-border/50 bg-card/80">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -629,7 +629,7 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(officerStats as Array<Record<string, unknown>>).map((row) => (
+                    {(officerStats as any[]).map((row: any) => (
                       <tr key={row.officer_id as string} className="border-b border-border/50">
                         <td className="py-2 font-medium">{getOfficerName(row.officer_id as string)}</td>
                         <td className="text-right py-2">{row.applications_submitted ?? 0}</td>

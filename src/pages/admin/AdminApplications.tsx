@@ -619,7 +619,7 @@ const AdminApplications = () => {
   // Workflow transition (verify_documents, finance_approve, approve)
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: string }) => {
-      const { data, error } = await supabase.rpc("transition_loan_status", {
+      const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
       });
@@ -651,13 +651,12 @@ const AdminApplications = () => {
     queryKey: ["loan-notes", selectedApp?.id],
     queryFn: async () => {
       if (!selectedApp?.id) return [];
-      const { data, error } = await supabase
-        .from("loan_notes")
+      const { data, error } = await (supabase.from as any)("loan_notes")
         .select("id, note, type, created_at, user_id")
         .eq("loan_id", selectedApp.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: !!selectedApp?.id,
   });
@@ -665,7 +664,7 @@ const AdminApplications = () => {
   const addNoteMutation = useMutation({
     mutationFn: async ({ loanId, note, type }: { loanId: string; note: string; type: "internal" | "borrower_visible" }) => {
       if (!user?.id) throw new Error("Not authenticated");
-      const { error } = await supabase.from("loan_notes").insert({
+      const { error } = await (supabase.from as any)("loan_notes").insert({
         loan_id: loanId,
         user_id: user.id,
         note,
@@ -2021,6 +2020,7 @@ const AdminApplications = () => {
                               monthly_payment: Number(selectedApp.monthly_payment),
                               total_repayment: Number(selectedApp.total_repayment),
                               loan_purpose: selectedApp.loan_purpose,
+                              created_at: selectedApp.created_at,
                             });
                           }}
                         >
@@ -2049,6 +2049,7 @@ const AdminApplications = () => {
                               monthly_payment: Number(selectedApp.monthly_payment),
                               total_repayment: Number(selectedApp.total_repayment),
                               loan_purpose: selectedApp.loan_purpose,
+                              created_at: selectedApp.created_at,
                             });
                           }}
                         >
@@ -2077,6 +2078,7 @@ const AdminApplications = () => {
                               monthly_payment: Number(selectedApp.monthly_payment),
                               total_repayment: Number(selectedApp.total_repayment),
                               loan_purpose: selectedApp.loan_purpose,
+                              created_at: selectedApp.created_at,
                             });
                           }}
                         >
@@ -2105,6 +2107,7 @@ const AdminApplications = () => {
                               monthly_payment: Number(selectedApp.monthly_payment),
                               total_repayment: Number(selectedApp.total_repayment),
                               loan_purpose: selectedApp.loan_purpose,
+                              created_at: selectedApp.created_at,
                             });
                           }}
                         >

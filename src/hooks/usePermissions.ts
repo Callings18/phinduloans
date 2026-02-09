@@ -29,7 +29,7 @@ export function usePermissions() {
 
     async function load() {
       try {
-        const { data, error } = await supabase.rpc("get_my_permissions");
+        const { data, error } = await (supabase.rpc as any)("get_my_permissions");
         if (cancelled) return;
         if (error) {
           console.warn("get_my_permissions failed", error);

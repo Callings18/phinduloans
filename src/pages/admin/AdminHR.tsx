@@ -47,12 +47,11 @@ const AdminHR = () => {
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["admin-hr-employees"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
+      const { data, error } = await (supabase.from as any)("employees")
         .select("id, user_id, employee_number, first_name, last_name, department, position, branch, commission_percentage, is_active, employment_start_date, email, phone")
         .order("last_name");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: canView,
   });
@@ -60,12 +59,11 @@ const AdminHR = () => {
   const { data: salaryStructures = [] } = useQuery({
     queryKey: ["admin-hr-salary-structures"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employee_salary_structure")
+      const { data, error } = await (supabase.from as any)("employee_salary_structure")
         .select("employee_id, basic_salary, effective_date, expiry_date")
         .order("effective_date", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: canView && employees.length > 0,
   });
@@ -90,13 +88,12 @@ const AdminHR = () => {
   const { data: payrollPeriods = [] } = useQuery({
     queryKey: ["admin-hr-payroll-periods"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payroll_periods")
+      const { data, error } = await (supabase.from as any)("payroll_periods")
         .select("id, period_name, period_start_date, period_end_date, pay_date, status, total_net, total_employees")
         .order("period_start_date", { ascending: false })
         .limit(10);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: canView,
   });
@@ -104,8 +101,7 @@ const AdminHR = () => {
   const { data: leaveCount } = useQuery({
     queryKey: ["admin-hr-leave-pending"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("employee_leave")
+      const { count, error } = await (supabase.from as any)("employee_leave")
         .select("id", { count: "exact", head: true })
         .gte("end_date", new Date().toISOString().slice(0, 10));
       if (error) throw error;
@@ -371,38 +367,39 @@ function AddEditEmployeeForm({
   });
   const queryClient = useQueryClient();
 
-  useQuery({
+  const editQuery = useQuery({
     queryKey: ["employee-edit", editId],
     queryFn: async () => {
       if (!editId) return null;
-      const { data, error } = await supabase.from("employees").select("*").eq("id", editId).single();
+      const { data, error } = await (supabase.from as any)("employees").select("*").eq("id", editId).single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!editId,
-    onSuccess: (data) => {
-      if (data) {
-        setForm({
-          first_name: data.first_name ?? "",
-          last_name: data.last_name ?? "",
-          email: data.email ?? "",
-          phone: data.phone ?? "",
-          employee_number: data.employee_number ?? "",
-          nrc_number: data.nrc_number ?? "",
-          date_of_birth: data.date_of_birth ?? "",
-          department: data.department ?? "",
-          position: data.position ?? "",
-          employment_type: data.employment_type ?? "permanent",
-          employment_start_date: data.employment_start_date ?? "",
-          address: data.address ?? "",
-          city: data.city ?? "",
-          branch: data.branch ?? "",
-          commission_percentage: data.commission_percentage != null ? String(data.commission_percentage) : "0",
-          user_id: data.user_id ?? "",
-        });
-      }
-    },
   });
+
+  // Sync form when edit data loads
+  const editData = editQuery.data;
+  if (editData && form.first_name === "" && form.last_name === "") {
+    setForm({
+      first_name: editData.first_name ?? "",
+      last_name: editData.last_name ?? "",
+      email: editData.email ?? "",
+      phone: editData.phone ?? "",
+      employee_number: editData.employee_number ?? "",
+      nrc_number: editData.nrc_number ?? "",
+      date_of_birth: editData.date_of_birth ?? "",
+      department: editData.department ?? "",
+      position: editData.position ?? "",
+      employment_type: editData.employment_type ?? "permanent",
+      employment_start_date: editData.employment_start_date ?? "",
+      address: editData.address ?? "",
+      city: editData.city ?? "",
+      branch: editData.branch ?? "",
+      commission_percentage: editData.commission_percentage != null ? String(editData.commission_percentage) : "0",
+      user_id: editData.user_id ?? "",
+    });
+  }
 
   const { data: profiles } = useQuery({
     queryKey: ["profiles-staff"],
@@ -436,10 +433,10 @@ function AddEditEmployeeForm({
         user_id: form.user_id || null,
       };
       if (editId) {
-        const { error } = await supabase.from("employees").update(payload).eq("id", editId);
+        const { error } = await (supabase.from as any)("employees").update(payload).eq("id", editId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("employees").insert(payload);
+        const { error } = await (supabase.from as any)("employees").insert(payload);
         if (error) throw error;
       }
     },
