@@ -166,7 +166,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
   const documentChecklist: RequiredDocRow[] = useMemo(() => {
     return productDocuments.map((reqDoc) => {
       const matchingUploads = allUploadedDocs.filter(
-        (d) => d.docType.toUpperCase() === reqDoc.document_type.toUpperCase()
+        (d) => d.docType && reqDoc.document_type && d.docType.toUpperCase() === reqDoc.document_type.toUpperCase()
       );
       return {
         docType: reqDoc.document_type,
@@ -180,8 +180,8 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
 
   // Extra uploaded docs not in the required list
   const extraDocs = useMemo(() => {
-    const requiredTypes = new Set(productDocuments.map((d) => d.document_type.toUpperCase()));
-    return allUploadedDocs.filter((d) => !requiredTypes.has(d.docType.toUpperCase()));
+    const requiredTypes = new Set(productDocuments.filter((d) => d.document_type).map((d) => d.document_type.toUpperCase()));
+    return allUploadedDocs.filter((d) => d.docType && !requiredTypes.has(d.docType.toUpperCase()));
   }, [productDocuments, allUploadedDocs]);
 
   // Stats
