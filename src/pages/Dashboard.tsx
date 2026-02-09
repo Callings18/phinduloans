@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
@@ -14,6 +14,7 @@ import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import QuickApply from "@/components/dashboard/QuickApply";
 import WalletWidget from "@/components/dashboard/WalletWidget";
 import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
+import DocumentChecklist from "@/components/dashboard/DocumentChecklist";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -52,6 +53,7 @@ const statusConfig = {
   pending: { label: "Submitted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
   under_review: { label: "Under Review", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: FileText },
   approved: { label: "Approved", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: CheckCircle },
+  contract_signing: { label: "Contract Signing", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: FileText },
   rejected: { label: "Rejected", color: "bg-red-500/20 text-red-400 border-red-500/30", icon: AlertCircle },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: CreditCard },
   active: { label: "Active", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: TrendingUp },
@@ -433,8 +435,13 @@ const Dashboard = () => {
               </TabsList>
 
               {/* Real-time Status Tracker Tab */}
-              <TabsContent value="tracker">
+              <TabsContent value="tracker" className="space-y-4">
                 {user?.id && <ApplicationStatusTracker userId={user.id} />}
+                
+                {/* Document Checklist for Under Review loans */}
+                {user?.id && loans?.filter(l => l.status === 'under_review').map(loan => (
+                  <DocumentChecklist key={loan.id} loanId={loan.id} userId={user.id} />
+                ))}
               </TabsContent>
 
               {/* Active Loans Tab */}

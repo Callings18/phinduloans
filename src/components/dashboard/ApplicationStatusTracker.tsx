@@ -34,6 +34,7 @@ const statusSteps = [
   { key: "pending", label: "Submitted", icon: FileText },
   { key: "under_review", label: "Under Review", icon: Clock },
   { key: "approved", label: "Approved", icon: CheckCircle2 },
+  { key: "contract_signing", label: "Contract Signing", icon: FileText },
   { key: "disbursed", label: "Disbursed", icon: Banknote },
   { key: "active", label: "Active", icon: Activity },
   { key: "completed", label: "Completed", icon: CheckCircle2 },
@@ -51,6 +52,7 @@ const getStatusColor = (status: string): string => {
     case "pending": return "bg-yellow-500";
     case "under_review": return "bg-blue-500";
     case "approved": return "bg-green-500";
+    case "contract_signing": return "bg-orange-500";
     case "rejected": return "bg-red-500";
     case "disbursed": return "bg-purple-500";
     case "active": return "bg-emerald-500";
@@ -63,6 +65,7 @@ const getStatusColor = (status: string): string => {
 const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
   switch (status) {
     case "approved":
+    case "contract_signing":
     case "disbursed":
     case "active":
     case "completed":
@@ -293,6 +296,7 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
                       {app.status === "pending" && "Your application is being processed"}
                       {app.status === "under_review" && "Your application is under review"}
                       {app.status === "approved" && "Congratulations! Your loan is approved"}
+                      {app.status === "contract_signing" && "Please sign your contract to proceed"}
                       {app.status === "disbursed" && "Funds have been disbursed to your account"}
                       {app.status === "active" && "Your loan is active"}
                       {app.status === "completed" && "Loan fully repaid"}
@@ -300,7 +304,8 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
                     <p className="text-sm text-muted-foreground mt-1">
                       {app.status === "pending" && "We'll review your application within 24-48 hours."}
                       {app.status === "under_review" && "Our team is verifying your documents and information."}
-                      {app.status === "approved" && "Disbursement will be processed shortly."}
+                      {app.status === "approved" && "Your contract is being prepared for signing."}
+                      {app.status === "contract_signing" && "Sign your loan contract to proceed with disbursement."}
                       {app.status === "disbursed" && "Check your bank account or mobile money for the funds."}
                       {app.status === "active" && "Make timely payments to maintain good standing."}
                       {app.status === "completed" && "Thank you for being a valued customer!"}

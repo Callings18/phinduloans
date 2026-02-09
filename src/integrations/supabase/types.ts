@@ -2690,6 +2690,7 @@ export type Database = {
         | "pending"
         | "under_review"
         | "approved"
+        | "contract_signing"
         | "rejected"
         | "disbursed"
         | "active"
@@ -2839,6 +2840,7 @@ export const Constants = {
         "pending",
         "under_review",
         "approved",
+        "contract_signing",
         "rejected",
         "disbursed",
         "active",

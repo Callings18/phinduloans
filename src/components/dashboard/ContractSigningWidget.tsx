@@ -50,7 +50,7 @@ export default function ContractSigningWidget({ userId }: Props) {
         .from("loan_applications")
         .select("*")
         .eq("user_id", userId)
-        .eq("status", "approved")
+        .in("status", ["approved", "contract_signing"])
         .is("signed_contract_url", null)
         .order("created_at", { ascending: false });
 

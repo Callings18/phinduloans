@@ -77,7 +77,7 @@ const AdminDashboard = () => {
     queryFn: async () => {
       const [applications, profiles, disbursements, repayments] = await Promise.all([
         supabase.from('loan_applications').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id'),
+        supabase.from('profiles').select('id, is_blacklisted, blacklist_expires_at'),
         supabase.from('disbursements').select('*').eq('status', 'completed'),
         supabase.from('loan_repayments').select('*'),
       ]);
@@ -85,6 +85,7 @@ const AdminDashboard = () => {
       const loans = applications.data || [];
       const allRepayments = repayments.data || [];
       const completedDisbursements = disbursements.data || [];
+      const allProfiles = profiles.data || [];
       
       // Financial calculations
       const totalDisbursed = completedDisbursements.reduce((sum, d) => sum + Number(d.amount), 0);
@@ -108,10 +109,25 @@ const AdminDashboard = () => {
       const pendingRepayments = allRepayments.filter(r => r.status === 'pending');
       const outstandingBalance = pendingRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
       
+      // Principal outstanding vs Interest outstanding
+      const principalOutstanding = Math.max(0, totalPrincipal - paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0));
+      const interestOutstanding = Math.max(0, outstandingBalance - principalOutstanding);
+      
       // Overdue amount
       const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
       const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
       const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+
+      // Loans due today
+      const loansDueToday = pendingRepayments.filter(r => r.due_date === todayStr).length;
+
+      // Blacklisted borrowers (active blacklist - not expired)
+      const blacklistedBorrowers = allProfiles.filter(p => {
+        if (!p.is_blacklisted) return false;
+        if (p.blacklist_expires_at && new Date(p.blacklist_expires_at) < today) return false;
+        return true;
+      }).length;
 
       return {
         totalApplications: loans.length,
@@ -121,15 +137,19 @@ const AdminDashboard = () => {
         activeLoans: activeLoans.length,
         completedLoans: loans.filter(l => l.status === 'completed').length,
         defaultedLoans: loans.filter(l => l.status === 'defaulted').length,
-        totalBorrowers: profiles.data?.length || 0,
+        totalBorrowers: allProfiles.length,
         totalDisbursed,
         expectedReturns,
         expectedInterest,
         totalPrincipal,
+        principalOutstanding,
+        interestOutstanding,
         amountRecovered,
         outstandingBalance,
         overdueAmount,
         overdueCount: overdueRepayments.length,
+        loansDueToday,
+        blacklistedBorrowers,
         recentApplications: loans.slice(0, 6),
       };
     },
@@ -420,7 +440,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Portfolio Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
               <p className="text-muted-foreground text-xs font-medium mb-1">Expected Returns</p>
@@ -437,23 +457,64 @@ const AdminDashboard = () => {
           </Card>
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
-              <p className="text-muted-foreground text-xs font-medium mb-1">Outstanding Balance</p>
-              <p className="text-2xl font-bold text-warning">K{(stats?.outstandingBalance || 0).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground mt-1">Pending payments</p>
+              <p className="text-muted-foreground text-xs font-medium mb-1">Principal Outstanding</p>
+              <p className="text-2xl font-bold text-warning">K{(stats?.principalOutstanding || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Remaining principal</p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
-              <p className="text-muted-foreground text-xs font-medium mb-1">Expected Interest</p>
-              <p className="text-2xl font-bold text-primary">K{(stats?.expectedInterest || 0).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground mt-1">Revenue from interest</p>
+              <p className="text-muted-foreground text-xs font-medium mb-1">Interest Outstanding</p>
+              <p className="text-2xl font-bold text-primary">K{(stats?.interestOutstanding || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Revenue pending</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Operational Metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-info/20 flex items-center justify-center">
+                <Calendar size={18} className="text-info" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-foreground">{stats?.loansDueToday || 0}</p>
+                <p className="text-xs text-muted-foreground">Loans Due Today</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/20 flex items-center justify-center">
+                <XCircle size={18} className="text-destructive" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-foreground">{stats?.defaultedLoans || 0}</p>
+                <p className="text-xs text-muted-foreground">Defaulted Loans</p>
+              </div>
             </CardContent>
           </Card>
           <Card className="border-destructive/30 bg-destructive/5">
-            <CardContent className="p-4">
-              <p className="text-destructive text-xs font-medium mb-1">Overdue Amount</p>
-              <p className="text-2xl font-bold text-destructive">K{(stats?.overdueAmount || 0).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground mt-1">{stats?.overdueCount || 0} overdue payments</p>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/20 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-destructive" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-destructive">K{(stats?.overdueAmount || 0).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{stats?.overdueCount || 0} overdue payments</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-warning/30 bg-warning/5">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
+                <Users size={18} className="text-warning" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-warning">{stats?.blacklistedBorrowers || 0}</p>
+                <p className="text-xs text-muted-foreground">Blacklisted Borrowers</p>
+              </div>
             </CardContent>
           </Card>
         </div>
