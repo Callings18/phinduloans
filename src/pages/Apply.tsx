@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw, Camera } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -104,14 +104,63 @@ const Apply = () => {
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [cameraDocType, setCameraDocType] = useState<string | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (!cameraDocType) {
+      cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+      cameraStreamRef.current = null;
+      return;
+    }
+    let stream: MediaStream | null = null;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraDocType === "selfie" ? "user" : "environment" }, audio: false });
+        cameraStreamRef.current = stream;
+        if (cameraVideoRef.current) {
+          cameraVideoRef.current.srcObject = stream;
+        }
+      } catch (e) {
+        toast({ title: "Camera not available", description: "Please use file upload instead.", variant: "destructive" });
+        setCameraDocType(null);
+      }
+    })();
+    return () => {
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [cameraDocType, toast]);
+
+  const handleCameraCapture = useCallback(() => {
+    const video = cameraVideoRef.current;
+    const docType = cameraDocType;
+    if (!video || !docType || !video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], `${docType}_${Date.now()}.jpg`, { type: "image/jpeg" });
+        handleDynamicFileUpload(docType, file);
+        setCameraDocType(null);
+        toast({ title: "Photo captured", description: `${docType} saved. You can submit or capture again.` });
+      },
+      "image/jpeg",
+      0.9
+    );
+  }, [cameraDocType, handleDynamicFileUpload, toast]);
 
   // Draft system
   const { draft, hasDraft, lastSaved, isSaving, saveDraft, clearDraft } = useApplicationDraft();
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [draftChecked, setDraftChecked] = useState(false);
 
-  // Standard required documents for all loan products
-  const productDocs = [
+  const DEFAULT_PRODUCT_DOCS = [
     { document_type: 'nrc_front', document_name: 'NRC Front', is_mandatory: true, display_order: 1 },
     { document_type: 'nrc_back', document_name: 'NRC Back', is_mandatory: true, display_order: 2 },
     { document_type: 'selfie', document_name: 'Selfie Photo', is_mandatory: true, display_order: 3 },
@@ -119,7 +168,29 @@ const Apply = () => {
     { document_type: 'bank_statement', document_name: 'Bank Statement (3 months)', is_mandatory: false, display_order: 5 },
     { document_type: 'employer_letter', document_name: 'Employment Letter', is_mandatory: false, display_order: 6 },
   ];
-  const docsLoading = false;
+
+  const { data: productDocsFromDb = [], isLoading: docsLoading } = useQuery({
+    queryKey: ['loan-product-documents', selectedProduct?.id],
+    queryFn: async () => {
+      if (!selectedProduct?.id) return [];
+      const { data, error } = await supabase
+        .from('loan_product_documents')
+        .select('document_type, document_name, is_mandatory, display_order')
+        .eq('loan_product_id', selectedProduct.id)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((d) => ({
+        document_type: d.document_type,
+        document_name: d.document_name,
+        is_mandatory: d.is_mandatory ?? true,
+        display_order: d.display_order ?? 0,
+      }));
+    },
+    enabled: !!selectedProduct?.id,
+  });
+
+  const productDocs = productDocsFromDb.length > 0 ? productDocsFromDb : DEFAULT_PRODUCT_DOCS;
 
   // Fetch user profile for autofill
   const { data: profile } = useQuery({
@@ -155,6 +226,23 @@ const Apply = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Document Vault: permanent docs for reuse (NRC, selfie, etc.)
+  const { data: vaultDocuments = [] } = useQuery({
+    queryKey: ["borrower-documents-vault", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from("borrower_documents")
+        .select("document_type, file_url, document_name")
+        .eq("user_id", user.id)
+        .order("uploaded_at", { ascending: false });
+      if (error) return [];
+      return (data ?? []) as { document_type: string; file_url: string; document_name: string }[];
+    },
+    enabled: !!user?.id,
+  });
+  const vaultByType = Object.fromEntries(vaultDocuments.map((d) => [d.document_type, d]));
 
   const tourSteps: Step[] = [
     {
@@ -548,6 +636,19 @@ const Apply = () => {
       return;
     }
 
+    if (selectedProduct?.eligible_locations && selectedProduct.eligible_locations.length > 0) {
+      const borrowerCity = (formData.city || "").trim();
+      if (!borrowerCity || !selectedProduct.eligible_locations.includes(borrowerCity)) {
+        toast({
+          title: "Location not eligible",
+          description: "This loan product is only available in selected locations. Your city is not in the allowed list. Please choose a different product or location.",
+          variant: "destructive",
+        });
+        setErrors((prev) => ({ ...prev, city: "Your location is not eligible for this product." }));
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     console.log('[Apply] Starting submission process...');
 
@@ -715,6 +816,7 @@ const Apply = () => {
         source: 'website',
         crb_consent: formData.dataConsent,
         crb_consent_timestamp: formData.dataConsent ? new Date().toISOString() : null,
+        payslip_password: (formData as { payslipPassword?: string }).payslipPassword?.trim() || null,
       };
 
       console.log('[Apply] Application data:', { ...applicationData, nrc_front_url: '***', nrc_back_url: '***' });
@@ -728,6 +830,99 @@ const Apply = () => {
       }
 
       console.log('[Apply] Application created successfully:', appData?.id);
+
+      const payslipPassword = (formData as { payslipPassword?: string }).payslipPassword?.trim() || null;
+      const monthTags: Record<string, string> = {
+        payslip: format(subMonths(new Date(), 1), 'yyyy-MM'),
+        payslip2: format(subMonths(new Date(), 2), 'yyyy-MM'),
+        payslip3: format(subMonths(new Date(), 3), 'yyyy-MM'),
+      };
+
+      const docRows: Array<{
+        loan_application_id: string;
+        borrower_id: string;
+        document_type: string;
+        document_name: string;
+        doc_label: string | null;
+        file_url: string;
+        file_size_bytes?: number;
+        file_type?: string;
+        mime_type?: string;
+        file_name?: string;
+        month_tag?: string | null;
+        payslip_password?: string | null;
+        uploaded_by: string;
+      }> = [];
+
+      for (const d of uploadedDocs) {
+        const docConfig = productDocs.find((p) => p.document_type === d.document_type);
+        docRows.push({
+          loan_application_id: appData.id,
+          borrower_id: user.id,
+          document_type: d.document_type,
+          document_name: docConfig?.document_name ?? d.document_type,
+          doc_label: docConfig?.document_name ?? null,
+          file_url: d.file_url,
+          file_size_bytes: d.file_size,
+          file_type: d.file_type ?? undefined,
+          mime_type: d.file_type ?? undefined,
+          file_name: d.file_name ?? undefined,
+          month_tag: monthTags[d.document_type] ?? null,
+          payslip_password: /^payslip/.test(d.document_type) ? payslipPassword : null,
+          uploaded_by: 'borrower',
+        });
+      }
+
+      for (const [docType, fileUrl] of Object.entries(formData.reusedDocs)) {
+        if (!fileUrl?.trim()) continue;
+        const docConfig = productDocs.find((p) => p.document_type === docType);
+        docRows.push({
+          loan_application_id: appData.id,
+          borrower_id: user.id,
+          document_type: docType,
+          document_name: docConfig?.document_name ?? docType,
+          doc_label: docConfig?.document_name ?? null,
+          file_url: fileUrl.trim(),
+          month_tag: monthTags[docType] ?? null,
+          payslip_password: /^payslip/.test(docType) ? payslipPassword : null,
+          uploaded_by: 'borrower',
+        });
+      }
+
+      if (collateralImageUrl) {
+        docRows.push({
+          loan_application_id: appData.id,
+          borrower_id: user.id,
+          document_type: 'collateral',
+          document_name: 'Collateral Image',
+          doc_label: 'Collateral Image',
+          file_url: collateralImageUrl,
+          uploaded_by: 'borrower',
+        });
+      }
+
+      if (docRows.length > 0) {
+        const { error: docError } = await supabase.from('loan_application_documents').insert(docRows);
+        if (docError) {
+          console.warn('[Apply] Dual-write to loan_application_documents failed (non-blocking):', docError);
+        }
+        // Save to Document Vault for reuse (NRC, selfie)
+        const vaultTypes = ['nrc_front', 'nrc_back', 'selfie'];
+        for (const row of docRows) {
+          if (!vaultTypes.includes(row.document_type) || !row.file_url) continue;
+          await supabase.from('borrower_documents').upsert(
+            {
+              user_id: user.id,
+              document_type: row.document_type,
+              document_name: row.document_name,
+              file_url: row.file_url,
+              file_size_bytes: row.file_size_bytes ?? null,
+              mime_type: row.mime_type ?? null,
+            },
+            { onConflict: 'user_id,document_type' }
+          );
+        }
+      }
 
       // 4. Update profile
       console.log('[Apply] Updating user profile...');
@@ -1359,41 +1554,56 @@ const Apply = () => {
                               {doc.document_name} {doc.is_mandatory && "*"}
                             </Label>
 
-                            {/* Document Reuse Option */}
+                            {/* Reuse from Document Vault */}
+                            {vaultByType[doc.document_type] && (
+                              <div className="mb-2 flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
+                                <Checkbox
+                                  id={`reuse-vault-${doc.document_type}`}
+                                  checked={formData.reusedDocs[doc.document_type] === vaultByType[doc.document_type]?.file_url}
+                                  onCheckedChange={(checked) => {
+                                    const url = vaultByType[doc.document_type]?.file_url;
+                                    if (!url) return;
+                                    setFormData(prev => {
+                                      const next = { ...prev };
+                                      if (checked) {
+                                        next.reusedDocs = { ...next.reusedDocs, [doc.document_type]: url };
+                                        setDynamicDocs(docs => { const d = { ...docs }; delete d[doc.document_type]; return d; });
+                                      } else {
+                                        const r = { ...next.reusedDocs }; delete r[doc.document_type]; next.reusedDocs = r;
+                                      }
+                                      return next;
+                                    });
+                                    if (errors[doc.document_type]) setErrors(e => { const n = { ...e }; delete n[doc.document_type]; return n; });
+                                  }}
+                                />
+                                <label htmlFor={`reuse-vault-${doc.document_type}`} className="text-sm cursor-pointer flex-1">
+                                  <span className="font-medium">Reuse from Document Vault</span>
+                                  <span className="block text-xs text-muted-foreground">Saved for future applications</span>
+                                </label>
+                                <CheckCircle size={16} className="text-success" />
+                              </div>
+                            )}
+                            {/* Reuse from previous application */}
                             {previousApplication &&
                               ['nrc_front', 'nrc_back', 'payslip', 'selfie'].includes(doc.document_type) &&
                               previousApplication[`${doc.document_type}_url`] && (
                                 <div className="mb-2 flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
                                   <Checkbox
                                     id={`reuse-${doc.id}`}
-                                    checked={!!formData.reusedDocs[doc.document_type]}
+                                    checked={formData.reusedDocs[doc.document_type] === previousApplication[`${doc.document_type}_url`]}
                                     onCheckedChange={(checked) => {
                                       const url = previousApplication[`${doc.document_type}_url`];
                                       setFormData(prev => {
                                         const next = { ...prev };
                                         if (checked) {
                                           next.reusedDocs = { ...next.reusedDocs, [doc.document_type]: url };
-                                          // Clear manual upload if switching to reuse
-                                          setDynamicDocs(docs => {
-                                            const d = { ...docs };
-                                            delete d[doc.document_type];
-                                            return d;
-                                          });
+                                          setDynamicDocs(docs => { const d = { ...docs }; delete d[doc.document_type]; return d; });
                                         } else {
-                                          const r = { ...next.reusedDocs };
-                                          delete r[doc.document_type];
-                                          next.reusedDocs = r;
+                                          const r = { ...next.reusedDocs }; delete r[doc.document_type]; next.reusedDocs = r;
                                         }
                                         return next;
                                       });
-                                      // Clear error
-                                      if (errors[doc.document_type]) {
-                                        setErrors(e => {
-                                          const next = { ...e };
-                                          delete next[doc.document_type];
-                                          return next;
-                                        });
-                                      }
+                                      if (errors[doc.document_type]) setErrors(e => { const n = { ...e }; delete n[doc.document_type]; return n; });
                                     }}
                                   />
                                   <label htmlFor={`reuse-${doc.id}`} className="text-sm cursor-pointer flex-1">
@@ -1407,21 +1617,33 @@ const Apply = () => {
                               )}
 
                             {!formData.reusedDocs[doc.document_type] && (
-                              <label
-                                className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${dynamicDocs[doc.document_type]
-                                  ? "border-primary bg-primary/10 shadow-glow"
-                                  : errors[doc.document_type]
-                                    ? "border-destructive bg-destructive/5"
-                                    : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                                  }`}
-                              >
-                                <input
-                                  type="file"
-                                  accept={doc.allowed_file_types?.map((t: string) => `.${t}`).join(',') || "image/*,.pdf"}
-                                  className="hidden"
-                                  onChange={(e) => handleDynamicFileUpload(doc.document_type, e.target.files?.[0] || null)}
-                                />
-                                {uploadProgress[doc.document_type] !== undefined ? (
+                              <div className="space-y-2">
+                                {["selfie", "nrc_front", "nrc_back"].includes(doc.document_type) && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                    onClick={() => setCameraDocType(doc.document_type)}
+                                  >
+                                    <Camera size={14} className="mr-2" /> Open Camera
+                                  </Button>
+                                )}
+                                <label
+                                  className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${dynamicDocs[doc.document_type]
+                                    ? "border-primary bg-primary/10 shadow-glow"
+                                    : errors[doc.document_type]
+                                      ? "border-destructive bg-destructive/5"
+                                      : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                                    }`}
+                                >
+                                  <input
+                                    type="file"
+                                    accept={doc.allowed_file_types?.map((t: string) => `.${t}`).join(',') || "image/*,.pdf"}
+                                    className="hidden"
+                                    onChange={(e) => handleDynamicFileUpload(doc.document_type, e.target.files?.[0] || null)}
+                                  />
+                                  {uploadProgress[doc.document_type] !== undefined ? (
                                   <>
                                     <Loader2 className="text-primary mb-2 animate-spin" size={32} />
                                     <Progress value={uploadProgress[doc.document_type]} className="w-full mb-2" />
@@ -1445,7 +1667,8 @@ const Apply = () => {
                                     </span>
                                   </>
                                 )}
-                              </label>
+                                </label>
+                              </div>
                             )}
                           </div>
                         ))}
@@ -1456,6 +1679,23 @@ const Apply = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Camera capture dialog */}
+                  <Dialog open={!!cameraDocType} onOpenChange={(open) => !open && setCameraDocType(null)}>
+                    <DialogContent className="sm:max-w-md bg-background">
+                      <DialogHeader>
+                        <DialogTitle>Capture {cameraDocType === "selfie" ? "Selfie" : cameraDocType === "nrc_front" ? "NRC Front" : "NRC Back"}</DialogTitle>
+                        <DialogDescription>Position the document or your face in the frame, then click Capture.</DialogDescription>
+                      </DialogHeader>
+                      <div className="rounded-lg overflow-hidden bg-muted border">
+                        <video ref={cameraVideoRef} autoPlay playsInline muted className="w-full aspect-video object-cover" />
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setCameraDocType(null)}>Cancel</Button>
+                        <Button onClick={handleCameraCapture}>Capture</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                   {/* Payslip Password Field */}
                   <div className="pt-6 border-t border-border">
@@ -1487,7 +1727,7 @@ const Apply = () => {
                   {/* Latest 3 Months Payslips - Not required for Business and Personal loans */}
                   {selectedProduct && !selectedProduct.name?.toLowerCase().includes('business') && !selectedProduct.name?.toLowerCase().includes('personal') && (
                   <div className="pt-6 border-t border-border">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Latest Payslips (3 Months) *</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Payslip Upload (Select Month) *</h3>
                     <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {getLastThreeMonths().map((month, index) => (

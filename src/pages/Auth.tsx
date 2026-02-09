@@ -19,13 +19,15 @@ const signupSchema = loginSchema.extend({
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [loginMode, setLoginMode] = useState<"password" | "otp">("password");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  const { signIn, signUp, user, isLoading } = useAuth();
+  const { signIn, signUp, sendOtp, user, isLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -61,6 +63,35 @@ const Auth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (isLogin && loginMode === "otp") {
+      const input = email.trim();
+      if (!input) {
+        setErrors({ email: "Enter your email or phone number" });
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        const { error } = await sendOtp(input);
+        if (error) {
+          toast({
+            title: "Sign-in link failed",
+            description: error.message,
+            variant: "destructive",
+          });
+          setErrors({ email: error.message });
+        } else {
+          setOtpSentTo(input);
+          toast({
+            title: "Check your email or phone",
+            description: "We sent you a sign-in link. Click it to log in.",
+          });
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!validateForm()) return;
     
     setIsSubmitting(true);
@@ -152,7 +183,35 @@ const Auth = () => {
 
           {/* Form */}
           <div className="glass rounded-3xl p-8 shadow-card animate-slide-up">
+            {otpSentTo ? (
+              <div className="space-y-4 text-center">
+                <p className="text-muted-foreground">
+                  We sent a sign-in link to <strong>{otpSentTo}</strong>. Click the link in your email or message to log in.
+                </p>
+                <Button type="button" variant="outline" className="w-full" onClick={() => { setOtpSentTo(null); setErrors({}); }}>
+                  Use a different email or phone
+                </Button>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {isLogin && (
+                <div className="flex gap-2 p-1 rounded-lg bg-muted/50">
+                  <button
+                    type="button"
+                    onClick={() => { setLoginMode("password"); setErrors({}); }}
+                    className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${loginMode === "password" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setLoginMode("otp"); setErrors({}); }}
+                    className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${loginMode === "otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    Email / OTP
+                  </button>
+                </div>
+              )}
               {!isLogin && (
                 <div className="space-y-2">
                   <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
@@ -176,14 +235,14 @@ const Auth = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                  Email Address
+                  {isLogin && loginMode === "otp" ? "Email or phone number" : "Email Address"}
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                   <Input
                     id="email"
-                    type="email"
-                    placeholder="you@example.com"
+                    type={isLogin && loginMode === "otp" ? "text" : "email"}
+                    placeholder={isLogin && loginMode === "otp" ? "you@example.com or 09xx xxx xxx" : "you@example.com"}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-11"
@@ -194,6 +253,7 @@ const Auth = () => {
                 )}
               </div>
 
+              {isLogin && loginMode === "password" && (
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
@@ -213,6 +273,7 @@ const Auth = () => {
                   <p className="text-sm text-destructive">{errors.password}</p>
                 )}
               </div>
+              )}
 
               <Button 
                 type="submit" 
@@ -227,12 +288,15 @@ const Auth = () => {
                   </div>
                 ) : (
                   <span className="flex items-center gap-2">
-                    {isLogin ? "Sign In" : "Create Account"}
+                    {isLogin
+                      ? (loginMode === "otp" ? "Send sign-in link" : "Sign In")
+                      : "Create Account"}
                     <ArrowRight size={18} />
                   </span>
                 )}
               </Button>
             </form>
+            )}
 
             <div className="mt-6 text-center">
               <p className="text-muted-foreground text-sm">

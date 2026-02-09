@@ -162,12 +162,13 @@ const AdminApplications = () => {
   });
   const [isUploading, setIsUploading] = useState(false);
 
-  // Disbursement form state
+  // Disbursement form state (source_account_id required for balance check)
   const [disbursement, setDisbursement] = useState({
     disbursement_method: "bank_transfer",
     account_number: "",
     mobile_money_number: "",
     transaction_reference: "",
+    source_account_id: "",
   });
 
   const [assigneeId, setAssigneeId] = useState<string>("");
@@ -229,6 +230,20 @@ const AdminApplications = () => {
         .order('full_name', { ascending: true });
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch active accounts for disbursement source (balance check)
+  const { data: fundingAccounts = [] } = useQuery({
+    queryKey: ["active-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data as { id: string; account_name: string; account_type: string; balance: number }[];
     },
   });
 
@@ -421,10 +436,14 @@ const AdminApplications = () => {
     },
   });
 
-  // Disburse mutation
+  // Disburse mutation (requires source_account_id; balance checked in handleDisburse and DB trigger)
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Create disbursement record
+      const sourceAccount = fundingAccounts.find((a) => a.id === data.source_account_id);
+      if (!sourceAccount) throw new Error("Source account not found");
+      if (sourceAccount.balance < (selectedApp?.loan_amount ?? 0)) {
+        throw new Error("Insufficient funds in selected account. Please top up and try again.");
+      }
       const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
         amount: selectedApp.loan_amount,
@@ -434,6 +453,7 @@ const AdminApplications = () => {
         transaction_reference: data.transaction_reference || null,
         status: 'completed',
         disbursed_at: new Date().toISOString(),
+        source_account_id: data.source_account_id || null,
       });
 
       if (disbError) throw disbError;
@@ -590,6 +610,7 @@ const AdminApplications = () => {
       account_number: "",
       mobile_money_number: "",
       transaction_reference: "",
+      source_account_id: "",
     });
   };
 
@@ -664,6 +685,15 @@ const AdminApplications = () => {
   };
 
   const handleDisburse = () => {
+    if (!disbursement.source_account_id) {
+      toast({ title: "Please select a funding account", description: "Disbursement requires a source account with sufficient balance.", variant: "destructive" });
+      return;
+    }
+    const sourceAccount = fundingAccounts.find((a) => a.id === disbursement.source_account_id);
+    if (sourceAccount && selectedApp && sourceAccount.balance < (selectedApp.loan_amount ?? 0)) {
+      toast({ title: "Insufficient funds", description: "Insufficient funds in selected account. Please top up and try again.", variant: "destructive" });
+      return;
+    }
     if (!disbursement.transaction_reference) {
       toast({ title: "Please enter a transaction reference", variant: "destructive" });
       return;
@@ -2143,6 +2173,29 @@ const AdminApplications = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Funding account (source) *</Label>
+              <Select
+                value={disbursement.source_account_id}
+                onValueChange={(v) => setDisbursement({ ...disbursement, source_account_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account with sufficient balance" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fundingAccounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.account_name} — K{(acc.balance ?? 0).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {disbursement.source_account_id && selectedApp && (() => {
+                const acc = fundingAccounts.find((a) => a.id === disbursement.source_account_id);
+                const ok = acc && acc.balance >= (selectedApp.loan_amount ?? 0);
+                return <p className={ok ? "text-xs text-green-600" : "text-xs text-destructive"}>{(ok ? "Sufficient" : "Insufficient")} balance for K{Number(selectedApp.loan_amount || 0).toLocaleString()}</p>;
+              })()}
+            </div>
             <div className="space-y-2">
               <Label>Disbursement Method</Label>
               <Select

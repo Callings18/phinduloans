@@ -119,8 +119,25 @@ class NotificationService {
         throw new Error(data?.error || "Failed to send notification");
       }
 
+      if (params.type === "email") {
+        await supabase.from("email_logs").insert({
+          recipient: params.to,
+          subject: params.subject ?? null,
+          status: "sent",
+          reference_type: params.eventType ?? null,
+        });
+      }
       return { success: true, data };
     } catch (error: any) {
+      if (params.type === "email") {
+        await supabase.from("email_logs").insert({
+          recipient: params.to,
+          subject: params.subject ?? null,
+          status: "failed",
+          error_message: error?.message ?? String(error),
+          reference_type: params.eventType ?? null,
+        });
+      }
       handleError(error, {
         component: 'NotificationService',
         action: `send_${params.type}`,

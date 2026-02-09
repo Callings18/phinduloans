@@ -67,6 +67,20 @@ interface LegacyDocument {
   label: string;
   url: string | null;
   type: 'image' | 'document';
+  payslipPassword?: string | null;
+}
+
+interface ApplicationDocumentRow {
+  id: string;
+  document_type: string;
+  document_name: string;
+  doc_label: string | null;
+  file_url: string | null;
+  month_tag: string | null;
+  payslip_password: string | null;
+  file_type: string | null;
+  mime_type: string | null;
+  uploaded_at: string | null;
 }
 
 interface Props {
@@ -94,16 +108,18 @@ export default function DocumentVerificationTab({ loanId }: Props) {
   const [newDocType, setNewDocType] = useState("");
   const [newDocName, setNewDocName] = useState("");
   const [newDocRequired, setNewDocRequired] = useState(true);
+  const [previewState, setPreviewState] = useState<{ url: string; type: 'pdf' | 'image'; label: string; payslipPassword?: string | null } | null>(null);
 
   const queryClient = useQueryClient();
 
-  // Fetch loan application for legacy documents
+  // Fetch loan application for legacy documents, payslip_password, and loan_product_id
   const { data: loanApplication } = useQuery({
     queryKey: ["loan-application-docs", loanId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_applications")
         .select(`
+          loan_product_id,
           nrc_front_url,
           nrc_back_url,
           selfie_url,
@@ -114,13 +130,47 @@ export default function DocumentVerificationTab({ loanId }: Props) {
           employer_letter_url,
           collateral_image_url,
           collateral_description,
-          signed_contract_url
+          signed_contract_url,
+          payslip_password
         `)
         .eq("id", loanId)
         .single();
 
       if (error) throw error;
       return data;
+    },
+  });
+
+  const loanProductId = (loanApplication as { loan_product_id?: string } | undefined)?.loan_product_id ?? null;
+
+  // Fetch required documents for this application's loan product (for checklist from product)
+  const { data: productDocuments = [] } = useQuery({
+    queryKey: ["loan-product-documents", loanProductId],
+    queryFn: async () => {
+      if (!loanProductId) return [];
+      const { data, error } = await supabase
+        .from("loan_product_documents")
+        .select("document_type, document_name, is_mandatory")
+        .eq("loan_product_id", loanProductId)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as { document_type: string; document_name: string; is_mandatory: boolean }[];
+    },
+    enabled: !!loanProductId,
+  });
+
+  // Fetch unified application documents (single-doc model)
+  const { data: applicationDocuments = [] } = useQuery({
+    queryKey: ["loan-application-documents", loanId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_application_documents")
+        .select("id, document_type, document_name, doc_label, file_url, month_tag, payslip_password, file_type, mime_type, uploaded_at")
+        .eq("loan_application_id", loanId)
+        .order("uploaded_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ApplicationDocumentRow[];
     },
   });
 
@@ -139,24 +189,65 @@ export default function DocumentVerificationTab({ loanId }: Props) {
     },
   });
 
-  // Build legacy documents list from loan application
+  const legacyPayslipPassword = (loanApplication as { payslip_password?: string } | undefined)?.payslip_password ?? null;
+
+  // Build legacy documents list from loan application (with payslip_password for payslips)
   const legacyDocuments: LegacyDocument[] = loanApplication ? ([
     { label: "NRC Front", url: loanApplication.nrc_front_url, type: 'image' as const },
     { label: "NRC Back", url: loanApplication.nrc_back_url, type: 'image' as const },
     { label: "Selfie", url: loanApplication.selfie_url, type: 'image' as const },
-    { label: "Payslip 1", url: loanApplication.payslip_url, type: 'document' as const },
-    { label: "Payslip 2", url: loanApplication.payslip_2_url, type: 'document' as const },
-    { label: "Payslip 3", url: loanApplication.payslip_3_url, type: 'document' as const },
+    { label: "Payslip 1", url: loanApplication.payslip_url, type: 'document' as const, payslipPassword: legacyPayslipPassword },
+    { label: "Payslip 2", url: loanApplication.payslip_2_url, type: 'document' as const, payslipPassword: legacyPayslipPassword },
+    { label: "Payslip 3", url: loanApplication.payslip_3_url, type: 'document' as const, payslipPassword: legacyPayslipPassword },
     { label: "Bank Statement", url: loanApplication.bank_statement_url, type: 'document' as const },
     { label: "Employer Letter", url: loanApplication.employer_letter_url, type: 'document' as const },
     { label: "Collateral Image", url: loanApplication.collateral_image_url, type: 'image' as const },
     { label: "Signed Contract", url: loanApplication.signed_contract_url, type: 'document' as const },
   ] as LegacyDocument[]).filter(doc => doc.url) : [];
 
-  // Initialize checklist mutation
+  const labelToDocType = (label: string): string => {
+    if (label === "Payslip 1") return "payslip";
+    if (label === "Payslip 2") return "payslip2";
+    if (label === "Payslip 3") return "payslip3";
+    if (label === "NRC Front") return "nrc_front";
+    if (label === "NRC Back") return "nrc_back";
+    if (label === "Selfie") return "selfie";
+    if (label === "Bank Statement") return "bank_statement";
+    if (label === "Employer Letter") return "employer_letter";
+    if (label === "Collateral Image") return "collateral";
+    if (label === "Signed Contract") return "signed_contract";
+    return label.toLowerCase().replace(/\s+/g, "_");
+  };
+  const unifiedDocTypes = new Set(applicationDocuments.map((d) => d.document_type));
+  const legacyOnly = legacyDocuments.filter((d) => !unifiedDocTypes.has(labelToDocType(d.label)));
+  type DisplayDoc = { label: string; url: string | null; type: 'image' | 'document'; payslipPassword?: string | null; mimeType?: string | null; source: 'unified' | 'legacy' };
+  const displayDocuments: DisplayDoc[] = [
+    ...applicationDocuments.map((d) => ({
+      label: d.doc_label || d.document_name,
+      url: d.file_url,
+      type: (d.mime_type?.startsWith("image/") || d.file_type?.startsWith("image")) ? "image" as const : "document" as const,
+      payslipPassword: d.payslip_password,
+      mimeType: d.mime_type,
+      source: "unified" as const,
+    })),
+    ...legacyOnly.map((d) => ({
+      label: d.label,
+      url: d.url,
+      type: d.type,
+      payslipPassword: d.payslipPassword,
+      mimeType: null as string | null,
+      source: "legacy" as const,
+    })),
+  ].filter((d) => d.url) as DisplayDoc[];
+
+  const checklistSourceDocs = productDocuments.length > 0
+    ? productDocuments.map((d) => ({ type: d.document_type, name: d.document_name, required: d.is_mandatory }))
+    : DEFAULT_DOCUMENTS.map((d) => ({ type: d.type, name: d.name, required: d.required }));
+
+  // Initialize checklist mutation (from product config when available)
   const initChecklistMutation = useMutation({
     mutationFn: async () => {
-      const checklistItems = DEFAULT_DOCUMENTS.map((doc) => ({
+      const checklistItems = checklistSourceDocs.map((doc) => ({
         loan_id: loanId,
         document_type: doc.type,
         document_name: doc.name,
@@ -313,12 +404,22 @@ export default function DocumentVerificationTab({ loanId }: Props) {
     return data.signedUrl;
   };
 
-  const handleViewDocument = async (fileUrl: string | null) => {
+  const handleViewDocument = async (
+    fileUrl: string | null,
+    opts?: { label?: string; payslipPassword?: string | null; mimeType?: string | null }
+  ) => {
     const signedUrl = await getSignedUrl(fileUrl);
     if (signedUrl) {
-      window.open(signedUrl, '_blank');
+      const mime = opts?.mimeType?.toLowerCase() ?? "";
+      const isPdf = mime.includes("pdf") || signedUrl.toLowerCase().includes(".pdf");
+      setPreviewState({
+        url: signedUrl,
+        type: isPdf ? "pdf" : "image",
+        label: opts?.label ?? "Document",
+        payslipPassword: opts?.payslipPassword ?? null,
+      });
     } else {
-      toast.error('Unable to view document');
+      toast.error("Unable to view document");
     }
   };
 
@@ -351,31 +452,38 @@ export default function DocumentVerificationTab({ loanId }: Props) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Link2 size={16} /> Legacy / Standard Documents
+              <Link2 size={16} /> Documents (Unified + Legacy)
             </CardTitle>
-            <CardDescription>Documents uploaded during application</CardDescription>
+            <CardDescription>All documents for this application — view inline (no redirect)</CardDescription>
           </CardHeader>
           <CardContent>
-            {legacyDocuments.length > 0 ? (
+            {displayDocuments.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {legacyDocuments.map((doc, index) => (
+                {displayDocuments.map((doc, index) => (
                   <Card key={index} className="bg-secondary/20 border-border/30">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {doc.type === 'image' ? (
-                          <Image size={18} className="text-primary" />
-                        ) : (
-                          <FileText size={18} className="text-primary" />
-                        )}
-                        <span className="font-medium">{doc.label}</span>
+                    <CardContent className="p-4 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {doc.type === "image" ? (
+                            <Image size={18} className="text-primary" />
+                          ) : (
+                            <FileText size={18} className="text-primary" />
+                          )}
+                          <span className="font-medium">{doc.label}</span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => doc.url && handleViewDocument(doc.url, { label: doc.label, payslipPassword: doc.payslipPassword, mimeType: doc.mimeType })}
+                        >
+                          <Eye size={14} className="mr-1" /> View
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => doc.url && handleViewDocument(doc.url)}
-                      >
-                        <ExternalLink size={14} className="mr-1" /> View
-                      </Button>
+                      {doc.payslipPassword && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <ShieldCheck size={12} /> Payslip password: <code className="bg-muted px-1 rounded">{doc.payslipPassword}</code>
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -383,7 +491,7 @@ export default function DocumentVerificationTab({ loanId }: Props) {
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <FileText className="mx-auto h-10 w-10 opacity-30 mb-2" />
-                <p>No legacy documents found for this application</p>
+                <p>No documents found for this application</p>
                 <p className="text-xs mt-1">Documents may not have been uploaded during application</p>
               </div>
             )}
@@ -506,7 +614,7 @@ export default function DocumentVerificationTab({ loanId }: Props) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleViewDocument(doc.file_url)}
+                              onClick={() => handleViewDocument(doc.file_url, { label: doc.document_name })}
                             >
                               <Eye size={14} />
                             </Button>
@@ -533,35 +641,42 @@ export default function DocumentVerificationTab({ loanId }: Props) {
         </CardContent>
       </Card>
 
-      {/* Legacy / Standard Documents from Application */}
+      {/* Unified + Legacy Documents from Application — inline preview, no redirect */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Link2 size={16} /> Legacy / Standard Documents
+            <Link2 size={16} /> Documents (Unified + Legacy)
           </CardTitle>
-          <CardDescription>Documents uploaded during application</CardDescription>
+          <CardDescription>All documents for this application — view inline</CardDescription>
         </CardHeader>
         <CardContent>
-          {legacyDocuments.length > 0 ? (
+          {displayDocuments.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {legacyDocuments.map((doc, index) => (
+              {displayDocuments.map((doc, index) => (
                 <Card key={index} className="bg-secondary/20 border-border/30">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {doc.type === 'image' ? (
-                        <Image size={18} className="text-primary" />
-                      ) : (
-                        <FileText size={18} className="text-primary" />
-                      )}
-                      <span className="font-medium">{doc.label}</span>
+                  <CardContent className="p-4 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {doc.type === "image" ? (
+                          <Image size={18} className="text-primary" />
+                        ) : (
+                          <FileText size={18} className="text-primary" />
+                        )}
+                        <span className="font-medium">{doc.label}</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => doc.url && handleViewDocument(doc.url, { label: doc.label, payslipPassword: doc.payslipPassword, mimeType: doc.mimeType })}
+                      >
+                        <Eye size={14} className="mr-1" /> View
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => doc.url && handleViewDocument(doc.url)}
-                    >
-                      <ExternalLink size={14} className="mr-1" /> View
-                    </Button>
+                    {doc.payslipPassword && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ShieldCheck size={12} /> Payslip password: <code className="bg-muted px-1 rounded">{doc.payslipPassword}</code>
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -569,7 +684,7 @@ export default function DocumentVerificationTab({ loanId }: Props) {
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="mx-auto h-10 w-10 opacity-30 mb-2" />
-              <p>No legacy documents found for this application</p>
+              <p>No documents found for this application</p>
               <p className="text-xs mt-1">Documents may not have been uploaded during application</p>
             </div>
           )}
@@ -624,6 +739,36 @@ export default function DocumentVerificationTab({ loanId }: Props) {
               Add Document
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inline document preview (no redirect) */}
+      <Dialog open={!!previewState} onOpenChange={(open) => !open && setPreviewState(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{previewState?.label ?? "Document"}</DialogTitle>
+            {previewState?.payslipPassword && (
+              <DialogDescription className="flex items-center gap-2">
+                <ShieldCheck size={14} /> Payslip password: <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">{previewState.payslipPassword}</code>
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="flex-1 min-h-0 rounded-lg border bg-muted/30 overflow-hidden">
+            {previewState?.type === "pdf" && (
+              <iframe
+                title={previewState.label}
+                src={previewState.url}
+                className="w-full h-[70vh] border-0"
+              />
+            )}
+            {previewState?.type === "image" && (
+              <img
+                src={previewState.url}
+                alt={previewState.label}
+                className="w-full h-auto max-h-[70vh] object-contain"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

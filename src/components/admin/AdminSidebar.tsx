@@ -29,6 +29,7 @@ import {
   Scale,
   UserCircle,
   DollarSign,
+  Mail,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -121,6 +122,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { icon: Shield, label: "Staff", path: "/admin/staff", adminOnly: true },
       { icon: FileSignature, label: "Contracts", path: "/admin/contract-templates", adminOnly: true },
+      { icon: Mail, label: "Email Log", path: "/admin/email-log", adminOnly: true },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
     ],
   },

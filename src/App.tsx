@@ -39,6 +39,7 @@ import AdminCourtCases from "./pages/admin/AdminCourtCases";
 import AdminWallets from "./pages/admin/AdminWallets";
 import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
+import AdminEmailLog from "./pages/admin/AdminEmailLog";
 
 const queryClient = new QueryClient();
 
@@ -86,6 +87,7 @@ function App() {
                 <Route path="/admin/wallets" element={<AdminWallets />} />
                 <Route path="/admin/hr" element={<AdminHR />} />
                 <Route path="/admin/payroll" element={<AdminPayroll />} />
+                <Route path="/admin/email-log" element={<AdminEmailLog />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
