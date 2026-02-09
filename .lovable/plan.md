@@ -1,143 +1,170 @@
 
-# Full Loan Flow Alignment -- Borrower vs Admin Synchronization
 
-## Summary of Gaps Found
+# Confirmation: Borrower vs Admin Flow Alignment -- Gap Analysis & Fix Plan
 
-After a thorough audit of the codebase against your specification, here is what is already implemented and what needs work:
+## Current State Assessment
 
-### Already Working (No Changes Needed)
-- Account creation with email/password + OTP-based passwordless login
-- Duplicate NRC + phone unique index on profiles
-- Blacklist enforcement on Apply page (with expiry support)
-- Loan product configuration (interest, fees, terms, CRB, PMIC, required documents)
-- Duplicate loan prevention (borrower and admin sides)
-- Real-time status sync (borrower dashboard subscribes to `postgres_changes`)
-- Admin loan lifecycle: approve, reject, disburse with source account balance check
-- Repayment schedule auto-generation on disbursement completion (DB trigger)
-- Penalty calculation and auto-apply via DB functions
-- Contract signing widget (borrower signs digitally, uploads signature)
-- Admin counter-signature verification (dual-signature locking)
-- Clearance notifications on completion (DB trigger)
-- Audit logging for loan changes and repayments (DB triggers)
-- Document vault for borrower reuse
-- Admin document verification tab with payslip password display
-- Collections and court case modules
-- Accounts/ledger integration for disbursements
-- Role-based sidebar navigation (7 staff roles)
-
-### Gaps to Fix (Grouped by Priority)
+After a comprehensive audit of every relevant file, here is the status of each item in your specification:
 
 ---
 
-## Phase 1: Status Pipeline Alignment (Critical)
+## Items Already Fully Implemented (No Changes Needed)
 
-**Problem:** The database `loan_status` enum is missing `contract_signing`. The borrower status tracker skips the Contract Signing step. The admin Loans page does not show `contract_signing` as a valid workflow step.
-
-**Changes:**
-
-1. **Database migration** -- Add `contract_signing` to the `loan_status` enum:
-   ```sql
-   ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'contract_signing' AFTER 'approved';
-   ```
-
-2. **ApplicationStatusTracker.tsx** -- Add `contract_signing` step between "Approved" and "Disbursed" in the status timeline with messaging: "Please sign your contract to proceed."
-
-3. **AdminLoans.tsx status flow** -- When admin clicks "Approve", the status should transition to `approved`. When the contract is generated and sent, status moves to `contract_signing`. After both signatures are verified, admin can proceed to disburse.
-
-4. **LoanDetailsModal.tsx** -- Add a visible contract-signing verification step: show borrower signature status, allow admin to counter-sign, and only enable the "Disburse" button when `admin_signed = true`.
-
-5. **ContractSigningWidget.tsx** -- Update query to also fetch loans with status `contract_signing` (not just `approved`), since the borrower needs to sign during this stage.
-
----
-
-## Phase 2: Admin Dashboard Missing Metrics
-
-**Problem:** The admin dashboard is missing some required KPIs from your spec.
-
-**Changes to AdminDashboard.tsx:**
-
-1. Add **"Loans Due Today"** count (repayments where `due_date = today` and `status = pending`)
-2. Add **"Blacklisted Borrowers"** count (profiles where `is_blacklisted = true` and blacklist has not expired)
-3. Add **"Principal Outstanding"** vs **"Interest Outstanding"** split (currently combined as "Outstanding Balance")
-4. Add **"Defaulted Loans"** count to stats grid
-
----
-
-## Phase 3: Borrower "Under Review" Document Checklist
-
-**Problem:** When a loan is under review, borrowers cannot see which documents were approved/rejected/missing or re-upload.
-
-**Changes to Dashboard.tsx / ApplicationStatusTracker.tsx:**
-
-1. When status is `under_review`, show a document checklist panel pulled from `application_documents` for that loan
-2. Each document shows status: Submitted / Verified / Rejected (with reason)
-3. Allow borrower to re-upload rejected documents
-4. Admin marks documents as verified/rejected in the existing DocumentVerificationTab
+| Feature | Status | Where |
+|---|---|---|
+| Account creation (email + password + OTP) | Done | `Auth.tsx`, `useAuth.tsx`, `verify-otp`, `send-otp` edge functions |
+| Phone normalization to E.164 | Done | `authHelpers.ts` used in `useAuth.tsx` |
+| OTP login with proper error messages | Done | `sendOtp` in `useAuth.tsx` checks profiles + loan_applications tables |
+| Duplicate NRC + phone prevention | Done | DB unique index `idx_profiles_nrc_phone_unique` |
+| Auth event logging (LOGIN/SIGNUP) | Done | `useAuth.tsx` calls `supabase.rpc('log_auth_event')` |
+| Borrower dashboard with real-time updates | Done | `Dashboard.tsx` subscribes to `postgres_changes` |
+| Loan product configuration (interest, fees, terms, CRB, PMIC, documents, locations) | Done | `AdminLoanProducts.tsx`, `loan_products` table |
+| Product-driven required documents | Done | `Apply.tsx` reads `required_documents` JSONB from product |
+| Location eligibility enforcement | Done | `Apply.tsx` blocks submission if city not in `eligible_locations` |
+| Duplicate loan prevention | Done | Both borrower (`existingActiveLoan` query) and admin side (`borrowerExistingLoan` query) |
+| Status pipeline includes `contract_signing` | Done | DB enum, `ApplicationStatusTracker.tsx`, `AdminLoans.tsx`, `LoanDetailsModal.tsx` |
+| Borrower status messages per stage | Done | `ApplicationStatusTracker.tsx` lines 296-312 |
+| Contract signing widget (signature pad + upload) | Done | `ContractSigningWidget.tsx` with dual signature |
+| Admin counter-signature verification | Done | `LoanDetailsModal.tsx` lines 1147-1280 |
+| Disbursement locked until dual signature | Done | Admin must verify `borrower_signed` + `admin_signed` before disburse |
+| Disbursement source account balance check | Done | `AdminLoans.tsx` line 649 checks balance |
+| Account transaction ledger on disburse | Done | `AdminLoans.tsx` records to `account_transactions` |
+| Repayment schedule auto-generation | Done | DB trigger `generate_repayment_schedule` |
+| Penalty calculation and auto-apply | Done | DB functions `calculate_repayment_penalty`, `apply_loan_penalties` |
+| Early settlement calculation | Done | DB function `calculate_early_settlement` |
+| Loan restructuring | Done | `LoanDetailsModal.tsx` restructure mutation |
+| Payment reversal | Done | `LoanDetailsModal.tsx` reversal mutation |
+| Notifications per stage (approval, rejection, disbursement, payment) | Done | DB triggers + `send_notification_via_edge_function` |
+| Admin dashboard KPIs (due today, blacklisted, principal/interest split, defaulted) | Done | `AdminDashboard.tsx` lines 75-155 |
+| Blacklist with duration support | Done | `AdminBorrowers.tsx` with `blacklist_expires_at` |
+| Blacklist enforcement on Apply page | Done | `Apply.tsx` checks `is_blacklisted` and `blacklist_expires_at` |
+| Document Vault for borrower reuse | Done | `Apply.tsx` queries `borrower_document_vault` |
+| Admin document verification tab (payslip passwords shown) | Done | `DocumentVerificationTab.tsx` |
+| Borrower document checklist during Under Review | Done | `DocumentChecklist.tsx` shown in `Dashboard.tsx` |
+| Collections, court cases, write-offs | Done | Dedicated modules |
+| Role-based admin sidebar | Done | 7+ staff roles |
+| Capital pool widget on admin dashboard | Done | `CapitalPoolWidget.tsx` |
 
 ---
 
-## Phase 4: Blacklist Duration Support in Admin
+## Remaining Gaps Found (Fixes Needed)
 
-**Problem:** The `blacklist_expires_at` column exists but the admin UI does not let staff set a duration.
+### Gap 1: Admin disbursement does NOT check `admin_signed` before allowing disbursement
 
-**Changes to AdminBorrowers.tsx:**
+**Problem:** The disbursement mutation in `AdminLoans.tsx` (line 641-728) does not verify that `admin_signed === true` before proceeding. The contract signing verification card exists in `LoanDetailsModal.tsx`, but the actual disbursement button in the main loans table can bypass it.
 
-1. Add a "Duration" field (optional) to the blacklist dialog: number of days, or "Permanent"
-2. When saving, calculate `blacklist_expires_at = now + duration` or `null` for permanent
-3. Display expiry date on the borrower card when blacklisted
+**Fix:** Add a guard in the `handleDisburse` function and the disbursement dialog to check `selectedLoan?.admin_signed === true` before allowing disbursement. Show an error toast: "Contract must be signed by both parties before disbursement."
+
+### Gap 2: Admin "Approve" does not auto-transition to `contract_signing`
+
+**Problem:** When admin clicks Approve, status goes to `approved` (line 857). But per the spec, after contract is generated and sent, it should move to `contract_signing`. Currently there is no explicit step to move from `approved` to `contract_signing` -- the borrower sees both statuses as valid for signing.
+
+**Fix:** After approval, when admin generates and sends the contract (via the contract download/share actions in `LoanDetailsModal.tsx`), automatically update status to `contract_signing`. Add a "Generate & Send Contract" button that transitions the status.
+
+### Gap 3: `contract_signing` status missing from `AdminLoans.tsx` applications tab filter
+
+**Problem:** The applications tab in `AdminLoans.tsx` filters loans by specific statuses but does not explicitly include `contract_signing` in the visible tabs/filters. Loans in `contract_signing` status may not appear in any tab.
+
+**Fix:** Ensure `contract_signing` appears in the Applications tab alongside `pending`, `under_review`, and `approved`.
+
+### Gap 4: Document verification status update by admin not propagating to borrower checklist
+
+**Problem:** The admin `DocumentVerificationTab.tsx` uses a `document_checklist` table for verification status, but the borrower `DocumentChecklist.tsx` reads from `application_documents`. The `status` column on `application_documents` may not be updated when admin verifies/rejects via the checklist.
+
+**Fix:** Ensure the admin verification action updates the `status` field on the `application_documents` table row (not just a separate checklist table). This way, the borrower's `DocumentChecklist.tsx` sees the correct verified/rejected status.
+
+### Gap 5: Missing "Upload Signed Contract" option for borrower
+
+**Problem:** The `ContractSigningWidget.tsx` only supports digital signature pad capture. The spec requires borrowers to also be able to "Download + sign manually + upload" as an alternative.
+
+**Fix:** Add a file upload option alongside the signature pad in the signing dialog. Allow borrower to upload a scanned/photographed signed contract PDF/image.
+
+### Gap 6: Signature pad dark mode visibility
+
+**Problem:** The spec requires the signature pad to temporarily switch to light mode for visibility. The `SignaturePad` component needs verification that it forces a white background.
+
+**Fix:** Ensure the `SignaturePad` component forces a white canvas background regardless of theme, and the dialog container also has light styling during signing.
 
 ---
 
-## Phase 5: Auth Event Logging
+## Implementation Plan
 
-**Problem:** The `log_auth_event` function exists but is never called from the frontend after login/signup.
+### Step 1: Add disbursement guard for dual signature (Gap 1)
 
-**Changes to useAuth.tsx:**
+**File:** `src/pages/admin/AdminLoans.tsx`
 
-1. After successful `signIn`, call `supabase.rpc('log_auth_event', { p_action: 'LOGIN' })`
-2. After successful `signUp`, call `supabase.rpc('log_auth_event', { p_action: 'SIGNUP' })`
+- In the `handleDisburse` function (around line 876), add a check:
+  ```
+  if (!selectedLoan?.borrower_signed || !selectedLoan?.admin_signed) {
+    toast.error("Contract must be signed by both parties before disbursement");
+    return;
+  }
+  ```
+- Also disable the "Disburse" button in the UI when signatures are incomplete
+
+### Step 2: Add "Generate & Send Contract" action to transition to `contract_signing` (Gap 2)
+
+**File:** `src/components/admin/LoanDetailsModal.tsx`
+
+- Add a prominent "Generate & Send Contract" button when status is `approved`
+- When clicked: generate the contract PDF, send via Email/SMS/WhatsApp, then update status to `contract_signing`
+- This makes the transition explicit and auditable
+
+### Step 3: Include `contract_signing` in applications tab filter (Gap 3)
+
+**File:** `src/pages/admin/AdminLoans.tsx`
+
+- Update the applications tab filter to include `contract_signing` alongside `pending`, `under_review`, `approved`, and `rejected`
+- Ensure `contract_signing` loans show in the "Applications" view with proper badge
+
+### Step 4: Sync admin document verification with borrower checklist (Gap 4)
+
+**File:** `src/components/admin/DocumentVerificationTab.tsx`
+
+- When admin marks a document as "Verified" or "Rejected", also update the corresponding `application_documents` row's `status` field
+- Add `notes` (rejection reason) update to `application_documents` so borrower sees the reason
+
+### Step 5: Add contract upload option for borrower (Gap 5)
+
+**File:** `src/components/dashboard/ContractSigningWidget.tsx`
+
+- Add a "Or upload signed contract" section below the signature pad
+- Accept PDF/image files
+- Upload to `loan-documents` storage bucket
+- Update `signed_contract_url`, `borrower_signed`, `borrower_signed_at` same as signature flow
+- Notify admin same as digital signature
+
+### Step 6: Ensure signature pad white background (Gap 6)
+
+**File:** `src/components/common/SignaturePad.tsx`
+
+- Verify the canvas has `backgroundColor: 'white'` forced
+- Ensure the signing dialog wrapper has light theme styling during signing (white background, dark text)
 
 ---
 
 ## Technical Details
 
-### Database Migration (Phase 1)
-
-```sql
--- Add contract_signing to the loan_status enum
-ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'contract_signing' AFTER 'approved';
-```
-
 ### Files to Modify
 
-| File | Phase | Change |
-|------|-------|--------|
-| `src/components/dashboard/ApplicationStatusTracker.tsx` | 1 | Add `contract_signing` step to timeline |
-| `src/components/dashboard/ContractSigningWidget.tsx` | 1 | Query `approved` OR `contract_signing` status |
-| `src/pages/admin/AdminLoans.tsx` | 1 | Include `contract_signing` in applications tab filter and status config |
-| `src/components/admin/LoanDetailsModal.tsx` | 1 | Add contract verification gate before disburse |
-| `src/constants/loanStatusLabels.ts` | 1 | Already correct (has `contract_signing`) |
-| `src/pages/admin/AdminDashboard.tsx` | 2 | Add missing KPI cards |
-| `src/pages/Dashboard.tsx` | 3 | Add document checklist for `under_review` loans |
-| `src/pages/admin/AdminBorrowers.tsx` | 4 | Add duration field to blacklist dialog |
-| `src/hooks/useAuth.tsx` | 5 | Log auth events after login/signup |
+| File | Gap | Change Description |
+|---|---|---|
+| `src/pages/admin/AdminLoans.tsx` | 1, 3 | Add dual-signature guard on disburse; include `contract_signing` in Applications filter |
+| `src/components/admin/LoanDetailsModal.tsx` | 2 | Add "Generate & Send Contract" button that transitions `approved` to `contract_signing` |
+| `src/components/admin/DocumentVerificationTab.tsx` | 4 | Sync verification status to `application_documents` table |
+| `src/components/dashboard/ContractSigningWidget.tsx` | 5 | Add file upload alternative for signed contract |
+| `src/components/common/SignaturePad.tsx` | 6 | Force white canvas background |
+
+### No Database Changes Required
+
+All needed columns and tables already exist. The `contract_signing` enum value was added in the previous migration. The `application_documents` table already has a `status` column.
 
 ### Implementation Order
 
-1. Database migration (enum change) -- must come first
-2. Status pipeline UI alignment (both admin and borrower)
-3. Dashboard metrics enhancement
-4. Borrower document checklist during review
-5. Blacklist duration UI
-6. Auth event logging
+1. Signature pad white background (quick fix)
+2. Contract upload option for borrower (enhances UX)
+3. Disbursement dual-signature guard (critical security)
+4. Admin "Generate & Send Contract" transition
+5. Applications tab filter update
+6. Document verification sync
 
-### What This Does NOT Change (Already Working)
-
-- Notification triggers (approval, rejection, disbursement, payment) -- working via DB triggers
-- Loan product configuration -- fully configurable
-- CRB and PMIC modules -- available in admin
-- Dual-signature contract workflow -- implemented
-- Disbursement accounting integration -- working with balance checks
-- Collections, write-offs, court cases -- all functional
-- Real-time status updates on borrower dashboard -- subscribed to postgres_changes
-- Audit trail for all loan changes -- DB trigger active
