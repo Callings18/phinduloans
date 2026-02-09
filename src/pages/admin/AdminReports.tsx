@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import { format, subMonths, startOfMonth, endOfMonth, isAfter } from "date-fns";
 import {
