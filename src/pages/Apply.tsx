@@ -106,9 +106,22 @@ const Apply = () => {
   const { user, isLoading } = useAuth();
   const [dynamicDocs, setDynamicDocs] = useState<Record<string, File>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [payslipPasswords, setPayslipPasswords] = useState<Record<string, string>>({});
   const [cameraDocType, setCameraDocType] = useState<string | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  const handleDynamicFileUpload = useCallback((docType: string, file: File | null) => {
+    if (file) {
+      setDynamicDocs(prev => ({ ...prev, [docType]: file }));
+    } else {
+      setDynamicDocs(prev => {
+        const next = { ...prev };
+        delete next[docType];
+        return next;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!cameraDocType) {
@@ -172,21 +185,21 @@ const Apply = () => {
   ];
 
   const { data: productDocsFromDb = [], isLoading: docsLoading } = useQuery({
-    queryKey: ['loan-product-documents', selectedProduct?.id],
+    queryKey: ['loan-product-required-docs', selectedProduct?.id],
     queryFn: async () => {
       if (!selectedProduct?.id) return [];
       const { data, error } = await supabase
-        .from('loan_product_documents')
-        .select('document_type, document_name, is_mandatory, display_order')
-        .eq('loan_product_id', selectedProduct.id)
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
+        .from('loan_products')
+        .select('required_documents')
+        .eq('id', selectedProduct.id)
+        .single();
       if (error) throw error;
-      return (data ?? []).map((d) => ({
+      const docs = data?.required_documents as { document_type: string; document_name: string; is_mandatory: boolean; display_order?: number }[] | null;
+      return (docs ?? []).map((d, i) => ({
         document_type: d.document_type,
         document_name: d.document_name,
         is_mandatory: d.is_mandatory ?? true,
-        display_order: d.display_order ?? 0,
+        display_order: d.display_order ?? i,
       }));
     },
     enabled: !!selectedProduct?.id,
@@ -235,12 +248,12 @@ const Apply = () => {
     queryFn: async () => {
       if (!user?.id) return [];
       const { data, error } = await supabase
-        .from("borrower_documents")
-        .select("document_type, file_url, document_name")
-        .eq("user_id", user.id)
+        .from("borrower_document_vault")
+        .select("doc_type, file_url, doc_label")
+        .eq("borrower_id", user.id)
         .order("uploaded_at", { ascending: false });
       if (error) return [];
-      return (data ?? []) as { document_type: string; file_url: string; document_name: string }[];
+      return (data ?? []).map(d => ({ document_type: d.doc_type, file_url: d.file_url, document_name: d.doc_label })) as { document_type: string; file_url: string; document_name: string }[];
     },
     enabled: !!user?.id,
   });
@@ -522,17 +535,9 @@ const Apply = () => {
     updateFormData(field, file);
   };
 
-  const handleDynamicFileUpload = (docType: string, file: File | null) => {
-    if (file) {
-      setDynamicDocs(prev => ({ ...prev, [docType]: file }));
-    } else {
-      setDynamicDocs(prev => {
-        const next = { ...prev };
-        delete next[docType];
-        return next;
-      });
-    }
-
+  // handleDynamicFileUpload already defined above via useCallback — extended with error clearing
+  const handleDynamicFileUploadWithErrors = (docType: string, file: File | null) => {
+    handleDynamicFileUpload(docType, file);
     if (errors[docType]) {
       setErrors(prev => {
         const next = { ...prev };
@@ -928,25 +933,38 @@ const Apply = () => {
       }
 
       if (docRows.length > 0) {
-        const { error: docError } = await supabase.from('loan_application_documents').insert(docRows);
+        const { error: docError } = await supabase.from('application_documents').insert(
+          docRows.map(r => ({
+            application_id: r.loan_application_id,
+            borrower_id: r.borrower_id,
+            doc_type: r.document_type,
+            doc_label: r.doc_label || r.document_name,
+            file_url: r.file_url,
+            file_name: r.document_name,
+            month_tag: r.month_tag ?? null,
+            payslip_password: r.payslip_password ?? null,
+            uploaded_by: r.uploaded_by ?? 'borrower',
+          }))
+        );
         if (docError) {
-          console.warn('[Apply] Dual-write to loan_application_documents failed (non-blocking):', docError);
+          console.warn('[Apply] Write to application_documents failed (non-blocking):', docError);
         }
         // Save to Document Vault for reuse (NRC, selfie)
         const vaultTypes = ['nrc_front', 'nrc_back', 'selfie'];
         for (const row of docRows) {
           if (!vaultTypes.includes(row.document_type) || !row.file_url) continue;
-          await supabase.from('borrower_documents').upsert(
-            {
-              user_id: user.id,
-              document_type: row.document_type,
-              document_name: row.document_name,
+          try {
+            await supabase.from('borrower_document_vault').insert({
+              borrower_id: user.id,
+              doc_type: row.document_type,
+              doc_label: row.document_name,
               file_url: row.file_url,
-              file_size_bytes: row.file_size_bytes ?? null,
+              file_name: row.document_name,
               mime_type: row.mime_type ?? null,
-            },
-            { onConflict: 'user_id,document_type' }
-          );
+            });
+          } catch (vaultErr) {
+            console.warn('[Apply] Vault save failed (non-blocking):', vaultErr);
+          }
         }
       }
 
