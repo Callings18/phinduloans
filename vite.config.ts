@@ -1,4 +1,4 @@
-// vite.config.ts v39 - force single React instance 2026-02-09
+// vite.config.ts v40 - force single React instance 2026-02-09
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
     include: ["react", "react-dom", "react/jsx-runtime"],
     force: true,
   },
-  cacheDir: ".vite-cache-v39",
+  cacheDir: ".vite-cache-v40",
   build: {
     commonjsOptions: {
       include: [/node_modules/],
