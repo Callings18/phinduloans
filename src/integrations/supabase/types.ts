@@ -212,6 +212,7 @@ export type Database = {
           entity_type: string
           id: string
           ip_address: string | null
+          module: string | null
           new_values: Json | null
           old_values: Json | null
           user_id: string | null
@@ -224,6 +225,7 @@ export type Database = {
           entity_type: string
           id?: string
           ip_address?: string | null
+          module?: string | null
           new_values?: Json | null
           old_values?: Json | null
           user_id?: string | null
@@ -236,6 +238,7 @@ export type Database = {
           entity_type?: string
           id?: string
           ip_address?: string | null
+          module?: string | null
           new_values?: Json | null
           old_values?: Json | null
           user_id?: string | null
@@ -458,6 +461,69 @@ export type Database = {
           },
           {
             foreignKeyName: "collection_assignments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
+      commission_calculations: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          commission_amount: number
+          commission_rate: number
+          created_at: string | null
+          employee_id: string
+          id: string
+          loan_amount: number
+          loan_id: string | null
+          period_end: string
+          period_start: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          commission_amount?: number
+          commission_rate?: number
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          loan_amount?: number
+          loan_id?: string | null
+          period_end: string
+          period_start: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          commission_amount?: number
+          commission_rate?: number
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          loan_amount?: number
+          loan_id?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_calculations_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_calculations_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "overdue_loans_view"
@@ -929,6 +995,57 @@ export type Database = {
           },
         ]
       }
+      employees: {
+        Row: {
+          branch: string | null
+          commission_percentage: number | null
+          created_at: string | null
+          department: string | null
+          email: string | null
+          full_name: string
+          hire_date: string | null
+          id: string
+          is_active: boolean | null
+          phone: string | null
+          position: string | null
+          salary: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          branch?: string | null
+          commission_percentage?: number | null
+          created_at?: string | null
+          department?: string | null
+          email?: string | null
+          full_name: string
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          phone?: string | null
+          position?: string | null
+          salary?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          branch?: string | null
+          commission_percentage?: number | null
+          created_at?: string | null
+          department?: string | null
+          email?: string | null
+          full_name?: string
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          phone?: string | null
+          position?: string | null
+          salary?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       employers: {
         Row: {
           address: string | null
@@ -1141,6 +1258,7 @@ export type Database = {
           admin_signed: boolean | null
           admin_signed_at: string | null
           admin_signed_by: string | null
+          approval_stage: string | null
           assigned_to: string | null
           bank_statement_url: string | null
           borrower_signed: boolean | null
@@ -1157,6 +1275,9 @@ export type Database = {
           crb_consent_timestamp: string | null
           created_at: string
           date_of_birth: string | null
+          disbursed_by: string | null
+          document_verified_at: string | null
+          document_verified_by: string | null
           early_settlement_fee: number | null
           email: string
           employer_id: string | null
@@ -1165,6 +1286,8 @@ export type Database = {
           employment_duration: string | null
           employment_type: Database["public"]["Enums"]["employment_type"]
           enforcement_fees: number | null
+          finance_verified_at: string | null
+          finance_verified_by: string | null
           full_name: string
           id: string
           interest_rate: number | null
@@ -1206,6 +1329,7 @@ export type Database = {
           admin_signed?: boolean | null
           admin_signed_at?: string | null
           admin_signed_by?: string | null
+          approval_stage?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
           borrower_signed?: boolean | null
@@ -1222,6 +1346,9 @@ export type Database = {
           crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
+          disbursed_by?: string | null
+          document_verified_at?: string | null
+          document_verified_by?: string | null
           early_settlement_fee?: number | null
           email: string
           employer_id?: string | null
@@ -1230,6 +1357,8 @@ export type Database = {
           employment_duration?: string | null
           employment_type: Database["public"]["Enums"]["employment_type"]
           enforcement_fees?: number | null
+          finance_verified_at?: string | null
+          finance_verified_by?: string | null
           full_name: string
           id?: string
           interest_rate?: number | null
@@ -1271,6 +1400,7 @@ export type Database = {
           admin_signed?: boolean | null
           admin_signed_at?: string | null
           admin_signed_by?: string | null
+          approval_stage?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
           borrower_signed?: boolean | null
@@ -1287,6 +1417,9 @@ export type Database = {
           crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
+          disbursed_by?: string | null
+          document_verified_at?: string | null
+          document_verified_by?: string | null
           early_settlement_fee?: number | null
           email?: string
           employer_id?: string | null
@@ -1295,6 +1428,8 @@ export type Database = {
           employment_duration?: string | null
           employment_type?: Database["public"]["Enums"]["employment_type"]
           enforcement_fees?: number | null
+          finance_verified_at?: string | null
+          finance_verified_by?: string | null
           full_name?: string
           id?: string
           interest_rate?: number | null
@@ -1475,6 +1610,54 @@ export type Database = {
           },
           {
             foreignKeyName: "loan_guarantors_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
+      loan_notes: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_internal: boolean | null
+          loan_id: string
+          note: string
+          note_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_internal?: boolean | null
+          loan_id: string
+          note: string
+          note_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_internal?: boolean | null
+          loan_id?: string
+          note?: string
+          note_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_notes_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_notes_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "overdue_loans_view"
@@ -2033,6 +2216,30 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          action: string
+          created_at: string | null
+          description: string | null
+          id: string
+          module: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          module: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          module?: string
+        }
+        Relationships: []
+      }
       pmic_borrower_enrollments: {
         Row: {
           available_deduction_capacity: number | null
@@ -2474,6 +2681,69 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          created_at: string | null
+          id: string
+          permission_id: string
+          role_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          permission_id: string
+          role_name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          permission_id?: string
+          role_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_name_fkey"
+            columns: ["role_name"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_system: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       system_settings: {
         Row: {
           created_at: string
@@ -2652,6 +2922,17 @@ export type Database = {
         Returns: number
       }
       cleanup_expired_otps: { Args: never; Returns: undefined }
+      get_my_permissions: {
+        Args: never
+        Returns: {
+          action: string
+          module: string
+        }[]
+      }
+      has_permission: {
+        Args: { _action: string; _module: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2662,6 +2943,31 @@ export type Database = {
       log_auth_event: {
         Args: { p_action: string; p_device_info?: Json; p_ip_address?: string }
         Returns: undefined
+      }
+      officer_loan_stats: {
+        Args: { p_period_end: string; p_period_start: string }
+        Returns: {
+          approval_rate: number
+          approved_count: number
+          officer_id: string
+          officer_name: string
+          rejected_count: number
+          total_applications: number
+          total_collected: number
+          total_disbursed: number
+        }[]
+      }
+      portfolio_at_risk: {
+        Args: { p_as_of_date?: string }
+        Returns: {
+          par_30: number
+          par_30_pct: number
+          par_60: number
+          par_60_pct: number
+          par_90: number
+          par_90_pct: number
+          total_outstanding: number
+        }[]
       }
       send_notification_via_edge_function: {
         Args: {
@@ -2674,6 +2980,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      transition_loan_status: {
+        Args: { p_action: string; p_loan_id: string }
+        Returns: Json
       }
     }
     Enums: {
