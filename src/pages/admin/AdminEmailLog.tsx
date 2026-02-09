@@ -19,12 +19,12 @@ export default function AdminEmailLog() {
     queryKey: ["email-logs"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("email_logs")
-        .select("*")
+        .from("notification_logs")
+        .select("id, recipient, subject, status, type, message, created_at")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as { id: string; recipient: string; subject: string | null; status: string; error_message: string | null; reference_type: string | null; created_at: string }[];
+      return (data ?? []) as { id: string; recipient: string; subject: string | null; status: string; type: string; message: string | null; created_at: string }[];
     },
   });
 
@@ -83,7 +83,7 @@ export default function AdminEmailLog() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[240px] truncate text-destructive text-sm">
-                        {row.error_message ?? "—"}
+                        {row.message ?? "—"}
                       </TableCell>
                     </TableRow>
                   ))}
