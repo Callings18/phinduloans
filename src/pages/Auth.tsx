@@ -205,7 +205,7 @@ const Auth = () => {
                 </Button>
               </div>
             ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleEmailSubmit} className="space-y-5">
               {isLogin && (
                 <div className="flex gap-2 p-1 rounded-lg bg-muted/50">
                   <button

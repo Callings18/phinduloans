@@ -162,29 +162,34 @@ class NotificationService {
       }
 
       if (params.type === "email") {
-        await supabase.from("email_logs").insert({
+        await supabase.from("notification_logs").insert({
+          user_id: params.userId ?? null,
+          type: "email",
           recipient: params.to,
           subject: params.subject ?? null,
+          title: params.subject ?? "Email Notification",
+          message: params.message ?? null,
           status: "sent",
-          reference_type: params.eventType ?? null,
         });
       }
       return { success: true, data };
     } catch (error: any) {
       if (params.type === "email") {
-        await supabase.from("email_logs").insert({
+        await supabase.from("notification_logs").insert({
+          user_id: params.userId ?? null,
+          type: "email",
           recipient: params.to,
           subject: params.subject ?? null,
+          title: params.subject ?? "Email Notification",
+          message: error?.message ?? String(error),
           status: "failed",
-          error_message: error?.message ?? String(error),
-          reference_type: params.eventType ?? null,
         });
       }
-      handleError(error, {
+      console.error('[NotificationService] Error:', error?.message, {
         component: 'NotificationService',
         action: `send_${params.type}`,
         metadata: { recipient: params.to, eventType: params.eventType },
-      }, false); // Don't show toast for background notifications
+      });
       return { success: false, error: error.message };
     }
   }

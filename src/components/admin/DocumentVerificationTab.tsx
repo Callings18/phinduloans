@@ -144,34 +144,45 @@ export default function DocumentVerificationTab({ loanId }: Props) {
 
   const loanProductId = (loanApplication as { loan_product_id?: string } | undefined)?.loan_product_id ?? null;
 
-  // Fetch required documents for this application's loan product (for checklist from product)
+  // Fetch required documents from loan_products.required_documents JSONB
   const { data: productDocuments = [] } = useQuery({
     queryKey: ["loan-product-documents", loanProductId],
     queryFn: async () => {
       if (!loanProductId) return [];
       const { data, error } = await supabase
-        .from("loan_product_documents")
-        .select("document_type, document_name, is_mandatory")
-        .eq("loan_product_id", loanProductId)
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
+        .from("loan_products")
+        .select("required_documents")
+        .eq("id", loanProductId)
+        .single();
       if (error) throw error;
-      return (data ?? []) as { document_type: string; document_name: string; is_mandatory: boolean }[];
+      const docs = data?.required_documents as { document_type: string; document_name: string; is_mandatory: boolean }[] | null;
+      return docs ?? [];
     },
     enabled: !!loanProductId,
   });
 
-  // Fetch unified application documents (single-doc model)
+  // Fetch unified application documents from application_documents table
   const { data: applicationDocuments = [] } = useQuery({
-    queryKey: ["loan-application-documents", loanId],
+    queryKey: ["application-documents-verify", loanId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("loan_application_documents")
-        .select("id, document_type, document_name, doc_label, file_url, month_tag, payslip_password, file_type, mime_type, uploaded_at")
-        .eq("loan_application_id", loanId)
+        .from("application_documents")
+        .select("id, doc_type, doc_label, file_url, month_tag, payslip_password, mime_type, file_name, uploaded_at")
+        .eq("application_id", loanId)
         .order("uploaded_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as ApplicationDocumentRow[];
+      return (data ?? []).map(d => ({
+        id: d.id,
+        document_type: d.doc_type,
+        document_name: d.file_name || d.doc_label || d.doc_type,
+        doc_label: d.doc_label,
+        file_url: d.file_url,
+        month_tag: d.month_tag,
+        payslip_password: d.payslip_password,
+        file_type: d.mime_type?.includes('pdf') ? 'pdf' : 'image',
+        mime_type: d.mime_type,
+        uploaded_at: d.uploaded_at,
+      })) as ApplicationDocumentRow[];
     },
   });
 
