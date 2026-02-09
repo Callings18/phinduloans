@@ -103,7 +103,7 @@ const replacePlaceholders = (content: string, loan: LoanData): string => {
     '{{total_repayment}}': loan.total_repayment.toLocaleString(),
     '{{disbursement_date}}': disbursementDate.toLocaleDateString('en-GB'),
     '{{first_payment_date}}': firstPaymentDate.toLocaleDateString('en-GB'),
-    '{{company_name}}': 'Phindu Credit Solutions',
+    '{{company_name}}': 'Phindu Credit Solutions Limited',
     '{{company_address}}': 'Lusaka, Zambia',
     '{{current_date}}': new Date().toLocaleDateString('en-GB'),
     '{{loan_purpose}}': loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal',
@@ -141,14 +141,14 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
-  doc.setFillColor(255, 51, 153);
+  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  doc.setFillColor(107, 26, 58);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  centerText('PHINDU CREDIT SOLUTIONS', 18, 20);
+  centerText('PHINDU CREDIT SOLUTIONS LIMITED', 18, 20);
   
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
@@ -207,8 +207,8 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
   for (let i = 1; i <= lastPage; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    centerText('Phindu Credit Solutions - Money When You Need It', 285, 8);
+    doc.setTextColor(107, 26, 58);
+    centerText('Phindu Credit Solutions Limited - Money When You Need It', 285, 8);
     centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', 289, 8);
     doc.setTextColor(0, 0, 0);
   }
@@ -254,14 +254,14 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
     yPos += 5;
   };
 
-  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
-  doc.setFillColor(255, 51, 153);
+  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  doc.setFillColor(107, 26, 58);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  centerText('PHINDU CREDIT SOLUTIONS', 18, 20);
+  centerText('PHINDU CREDIT SOLUTIONS LIMITED', 18, 20);
   
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
@@ -279,7 +279,7 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
   addSection('1. PARTIES TO THIS AGREEMENT', [
     'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
     '',
-    'LENDER: Phindu Credit Solutions',
+    'LENDER: Phindu Credit Solutions Limited',
     'Address: Lusaka, Zambia',
     '',
     `BORROWER: ${loan.full_name}`,
@@ -355,7 +355,7 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
   doc.text('Date: ____________________', margin, yPos);
   
   yPos -= 20;
-  doc.text('FOR PHINDU CREDIT SOLUTIONS:', pageWidth - margin - 80, yPos);
+  doc.text('FOR PHINDU CREDIT SOLUTIONS LTD:', pageWidth - margin - 80, yPos);
   yPos += 10;
   doc.line(pageWidth - margin - 80, yPos, pageWidth - margin, yPos);
   yPos += 5;
@@ -365,8 +365,8 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
 
   yPos = 285;
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  centerText('Phindu Credit Solutions - Money When You Need It', yPos, 8);
+  doc.setTextColor(107, 26, 58);
+  centerText('Phindu Credit Solutions Limited - Money When You Need It', yPos, 8);
   centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', yPos + 4, 8);
 
   return doc;
@@ -413,51 +413,87 @@ export const getLoanContractBase64 = async (loan: LoanData): Promise<string> => 
   return doc.output('datauristring');
 };
 
-// Share via WhatsApp (async version) - Uses notification service
+// Upload PDF to storage and get public URL for WhatsApp media
+export const uploadContractToStorage = async (loan: LoanData): Promise<string | null> => {
+  try {
+    const doc = await createContractPDF(loan);
+    const pdfBlob = doc.output('blob');
+    
+    const fileName = `contracts/contract_${loan.id}_${Date.now()}.pdf`;
+    
+    // Upload to Supabase storage
+    const { error: uploadError } = await supabase.storage
+      .from('loan-documents')
+      .upload(fileName, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Failed to upload contract to storage:', uploadError);
+      return null;
+    }
+
+    // Get signed URL for access (valid for 1 hour)
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from('loan-documents')
+      .createSignedUrl(fileName, 3600); // 1 hour expiry
+
+    if (signedError || !signedData?.signedUrl) {
+      console.error('Failed to get signed URL:', signedError);
+      return null;
+    }
+
+    return signedData.signedUrl;
+  } catch (error) {
+    console.error('Error uploading contract:', error);
+    return null;
+  }
+};
+
+// Share via WhatsApp (async version) - Sends PDF directly via Twilio
 export const shareContractViaWhatsApp = async (loan: LoanData) => {
-  const { notificationService } = await import('@/utils/notificationService');
+  const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
+  const { toast } = await import('sonner');
+  
+  toast.info('Preparing contract PDF...');
+  
+  // Upload PDF to storage and get URL
+  const pdfUrl = await uploadContractToStorage(loan);
   
   const message = `Hello ${loan.full_name},\n\n` +
-    `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
+    `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
     `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
     `- Term: ${loan.loan_term_months} months\n\n` +
-    `Please sign and return the contract.\n\n` +
-    `Phindu Credit Solutions`;
+    `Please review, sign and return the contract.\n\n` +
+    `Phindu Credit Solutions Limited`;
   
-  // Get contract PDF as base64 for attachment
-  const contractBase64 = await getLoanContractBase64(loan);
+  // Send WhatsApp message with PDF attachment if URL is available
+  const result = await sendWhatsAppDirect(
+    loan.phone,
+    message,
+    'Loan Contract',
+    pdfUrl || undefined // Pass the PDF URL as media attachment
+  );
   
-  // Send via WhatsApp using notification service
-  const result = await notificationService.send({
-    userId: loan.id, // Using loan id as fallback
-    type: 'whatsapp',
-    to: loan.phone,
-    message: message,
-    title: 'Loan Contract',
-    eventType: 'contract_sent',
-    attachment: {
-      content: contractBase64.split(',')[1] || contractBase64, // Remove data URI prefix if present
-      name: `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}.pdf`
-    }
-  });
-  
-  if (result.success) {
-    // Also download locally for admin reference
-    await downloadLoanContract(loan);
-  }
+  // Also download locally for admin reference
+  await downloadLoanContract(loan);
   
   return result;
 };
 
-// Prepare mailto link with contract info (async version)
+// Send contract via Email using SendGrid (through edge function)
 export const emailContract = async (loan: LoanData) => {
-  const subject = encodeURIComponent(`Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`);
-  const body = encodeURIComponent(
+  const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+  const { toast } = await import('sonner');
+  
+  const subject = `Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`;
+  const message = 
     `Dear ${loan.full_name},\n\n` +
-    `Please find attached your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
+    `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
@@ -468,12 +504,33 @@ export const emailContract = async (loan: LoanData) => {
     `Please review, sign, and return the contract at your earliest convenience.\n\n` +
     `If you have any questions, please don't hesitate to contact us.\n\n` +
     `Best regards,\n` +
-    `Phindu Credit Solutions\n` +
-    `info@phinducredit.co.zm`
-  );
+    `Phindu Credit Solutions Limited\n` +
+    `info@phinducredit.co.zm`;
   
+  // Download contract locally for admin reference
   await downloadLoanContract(loan);
   
-  const mailtoUrl = `mailto:${loan.email}?subject=${subject}&body=${body}`;
-  window.location.href = mailtoUrl;
+  // Send email via SendGrid
+  const result = await sendEmailDirect(
+    loan.email,
+    subject,
+    message
+  );
+  
+  return result;
+};
+
+// Send contract via SMS
+export const smsContract = async (loan: LoanData, companyName?: string) => {
+  const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
+  
+  const message = `Dear ${loan.full_name}, your loan contract (Ref: PCS-${loan.id.slice(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. Monthly payment: K${loan.monthly_payment.toLocaleString()}. Term: ${loan.loan_term_months} months. Please check your email/WhatsApp for the full contract. - ${companyName || 'Phindu Finance'}`;
+  
+  const result = await sendSMSDirect(
+    loan.phone,
+    message,
+    'Loan Contract Notification'
+  );
+  
+  return result;
 };

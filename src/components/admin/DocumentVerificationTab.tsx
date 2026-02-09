@@ -126,6 +126,7 @@ export default function DocumentVerificationTab({ loanId }: Props) {
           payslip_url,
           payslip_2_url,
           payslip_3_url,
+          payslip_password,
           bank_statement_url,
           employer_letter_url,
           collateral_image_url,
@@ -456,7 +457,18 @@ export default function DocumentVerificationTab({ loanId }: Props) {
             </CardTitle>
             <CardDescription>All documents for this application — view inline (no redirect)</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {loanApplication?.payslip_password && (
+              <div className="p-3 bg-warning/10 border border-warning/30 rounded-lg flex items-center gap-3">
+                <ShieldCheck className="text-warning" size={20} />
+                <div>
+                  <p className="text-sm font-medium">Payslip Password</p>
+                  <p className="text-sm text-muted-foreground font-mono bg-background px-2 py-1 rounded mt-1">
+                    {loanApplication.payslip_password}
+                  </p>
+                </div>
+              </div>
+            )}
             {displayDocuments.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {displayDocuments.map((doc, index) => (

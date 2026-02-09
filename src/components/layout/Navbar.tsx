@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PhinduAI from "../common/PhinduAI";
-import phinduLogo from "@/assets/phindu-logo.jpg";
+import phinduLogo from "@/assets/phindu-logo.png";
 import ThemeToggle from "../common/ThemeToggle";
 import NotificationCenter from "../common/NotificationCenter";
 
@@ -32,20 +32,16 @@ const Navbar = () => {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 glass">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/50 shadow-sm">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-3 group">
+            <Link to="/" className="flex items-center group">
               <img
                 src={phinduLogo}
-                alt="Phindu Loans"
-                className="w-10 h-10 rounded-lg object-cover group-hover:shadow-glow transition-shadow duration-300"
+                alt="Phindu Credit Solutions"
+                className="h-10 object-contain group-hover:opacity-90 transition-opacity duration-300"
               />
-              <div className="flex flex-col">
-                <span className="text-foreground font-bold text-lg leading-tight uppercase">PHINDU</span>
-                <span className="text-muted-foreground text-xs tracking-wider uppercase">LOANS</span>
-              </div>
             </Link>
 
             {/* Desktop Navigation */}

@@ -1,23 +1,23 @@
 {
-  "name": "Phindu Loans - Microfinance Platform",
-  "short_name": "Phindu Loans",
+  "name": "Phindu Credit Solutions - Microfinance Platform",
+  "short_name": "Phindu Credit",
   "description": "Quick and easy loan application platform for Zambians. Apply online, get funds within 24 hours.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#EC4899",
+  "theme_color": "#6B1A3A",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/favicon.jpg",
+      "src": "/favicon.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/favicon.jpg",
+      "src": "/favicon.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
@@ -36,21 +36,21 @@
       "short_name": "Apply",
       "description": "Start a new loan application",
       "url": "/apply",
-      "icons": [{ "src": "/favicon.jpg", "sizes": "96x96" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
     },
     {
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "View your loans and applications",
       "url": "/dashboard",
-      "icons": [{ "src": "/favicon.jpg", "sizes": "96x96" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
     },
     {
       "name": "Calculator",
       "short_name": "Calculator",
       "description": "Calculate your loan repayments",
       "url": "/calculator",
-      "icons": [{ "src": "/favicon.jpg", "sizes": "96x96" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
     }
   ]
 }

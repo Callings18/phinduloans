@@ -1,8 +1,9 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+// ErrorBoundary v2 - cache bust
+import * as React from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 interface Props {
   children: ReactNode;
@@ -16,7 +17,7 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -119,7 +120,13 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
-  const navigate = useNavigate();
+  const handleGoHome = () => {
+    window.location.href = '/';
+  };
+
+  const handleRefresh = () => {
+    window.location.reload();
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -158,7 +165,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="default"
-              onClick={onReset}
+              onClick={handleRefresh}
               className="flex-1"
             >
               <RefreshCw size={16} className="mr-2" />
@@ -166,7 +173,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
             </Button>
             <Button
               variant="outline"
-              onClick={() => navigate('/')}
+              onClick={handleGoHome}
               className="flex-1"
             >
               <Home size={16} className="mr-2" />

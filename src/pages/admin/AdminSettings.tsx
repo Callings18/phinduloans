@@ -24,11 +24,14 @@ import {
   Building2,
   ShieldCheck,
   BellRing,
-  Shield
+  Shield,
+  Phone
 } from "lucide-react";
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 import { BrevoSettings } from "@/components/admin/BrevoSettings";
 import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonitor";
+import NotificationSettingsPanel from "@/components/admin/NotificationSettingsPanel";
+import { NotificationProvidersSettings } from "@/components/admin/NotificationProvidersSettings";
 
 interface PaymentSettings {
   id: string;
@@ -88,6 +91,10 @@ const AdminSettings = () => {
     twilio_whatsapp_number: "",
     tumeny_api_key: "",
     gmail_app_password: "",
+    // ExciteSMS credentials
+    excitesms_api_url: "https://gateway.excitesms.com/api/v3",
+    excitesms_api_token: "",
+    excitesms_sender_id: "Phindu",
   });
 
   const [paymentFormData, setPaymentFormData] = useState({
@@ -262,6 +269,9 @@ const AdminSettings = () => {
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2">
               <BellRing size={16} /> Notifications
+            </TabsTrigger>
+            <TabsTrigger value="twilio" className="gap-2">
+              <Phone size={16} /> Twilio/SendGrid
             </TabsTrigger>
             <TabsTrigger value="brevo" className="gap-2">
               <BellRing size={16} /> Brevo
@@ -585,6 +595,7 @@ const AdminSettings = () => {
                           <SelectItem value="africastalking">Africa's Talking</SelectItem>
                           <SelectItem value="tumeny">Tumeny</SelectItem>
                           <SelectItem value="twilio">Twilio SMS</SelectItem>
+                          <SelectItem value="excitesms">ExciteSMS</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -680,6 +691,39 @@ const AdminSettings = () => {
                       </div>
                     )}
 
+                    {/* ExciteSMS Credentials */}
+                    {notificationConfig.sms_provider === 'excitesms' && (
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
+                        <Label className="text-sm font-bold uppercase opacity-70">ExciteSMS Credentials</Label>
+                        <div className="space-y-2">
+                          <Label>API URL</Label>
+                          <Input
+                            placeholder="https://gateway.excitesms.com/api/v3"
+                            value={notificationConfig.excitesms_api_url}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_api_url: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>API Token</Label>
+                          <Input
+                            type="password"
+                            placeholder="Your ExciteSMS API token"
+                            value={notificationConfig.excitesms_api_token}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_api_token: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Sender ID</Label>
+                          <Input
+                            placeholder="Phindu"
+                            value={notificationConfig.excitesms_sender_id}
+                            onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_sender_id: e.target.value })}
+                          />
+                          <p className="text-[10px] text-muted-foreground">The sender ID shown on recipients' phones</p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Gmail Credentials */}
                     {notificationConfig.email_provider === 'gmail' && (
                       <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
@@ -708,6 +752,11 @@ const AdminSettings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Twilio/SendGrid Notification Settings */}
+          <TabsContent value="twilio">
+            <NotificationProvidersSettings />
           </TabsContent>
 
           {/* Brevo Notification Settings */}

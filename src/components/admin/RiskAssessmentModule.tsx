@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,21 @@ interface LoanProduct {
     max_guarantee_percent?: number;
 }
 
+const initialFormData = {
+    credit_score: "",
+    risk_rating: "medium",
+    decision: "more_info",
+    admin_notes: "",
+    items: {
+        kyc_verified: false,
+        employment_verified: false,
+        income_verified: false,
+        collateral_verified: false,
+        crb_check_passed: false,
+        guarantee_obtained: false,
+    }
+};
+
 const RiskAssessmentModule = ({ 
     applicationId, 
     borrowerId,
@@ -66,20 +81,7 @@ const RiskAssessmentModule = ({
     const queryClient = useQueryClient();
     const [isEditing, setIsEditing] = useState(false);
 
-    const [formData, setFormData] = useState({
-        credit_score: "",
-        risk_rating: "medium",
-        decision: "more_info",
-        admin_notes: "",
-        items: {
-            kyc_verified: false,
-            employment_verified: false,
-            income_verified: false,
-            collateral_verified: false,
-            crb_check_passed: false,
-            guarantee_obtained: false,
-        }
-    });
+    const [formData, setFormData] = useState(initialFormData);
 
     // Fetch loan product settings
     const { data: loanProduct } = useQuery({
@@ -127,6 +129,13 @@ const RiskAssessmentModule = ({
             return data as unknown as RiskAssessment;
         }
     });
+
+    // Reset form when switching to an application with no assessment
+    useEffect(() => {
+        if (!isLoading && assessment === null) {
+            setFormData(initialFormData);
+        }
+    }, [applicationId, isLoading, assessment]);
 
     const saveMutation = useMutation({
         mutationFn: async (vars: typeof formData) => {

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, createContext, useContext } from "react";
+// useAuth v28 - clean React hooks 2026-02-04
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
 import { notificationService } from "@/utils/notificationService";
@@ -26,7 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [roles, setRoles] = useState<string[]>([]);
 
-  const fetchUserRoles = async (userId: string) => {
+  const fetchUserRoles = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -37,13 +38,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return [];
     }
     return data.map(r => r.role);
-  };
+  }, []);
 
-  const hasRole = (role: string) => roles.includes(role);
-  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+  const hasRole = useCallback((role: string) => roles.includes(role), [roles]);
+  
+  const isAdmin = useMemo(() => 
+    roles.includes('admin') || roles.includes('super_admin'), 
+    [roles]
+  );
 
-  const isStaff = roles.some(role =>
-    ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
+  const isStaff = useMemo(() => 
+    roles.some(role =>
+      ['admin', 'super_admin', 'loan_officer', 'credit_officer', 'finance_officer', 'collections_officer', 'auditor', 'support'].includes(role)
+    ),
+    [roles]
   );
 
   useEffect(() => {
@@ -72,9 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchUserRoles]);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
 
     const { data, error } = await supabase.auth.signUp({
@@ -88,33 +96,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    // Send welcome email if signup was successful
     if (!error && data.user) {
       try {
         await notificationService.sendSignupWelcome(
           data.user.id,
           fullName,
-          '', // Phone not available at signup
+          '',
           email
         );
         console.log('[Auth] Welcome email sent successfully');
       } catch (notifyError) {
         console.error('[Auth] Failed to send welcome email:', notifyError);
-        // Don't fail signup if notification fails
       }
     }
 
     return { error: error as Error | null };
-  };
+  }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     return { error: error as Error | null };
-  };
+  }, []);
 
   const sendOtp = async (emailOrPhone: string): Promise<{ error: Error | null }> => {
     const trimmed = emailOrPhone.trim();
@@ -173,14 +179,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setRoles([]);
-  };
+  }, []);
 
   const value = useMemo(() => ({
     user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, sendOtp, signOut
-  }), [user, session, isLoading, roles, isAdmin, isStaff]);
+  }), [user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut]);
 
   return (
     <AuthContext.Provider value={value}>

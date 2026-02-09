@@ -79,13 +79,14 @@ import {
   Send,
   FileDown,
   Edit,
+  Smartphone,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
 import GuarantorTab from "./GuarantorTab";
 import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { downloadLoanContract, shareContractViaWhatsApp, emailContract } from "@/utils/generateLoanContract";
+import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract } from "@/utils/generateLoanContract";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 
@@ -115,6 +116,14 @@ interface Loan {
   settlement_date?: string | null;
   settlement_type?: string | null;
   early_settlement_fee?: number;
+  loan_product_id?: string | null;
+  // Contract signing fields
+  signed_contract_url?: string | null;
+  signed_contract_uploaded_at?: string | null;
+  borrower_signed?: boolean;
+  borrower_signed_at?: string | null;
+  admin_signed?: boolean;
+  admin_signed_at?: string | null;
 }
 
 interface Repayment {
@@ -825,8 +834,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     // First download the schedule
     handleDownloadSchedule();
 
-    // Send via WhatsApp using notification service
-    const { notificationService } = await import('@/utils/notificationService');
+    // Send via WhatsApp directly via Twilio
+    const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
     
     const message = `Hello ${loan.full_name},\n\n` +
       `Please find your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
@@ -838,21 +847,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `Please contact us if you have any questions.\n\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
-    await notificationService.send({
-      userId: loan.user_id,
-      type: 'whatsapp',
-      to: loan.phone,
-      message: message,
-      title: 'Loan Repayment Schedule',
-      eventType: 'payment_reminder'
-    });
+    await sendWhatsAppDirect(loan.phone, message, 'Loan Repayment Schedule');
   };
 
-  const handleEmailSchedule = () => {
+  const handleEmailSchedule = async () => {
     handleDownloadSchedule();
 
-    const subject = encodeURIComponent(`Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`);
-    const body = encodeURIComponent(
+    // Send via Email directly via SendGrid
+    const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+    
+    const subject = `Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`;
+    const message = 
       `Dear ${loan.full_name},\n\n` +
       `Please find attached your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
       `Loan Details:\n` +
@@ -864,10 +869,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
       `Please contact us if you have any questions.\n\n` +
       `Best regards,\n` +
-      `${settings?.companyInfo?.name || 'PHINDU Finance'}`
-    );
+      `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
-    window.location.href = `mailto:${loan.email}?subject=${subject}&body=${body}`;
+    await sendEmailDirect(loan.email, subject, message);
   };
 
   const handleDownloadContract = async () => {
@@ -881,6 +885,45 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
   const handleContractEmail = async () => {
     await emailContract(loan as any);
+  };
+
+  // SMS via unified notification service
+  const handleContractSMS = async () => {
+    if (!loan.phone) {
+      toast.error("No phone number available");
+      return;
+    }
+    await smsContract(loan as any, settings?.companyInfo?.name || 'PHINDU Finance');
+  };
+
+  const handleScheduleSMS = async () => {
+    if (!loan.phone) {
+      toast.error("No phone number available");
+      return;
+    }
+
+    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("excite-sms", {
+        body: {
+          to: loan.phone,
+          message,
+          userId: loan.user_id,
+          title: "Loan Schedule Notification"
+        }
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`SMS sent to ${loan.phone}`);
+      } else {
+        toast.error(data?.message || "Failed to send SMS");
+      }
+    } catch (error: any) {
+      console.error("[SMS] Error:", error);
+      toast.error(error.message || "Failed to send SMS");
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -1100,6 +1143,141 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Contract Signing Status - for approved loans */}
+                {(loan.status === "approved" || loan.signed_contract_url) && (
+                  <Card className={`border-2 ${
+                    loan.borrower_signed && loan.admin_signed 
+                      ? "border-success/50 bg-success/5" 
+                      : "border-warning/50 bg-warning/5"
+                  }`}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <FileText size={16} /> Contract Signing Status
+                      </CardTitle>
+                      <CardDescription>
+                        {loan.borrower_signed && loan.admin_signed 
+                          ? "Contract has been signed by both parties - ready for disbursement"
+                          : "Contract must be signed by both parties before disbursement"
+                        }
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Borrower Signature */}
+                        <div className={`p-3 rounded-lg border ${loan.borrower_signed || loan.signed_contract_url ? "bg-success/10 border-success/30" : "bg-muted border-border"}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            {loan.borrower_signed || loan.signed_contract_url ? (
+                              <CheckCircle size={16} className="text-success" />
+                            ) : (
+                              <Clock size={16} className="text-muted-foreground" />
+                            )}
+                            <span className="font-medium text-sm">Borrower Signature</span>
+                          </div>
+                          {loan.borrower_signed || loan.signed_contract_url ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-success">Signed</p>
+                              {loan.borrower_signed_at && (
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(loan.borrower_signed_at), "MMM dd, yyyy HH:mm")}
+                                </p>
+                              )}
+                              {loan.signed_contract_url && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-7 text-xs mt-2"
+                                  onClick={async () => {
+                                    const { data } = await supabase.storage
+                                      .from('loan-documents')
+                                      .createSignedUrl(loan.signed_contract_url!, 3600);
+                                    if (data?.signedUrl) {
+                                      window.open(data.signedUrl, '_blank');
+                                    } else {
+                                      toast.error('Could not retrieve signed contract');
+                                    }
+                                  }}
+                                >
+                                  <Download size={12} className="mr-1" /> View Signature
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Awaiting borrower signature</p>
+                          )}
+                        </div>
+
+                        {/* Admin Signature */}
+                        <div className={`p-3 rounded-lg border ${loan.admin_signed ? "bg-success/10 border-success/30" : "bg-muted border-border"}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            {loan.admin_signed ? (
+                              <CheckCircle size={16} className="text-success" />
+                            ) : (
+                              <Clock size={16} className="text-muted-foreground" />
+                            )}
+                            <span className="font-medium text-sm">Admin Signature</span>
+                          </div>
+                          {loan.admin_signed ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-success">Signed & Verified</p>
+                              {loan.admin_signed_at && (
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(loan.admin_signed_at), "MMM dd, yyyy HH:mm")}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">Pending admin verification</p>
+                              {(loan.borrower_signed || loan.signed_contract_url) && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-7 text-xs"
+                                  onClick={async () => {
+                                    const { error } = await supabase
+                                      .from('loan_applications')
+                                      .update({
+                                        admin_signed: true,
+                                        admin_signed_at: new Date().toISOString(),
+                                        borrower_signed: true, // Ensure borrower is also marked
+                                        borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || new Date().toISOString(),
+                                      })
+                                      .eq('id', loan.id);
+                                    
+                                    if (error) {
+                                      toast.error('Failed to sign contract');
+                                    } else {
+                                      toast.success('Contract signed by admin - ready for disbursement!');
+                                      queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
+                                    }
+                                  }}
+                                >
+                                  <Shield size={12} className="mr-1" /> Sign & Verify
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Status Summary */}
+                      {!(loan.borrower_signed && loan.admin_signed) && !loan.signed_contract_url && (
+                        <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle size={16} className="text-warning mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium">Disbursement Locked</p>
+                              <p className="text-xs text-muted-foreground">
+                                The borrower must sign the contract first, then admin must verify and counter-sign before disbursement can proceed.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               {/* Repayments Tab */}
@@ -1514,6 +1692,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <Button size="sm" variant="outline" onClick={handleDownloadContract}>
                           <Download size={14} className="mr-1" /> Download Contract
                         </Button>
+                        <Button size="sm" variant="outline" onClick={handleContractSMS}>
+                          <Smartphone size={14} className="mr-1" /> SMS
+                        </Button>
                         <Button size="sm" variant="outline" onClick={handleContractWhatsApp}>
                           <Share2 size={14} className="mr-1" /> WhatsApp
                         </Button>
@@ -1543,6 +1724,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardContent className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={handleDownloadSchedule} disabled={!repayments?.length}>
                         <FileDown size={14} className="mr-1" /> Download PDF
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleScheduleSMS} disabled={!repayments?.length}>
+                        <Smartphone size={14} className="mr-1" /> SMS
                       </Button>
                       <Button size="sm" variant="outline" onClick={handleShareScheduleWhatsApp} disabled={!repayments?.length}>
                         <Share2 size={14} className="mr-1" /> WhatsApp

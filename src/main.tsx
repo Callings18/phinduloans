@@ -1,3 +1,4 @@
+// Main v28 - clean React import 2026-02-04
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource/outfit/300.css";
@@ -8,26 +9,18 @@ import "@fontsource/outfit/700.css";
 import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "./index.css";
-import ErrorBoundary from "./components/common/ErrorBoundary.tsx";
 
-// Register Service Worker for PWA
+// Unregister any existing service workers to clear cache
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then((registration) => {
-        console.log('SW registered: ', registration);
-      })
-      .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
-      });
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
   });
 }
 
-const root = ReactDOM.createRoot(document.getElementById("root")!);
-root.render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <App />
   </React.StrictMode>
 );

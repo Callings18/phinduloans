@@ -139,7 +139,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("applications");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -209,6 +209,7 @@ const AdminLoans = () => {
     account_number: "",
     mobile_money_number: "",
     transaction_reference: "",
+    source_account_id: "", // Source account to deduct funds from
   });
 
   // Quick Payment State
@@ -294,6 +295,26 @@ const AdminLoans = () => {
     },
   });
 
+  // Check if selected borrower has an existing active loan (duplicate prevention)
+  const { data: borrowerExistingLoan } = useQuery({
+    queryKey: ["borrower-existing-loan", selectedBorrowerId],
+    queryFn: async () => {
+      if (!selectedBorrowerId) return null;
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, loan_amount, status, created_at")
+        .eq("user_id", selectedBorrowerId)
+        .in("status", ["pending", "under_review", "approved", "disbursed", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return null;
+      return data;
+    },
+    enabled: !!selectedBorrowerId,
+  });
+
   // Fetch loan products
   const { data: loanProducts } = useQuery({
     queryKey: ["admin-loan-products"],
@@ -335,6 +356,21 @@ const AdminLoans = () => {
         profile: profiles?.find(p => p.id === role.user_id)
       }));
     }
+  });
+
+  // Fetch active accounts for disbursement source
+  const { data: accounts } = useQuery({
+    queryKey: ["active-accounts-for-disbursement"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("is_active", true)
+        .order("account_name", { ascending: true });
+
+      if (error) throw error;
+      return data as { id: string; account_name: string; balance: number; account_type: string }[];
+    },
   });
 
   const selectedBorrower = borrowers?.find(b => b.id === selectedBorrowerId);
@@ -396,6 +432,11 @@ const AdminLoans = () => {
     mutationFn: async () => {
       if (!selectedBorrower || !selectedProduct || !loanDetails) {
         throw new Error("Please fill in all required fields");
+      }
+
+      // Check for duplicate loan - prevent admin from creating loan for borrower with existing active loan
+      if (borrowerExistingLoan) {
+        throw new Error("This borrower already has an active or pending loan. Cannot create a new loan until the existing one is completed.");
       }
 
       const { data: loanApp, error: loanError } = await supabase
@@ -579,7 +620,8 @@ const AdminLoans = () => {
         notificationService.send({
           userId: selectedLoan.user_id,
           type: 'email',
-          recipient: selectedLoan.email,
+          to: selectedLoan.email,
+          subject: 'Loan Application Update',
           title: 'Loan Application Update',
           message: `Hello ${selectedLoan.full_name}, unfortunately your loan application has been rejected. Reason: ${variables.reason || 'Not disclosed'}.`
         });
@@ -597,18 +639,56 @@ const AdminLoans = () => {
   // Disburse mutation
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
+      const disbursementAmount = selectedLoan!.loan_amount;
+      
+      // Validate source account if provided
+      if (data.source_account_id) {
+        const sourceAccount = accounts?.find(a => a.id === data.source_account_id);
+        if (!sourceAccount) throw new Error("Source account not found");
+        if (sourceAccount.balance < disbursementAmount) {
+          throw new Error(`Insufficient balance in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}`);
+        }
+      }
+
+      // Create disbursement record with source account
       const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedLoan!.id,
-        amount: selectedLoan!.loan_amount,
+        amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
         account_number: data.account_number || null,
         mobile_money_number: data.mobile_money_number || null,
         transaction_reference: data.transaction_reference || null,
+        source_account_id: data.source_account_id || null,
         status: 'completed',
         disbursed_at: new Date().toISOString(),
       });
 
       if (disbError) throw disbError;
+
+      // Deduct from source account if provided
+      if (data.source_account_id) {
+        const sourceAccount = accounts?.find(a => a.id === data.source_account_id);
+        if (sourceAccount) {
+          const { error: accountError } = await supabase
+            .from("accounts")
+            .update({ balance: sourceAccount.balance - disbursementAmount })
+            .eq("id", data.source_account_id);
+
+          if (accountError) throw accountError;
+
+          // Record account transaction
+          await supabase.from("account_transactions").insert({
+            account_id: data.source_account_id,
+            transaction_type: "disbursement",
+            amount: disbursementAmount,
+            balance_before: sourceAccount.balance,
+            balance_after: sourceAccount.balance - disbursementAmount,
+            reference_type: "loan_disbursement",
+            reference_id: selectedLoan!.id,
+            notes: `Loan disbursement to ${selectedLoan!.full_name}`,
+          });
+        }
+      }
 
       const { error: loanError } = await supabase
         .from('loan_applications')
@@ -623,18 +703,20 @@ const AdminLoans = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
+      queryClient.invalidateQueries({ queryKey: ['active-accounts-for-disbursement'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
 
       if (selectedLoan) {
         notificationService.send({
           userId: selectedLoan.user_id,
           type: 'sms',
-          recipient: selectedLoan.phone,
+          to: selectedLoan.phone,
           title: 'Loan Disbursed',
           message: `Hello ${selectedLoan.full_name}, your loan of K${Number(selectedLoan.loan_amount).toLocaleString()} has been disbursed. Please check your account.`
         });
       }
 
-      toast.success("Loan disbursed successfully");
+      toast.success("Loan disbursed successfully and account balance updated");
       setIsDisburseOpen(false);
       setSelectedLoan(null);
       resetDisbursementForm();
@@ -752,6 +834,7 @@ const AdminLoans = () => {
       account_number: "",
       mobile_money_number: "",
       transaction_reference: "",
+      source_account_id: "",
     });
   };
 
@@ -789,6 +872,10 @@ const AdminLoans = () => {
   };
 
   const handleDisburse = () => {
+    if (!disbursement.source_account_id) {
+      toast.error("Please select a source account for disbursement");
+      return;
+    }
     if (!disbursement.transaction_reference) {
       toast.error("Please enter a transaction reference");
       return;
@@ -884,23 +971,22 @@ const AdminLoans = () => {
     );
   };
 
-  // Filter loans based on active tab - Only show actual disbursed loans, not applications
+  // Filter loans based on active tab
   const getFilteredLoans = () => {
     let filtered = loans || [];
 
-    // Always exclude application statuses (pending, under_review, approved, rejected)
-    // Only show actual disbursed loans
-    filtered = filtered.filter(l => !["pending", "under_review", "approved", "rejected"].includes(l.status));
-
-    // Tab-based filtering within actual loans
-    if (activeTab === "active") {
+    // Tab-based filtering
+    if (activeTab === "applications") {
+      // Applications tab shows pending, under_review, approved, rejected
+      filtered = filtered.filter(l => ["pending", "under_review", "approved", "rejected"].includes(l.status));
+    } else if (activeTab === "active") {
+      // Active tab shows disbursed and active loans
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
       filtered = filtered.filter(l => l.status === "completed");
     } else if (activeTab === "defaulted") {
       filtered = filtered.filter(l => l.status === "defaulted");
     }
-    // No else needed - "all" tab will show all disbursed loans (active, completed, defaulted)
 
     // Status filter within tab
     if (statusFilter !== "all") {
@@ -1231,7 +1317,29 @@ const AdminLoans = () => {
                 </Select>
               </div>
 
-              {selectedBorrower && (
+              {/* Duplicate Loan Warning */}
+              {borrowerExistingLoan && (
+                <Card className="border-destructive bg-destructive/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="text-destructive h-5 w-5 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-destructive mb-1">Cannot Create Loan</h4>
+                        <p className="text-sm text-destructive/90 mb-2">
+                          This borrower already has an active/pending loan and cannot receive a new loan until the existing one is completed.
+                        </p>
+                        <div className="text-sm space-y-1">
+                          <p><span className="text-muted-foreground">Existing Loan Amount:</span> <span className="font-medium">K{Number(borrowerExistingLoan.loan_amount).toLocaleString()}</span></p>
+                          <p><span className="text-muted-foreground">Status:</span> <Badge variant="outline" className="ml-1">{borrowerExistingLoan.status}</Badge></p>
+                          <p><span className="text-muted-foreground">Applied:</span> <span className="font-medium">{format(new Date(borrowerExistingLoan.created_at), "MMM dd, yyyy")}</span></p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedBorrower && !borrowerExistingLoan && (
                 <Card className="bg-secondary/30">
                   <CardContent className="p-4">
                     <h4 className="font-semibold mb-3">Borrower Details</h4>
@@ -1568,10 +1676,14 @@ const AdminLoans = () => {
 
           <DialogFooter className="gap-2 mt-4">
             <Button variant="outline" onClick={() => setIsAddLoanOpen(false)}>Cancel</Button>
-            <Button onClick={() => createLoanMutation.mutate()} disabled={createLoanMutation.isPending}>
+            <Button 
+              onClick={() => createLoanMutation.mutate()} 
+              disabled={createLoanMutation.isPending || !!borrowerExistingLoan}
+              title={borrowerExistingLoan ? "Cannot create loan - borrower has existing active loan" : undefined}
+            >
               {createLoanMutation.isPending && <Loader2 className="mr-2 animate-spin" size={16} />}
               <Plus size={16} className="mr-1" />
-              Create Loan
+              {borrowerExistingLoan ? "Cannot Create Loan" : "Create Loan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1647,6 +1759,31 @@ const AdminLoans = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Source Account *</Label>
+              <Select
+                value={disbursement.source_account_id}
+                onValueChange={(v) => setDisbursement({ ...disbursement, source_account_id: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select account to disburse from" /></SelectTrigger>
+                <SelectContent>
+                  {accounts?.map((account) => (
+                    <SelectItem 
+                      key={account.id} 
+                      value={account.id}
+                      disabled={account.balance < (selectedLoan?.loan_amount || 0)}
+                    >
+                      {account.account_name} - K{account.balance.toLocaleString()} ({account.account_type})
+                      {account.balance < (selectedLoan?.loan_amount || 0) && " (Insufficient)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                This account will be debited K{Number(selectedLoan?.loan_amount || 0).toLocaleString()}
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>Disbursement Method</Label>
               <Select

@@ -9,9 +9,11 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw, Camera } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle, User, Briefcase, CreditCard, FileText, Sparkles, Package, Loader2, Link2, Save, Trash2, Clock, RefreshCw, Camera, AlertTriangle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -243,6 +245,26 @@ const Apply = () => {
     enabled: !!user?.id,
   });
   const vaultByType = Object.fromEntries(vaultDocuments.map((d) => [d.document_type, d]));
+
+  // Check for existing active loan (block duplicate applications)
+  const { data: existingActiveLoan } = useQuery({
+    queryKey: ["existing-active-loan", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, full_name, loan_amount, loan_term_months, status, created_at, nrc_number, phone")
+        .eq("user_id", user.id)
+        .in("status", ["pending", "under_review", "approved", "disbursed", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
   const tourSteps: Step[] = [
     {
@@ -547,14 +569,18 @@ const Apply = () => {
           loanTerm: formData.loanTerm,
         });
       } else if (step === 4) {
-        // Dynamic documents validation
+        // Dynamic documents validation based on product requirements
         let hasErrors = false;
         const newDocErrors: Record<string, string> = {};
 
         productDocs?.forEach((doc: any) => {
+          const docType = doc.doc_type || doc.document_type; // Support both field names
+          const docLabel = doc.doc_label || doc.document_name || docType;
+          const isMandatory = doc.is_mandatory;
+
           // Check if mandatory AND not uploaded AND not being reused
-          if (doc.is_mandatory && !dynamicDocs[doc.document_type] && !formData.reusedDocs[doc.document_type]) {
-            newDocErrors[doc.document_type] = `${doc.document_name} is required`;
+          if (isMandatory && !dynamicDocs[docType] && !formData.reusedDocs[docType]) {
+            newDocErrors[docType] = `${docLabel} is required`;
             hasErrors = true;
           }
         });
@@ -613,7 +639,7 @@ const Apply = () => {
 
   const handleSubmit = async () => {
     console.log('[Apply] handleSubmit called', { user: user?.id, termsAccepted: formData.termsAccepted, dataConsent: formData.dataConsent });
-    
+
     if (!user) {
       const { handleError } = await import('@/utils/errorHandler');
       handleError('User not authenticated', { component: 'Apply', action: 'submit_application' }, false);
@@ -663,10 +689,10 @@ const Apply = () => {
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${docType}_${Date.now()}.${fileExt}`;
           console.log(`[Apply] Uploading ${docType}: ${fileName}`);
-          
+
           // Set initial progress and simulate upload progress
           setUploadProgress(prev => ({ ...prev, [docType]: 10 }));
-          
+
           // Simulate progress (Supabase doesn't support onUploadProgress)
           const progressInterval = setInterval(() => {
             setUploadProgress(prev => {
@@ -677,14 +703,14 @@ const Apply = () => {
               return prev;
             });
           }, 200);
-          
+
           const { data, error: uploadErr } = await supabase.storage
             .from('loan-documents')
             .upload(fileName, file, {
               cacheControl: '3600',
               upsert: false
             });
-          
+
           clearInterval(progressInterval);
 
           if (uploadErr) {
@@ -694,7 +720,7 @@ const Apply = () => {
               component: 'Apply',
               action: `upload_${docType}`,
             });
-            
+
             setUploadProgress(prev => {
               const next = { ...prev };
               delete next[docType];
@@ -731,7 +757,7 @@ const Apply = () => {
           });
         }
       }
-      
+
       // Upload collateral image if provided
       let collateralImageUrl: string | null = null;
       if (formData.collateralImage) {
@@ -739,14 +765,14 @@ const Apply = () => {
           const fileExt = formData.collateralImage.name.split('.').pop();
           const fileName = `${user.id}/collateral_${Date.now()}.${fileExt}`;
           console.log(`[Apply] Uploading collateral image: ${fileName}`);
-          
+
           const { data: collateralData, error: collateralErr } = await supabase.storage
             .from('loan-documents')
             .upload(fileName, formData.collateralImage, {
               cacheControl: '3600',
               upsert: false
             });
-          
+
           if (collateralErr) {
             const { handleError } = await import('@/utils/errorHandler');
             handleError(collateralErr, { component: 'Apply', action: 'upload_collateral' });
@@ -1042,6 +1068,58 @@ const Apply = () => {
               </p>
             )}
           </div>
+
+          {/* Existing Active Loan Block */}
+          {existingActiveLoan && (
+            <div className="max-w-2xl mx-auto mb-12">
+              <Alert className="border-warning bg-warning/10">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+                <AlertDescription>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-2">
+                        You Already Have an Active Loan
+                      </h3>
+                      <p className="text-muted-foreground text-sm">
+                        Our records show that you already have a loan that is currently being processed or active.
+                        You cannot apply for another loan until your current loan is completed.
+                      </p>
+                    </div>
+                    <Card className="bg-card border-border">
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Loan Amount</p>
+                            <p className="font-semibold">K{existingActiveLoan.loan_amount?.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Status</p>
+                            <Badge className="capitalize">{existingActiveLoan.status}</Badge>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Term</p>
+                            <p className="font-semibold">{existingActiveLoan.loan_term_months} months</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Applied On</p>
+                            <p className="font-semibold">{format(new Date(existingActiveLoan.created_at), 'MMM dd, yyyy')}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <div className="flex gap-3">
+                      <Button variant="outline" asChild>
+                        <a href="/dashboard">View My Loan</a>
+                      </Button>
+                      <Button variant="ghost" asChild>
+                        <a href="/">Go Home</a>
+                      </Button>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
 
           {/* Auto-save indicator */}
           {draftChecked && (
@@ -1704,8 +1782,8 @@ const Apply = () => {
                         <FileText className="text-info mt-0.5" size={20} />
                         <div className="text-sm text-muted-foreground">
                           <p className="font-medium text-foreground mb-1">Payslip Password Required</p>
-                          All government payslips are secured with passwords. Please enter your payslip password 
-                          to allow verification. Your information is kept confidential and used strictly for 
+                          All government payslips are secured with passwords. Please enter your payslip password
+                          to allow verification. Your information is kept confidential and used strictly for
                           processing your application.
                         </div>
                       </div>
@@ -1715,8 +1793,12 @@ const Apply = () => {
                       <Input
                         type="password"
                         placeholder="Enter your payslip password"
-                        value={(formData as any).payslipPassword || ""}
-                        onChange={(e) => updateFormData("payslipPassword", e.target.value)}
+                        value={payslipPasswords['payslip'] || payslipPasswords['PAYSLIP'] || ""}
+                        onChange={(e) => setPayslipPasswords(prev => ({
+                          ...prev,
+                          'payslip': e.target.value,
+                          'PAYSLIP': e.target.value
+                        }))}
                       />
                       <p className="text-xs text-muted-foreground">
                         This password is used to open your password-protected payslip PDF for verification
@@ -1726,54 +1808,53 @@ const Apply = () => {
 
                   {/* Latest 3 Months Payslips - Not required for Business and Personal loans */}
                   {selectedProduct && !selectedProduct.name?.toLowerCase().includes('business') && !selectedProduct.name?.toLowerCase().includes('personal') && (
-                  <div className="pt-6 border-t border-border">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Payslip Upload (Select Month) *</h3>
-                    <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {getLastThreeMonths().map((month, index) => (
-                        <div key={month.key} className="space-y-2">
-                          <Label className={errors[month.key] ? "text-destructive" : ""}>
-                            {month.label} {index === 0 && "(Latest)"}
-                            {index === 0 && " *"}
-                          </Label>
-                          <label
-                            className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
-                              formData[month.key as keyof typeof formData]
+                    <div className="pt-6 border-t border-border">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Payslip Upload (Select Month) *</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Upload your payslips for the last 3 months</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {getLastThreeMonths().map((month, index) => (
+                          <div key={month.key} className="space-y-2">
+                            <Label className={errors[month.key] ? "text-destructive" : ""}>
+                              {month.label} {index === 0 && "(Latest)"}
+                              {index === 0 && " *"}
+                            </Label>
+                            <label
+                              className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData[month.key as keyof typeof formData]
                                 ? "border-primary bg-primary/10 shadow-glow"
                                 : errors[month.key]
                                   ? "border-destructive bg-destructive/5"
                                   : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                            }`}
-                          >
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png"
-                              className="hidden"
-                              onChange={(e) => updateFormData(month.key, e.target.files?.[0] || null)}
-                            />
-                            {formData[month.key as keyof typeof formData] ? (
-                              <>
-                                <CheckCircle className="text-primary mb-2" size={32} />
-                                <span className="text-sm text-primary font-medium text-center">Uploaded</span>
-                                <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-full">
-                                  {(formData[month.key as keyof typeof formData] as File)?.name}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <Upload className={errors[month.key] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
-                                <span className={`text-sm ${errors[month.key] ? "text-destructive" : "text-muted-foreground"} text-center`}>
-                                  {errors[month.key] || `Upload payslip`}
-                                </span>
-                                <span className="text-xs text-muted-foreground mt-1">PDF, JPG, or PNG</span>
-                              </>
-                            )}
-                          </label>
-                        </div>
-                      ))}
+                                }`}
+                            >
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={(e) => updateFormData(month.key, e.target.files?.[0] || null)}
+                              />
+                              {formData[month.key as keyof typeof formData] ? (
+                                <>
+                                  <CheckCircle className="text-primary mb-2" size={32} />
+                                  <span className="text-sm text-primary font-medium text-center">Uploaded</span>
+                                  <span className="text-[10px] text-muted-foreground mt-1 truncate max-w-full">
+                                    {(formData[month.key as keyof typeof formData] as File)?.name}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className={errors[month.key] ? "text-destructive mb-2" : "text-muted-foreground mb-2"} size={32} />
+                                  <span className={`text-sm ${errors[month.key] ? "text-destructive" : "text-muted-foreground"} text-center`}>
+                                    {errors[month.key] || `Upload payslip`}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground mt-1">PDF, JPG, or PNG</span>
+                                </>
+                              )}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">* At least the latest month's payslip is required</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">* At least the latest month's payslip is required</p>
-                  </div>
                   )}
 
                   {/* Collateral Details - still manual if needed */}
@@ -1799,16 +1880,15 @@ const Apply = () => {
                           />
                         </div>
                       </div>
-                      
+
                       {/* Collateral Photo Upload */}
                       <div className="space-y-2 mt-6">
                         <Label>Collateral Photo</Label>
                         <label
-                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
-                            formData.collateralImage
-                              ? "border-primary bg-primary/10 shadow-glow"
-                              : "border-border hover:border-primary/50 hover:bg-secondary/50"
-                          }`}
+                          className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${formData.collateralImage
+                            ? "border-primary bg-primary/10 shadow-glow"
+                            : "border-border hover:border-primary/50 hover:bg-secondary/50"
+                            }`}
                         >
                           <input
                             type="file"

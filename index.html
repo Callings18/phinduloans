@@ -1,20 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#EC4899" />
+    <meta name="theme-color" content="#6B1A3A" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Phindu Loans" />
-    <link rel="apple-touch-icon" href="/favicon.jpg" />
+    <meta name="apple-mobile-web-app-title" content="Phindu Credit" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
     <title>Phindu Credit Solutions - Fast Personal & Salary Loans in Zambia</title>
     <meta name="description" content="Get quick personal and salary loans in Zambia with Phindu Credit Solutions. Apply online, get approved in 24 hours, and receive funds via mobile money. Money when you need it." />
     <meta name="author" content="Phindu Credit Solutions" />
     <meta name="keywords" content="loans Zambia, personal loans, salary loans, quick loans, mobile money loans, Lusaka loans, credit solutions" />
     <link rel="canonical" href="https://phinducredit.co.zm" />
+    <!-- Cache bust v36 - 20260206 FORCE CLEAN -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <script>
+      // Force clear all caches on load to prevent dual React instances
+      (function() {
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (var i = 0; i < names.length; i++) { caches.delete(names[i]); }
+          });
+        }
+      })();
+    </script>
 
     <meta property="og:title" content="Phindu Credit Solutions - Fast Personal & Salary Loans in Zambia" />
     <meta property="og:description" content="Get quick personal and salary loans in Zambia. Apply online, get approved in 24 hours, and receive funds via mobile money." />
@@ -45,6 +59,6 @@
 
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx?v=36"></script>
   </body>
 </html>

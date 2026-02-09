@@ -13,6 +13,7 @@ import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStat
 import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import QuickApply from "@/components/dashboard/QuickApply";
 import WalletWidget from "@/components/dashboard/WalletWidget";
+import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -113,6 +114,34 @@ const Dashboard = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Real-time subscription for loan status changes
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('loan-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'loan_applications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('[Dashboard] Real-time update received:', payload);
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['user-loans', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['user-repayments', user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   const { data: repayments } = useQuery({
     queryKey: ['user-repayments', user?.id],
@@ -358,12 +387,19 @@ const Dashboard = () => {
             </Card>
           </div>
 
+          {/* Contract Signing Widget - Show if any contracts need signing */}
+          {user && (
+            <div className="mb-6">
+              <ContractSigningWidget userId={user.id} />
+            </div>
+          )}
+
           {/* Quick Actions and Wallet - Use QuickApply for logged-in users */}
           <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="tour-apply">
               {user && profile && (
-                <QuickApply 
-                  userId={user.id} 
+                <QuickApply
+                  userId={user.id}
                   profile={profile}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
                 />

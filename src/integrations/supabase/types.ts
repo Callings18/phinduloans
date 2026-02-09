@@ -109,6 +109,100 @@ export type Database = {
         }
         Relationships: []
       }
+      application_documents: {
+        Row: {
+          application_id: string
+          borrower_id: string
+          created_at: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          is_required: boolean | null
+          loan_product_id: string | null
+          mime_type: string | null
+          month_tag: string | null
+          notes: string | null
+          payslip_password: string | null
+          status: string | null
+          updated_at: string
+          uploaded_at: string
+          uploaded_by: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          application_id: string
+          borrower_id: string
+          created_at?: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          is_required?: boolean | null
+          loan_product_id?: string | null
+          mime_type?: string | null
+          month_tag?: string | null
+          notes?: string | null
+          payslip_password?: string | null
+          status?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          application_id?: string
+          borrower_id?: string
+          created_at?: string
+          doc_label?: string
+          doc_type?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          is_required?: boolean | null
+          loan_product_id?: string | null
+          mime_type?: string | null
+          month_tag?: string | null
+          notes?: string | null
+          payslip_password?: string | null
+          status?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_documents_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_documents_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "application_documents_loan_product_id_fkey"
+            columns: ["loan_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -145,6 +239,60 @@ export type Database = {
           new_values?: Json | null
           old_values?: Json | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      borrower_document_vault: {
+        Row: {
+          borrower_id: string
+          created_at: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          is_verified: boolean | null
+          mime_type: string | null
+          notes: string | null
+          updated_at: string
+          uploaded_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          borrower_id: string
+          created_at?: string
+          doc_label: string
+          doc_type: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          is_verified?: boolean | null
+          mime_type?: string | null
+          notes?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          borrower_id?: string
+          created_at?: string
+          doc_label?: string
+          doc_type?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          is_verified?: boolean | null
+          mime_type?: string | null
+          notes?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: []
       }
@@ -661,6 +809,7 @@ export type Database = {
           id: string
           loan_id: string
           mobile_money_number: string | null
+          source_account_id: string | null
           status: string | null
           transaction_reference: string | null
         }
@@ -673,6 +822,7 @@ export type Database = {
           id?: string
           loan_id: string
           mobile_money_number?: string | null
+          source_account_id?: string | null
           status?: string | null
           transaction_reference?: string | null
         }
@@ -685,6 +835,7 @@ export type Database = {
           id?: string
           loan_id?: string
           mobile_money_number?: string | null
+          source_account_id?: string | null
           status?: string | null
           transaction_reference?: string | null
         }
@@ -702,6 +853,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "overdue_loans_view"
             referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "disbursements_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -980,8 +1138,13 @@ export type Database = {
         Row: {
           address: string | null
           admin_notes: string | null
+          admin_signed: boolean | null
+          admin_signed_at: string | null
+          admin_signed_by: string | null
           assigned_to: string | null
           bank_statement_url: string | null
+          borrower_signed: boolean | null
+          borrower_signed_at: string | null
           city: string | null
           collateral_description: string | null
           collateral_image_2_url: string | null
@@ -1039,8 +1202,13 @@ export type Database = {
         Insert: {
           address?: string | null
           admin_notes?: string | null
+          admin_signed?: boolean | null
+          admin_signed_at?: string | null
+          admin_signed_by?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
+          borrower_signed?: boolean | null
+          borrower_signed_at?: string | null
           city?: string | null
           collateral_description?: string | null
           collateral_image_2_url?: string | null
@@ -1098,8 +1266,13 @@ export type Database = {
         Update: {
           address?: string | null
           admin_notes?: string | null
+          admin_signed?: boolean | null
+          admin_signed_at?: string | null
+          admin_signed_by?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
+          borrower_signed?: boolean | null
+          borrower_signed_at?: string | null
           city?: string | null
           collateral_description?: string | null
           collateral_image_2_url?: string | null
@@ -1365,6 +1538,7 @@ export type Database = {
           product_code: string | null
           repayment_frequency: string | null
           repayment_methods: string[] | null
+          required_documents: Json | null
           requirements: string[] | null
           status: string | null
           term_unit: string
@@ -1430,6 +1604,7 @@ export type Database = {
           product_code?: string | null
           repayment_frequency?: string | null
           repayment_methods?: string[] | null
+          required_documents?: Json | null
           requirements?: string[] | null
           status?: string | null
           term_unit?: string
@@ -1495,6 +1670,7 @@ export type Database = {
           product_code?: string | null
           repayment_frequency?: string | null
           repayment_methods?: string[] | null
+          required_documents?: Json | null
           requirements?: string[] | null
           status?: string | null
           term_unit?: string
@@ -1734,6 +1910,42 @@ export type Database = {
           sms_template?: string | null
           updated_at?: string | null
           whatsapp_template?: string | null
+        }
+        Relationships: []
+      }
+      otp_codes: {
+        Row: {
+          attempts: number
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          max_attempts: number
+          phone: string
+          purpose: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          code: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          max_attempts?: number
+          phone: string
+          purpose?: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_attempts?: number
+          phone?: string
+          purpose?: string
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -2427,6 +2639,7 @@ export type Database = {
         Args: { p_repayment_id: string }
         Returns: number
       }
+      cleanup_expired_otps: { Args: never; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

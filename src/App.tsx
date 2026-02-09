@@ -1,9 +1,10 @@
+// App v28 - clean React hooks 2026-02-04
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "@/hooks/useTheme";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import { AuthProvider } from "@/hooks/useAuth";
 
@@ -41,11 +42,78 @@ import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 
+// Inline Theme - no external module
+type Theme = "dark" | "light" | "system";
+
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  resolvedTheme: "dark" | "light";
+}
+
+const ThemeContext = createContext<ThemeContextType>({
+  theme: "dark",
+  setTheme: () => {},
+  resolvedTheme: "dark",
+});
+
+export function useTheme() {
+  return useContext(ThemeContext);
+}
+
+function getSystemTheme(): "dark" | "light" {
+  if (typeof window !== "undefined") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "dark";
+}
+
+function getStoredTheme(): Theme {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("phindu-theme") as Theme | null;
+    return stored || "dark";
+  }
+  return "dark";
+}
+
 const queryClient = new QueryClient();
 
 function App() {
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const resolved = theme === "system" ? getSystemTheme() : theme;
+    
+    setResolvedTheme(resolved);
+    root.classList.remove("light", "dark");
+    root.classList.add(resolved);
+    localStorage.setItem("phindu-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (theme !== "system") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      const newTheme = e.matches ? "dark" : "light";
+      setResolvedTheme(newTheme);
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(newTheme);
+    };
+
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, [theme]);
+
+  const themeValue = useMemo(
+    () => ({ theme, setTheme, resolvedTheme }),
+    [theme, resolvedTheme]
+  );
+
   return (
-    <ThemeProvider>
+    <ThemeContext.Provider value={themeValue}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
@@ -94,7 +162,7 @@ function App() {
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
-    </ThemeProvider>
+    </ThemeContext.Provider>
   );
 }
 

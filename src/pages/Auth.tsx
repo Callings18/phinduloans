@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, ArrowRight, Sparkles } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, Sparkles, Phone, KeyRound } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -16,6 +18,8 @@ const loginSchema = z.object({
 const signupSchema = loginSchema.extend({
   fullName: z.string().trim().min(2, "Full name must be at least 2 characters"),
 });
+
+type AuthMethod = 'email' | 'phone';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -60,7 +64,7 @@ const Auth = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (isLogin && loginMode === "otp") {
@@ -141,6 +145,14 @@ const Auth = () => {
     }
   };
 
+  const handlePhoneAuthSuccess = (userId?: string) => {
+    toast({
+      title: isLogin ? "Welcome back!" : "Account Created!",
+      description: isLogin ? "You've successfully logged in." : "Welcome to Phindu Credit Solutions.",
+    });
+    navigate('/dashboard');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -181,7 +193,7 @@ const Auth = () => {
             </p>
           </div>
 
-          {/* Form */}
+          {/* Auth Form */}
           <div className="glass rounded-3xl p-8 shadow-card animate-slide-up">
             {otpSentTo ? (
               <div className="space-y-4 text-center">

@@ -100,12 +100,20 @@ const AdminDisbursements = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_applications")
-        .select("id, full_name, loan_amount, email")
+        .select("id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url")
         .eq("status", "approved")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return data as Array<{
+        id: string;
+        full_name: string;
+        loan_amount: number;
+        email: string;
+        borrower_signed: boolean | null;
+        admin_signed: boolean | null;
+        signed_contract_url: string | null;
+      }>;
     },
   });
 
@@ -129,6 +137,18 @@ const AdminDisbursements = () => {
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
 
+      // Check if contract is signed by both parties
+      const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
+      const isAdminSigned = loan.admin_signed;
+      
+      if (!isBorrowerSigned) {
+        throw new Error("Cannot disburse: The borrower has not signed the contract yet. Please have the borrower sign the contract first.");
+      }
+      
+      if (!isAdminSigned) {
+        throw new Error("Cannot disburse: Admin has not verified and counter-signed the contract. Please go to the loan details and click 'Sign & Verify' first.");
+      }
+
       if (!formData.source_account_id) {
         throw new Error("Please select a source account for disbursement");
       }
@@ -142,7 +162,8 @@ const AdminDisbursements = () => {
         throw new Error(`Insufficient balance in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}`);
       }
 
-      // Create disbursement record with source account
+      // Create disbursement record with source account (status pending).
+      // Account deduction happens only when status is set to "completed" (via DB trigger).
       const { error: disbError } = await supabase.from("disbursements").insert({
         loan_id: selectedLoan,
         amount: disbursementAmount,
@@ -154,33 +175,13 @@ const AdminDisbursements = () => {
       });
 
       if (disbError) throw disbError;
-
-      // Deduct from source account balance
-      const { error: accountError } = await supabase
-        .from("accounts")
-        .update({ balance: sourceAccount.balance - disbursementAmount })
-        .eq("id", formData.source_account_id);
-
-      if (accountError) throw accountError;
-
-      // Record account transaction
-      await supabase.from("account_transactions").insert({
-        account_id: formData.source_account_id,
-        transaction_type: "disbursement",
-        amount: disbursementAmount,
-        balance_before: sourceAccount.balance,
-        balance_after: sourceAccount.balance - disbursementAmount,
-        reference_type: "loan_disbursement",
-        reference_id: selectedLoan,
-        notes: `Loan disbursement to ${loan.full_name}`,
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
       queryClient.invalidateQueries({ queryKey: ["approved-loans-for-disbursement"] });
       queryClient.invalidateQueries({ queryKey: ["active-accounts"] }); // Refresh account balances
       queryClient.invalidateQueries({ queryKey: ["accounts"] }); // Refresh all accounts
-      toast.success("Disbursement created and account balance updated");
+      toast.success("Disbursement created. Mark as completed to deduct from the source account.");
       resetForm();
       setIsDialogOpen(false);
     },
@@ -215,10 +216,13 @@ const AdminDisbursements = () => {
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
-      toast.success("Disbursement status updated");
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["account_transactions"] });
+      toast.success(variables.status === "completed" ? "Disbursement completed and account balance updated" : "Disbursement status updated");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to update status");
@@ -314,14 +318,81 @@ const AdminDisbursements = () => {
                       {approvedLoans?.length === 0 ? (
                         <SelectItem value="none" disabled>No approved loans available</SelectItem>
                       ) : (
-                        approvedLoans?.map((loan) => (
-                          <SelectItem key={loan.id} value={loan.id}>
-                            {loan.full_name} - K{Number(loan.loan_amount).toLocaleString()}
-                          </SelectItem>
-                        ))
+                        approvedLoans?.map((loan) => {
+                          const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
+                          const isAdminSigned = loan.admin_signed;
+                          const isReady = isBorrowerSigned && isAdminSigned;
+                          
+                          return (
+                            <SelectItem key={loan.id} value={loan.id}>
+                              <div className="flex items-center gap-2">
+                                {isReady ? (
+                                  <CheckCircle size={14} className="text-success" />
+                                ) : (
+                                  <Clock size={14} className="text-warning" />
+                                )}
+                                <span>{loan.full_name} - K{Number(loan.loan_amount).toLocaleString()}</span>
+                                {!isReady && (
+                                  <span className="text-xs text-warning">(Contract pending)</span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          );
+                        })
                       )}
                     </SelectContent>
                   </Select>
+                  
+                  {/* Contract signing status alert */}
+                  {selectedLoan && (() => {
+                    const loan = approvedLoans?.find(l => l.id === selectedLoan);
+                    if (!loan) return null;
+                    const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
+                    const isAdminSigned = loan.admin_signed;
+                    
+                    if (!isBorrowerSigned) {
+                      return (
+                        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                          <div className="flex items-start gap-2">
+                            <XCircle size={16} className="text-destructive mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-destructive">Contract Not Signed</p>
+                              <p className="text-xs text-muted-foreground">
+                                The borrower must sign the contract before disbursement can proceed. 
+                                Send them the contract to sign from the Loan Details page.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    if (!isAdminSigned) {
+                      return (
+                        <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                          <div className="flex items-start gap-2">
+                            <Clock size={16} className="text-warning mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-warning">Admin Verification Required</p>
+                              <p className="text-xs text-muted-foreground">
+                                Borrower has signed. Go to Loan Details → Overview and click "Sign & Verify" 
+                                to counter-sign the contract before disbursement.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="p-3 rounded-lg bg-success/10 border border-success/20">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle size={16} className="text-success" />
+                          <p className="text-sm font-medium text-success">Contract signed by both parties - Ready for disbursement</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* NEW: Source Account Selection */}
