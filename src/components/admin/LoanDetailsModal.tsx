@@ -1144,8 +1144,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </CardContent>
                 </Card>
 
-                {/* Contract Signing Status - for approved loans */}
-                {(loan.status === "approved" || loan.signed_contract_url) && (
+                {/* Contract Signing Status - for approved/contract_signing loans */}
+                {(loan.status === "approved" || loan.status === "contract_signing" || loan.signed_contract_url) && (
                   <Card className={`border-2 ${
                     loan.borrower_signed && loan.admin_signed 
                       ? "border-success/50 bg-success/5" 

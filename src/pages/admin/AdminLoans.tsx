@@ -131,6 +131,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   pending: { label: "Pending", color: "bg-warning/20 text-warning border-warning/30", icon: AlertTriangle },
   under_review: { label: "Under Review", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Eye },
   approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
+  contract_signing: { label: "Contract Signing", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: FileText },
   rejected: { label: "Rejected", color: "bg-destructive/20 text-destructive border-destructive/30", icon: XCircle },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Wallet },
   active: { label: "Active", color: "bg-info/20 text-info border-info/30", icon: Activity },
@@ -977,8 +978,8 @@ const AdminLoans = () => {
 
     // Tab-based filtering
     if (activeTab === "applications") {
-      // Applications tab shows pending, under_review, approved, rejected
-      filtered = filtered.filter(l => ["pending", "under_review", "approved", "rejected"].includes(l.status));
+      // Applications tab shows pending, under_review, approved, contract_signing, rejected
+      filtered = filtered.filter(l => ["pending", "under_review", "approved", "contract_signing", "rejected"].includes(l.status));
     } else if (activeTab === "active") {
       // Active tab shows disbursed and active loans
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
@@ -1024,6 +1025,7 @@ const AdminLoans = () => {
         { value: "pending", label: "Pending" },
         { value: "under_review", label: "Under Review" },
         { value: "approved", label: "Approved" },
+        { value: "contract_signing", label: "Contract Signing" },
         { value: "rejected", label: "Rejected" },
       ];
     } else if (activeTab === "active") {
@@ -1126,7 +1128,7 @@ const AdminLoans = () => {
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setStatusFilter("all"); }}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="applications">Applications ({stats.pending + stats.approved + (loans?.filter(l => ["under_review", "rejected"].includes(l.status)).length || 0)})</TabsTrigger>
+            <TabsTrigger value="applications">Applications ({stats.pending + stats.approved + (loans?.filter(l => ["under_review", "contract_signing", "rejected"].includes(l.status)).length || 0)})</TabsTrigger>
             <TabsTrigger value="active">Active Loans ({stats.active})</TabsTrigger>
             <TabsTrigger value="completed">Completed ({stats.completed})</TabsTrigger>
             <TabsTrigger value="defaulted">Defaulted ({stats.defaulted})</TabsTrigger>

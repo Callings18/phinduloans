@@ -108,6 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (notifyError) {
         console.error('[Auth] Failed to send welcome email:', notifyError);
       }
+
+      try {
+        await supabase.rpc('log_auth_event', { p_action: 'SIGNUP' });
+      } catch (e) {
+        console.error('[Auth] Failed to log auth event:', e);
+      }
     }
 
     return { error: error as Error | null };
@@ -118,6 +124,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
     });
+
+    if (!error) {
+      try {
+        await supabase.rpc('log_auth_event', { p_action: 'LOGIN' });
+      } catch (e) {
+        console.error('[Auth] Failed to log auth event:', e);
+      }
+    }
 
     return { error: error as Error | null };
   }, []);
