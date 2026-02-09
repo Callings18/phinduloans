@@ -24,6 +24,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
+import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -224,7 +225,7 @@ const AdminDisbursements = () => {
 
       if (error) throw error;
 
-      // Update loan status if disbursed
+      // Update loan status and auto-generate repayment schedule if disbursed
       if (status === "completed") {
         const disbursement = disbursements?.find((d) => d.id === id);
         if (disbursement) {
@@ -232,6 +233,26 @@ const AdminDisbursements = () => {
             .from("loan_applications")
             .update({ status: "disbursed" })
             .eq("id", disbursement.loan_id);
+
+          const { data: loan, error: loanErr } = await supabase
+            .from("loan_applications")
+            .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
+            .eq("id", disbursement.loan_id)
+            .single();
+          if (!loanErr && loan) {
+            await createRepaymentScheduleForLoan(
+              {
+                id: loan.id,
+                user_id: loan.user_id,
+                loan_term_months: loan.loan_term_months,
+                total_repayment: loan.total_repayment,
+                monthly_payment: loan.monthly_payment,
+                loan_product_id: loan.loan_product_id,
+                term_unit: (loan as any).term_unit,
+              },
+              supabase
+            );
+          }
         }
       }
 
@@ -249,7 +270,9 @@ const AdminDisbursements = () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["account_transactions"] });
-      toast.success(variables.status === "completed" ? "Disbursement completed and account balance updated" : "Disbursement status updated");
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
+      toast.success(variables.status === "completed" ? "Disbursement completed, schedule generated, and account balance updated" : "Disbursement status updated");
     },
     onError: async (error: any, variables) => {
       const handled = await handleUnauthorized(error, {

@@ -54,6 +54,8 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
       let data: any[] = [];
       let columns: string[] = [];
       let title = "";
+      let extraSheetData: any[] | null = null;
+      let extraSheetName = "";
 
       // Fetch data based on report type
       if (reportType === "loans") {
@@ -170,6 +172,19 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
         ];
         columns = ["Metric", "Value"];
         title = "Portfolio Summary Report";
+        if (exportFormat === "xlsx") {
+          extraSheetData = allLoans
+            .filter(l => ["disbursed", "active", "completed"].includes(l.status))
+            .map(l => ({
+              "Loan ID": l.id?.slice(0, 8) || "",
+              "Borrower": l.full_name,
+              "Amount (K)": Number(l.loan_amount),
+              "Total Repayment (K)": Number(l.total_repayment || 0),
+              "Status": l.status,
+              "Applied": format(new Date(l.created_at), "yyyy-MM-dd"),
+            }));
+          extraSheetName = "Active & Completed Loans";
+        }
       }
 
       if (data.length === 0) {
@@ -190,9 +205,13 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
         a.click();
         URL.revokeObjectURL(url);
       } else if (exportFormat === "xlsx") {
-        const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Report");
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, reportType === "portfolio" ? "Summary" : "Report");
+        if (extraSheetData && extraSheetData.length > 0 && extraSheetName) {
+          const ws2 = XLSX.utils.json_to_sheet(extraSheetData);
+          XLSX.utils.book_append_sheet(wb, ws2, extraSheetName.slice(0, 31));
+        }
         XLSX.writeFile(wb, `${reportType}-report-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
       } else {
         // Generate PDF

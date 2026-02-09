@@ -87,10 +87,13 @@ import DocumentVerificationTab from "./DocumentVerificationTab";
 import GuarantorTab from "./GuarantorTab";
 import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract } from "@/utils/generateLoanContract";
+import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
+import { logAudit } from "@/utils/auditLog";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
+import { useAuth } from "@/hooks/useAuth";
 import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
+import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
@@ -178,6 +181,7 @@ interface EarlySettlement {
 }
 
 export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
@@ -545,91 +549,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Generate repayment schedule mutation
+  // Generate repayment schedule mutation (uses shared createRepaymentScheduleForLoan)
   const generateScheduleMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-
-      // Get loan product to check term_unit, interest_period, and repayment_frequency
-      const { data: product } = await supabase
-        .from("loan_products")
-        .select("term_unit, interest_period, repayment_frequency")
-        .eq("id", loan.loan_product_id)
-        .single();
-
-      const termUnit = (loan as any).term_unit || product?.term_unit || 'months';
-      const interestPeriod = product?.interest_period || 'monthly';
-      const repaymentFrequency = product?.repayment_frequency || 'monthly';
-      const isDaily = termUnit === 'days' || (termUnit === 'months' && (interestPeriod === 'daily' || repaymentFrequency === 'daily'));
-      const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && (interestPeriod === 'weekly' || repaymentFrequency === 'weekly'));
-
-      // Calculate payment amount and number of installments
-      let paymentAmount: number;
-      let numInstallments: number;
-      
-      if (isDaily) {
-        // For daily loans
-        if (termUnit === 'days') {
-          numInstallments = loan.loan_term_months; // loan_term_months represents days
-          paymentAmount = loan.total_repayment / numInstallments;
-        } else {
-          numInstallments = loan.loan_term_months * 30;
-          paymentAmount = (loan.monthly_payment || (loan.total_repayment / loan.loan_term_months)) / 30;
-        }
-      } else if (isWeekly) {
-        // For weekly loans
-        if (termUnit === 'weeks') {
-          numInstallments = loan.loan_term_months; // loan_term_months represents weeks
-          paymentAmount = loan.total_repayment / numInstallments;
-        } else {
-          numInstallments = loan.loan_term_months * 4;
-          paymentAmount = (loan.monthly_payment || (loan.total_repayment / loan.loan_term_months)) / 4.33;
-        }
-      } else {
-        // For monthly loans
-        numInstallments = loan.loan_term_months;
-        paymentAmount = loan.monthly_payment || (loan.total_repayment / loan.loan_term_months);
-      }
-
-      const repaymentRecords = [];
-      const startDate = new Date();
-
-      for (let i = 1; i <= numInstallments; i++) {
-        let dueDate: Date;
-        if (isDaily) {
-          // Add 1 day per installment
-          dueDate = new Date(startDate);
-          dueDate.setDate(dueDate.getDate() + i);
-        } else if (isWeekly) {
-          // Add 7 days per week
-          dueDate = new Date(startDate);
-          dueDate.setDate(dueDate.getDate() + (i * 7));
-        } else {
-          // Add months
-          dueDate = addMonths(startDate, i);
-        }
-
-        repaymentRecords.push({
-          loan_id: loan.id,
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
           user_id: loan.user_id,
-          amount: paymentAmount,
-          due_date: format(dueDate, "yyyy-MM-dd"),
-          installment_number: i,
-          status: "pending",
-        });
-      }
-
-      const { error } = await supabase
-        .from("loan_repayments")
-        .insert(repaymentRecords);
-
-      if (error) throw error;
-
-      // Update loan status to active
-      await supabase
-        .from("loan_applications")
-        .update({ status: "active" })
-        .eq("id", loan.id);
+          loan_term_months: loan.loan_term_months,
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+          loan_product_id: loan.loan_product_id,
+          term_unit: (loan as any).term_unit,
+        },
+        supabase
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -1286,19 +1221,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                   variant="default"
                                   className="h-7 text-xs"
                                   onClick={async () => {
+                                    const now = new Date().toISOString();
                                     const { error } = await supabase
                                       .from('loan_applications')
                                       .update({
                                         admin_signed: true,
-                                        admin_signed_at: new Date().toISOString(),
-                                        borrower_signed: true, // Ensure borrower is also marked
-                                        borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || new Date().toISOString(),
+                                        admin_signed_at: now,
+                                        admin_signed_by: user?.id ?? null,
+                                        borrower_signed: true,
+                                        borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
                                       })
                                       .eq('id', loan.id);
                                     
                                     if (error) {
                                       toast.error('Failed to sign contract');
                                     } else {
+                                      await logAudit({ action: 'CONTRACT_SIGNED_ADMIN', entity_type: 'loan_application', entity_id: loan.id });
                                       toast.success('Contract signed by admin - ready for disbursement!');
                                       queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
                                     }
@@ -1756,6 +1694,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                               .update({
                                 admin_signed: true,
                                 admin_signed_at: now,
+                                admin_signed_by: user?.id ?? null,
                                 borrower_signed: true,
                                 borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
                               })
@@ -1763,6 +1702,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             if (error) {
                               toast.error("Failed to sign contract");
                             } else {
+                              await logAudit({ action: 'CONTRACT_SIGNED_ADMIN', entity_type: 'loan_application', entity_id: loan.id });
                               queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
                               queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
                               toast.success("Contract signed by admin – ready for disbursement");
@@ -1795,6 +1735,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           className="w-full mb-2"
                           onClick={async () => {
                             try {
+                              // Save generated contract to storage and set contract_url
+                              await uploadContractAndSaveUrl(loan as any);
                               // Generate and send contract via all channels
                               await handleDownloadContract();
                               await handleContractEmail();
@@ -1808,6 +1750,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 .eq("id", loan.id);
 
                               if (error) throw error;
+
+                              const dashboardUrl = typeof window !== "undefined" ? `${window.location.origin}/dashboard` : "";
+                              const contractReadyMessage = `Your loan contract is ready for signing. Log in to your dashboard to sign.${dashboardUrl ? ` ${dashboardUrl}` : ""}`;
+                              await supabase.functions.invoke("send-notification", {
+                                body: { type: "sms", to: loan.phone, message: contractReadyMessage, userId: loan.user_id, title: "Contract ready for signing" },
+                              }).catch(() => {});
+                              await supabase.functions.invoke("send-notification", {
+                                body: { type: "email", to: loan.email, subject: "Contract ready for signing", message: contractReadyMessage, userId: loan.user_id, title: "Contract ready for signing" },
+                              }).catch(() => {});
 
                               queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
                               queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });

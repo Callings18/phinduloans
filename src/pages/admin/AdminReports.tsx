@@ -55,6 +55,8 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning
 const AdminReports = () => {
   const { can } = usePermissions();
   const [dateRange, setDateRange] = useState("6months");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [filterEmployee, setFilterEmployee] = useState<string>("all");
   const [filterProduct, setFilterProduct] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -80,15 +82,22 @@ const AdminReports = () => {
   });
 
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ["admin-reports", dateRange, filterEmployee, filterProduct, filterStatus],
+    queryKey: ["admin-reports", dateRange, customFrom, customTo, filterEmployee, filterProduct, filterStatus],
     queryFn: async () => {
       let appQuery = supabase.from("loan_applications").select("*").order("created_at", { ascending: true });
       if (filterEmployee !== "all") appQuery = appQuery.eq("assigned_to", filterEmployee);
       if (filterProduct !== "all") appQuery = appQuery.eq("loan_product_id", filterProduct);
       if (filterStatus !== "all") appQuery = appQuery.eq("status", filterStatus as any);
-      const monthsBack = dateRange === "3months" ? 3 : dateRange === "12months" ? 12 : 6;
-      const from = subMonths(new Date(), monthsBack);
-      appQuery = appQuery.gte("created_at", from.toISOString());
+      let from: Date;
+      let to: Date = new Date();
+      if (dateRange === "custom" && customFrom && customTo) {
+        from = new Date(customFrom);
+        to = new Date(customTo);
+      } else {
+        const monthsBack = dateRange === "3months" ? 3 : dateRange === "12months" ? 12 : 6;
+        from = subMonths(new Date(), monthsBack);
+      }
+      appQuery = appQuery.gte("created_at", from.toISOString()).lte("created_at", to.toISOString());
       const [applications, disbursements, repayments, profiles] = await Promise.all([
         appQuery,
         supabase.from("disbursements").select("*"),
@@ -217,6 +226,7 @@ const AdminReports = () => {
         },
       };
     },
+    enabled: dateRange !== "custom" || (!!customFrom && !!customTo),
   });
 
   const exportReport = () => {
@@ -256,8 +266,21 @@ const AdminReports = () => {
                 <SelectItem value="3months">Last 3 Months</SelectItem>
                 <SelectItem value="6months">Last 6 Months</SelectItem>
                 <SelectItem value="12months">Last 12 Months</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
               </SelectContent>
             </Select>
+            {dateRange === "custom" && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
+                  <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="w-36" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
+                  <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-36" />
+                </div>
+              </div>
+            )}
             <Select value={filterEmployee} onValueChange={setFilterEmployee}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="Employee" />

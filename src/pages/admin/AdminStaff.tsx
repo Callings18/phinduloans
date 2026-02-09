@@ -11,8 +11,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Shield, Plus, Search, UserCog, Trash2, Loader2 } from "lucide-react";
+import { Shield, Plus, Search, UserCog, Trash2, Loader2, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const STAFF_ROLES = [
     { value: "super_admin", label: "Super Admin", color: "bg-red-500/10 text-red-500 border-red-500/20" },
@@ -25,8 +26,21 @@ const STAFF_ROLES = [
     { value: "support", label: "Support", color: "bg-pink-500/10 text-pink-500 border-pink-500/20" },
 ];
 
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+    super_admin: "Full access: all modules",
+    admin: "Admin: all modules",
+    loan_officer: "Loans: view, verify documents, assign, edit; Borrowers: view",
+    credit_officer: "Loans: view, assign; Reports: view; Borrowers: view",
+    finance_officer: "Loans: view, finance approve; Disbursement: view, disburse; Reports: view, export",
+    collections_officer: "Loans, Borrowers, Reports: view",
+    auditor: "Reports, Audit: view, export",
+    support: "Loans, Borrowers: view (read-only)",
+};
+
 const AdminStaff = () => {
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, isAdmin } = useAuth();
+    const { can } = usePermissions();
+    const canManageStaff = can("settings", "manage") || isAdmin;
     const queryClient = useQueryClient();
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -156,6 +170,21 @@ const AdminStaff = () => {
         );
     };
 
+    if (!canManageStaff) {
+        return (
+            <AdminLayout>
+                <div className="space-y-6">
+                    <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
+                    <Card>
+                        <CardContent className="p-6">
+                            <p className="text-muted-foreground">You don&apos;t have permission to manage staff and roles.</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </AdminLayout>
+        );
+    }
+
     return (
         <AdminLayout>
             <div className="space-y-6">
@@ -163,7 +192,7 @@ const AdminStaff = () => {
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
                         <p className="text-muted-foreground mt-1">
-                            Manage system access and employee roles
+                            Manage system access and employee roles (RBAC)
                         </p>
                     </div>
                     <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -216,6 +245,12 @@ const AdminStaff = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
+                                            {ROLE_DESCRIPTIONS[selectedRole] && (
+                                                <p className="text-xs text-muted-foreground flex items-start gap-1">
+                                                    <Info size={12} className="shrink-0 mt-0.5" />
+                                                    {ROLE_DESCRIPTIONS[selectedRole]}
+                                                </p>
+                                            )}
                                         </div>
 
                                         <Button

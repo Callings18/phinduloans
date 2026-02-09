@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { notificationService } from "@/utils/notifications";
 import { getSignedUrl } from "@/utils/storageHelpers";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp } from "@/utils/generateLoanContract";
+import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
 import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
 import ApplicationDocumentsTab from "@/components/admin/ApplicationDocumentsTab";
 import GuidedTour from "@/components/common/GuidedTour";
@@ -78,6 +78,7 @@ import { HelpCircle } from "lucide-react";
 import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/components/common/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
+import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -215,6 +216,23 @@ const AdminApplications = () => {
   const applications = applicationsData?.data || [];
   const totalCount = applicationsData?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  // Real-time: refetch applications when loan_applications change (any user's updates)
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-applications-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_applications" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Placeholder for workflow data - tables don't exist yet  
   const workflowStages: any[] = [];
@@ -502,6 +520,20 @@ const AdminApplications = () => {
 
       if (loanError) throw loanError;
 
+      // Auto-generate repayment schedule and set status to active
+      await createRepaymentScheduleForLoan(
+        {
+          id: selectedApp.id,
+          user_id: selectedApp.user_id,
+          loan_term_months: selectedApp.loan_term_months,
+          total_repayment: selectedApp.total_repayment,
+          monthly_payment: selectedApp.monthly_payment,
+          loan_product_id: selectedApp.loan_product_id,
+          term_unit: (selectedApp as any).term_unit,
+        },
+        supabase
+      );
+
       await logAudit({
         action: "DISBURSE",
         entity_type: "loan_application",
@@ -517,6 +549,10 @@ const AdminApplications = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       queryClient.invalidateQueries({ queryKey: ['disbursements'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
+      if (selectedApp?.id) {
+        queryClient.invalidateQueries({ queryKey: ['loan-repayments', selectedApp.id] });
+      }
 
       // Trigger Disbursement SMS notification
       if (selectedApp) {
@@ -617,12 +653,13 @@ const AdminApplications = () => {
     },
   });
 
-  // Workflow transition (verify_documents, finance_approve, approve)
+  // Workflow transition (verify_documents, finance_approve, approve, reject)
   const transitionMutation = useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: string }) => {
+    mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
       const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
+        p_reason: reason ?? null,
       });
       if (error) throw error;
       const result = data as { ok: boolean; error?: string };
@@ -635,7 +672,9 @@ const AdminApplications = () => {
           ? "Documents marked as verified"
           : variables.action === "finance_approve"
             ? "Finance approved"
-            : "Application approved";
+            : variables.action === "reject"
+              ? "Application rejected"
+              : "Application approved";
       toast({ title: msg });
     },
     onError: (error) => {
@@ -721,11 +760,17 @@ const AdminApplications = () => {
         .update({
           admin_signed: true,
           admin_signed_at: now,
+          admin_signed_by: user?.id ?? null,
           borrower_signed: true,
           borrower_signed_at: borrowerSignedAt || now,
         })
         .eq("id", applicationId);
       if (error) throw error;
+      await logAudit({
+        action: 'CONTRACT_SIGNED_ADMIN',
+        entity_type: 'loan_application',
+        entity_id: applicationId,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
@@ -878,9 +923,9 @@ const AdminApplications = () => {
     const fullReason = rejectionReason 
       ? `${rejectionCategory}: ${rejectionReason}`
       : rejectionCategory;
-    await updateStatusMutation.mutateAsync({
+    await transitionMutation.mutateAsync({
       id: selectedApp.id,
-      status: 'rejected',
+      action: "reject",
       reason: fullReason,
     });
     setIsProcessing(false);
@@ -969,13 +1014,19 @@ const AdminApplications = () => {
     label: s.profile?.full_name || s.profile?.email || 'Unknown Staff'
   })) || [];
 
-  // Bulk actions with dynamic staff options
-  const bulkActions: BulkAction[] = defaultLoanApplicationActions.map(action => {
-    if (action.id === 'assign') {
-      return { ...action, selectOptions: staffOptions };
-    }
-    return action;
-  });
+  // Bulk actions with dynamic staff options + workflow actions (permission-gated)
+  const bulkActions: BulkAction[] = [
+    ...defaultLoanApplicationActions.map(action => {
+      if (action.id === 'assign') return { ...action, selectOptions: staffOptions };
+      return action;
+    }),
+    ...(can('loans', 'verify_documents')
+      ? [{ id: 'verify_documents', label: 'Verify documents (bulk)', icon: <FileText size={16} />, variant: 'success' as const, requiresConfirmation: true, confirmationMessage: 'Mark documents as verified for all selected under-review applications?' }]
+      : []),
+    ...(can('loans', 'finance_approve')
+      ? [{ id: 'finance_approve', label: 'Approve finance (bulk)', icon: <ShieldCheck size={16} />, variant: 'success' as const, requiresConfirmation: true, confirmationMessage: 'Approve finance for all selected applications with documents verified?' }]
+      : []),
+  ].filter(Boolean) as BulkAction[];
 
   // Handle bulk action execution
   const handleBulkAction = async (actionId: string, inputValue?: string) => {
@@ -983,24 +1034,42 @@ const AdminApplications = () => {
 
     switch (actionId) {
       case 'approve':
-        // Bulk approve
-        const approvePromises = selectedApplications.map(id =>
-          supabase.from('loan_applications').update({ status: 'approved' }).eq('id', id)
-        );
-        await Promise.all(approvePromises);
+        // Bulk approve (use transition_loan_status for each; only succeeds if both verifications done)
+        let approveFailed = 0;
+        for (const id of selectedApplications) {
+          const { data } = await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'approve' });
+          const res = data as { ok?: boolean; error?: string };
+          if (!res?.ok) approveFailed++;
+        }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
+        if (approveFailed > 0) toast({ title: 'Bulk approve', description: `${approveFailed} application(s) could not be approved (e.g. verifications not done).`, variant: 'destructive' });
+        else toast({ title: 'Bulk approve completed' });
+        break;
+
+      case 'verify_documents':
+        for (const id of selectedApplications) {
+          await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'verify_documents' });
+        }
+        await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+        setSelectedApplications([]);
+        toast({ title: 'Bulk verify documents completed' });
+        break;
+
+      case 'finance_approve':
+        for (const id of selectedApplications) {
+          await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'finance_approve' });
+        }
+        await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+        setSelectedApplications([]);
+        toast({ title: 'Bulk finance approve completed' });
         break;
 
       case 'reject':
-        // Bulk reject with reason
-        const rejectPromises = selectedApplications.map(id =>
-          supabase.from('loan_applications').update({
-            status: 'rejected',
-            rejection_reason: inputValue || 'Bulk rejection'
-          }).eq('id', id)
-        );
-        await Promise.all(rejectPromises);
+        // Bulk reject via transition_loan_status (audited)
+        for (const id of selectedApplications) {
+          await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'reject', p_reason: inputValue || 'Bulk rejection' });
+        }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
         break;
@@ -2022,6 +2091,7 @@ const AdminApplications = () => {
                           size="sm"
                           onClick={async () => {
                             if (!selectedApp) return;
+                            await uploadContractAndSaveUrl(selectedApp as any);
                             await generateLoanContract({
                               id: selectedApp.id,
                               full_name: selectedApp.full_name,
@@ -2051,6 +2121,7 @@ const AdminApplications = () => {
                           size="sm"
                           onClick={async () => {
                             if (!selectedApp) return;
+                            await uploadContractAndSaveUrl(selectedApp as any);
                             await downloadLoanContract({
                               id: selectedApp.id,
                               full_name: selectedApp.full_name,
@@ -2080,6 +2151,7 @@ const AdminApplications = () => {
                           size="sm"
                           onClick={async () => {
                             if (!selectedApp) return;
+                            await uploadContractAndSaveUrl(selectedApp as any);
                             await emailContract({
                               id: selectedApp.id,
                               full_name: selectedApp.full_name,
@@ -2109,6 +2181,7 @@ const AdminApplications = () => {
                           size="sm"
                           onClick={async () => {
                             if (!selectedApp) return;
+                            await uploadContractAndSaveUrl(selectedApp as any);
                             await shareContractViaWhatsApp({
                               id: selectedApp.id,
                               full_name: selectedApp.full_name,

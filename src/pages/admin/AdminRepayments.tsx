@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { useAuth } from "@/hooks/useAuth";
 import { notificationService } from "@/utils/notifications";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,12 +81,26 @@ interface Repayment {
   };
 }
 
+interface PaymentClaim {
+  id: string;
+  loan_id: string;
+  repayment_id: string;
+  user_id: string;
+  amount: number;
+  reference: string;
+  receipt_url: string | null;
+  status: string;
+  created_at: string;
+}
+
 const AdminRepayments = () => {
+  const { user } = useAuth();
   const { data: settings } = useSystemSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
   const [paymentData, setPaymentData] = useState({
     payment_method: "mobile_money",
     transaction_reference: "",
@@ -137,9 +152,31 @@ const AdminRepayments = () => {
     },
   });
 
-  // Record payment mutation - supports partial payments
+  // Pending borrower payment claims (for "Verify & record")
+  const { data: paymentClaims = [] } = useQuery({
+    queryKey: ["admin-payment-claims"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("payment_claims")
+        .select("*")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []) as PaymentClaim[];
+    },
+  });
+
+  const claimsByRepaymentId = useMemo(() => {
+    const map: Record<string, PaymentClaim> = {};
+    for (const c of paymentClaims) {
+      if (!map[c.repayment_id]) map[c.repayment_id] = c;
+    }
+    return map;
+  }, [paymentClaims]);
+
+  // Record payment mutation - supports partial payments; optional claimId to mark borrower claim as verified
   const recordPaymentMutation = useMutation({
-    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, destinationAccountId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; destinationAccountId: string }) => {
+    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, destinationAccountId, claimId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; destinationAccountId: string; claimId?: string | null }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
       if (!repayment) throw new Error("Repayment not found");
 
@@ -207,12 +244,23 @@ const AdminRepayments = () => {
         notes: `Loan repayment from ${repayment.loan_applications?.full_name || 'borrower'}`,
       });
 
+      if (claimId) {
+        await supabase.from("payment_claims").update({
+          status: "verified",
+          verified_at: new Date().toISOString(),
+          verified_by: user?.id ?? null,
+        }).eq("id", claimId);
+      }
+
       return { repayment, paidAmount, isFullPayment };
     },
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-payment-claims"] });
       queryClient.invalidateQueries({ queryKey: ["active-accounts"] }); // Refresh account balances
       queryClient.invalidateQueries({ queryKey: ["accounts"] }); // Refresh all accounts
+
+      setSelectedClaimId(null);
 
       if (isFullPayment) {
         toast.success("Full payment recorded and deposited to account");
@@ -249,6 +297,7 @@ const AdminRepayments = () => {
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
       setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
+      setSelectedClaimId(null);
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
@@ -256,7 +305,21 @@ const AdminRepayments = () => {
   });
 
   const handleRecordPayment = (repayment: Repayment) => {
+    setSelectedClaimId(null);
     setSelectedRepayment(repayment);
+    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
+    setIsRecordPaymentOpen(true);
+  };
+
+  const handleVerifyClaim = (repayment: Repayment, claim: PaymentClaim) => {
+    setSelectedRepayment(repayment);
+    setPaymentData({
+      payment_method: "mobile_money",
+      transaction_reference: claim.reference,
+      amount: String(claim.amount),
+      destination_account_id: "",
+    });
+    setSelectedClaimId(claim.id);
     setIsRecordPaymentOpen(true);
   };
 
@@ -333,6 +396,7 @@ const AdminRepayments = () => {
         transactionRef: `SPLIT-${Date.now()}`,
         paidAmount: totalSplitAmount,
         destinationAccountId: firstDestination,
+        claimId: selectedClaimId ?? undefined,
       });
 
       // Note: Split payments stored as separate repayment records would require schema changes
@@ -353,6 +417,7 @@ const AdminRepayments = () => {
         transactionRef: paymentData.transaction_reference,
         paidAmount,
         destinationAccountId: paymentData.destination_account_id,
+        claimId: selectedClaimId ?? undefined,
       });
     }
   };
@@ -731,7 +796,21 @@ const AdminRepayments = () => {
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex flex-col items-end gap-1">
+                            {rep.status === "pending" && claimsByRepaymentId[rep.id] && (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                                <Badge variant="secondary" className="text-xs">Borrower reported – pending verification</Badge>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs"
+                                  onClick={() => handleVerifyClaim(rep, claimsByRepaymentId[rep.id])}
+                                >
+                                  <CheckCircle size={12} className="mr-1" />
+                                  Verify & record
+                                </Button>
+                              </div>
+                            )}
                             {rep.status === "pending" && (
                               <Button
                                 size="sm"
@@ -769,7 +848,7 @@ const AdminRepayments = () => {
         </Card>
 
         {/* Record Payment Dialog */}
-        <Dialog open={isRecordPaymentOpen} onOpenChange={setIsRecordPaymentOpen}>
+        <Dialog open={isRecordPaymentOpen} onOpenChange={(open) => { setIsRecordPaymentOpen(open); if (!open) setSelectedClaimId(null); }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Record Payment</DialogTitle>

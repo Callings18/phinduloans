@@ -54,6 +54,8 @@ interface MenuItem {
   adminOnly?: boolean;
   /** Permission required to see item (module, action). If not set, visibility follows adminOnly only. */
   permission?: { module: string; action: string };
+  /** Show "New" badge for recently improved modules */
+  badge?: "New";
 }
 
 const menuGroups: MenuGroup[] = [
@@ -61,19 +63,19 @@ const menuGroups: MenuGroup[] = [
     label: "Overview",
     defaultOpen: true,
     items: [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
+      { icon: LayoutDashboard, label: "Dashboard", path: "/admin", badge: "New" },
     ],
   },
   {
     label: "Lending",
     defaultOpen: true,
     items: [
-      { icon: FileText, label: "Applications", path: "/admin/applications", permission: { module: "loans", action: "view" } },
+      { icon: FileText, label: "Applications", path: "/admin/applications", permission: { module: "loans", action: "view" }, badge: "New" },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", permission: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employees", path: "/admin/employers" },
-      { icon: Package, label: "Loan Products", path: "/admin/loan-products", permission: { module: "products", action: "view" } },
-      { icon: CreditCard, label: "Loans", path: "/admin/loans", permission: { module: "loans", action: "view" } },
-      { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements", permission: { module: "disbursement", action: "view" } },
+      { icon: Package, label: "Loan Products", path: "/admin/loan-products", permission: { module: "products", action: "view" }, badge: "New" },
+      { icon: CreditCard, label: "Loans", path: "/admin/loans", permission: { module: "loans", action: "view" }, badge: "New" },
+      { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements", permission: { module: "disbursement", action: "view" }, badge: "New" },
     ],
   },
   {
@@ -106,23 +108,23 @@ const menuGroups: MenuGroup[] = [
     label: "Reports & Logs",
     defaultOpen: false,
     items: [
-      { icon: BarChart3, label: "Reports", path: "/admin/reports", permission: { module: "reports", action: "view" } },
-      { icon: History, label: "Audit Logs", path: "/admin/audit-logs", permission: { module: "audit", action: "view" } },
+      { icon: BarChart3, label: "Reports", path: "/admin/reports", permission: { module: "reports", action: "view" }, badge: "New" },
+      { icon: History, label: "Audit Logs", path: "/admin/audit-logs", permission: { module: "audit", action: "view" }, badge: "New" },
     ],
   },
   {
     label: "HR & Payroll",
     defaultOpen: false,
     items: [
-      { icon: UserCircle, label: "HR Management", path: "/admin/hr", permission: { module: "payroll", action: "view" } },
-      { icon: DollarSign, label: "Payroll", path: "/admin/payroll", permission: { module: "payroll", action: "view" } },
+      { icon: UserCircle, label: "HR Management", path: "/admin/hr", permission: { module: "payroll", action: "view" }, badge: "New" },
+      { icon: DollarSign, label: "Payroll", path: "/admin/payroll", permission: { module: "payroll", action: "view" }, badge: "New" },
     ],
   },
   {
     label: "Administration",
     defaultOpen: false,
     items: [
-      { icon: Shield, label: "Staff", path: "/admin/staff", adminOnly: true },
+      { icon: Shield, label: "Staff", path: "/admin/staff", adminOnly: true, badge: "New" },
       { icon: FileSignature, label: "Contracts", path: "/admin/contract-templates", adminOnly: true },
       { icon: Mail, label: "Email Log", path: "/admin/email-log", adminOnly: true },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
@@ -215,13 +217,16 @@ const AdminSidebar = () => {
                   to={item.path}
                   title={item.label}
                   className={cn(
-                    "flex items-center justify-center p-3 rounded-xl transition-all duration-200",
+                    "flex items-center justify-center relative p-3 rounded-xl transition-all duration-200",
                     isActive
                       ? "gradient-primary text-primary-foreground shadow-button"
                       : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   )}
                 >
                   <item.icon size={20} />
+                  {item.badge === "New" && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">New</span>
+                  )}
                 </Link>
               );
             });
@@ -258,7 +263,10 @@ const AdminSidebar = () => {
                       )}
                     >
                       <item.icon size={18} />
-                      <span className="font-medium text-sm">{item.label}</span>
+                      <span className="font-medium text-sm flex-1">{item.label}</span>
+                      {item.badge === "New" && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/20 text-primary border border-primary/30">New</span>
+                      )}
                     </Link>
                   );
                 })}

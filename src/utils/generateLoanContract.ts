@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
+import { logAudit } from '@/utils/auditLog';
 
 interface LoanData {
   id: string;
@@ -447,6 +448,51 @@ export const uploadContractToStorage = async (loan: LoanData): Promise<string | 
     return signedData.signedUrl;
   } catch (error) {
     console.error('Error uploading contract:', error);
+    return null;
+  }
+};
+
+/**
+ * Upload contract PDF to storage and save path to loan_applications.contract_url.
+ * Call when generating/sending contract so "Generated Contract" link is available.
+ */
+export const uploadContractAndSaveUrl = async (loan: LoanData): Promise<string | null> => {
+  try {
+    const doc = await createContractPDF(loan);
+    const pdfBlob = doc.output('blob');
+    const fileName = `contracts/contract_${loan.id}_${Date.now()}.pdf`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('loan-documents')
+      .upload(fileName, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Failed to upload contract to storage:', uploadError);
+      return null;
+    }
+
+    const { error: updateError } = await supabase
+      .from('loan_applications')
+      .update({ contract_url: fileName })
+      .eq('id', loan.id);
+
+    if (updateError) {
+      console.error('Failed to save contract_url:', updateError);
+      return null;
+    }
+
+    await logAudit({
+      action: 'CONTRACT_GENERATED',
+      entity_type: 'loan_application',
+      entity_id: loan.id,
+      details: { contract_url: fileName },
+    });
+    return fileName;
+  } catch (error) {
+    console.error('Error in uploadContractAndSaveUrl:', error);
     return null;
   }
 };

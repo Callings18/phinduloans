@@ -33,7 +33,9 @@ import {
   User,
   CreditCard,
   Loader2,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -606,11 +608,39 @@ const AdminDashboard = () => {
         {(officerStats as any[]).length > 0 && (
           <Card className="border-border/50 bg-card/80">
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <TrendingUp size={18} />
-                Team performance
-              </CardTitle>
-              <CardDescription>Per-officer stats for {format(periodStart, "MMM yyyy")}</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp size={18} />
+                    Team performance
+                  </CardTitle>
+                  <CardDescription>Per-officer stats for {format(periodStart, "MMM yyyy")}</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const rows = (officerStats as any[]).map((row: any) => ({
+                      Officer: getOfficerName(row.officer_id as string),
+                      Apps: row.applications_submitted ?? 0,
+                      Approved: row.approved_count ?? 0,
+                      Rejected: row.rejected_count ?? 0,
+                      Disbursed: row.disbursed_count ?? 0,
+                      "Approval %": row.approval_rate != null ? `${row.approval_rate}%` : "—",
+                      "Default %": row.default_rate != null ? `${row.default_rate}%` : "—",
+                      "Avg size": row.avg_loan_size != null ? Number(row.avg_loan_size) : null,
+                      Portfolio: row.portfolio_outstanding != null ? Number(row.portfolio_outstanding) : null,
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(rows);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Team performance");
+                    XLSX.writeFile(wb, `officer-stats-${format(periodStart, "yyyy-MM")}.xlsx`);
+                  }}
+                >
+                  <Download size={14} className="mr-2" />
+                  Export Excel
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">

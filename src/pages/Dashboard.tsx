@@ -48,6 +48,19 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Banknote, Upload } from "lucide-react";
 
 const statusConfig = {
   pending: { label: "Submitted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
@@ -68,6 +81,10 @@ const Dashboard = () => {
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [runTour, setRunTour] = useState(false);
   const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
+  const [submitPaymentRepayment, setSubmitPaymentRepayment] = useState<{ id: string; loan_id: string; amount: number; due_date: string; installment_number?: number } | null>(null);
+  const [claimAmount, setClaimAmount] = useState("");
+  const [claimReference, setClaimReference] = useState("");
+  const [claimReceiptFile, setClaimReceiptFile] = useState<File | null>(null);
 
   const tourSteps: Step[] = [
     {
@@ -175,6 +192,47 @@ const Dashboard = () => {
       return data;
     },
     enabled: !!user?.id,
+  });
+
+  const submitPaymentClaimMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !submitPaymentRepayment) throw new Error("Missing user or repayment");
+      const amount = parseFloat(claimAmount);
+      if (isNaN(amount) || amount <= 0) throw new Error("Enter a valid amount");
+      if (!claimReference.trim()) throw new Error("Enter transaction reference");
+
+      let receiptUrl: string | null = null;
+      if (claimReceiptFile) {
+        const ext = claimReceiptFile.name.split(".").pop() || "bin";
+        const path = `payment-receipts/${user.id}/claim_${submitPaymentRepayment.id}_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("loan-documents")
+          .upload(path, claimReceiptFile, { contentType: claimReceiptFile.type, upsert: true });
+        if (uploadError) throw uploadError;
+        receiptUrl = path;
+      }
+
+      const { error } = await supabase.from("payment_claims").insert({
+        loan_id: submitPaymentRepayment.loan_id,
+        repayment_id: submitPaymentRepayment.id,
+        user_id: user.id,
+        amount,
+        reference: claimReference.trim(),
+        receipt_url: receiptUrl,
+        status: "pending",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-repayments", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["payment-claims", user?.id] });
+      toast.success("Payment reference submitted. Admin will verify and record it.");
+      setSubmitPaymentRepayment(null);
+      setClaimAmount("");
+      setClaimReference("");
+      setClaimReceiptFile(null);
+    },
+    onError: (e) => toast.error((e as Error).message || "Failed to submit"),
   });
 
   const downloadStatement = async (loan: any) => {
@@ -564,10 +622,28 @@ const Dashboard = () => {
                                                 </p>
                                               </div>
                                             </div>
-                                            <Badge className={`${status.color} border text-xs`}>
-                                              <StatusIcon size={10} className="mr-1" />
-                                              {status.label}
-                                            </Badge>
+                                            <div className="flex items-center gap-2">
+                                              {rep.status === 'pending' && (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="text-xs"
+                                                  onClick={() => {
+                                                    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: rep.amount, due_date: rep.due_date, installment_number: rep.installment_number });
+                                                    setClaimAmount(String(rep.amount));
+                                                    setClaimReference("");
+                                                    setClaimReceiptFile(null);
+                                                  }}
+                                                >
+                                                  <Banknote size={12} className="mr-1" />
+                                                  I've paid
+                                                </Button>
+                                              )}
+                                              <Badge className={`${status.color} border text-xs`}>
+                                                <StatusIcon size={10} className="mr-1" />
+                                                {status.label}
+                                              </Badge>
+                                            </div>
                                           </div>
                                         );
                                       })
@@ -677,6 +753,43 @@ const Dashboard = () => {
               </TabsContent>
             </Tabs>
           </div>
+
+          <Dialog open={!!submitPaymentRepayment} onOpenChange={(open) => { if (!open) { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); } }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Submit payment reference</DialogTitle>
+                <DialogDescription>
+                  Enter the amount you paid and the transaction reference (e.g. mobile money code). Optionally attach a receipt. Admin will verify and record the payment.
+                </DialogDescription>
+              </DialogHeader>
+              {submitPaymentRepayment && (
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="claim-amount">Amount (K)</Label>
+                    <Input id="claim-amount" type="number" min="0" step="0.01" value={claimAmount} onChange={(e) => setClaimAmount(e.target.value)} placeholder="e.g. 50000" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="claim-reference">Transaction reference *</Label>
+                    <Input id="claim-reference" value={claimReference} onChange={(e) => setClaimReference(e.target.value)} placeholder="e.g. MM123456789" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Receipt (optional)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input type="file" accept="image/*,.pdf" onChange={(e) => setClaimReceiptFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
+                      {claimReceiptFile && <span className="text-xs text-muted-foreground truncate">{claimReceiptFile.name}</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); }}>Cancel</Button>
+                <Button onClick={() => submitPaymentClaimMutation.mutate()} disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}>
+                  {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1" />}
+                  Submit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </main>
 

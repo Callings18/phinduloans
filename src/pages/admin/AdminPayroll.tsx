@@ -216,16 +216,41 @@ const AdminPayroll = () => {
               <CardDescription>Payroll records for this period. Run payroll to generate records from employees and salary structures.</CardDescription>
             </CardHeader>
             <CardContent>
-              {canManage && selectedPeriod.status === "draft" && (
-                <RunPayrollButton
-                  periodId={selectedPeriodId}
-                  periodName={selectedPeriod.period_name}
-                  onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-                    queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", selectedPeriodId] });
-                    toast({ title: "Payroll run completed" });
-                  }}
-                />
+              {canManage && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {selectedPeriod.status === "draft" && (
+                    <RunPayrollButton
+                      periodId={selectedPeriodId}
+                      periodName={selectedPeriod.period_name}
+                      periodStart={selectedPeriod.period_start_date}
+                      periodEnd={selectedPeriod.period_end_date}
+                      onSuccess={() => {
+                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
+                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", selectedPeriodId] });
+                        toast({ title: "Payroll run completed" });
+                      }}
+                    />
+                  )}
+                  {selectedPeriod.status === "processing" && (
+                    <ApprovePeriodButton
+                      periodId={selectedPeriodId}
+                      onSuccess={() => {
+                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
+                        toast({ title: "Period approved" });
+                      }}
+                    />
+                  )}
+                  {selectedPeriod.status === "approved" && (
+                    <MarkPaidButton
+                      periodId={selectedPeriodId}
+                      onSuccess={() => {
+                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
+                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", selectedPeriodId] });
+                        toast({ title: "Marked as paid" });
+                      }}
+                    />
+                  )}
+                </div>
               )}
               {recordsLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -360,10 +385,14 @@ function CreatePeriodForm({ onSuccess, onCancel }: { onSuccess: () => void; onCa
 function RunPayrollButton({
   periodId,
   periodName,
+  periodStart,
+  periodEnd,
   onSuccess,
 }: {
   periodId: string;
   periodName: string;
+  periodStart?: string;
+  periodEnd?: string;
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
@@ -389,14 +418,28 @@ function RunPayrollButton({
         byEmployee[emp.id] = latest?.basic_salary ?? 0;
       });
 
+      const startDate = periodStart ?? today;
+      const endDate = periodEnd ?? today;
+      const commissionByEmployee: Record<string, number> = {};
+      try {
+        const { data: commissionRows } = await (supabase.rpc as any)("compute_commission_for_period", { p_period_start: startDate, p_period_end: endDate });
+        (commissionRows ?? []).forEach((r: { employee_id: string; commission_amount: number }) => {
+          commissionByEmployee[r.employee_id] = Number(r.commission_amount ?? 0);
+        });
+      } catch {
+        /* commission RPC optional */
+      }
+
       const records = employees.map((emp: any) => {
         const basic = byEmployee[emp.id] ?? 0;
+        const commission = commissionByEmployee[emp.id] ?? 0;
+        const gross = basic + commission;
         return {
           payroll_period_id: periodId,
           employee_id: emp.id,
           basic_salary: basic,
-          gross_salary: basic,
-          commission_amount: 0,
+          gross_salary: gross,
+          commission_amount: commission,
           bonus_amount: 0,
         };
       });
@@ -422,9 +465,58 @@ function RunPayrollButton({
   });
 
   return (
-    <Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending} className="mb-4">
+    <Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
       {runMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <CheckCircle size={16} className="mr-2" />}
       Run Payroll
+    </Button>
+  );
+}
+
+function ApprovePeriodButton({ periodId, onSuccess }: { periodId: string; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const approveMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await (supabase.from as any)("payroll_periods").update({ status: "approved" }).eq("id", periodId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
+      onSuccess();
+    },
+    onError: (e) => toast({ title: "Approve failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  return (
+    <Button variant="outline" onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending}>
+      {approveMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+      Approve Period
+    </Button>
+  );
+}
+
+function MarkPaidButton({ periodId, onSuccess }: { periodId: string; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const markPaidMutation = useMutation({
+    mutationFn: async () => {
+      const { error: periodError } = await (supabase.from as any)("payroll_periods").update({ status: "paid" }).eq("id", periodId);
+      if (periodError) throw periodError;
+      const { data: records } = await (supabase.from as any)("payroll_records").select("id").eq("payroll_period_id", periodId);
+      for (const rec of records ?? []) {
+        await (supabase.from as any)("payroll_records").update({ payment_status: "paid", paid_at: new Date().toISOString() }).eq("id", rec.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", periodId] });
+      onSuccess();
+    },
+    onError: (e) => toast({ title: "Mark paid failed", description: (e as Error).message, variant: "destructive" }),
+  });
+  return (
+    <Button onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending}>
+      {markPaidMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <DollarSign size={16} className="mr-2" />}
+      Mark as Paid
     </Button>
   );
 }

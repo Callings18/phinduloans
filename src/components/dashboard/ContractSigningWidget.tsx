@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import SignaturePad from "@/components/common/SignaturePad";
 import { downloadLoanContract } from "@/utils/generateLoanContract";
+import { logAudit } from "@/utils/auditLog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -94,6 +95,12 @@ export default function ContractSigningWidget({ userId }: Props) {
         .eq("id", selectedLoan.id);
 
       if (updateError) throw updateError;
+
+      await logAudit({
+        action: 'CONTRACT_SIGNED_BORROWER',
+        entity_type: 'loan_application',
+        entity_id: selectedLoan.id,
+      });
 
       // Notify admin via edge function
       const { error: notifyError } = await supabase.functions.invoke("send-notification", {
