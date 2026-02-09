@@ -18,7 +18,7 @@ import NotificationCenter from "../common/NotificationCenter";
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const { user, isAdmin, signOut, isLoading } = useAuth();
+  const { user, isAdmin, isStaff, signOut, isLoading } = useAuth();
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -86,9 +86,9 @@ const Navbar = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem asChild>
-                        <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
+                        <Link to={isStaff ? "/admin" : "/dashboard"} className="flex items-center gap-2">
                           <LayoutDashboard size={16} />
-                          {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+                          {isStaff ? "Admin" : "My Dashboard"}
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -145,9 +145,9 @@ const Navbar = () => {
                   {user ? (
                     <>
                       <Button variant="ghost" asChild className="justify-start">
-                        <Link to={isAdmin ? "/admin" : "/dashboard"} onClick={() => setIsOpen(false)}>
+                        <Link to={isStaff ? "/admin" : "/dashboard"} onClick={() => setIsOpen(false)}>
                           <LayoutDashboard size={16} className="mr-2" />
-                          {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+                          {isStaff ? "Admin" : "My Dashboard"}
                         </Link>
                       </Button>
                       <Button variant="ghost" onClick={() => { signOut(); setIsOpen(false); }} className="justify-start text-destructive hover:text-destructive">

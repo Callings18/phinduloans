@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,6 +33,8 @@ interface ReportsExportProps {
 type ReportType = "loans" | "repayments" | "collections" | "disbursements" | "portfolio";
 
 export default function ReportsExport({ open, onOpenChange }: ReportsExportProps) {
+  const { can } = usePermissions();
+  const canExport = can("reports", "export");
   const [reportType, setReportType] = useState<ReportType>("loans");
   const [exportFormat, setExportFormat] = useState<"csv" | "pdf">("csv");
   const [dateRange, setDateRange] = useState("all");
@@ -317,7 +320,7 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleExport} disabled={isExporting}>
+          <Button onClick={handleExport} disabled={isExporting || !canExport} title={!canExport ? "You don't have permission to export reports." : undefined}>
             {isExporting ? (
               <>
                 <Loader2 size={14} className="animate-spin mr-2" />

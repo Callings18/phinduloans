@@ -36,14 +36,19 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Link, useNavigate } from "react-router-dom";
+import { startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format, differenceInDays } from "date-fns";
 import { useState } from "react";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [runTour, setRunTour] = useState(false);
+  const periodStart = startOfMonth(subMonths(new Date(), 0));
+  const periodEnd = endOfMonth(subMonths(new Date(), 0));
   const tourSteps: Step[] = [
     {
       target: ".tour-admin-header",
@@ -115,19 +120,20 @@ const AdminDashboard = () => {
       
       // Overdue amount
       const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = format(today, 'yyyy-MM-dd');
       const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
       const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-
-      // Loans due today
-      const loansDueToday = pendingRepayments.filter(r => r.due_date === todayStr).length;
-
-      // Blacklisted borrowers (active blacklist - not expired)
-      const blacklistedBorrowers = allProfiles.filter(p => {
-        if (!p.is_blacklisted) return false;
-        if (p.blacklist_expires_at && new Date(p.blacklist_expires_at) < today) return false;
-        return true;
-      }).length;
+      // Loans due today (pending, due_date = today)
+      const loansDueToday = pendingRepayments.filter(
+        r => format(new Date(r.due_date), 'yyyy-MM-dd') === todayStr
+      ).length;
+      // Blacklisted borrowers count (exclude expired)
+      const now = new Date().toISOString();
+      const blacklistedCount = (profiles.data || []).filter(
+        (p: { is_blacklisted?: boolean; blacklist_expires_at?: string | null }) =>
+          p.is_blacklisted === true &&
+          (p.blacklist_expires_at == null || p.blacklist_expires_at > now)
+      ).length;
 
       return {
         totalApplications: loans.length,
@@ -149,7 +155,8 @@ const AdminDashboard = () => {
         overdueAmount,
         overdueCount: overdueRepayments.length,
         loansDueToday,
-        blacklistedBorrowers,
+        blacklistedCount,
+        blacklistedBorrowers: blacklistedCount,
         recentApplications: loans.slice(0, 6),
       };
     },
@@ -284,6 +291,42 @@ const AdminDashboard = () => {
       return Object.entries(dayCounts).map(([day, count]) => ({ day, count }));
     },
   });
+
+  const { data: officerStats = [] } = useQuery({
+    queryKey: ["officer-loan-stats", periodStart.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10)],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("officer_loan_stats", {
+        p_period_start: periodStart.toISOString().slice(0, 10),
+        p_period_end: periodEnd.toISOString().slice(0, 10),
+      });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: parData } = useQuery({
+    queryKey: ["portfolio-at-risk"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("portfolio_at_risk", { p_as_of_date: new Date().toISOString().slice(0, 10) });
+      if (error) throw error;
+      return Array.isArray(data) && data[0] ? data[0] : null;
+    },
+  });
+
+  const officerIds = [...new Set((officerStats as { officer_id: string }[]).map((s) => s.officer_id).filter(Boolean))];
+  const { data: officerProfiles = [] } = useQuery({
+    queryKey: ["officer-profiles", officerIds],
+    queryFn: async () => {
+      if (officerIds.length === 0) return [];
+      const { data, error } = await supabase.from("profiles").select("id, full_name, email").in("id", officerIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: officerIds.length > 0,
+  });
+  const getOfficerName = (id: string) => officerProfiles.find((p: { id: string }) => p.id === id)?.full_name || (officerProfiles.find((p: { id: string }) => p.id === id)?.email) || id?.slice(0, 8);
+
+  const myStats = user ? (officerStats as { officer_id: string }[]).find((s) => s.officer_id === user.id) : null;
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -440,7 +483,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Portfolio Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
               <p className="text-muted-foreground text-xs font-medium mb-1">Expected Returns</p>
@@ -517,6 +560,115 @@ const AdminDashboard = () => {
               </div>
             </CardContent>
           </Card>
+          <Card className="border-border/50 bg-card/80">
+            <CardContent className="p-4">
+              <p className="text-muted-foreground text-xs font-medium mb-1">PAR (Portfolio at Risk)</p>
+              <p className="text-2xl font-bold text-foreground">{parData?.par_percent != null ? `${parData.par_percent}%` : "—"}</p>
+              <p className="text-xs text-muted-foreground mt-1">Overdue / outstanding</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* My performance (for staff) */}
+        {myStats && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User size={18} />
+                My performance (this month)
+              </CardTitle>
+              <CardDescription>Applications, approvals, disbursements, and portfolio</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-muted-foreground text-xs">Applications</p>
+                  <p className="text-xl font-bold">{(myStats as { applications_submitted?: number }).applications_submitted ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Approved</p>
+                  <p className="text-xl font-bold">{(myStats as { approved_count?: number }).approved_count ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Disbursed</p>
+                  <p className="text-xl font-bold">{(myStats as { disbursed_count?: number }).disbursed_count ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Portfolio</p>
+                  <p className="text-xl font-bold">K{Number((myStats as { portfolio_outstanding?: number }).portfolio_outstanding ?? 0).toLocaleString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Team performance */}
+        {officerStats.length > 0 && (
+          <Card className="border-border/50 bg-card/80">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TrendingUp size={18} />
+                Team performance
+              </CardTitle>
+              <CardDescription>Per-officer stats for {format(periodStart, "MMM yyyy")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 font-medium">Officer</th>
+                      <th className="text-right py-2 font-medium">Apps</th>
+                      <th className="text-right py-2 font-medium">Approved</th>
+                      <th className="text-right py-2 font-medium">Rejected</th>
+                      <th className="text-right py-2 font-medium">Disbursed</th>
+                      <th className="text-right py-2 font-medium">Approval %</th>
+                      <th className="text-right py-2 font-medium">Default %</th>
+                      <th className="text-right py-2 font-medium">Avg size</th>
+                      <th className="text-right py-2 font-medium">Portfolio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(officerStats as Array<Record<string, unknown>>).map((row) => (
+                      <tr key={row.officer_id as string} className="border-b border-border/50">
+                        <td className="py-2 font-medium">{getOfficerName(row.officer_id as string)}</td>
+                        <td className="text-right py-2">{row.applications_submitted ?? 0}</td>
+                        <td className="text-right py-2">{row.approved_count ?? 0}</td>
+                        <td className="text-right py-2">{row.rejected_count ?? 0}</td>
+                        <td className="text-right py-2">{row.disbursed_count ?? 0}</td>
+                        <td className="text-right py-2">{row.approval_rate != null ? `${row.approval_rate}%` : "—"}</td>
+                        <td className="text-right py-2">{row.default_rate != null ? `${row.default_rate}%` : "—"}</td>
+                        <td className="text-right py-2">{row.avg_loan_size != null ? `K${Number(row.avg_loan_size).toLocaleString()}` : "—"}</td>
+                        <td className="text-right py-2">{row.portfolio_outstanding != null ? `K${Number(row.portfolio_outstanding).toLocaleString()}` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loans due today & Blacklisted */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+          <Link to="/admin/repayments">
+            <Card className="border-border/50 bg-card/80 hover:border-primary/50 transition-colors">
+              <CardContent className="p-4">
+                <p className="text-muted-foreground text-xs font-medium mb-1">Loans Due Today</p>
+                <p className="text-2xl font-bold text-foreground">{stats?.loansDueToday || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Pending payments due today</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/admin/borrowers">
+            <Card className="border-border/50 bg-card/80 hover:border-primary/50 transition-colors">
+              <CardContent className="p-4">
+                <p className="text-muted-foreground text-xs font-medium mb-1">Blacklisted Borrowers</p>
+                <p className="text-2xl font-bold text-foreground">{stats?.blacklistedCount || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Cannot apply for new loans</p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Upcoming Payments Widget */}

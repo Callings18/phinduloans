@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { usePermissions } from "@/hooks/usePermissions";
+import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -251,6 +253,10 @@ interface PreviewCalculation {
 }
 
 const AdminLoanProducts = () => {
+  const { can } = usePermissions();
+  const canEditProducts = can("products", "edit");
+  const canDeleteProducts = can("products", "delete");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<LoanProduct | null>(null);
@@ -359,8 +365,15 @@ const AdminLoanProducts = () => {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const { error } = await supabase.from("loan_products").insert(data);
+      const { data: inserted, error } = await supabase.from("loan_products").insert(data).select("id").single();
       if (error) throw error;
+      await logAudit({
+        action: "CREATE",
+        entity_type: "loan_product",
+        entity_id: inserted?.id ?? "",
+        module: "products",
+        new_values: { name: data.name, interest_rate: data.interest_rate },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-products"] });
@@ -368,8 +381,17 @@ const AdminLoanProducts = () => {
       setIsDialogOpen(false);
       resetForm();
     },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: async (error: Error) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_product",
+        entity_id: "",
+        module: "products",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error",
+        description: handled ? undefined : error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -377,6 +399,13 @@ const AdminLoanProducts = () => {
     mutationFn: async ({ id, data }: { id: string; data: Partial<LoanProduct> }) => {
       const { error } = await supabase.from("loan_products").update(data).eq("id", id);
       if (error) throw error;
+      await logAudit({
+        action: "UPDATE",
+        entity_type: "loan_product",
+        entity_id: id,
+        module: "products",
+        new_values: data,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-products"] });
@@ -385,8 +414,17 @@ const AdminLoanProducts = () => {
       setEditingProduct(null);
       resetForm();
     },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: async (error: Error, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_product",
+        entity_id: variables?.id ?? "",
+        module: "products",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error",
+        description: handled ? undefined : error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -401,11 +439,24 @@ const AdminLoanProducts = () => {
           .update({ is_active: false, status: "archived" })
           .eq("id", id);
         if (error) throw error;
+        await logAudit({
+          action: "ARCHIVE",
+          entity_type: "loan_product",
+          entity_id: id,
+          module: "products",
+          new_values: { is_active: false, status: "archived" },
+        });
         return { archived: true, count: linkedCount };
       } else {
         // No linked applications - safe to delete
         const { error } = await supabase.from("loan_products").delete().eq("id", id);
         if (error) throw error;
+        await logAudit({
+          action: "DELETE",
+          entity_type: "loan_product",
+          entity_id: id,
+          module: "products",
+        });
         return { archived: false };
       }
     },
@@ -421,8 +472,17 @@ const AdminLoanProducts = () => {
         toast({ title: "Loan product deleted successfully" });
       }
     },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: async (error: Error, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_product",
+        entity_id: variables ?? "",
+        module: "products",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error",
+        description: handled ? undefined : error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -497,8 +557,17 @@ const AdminLoanProducts = () => {
       queryClient.invalidateQueries({ queryKey: ["loan-products"] });
       toast({ title: "Product cloned successfully", description: "The copy is set to inactive by default." });
     },
-    onError: (error: Error) => {
-      toast({ title: "Error cloning product", description: error.message, variant: "destructive" });
+    onError: async (error: Error) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_product",
+        entity_id: "",
+        module: "products",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error cloning product",
+        description: handled ? undefined : error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -705,6 +774,7 @@ const AdminLoanProducts = () => {
             <h1 className="text-2xl font-bold text-foreground">Loan Products</h1>
             <p className="text-muted-foreground">Configure loan product templates and rules</p>
           </div>
+          {canEditProducts && (
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) {
@@ -1648,6 +1718,7 @@ const AdminLoanProducts = () => {
               </div>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
         {/* Stats */}
@@ -1830,33 +1901,39 @@ const AdminLoanProducts = () => {
                               onCheckedChange={() => toggleActive(product)}
                             />
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => cloneMutation.mutate(product)}
-                            title="Clone product"
-                          >
-                            <Copy size={16} />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(product)}>
-                            <Pencil size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setConfiguringProduct(product)}
-                            title="Configure Docs & Workflow"
-                          >
-                            <Settings size={16} className="text-primary" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleteConfirmProduct(product)}
-                          >
-                            <Trash2 size={16} />
-                          </Button>
+                          {canEditProducts && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => cloneMutation.mutate(product)}
+                                title="Clone product"
+                              >
+                                <Copy size={16} />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(product)}>
+                                <Pencil size={16} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setConfiguringProduct(product)}
+                                title="Configure Docs & Workflow"
+                              >
+                                <Settings size={16} className="text-primary" />
+                              </Button>
+                              {canDeleteProducts && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteConfirmProduct(product)}
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                              )}
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -80,6 +80,7 @@ import {
   FileDown,
   Edit,
   Smartphone,
+  Upload,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
@@ -184,6 +185,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isApplyPenaltiesOpen, setIsApplyPenaltiesOpen] = useState(false);
   const [isContractEditOpen, setIsContractEditOpen] = useState(false);
   const [contractNotes, setContractNotes] = useState("");
+  const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
 
   const queryClient = useQueryClient();
   const { data: settings } = useSystemSettings();
@@ -621,6 +623,38 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to generate schedule");
+    },
+  });
+
+  const uploadSignedContractMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!loan) throw new Error("No loan selected");
+      const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+      const fileName = `contracts/signed_${loan.id}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("loan-documents")
+        .upload(fileName, file, { contentType: file.type, upsert: true });
+      if (uploadError) throw uploadError;
+      const now = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from("loan_applications")
+        .update({
+          signed_contract_url: fileName,
+          borrower_signed: true,
+          borrower_signed_at: now,
+          signed_contract_uploaded_at: now,
+        })
+        .eq("id", loan.id);
+      if (updateError) throw updateError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      setSignedContractFile(null);
+      toast.success("Signed contract uploaded");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Upload failed");
     },
   });
 
@@ -1688,6 +1722,100 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <CardDescription>Download, share or update loan contract</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      {/* Contract signing status */}
+                      <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Signing status</p>
+                        <div className="flex flex-wrap gap-3 text-sm">
+                          <span className={loan.borrower_signed || loan.signed_contract_url ? "text-success font-medium" : "text-muted-foreground"}>
+                            {loan.borrower_signed || loan.signed_contract_url ? (
+                              <><CheckCircle size={14} className="inline mr-1" /> Borrower signed</>
+                            ) : (
+                              <><Clock size={14} className="inline mr-1" /> Borrower not signed yet</>
+                            )}
+                          </span>
+                          <span className={loan.admin_signed ? "text-success font-medium" : "text-muted-foreground"}>
+                            {loan.admin_signed ? (
+                              <><CheckCircle size={14} className="inline mr-1" /> Admin signed</>
+                            ) : (
+                              <><Clock size={14} className="inline mr-1" /> Admin not signed yet</>
+                            )}
+                          </span>
+                        </div>
+                        {!(loan.borrower_signed && loan.admin_signed) && (
+                          <p className="text-xs text-warning">
+                            No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Upload signed contract */}
+                      <div className="space-y-2">
+                        <Label className="text-xs">Upload signed contract</Label>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="max-w-[220px]"
+                            onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!signedContractFile || uploadSignedContractMutation.isPending}
+                            onClick={() => {
+                              if (!signedContractFile) return;
+                              uploadSignedContractMutation.mutate(signedContractFile);
+                            }}
+                          >
+                            {uploadSignedContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Upload size={14} className="mr-1" />}
+                            Upload
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Sign & Verify (admin) and View contract */}
+                      {(loan.borrower_signed || loan.signed_contract_url) && !loan.admin_signed && (
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            const now = new Date().toISOString();
+                            const { error } = await supabase
+                              .from("loan_applications")
+                              .update({
+                                admin_signed: true,
+                                admin_signed_at: now,
+                                borrower_signed: true,
+                                borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
+                              })
+                              .eq("id", loan.id);
+                            if (error) {
+                              toast.error("Failed to sign contract");
+                            } else {
+                              queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+                              queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+                              toast.success("Contract signed by admin – ready for disbursement");
+                            }
+                          }}
+                        >
+                          <Shield size={14} className="mr-1" /> Sign & Verify
+                        </Button>
+                      )}
+                      {loan.signed_contract_url && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from("loan-documents")
+                              .createSignedUrl(loan.signed_contract_url!, 3600);
+                            if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                            else toast.error("Could not load contract");
+                          }}
+                        >
+                          <Download size={14} className="mr-1" /> View contract
+                        </Button>
+                      )}
+
                       {/* Generate & Send Contract - transitions approved → contract_signing */}
                       {loan.status === "approved" && (
                         <Button

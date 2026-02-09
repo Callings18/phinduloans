@@ -5,6 +5,8 @@
 export const LOAN_STATUS_LABELS: Record<string, string> = {
   pending: "Submitted",
   under_review: "Under Review",
+  crb_failed: "CRB Failed",
+  pmic_pending: "PMIC Pending",
   approved: "Approved",
   contract_signing: "Contract Signing",
   disbursed: "Disbursed",

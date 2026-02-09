@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,8 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { logAudit, handleUnauthorized } from "@/utils/auditLog";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -61,6 +64,9 @@ interface Disbursement {
 }
 
 const AdminDisbursements = () => {
+  const { can } = usePermissions();
+  const canCompleteDisbursement = can("disbursement", "disburse");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -164,7 +170,7 @@ const AdminDisbursements = () => {
 
       // Create disbursement record with source account (status pending).
       // Account deduction happens only when status is set to "completed" (via DB trigger).
-      const { error: disbError } = await supabase.from("disbursements").insert({
+      const { data: inserted, error: disbError } = await supabase.from("disbursements").insert({
         loan_id: selectedLoan,
         amount: disbursementAmount,
         disbursement_method: formData.disbursement_method,
@@ -172,9 +178,17 @@ const AdminDisbursements = () => {
         account_number: formData.disbursement_method === "bank_transfer" ? formData.account_number : null,
         status: "pending",
         source_account_id: formData.source_account_id,
-      });
+      }).select("id").single();
 
       if (disbError) throw disbError;
+
+      await logAudit({
+        action: "DISBURSE_CREATE",
+        entity_type: "disbursement",
+        entity_id: inserted?.id ?? selectedLoan,
+        module: "disbursement",
+        new_values: { loan_id: selectedLoan, amount: disbursementAmount, status: "pending" },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
@@ -185,8 +199,13 @@ const AdminDisbursements = () => {
       resetForm();
       setIsDialogOpen(false);
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to create disbursement");
+    onError: async (error: any) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "disbursement",
+        entity_id: selectedLoan || "",
+        module: "disbursement",
+      });
+      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to create disbursement"));
     },
   });
 
@@ -215,6 +234,14 @@ const AdminDisbursements = () => {
             .eq("id", disbursement.loan_id);
         }
       }
+
+      await logAudit({
+        action: status === "completed" ? "DISBURSE_COMPLETE" : "DISBURSE_STATUS_UPDATE",
+        entity_type: "disbursement",
+        entity_id: id,
+        module: "disbursement",
+        new_values: { status },
+      });
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });
@@ -224,8 +251,13 @@ const AdminDisbursements = () => {
       queryClient.invalidateQueries({ queryKey: ["account_transactions"] });
       toast.success(variables.status === "completed" ? "Disbursement completed and account balance updated" : "Disbursement status updated");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update status");
+    onError: async (error: any, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "disbursement",
+        entity_id: variables?.id ?? "",
+        module: "disbursement",
+      });
+      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to update status"));
     },
   });
 
@@ -682,36 +714,42 @@ const AdminDisbursements = () => {
                         <td className="py-4 px-4 text-right">
                           {disbursement.status === "pending" && (
                             <div className="flex items-center justify-end gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 border-success/50 text-success hover:bg-success/10"
-                                onClick={() =>
-                                  updateStatusMutation.mutate({
-                                    id: disbursement.id,
-                                    status: "completed",
-                                  })
-                                }
-                                disabled={updateStatusMutation.isPending}
-                              >
-                                <CheckCircle size={14} className="mr-1" />
-                                Complete
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10"
-                                onClick={() =>
-                                  updateStatusMutation.mutate({
-                                    id: disbursement.id,
-                                    status: "failed",
-                                  })
-                                }
-                                disabled={updateStatusMutation.isPending}
-                              >
-                                <XCircle size={14} className="mr-1" />
-                                Fail
-                              </Button>
+                              {canCompleteDisbursement ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 border-success/50 text-success hover:bg-success/10"
+                                    onClick={() =>
+                                      updateStatusMutation.mutate({
+                                        id: disbursement.id,
+                                        status: "completed",
+                                      })
+                                    }
+                                    disabled={updateStatusMutation.isPending}
+                                  >
+                                    <CheckCircle size={14} className="mr-1" />
+                                    Complete
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10"
+                                    onClick={() =>
+                                      updateStatusMutation.mutate({
+                                        id: disbursement.id,
+                                        status: "failed",
+                                      })
+                                    }
+                                    disabled={updateStatusMutation.isPending}
+                                  >
+                                    <XCircle size={14} className="mr-1" />
+                                    Fail
+                                  </Button>
+                                </>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Accounts only</span>
+                              )}
                             </div>
                           )}
                         </td>

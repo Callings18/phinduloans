@@ -38,6 +38,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format, addMonths, parseISO } from "date-fns";
 import { calculateLoan, getInterestPeriodLabel } from "@/utils/loanCalculations";
+import { logAudit, handleUnauthorized } from "@/utils/auditLog";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   CreditCard,
   Search,
@@ -225,6 +227,7 @@ const AdminLoans = () => {
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { can } = usePermissions();
 
   // Fetch all loans
   const { data: loans, isLoading, refetch } = useQuery({
@@ -606,6 +609,14 @@ const AdminLoans = () => {
         .eq('id', id);
 
       if (error) throw error;
+
+      await logAudit({
+        action: "STATUS_UPDATE",
+        entity_type: "loan_application",
+        entity_id: id,
+        module: "loans",
+        new_values: { status, rejection_reason: reason ?? null },
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
@@ -632,8 +643,13 @@ const AdminLoans = () => {
       setSelectedLoan(null);
       setRejectionReason("");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update application");
+    onError: async (error: any, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: variables.id,
+        module: "loans",
+      });
+      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to update application"));
     },
   });
 
@@ -701,6 +717,18 @@ const AdminLoans = () => {
         .eq('id', selectedLoan!.id);
 
       if (loanError) throw loanError;
+
+      await logAudit({
+        action: "DISBURSE",
+        entity_type: "loan_application",
+        entity_id: selectedLoan!.id,
+        module: "disbursement",
+        new_values: {
+          amount: disbursementAmount,
+          disbursement_method: data.disbursement_method,
+          source_account_id: data.source_account_id,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
@@ -722,8 +750,13 @@ const AdminLoans = () => {
       setSelectedLoan(null);
       resetDisbursementForm();
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to disburse loan");
+    onError: async (error: any) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: selectedLoan?.id ?? "",
+        module: "disbursement",
+      });
+      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to disburse loan"));
     },
   });
 
@@ -756,6 +789,14 @@ const AdminLoans = () => {
         .eq("id", editingLoan.id);
 
       if (error) throw error;
+
+      await logAudit({
+        action: "LOAN_EDIT",
+        entity_type: "loan_application",
+        entity_id: editingLoan.id,
+        module: "loans",
+        new_values: { loan_amount: principal, interest_rate: rate, loan_term_months: months },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
@@ -763,8 +804,13 @@ const AdminLoans = () => {
       setIsEditLoanOpen(false);
       setEditingLoan(null);
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update loan");
+    onError: async (error: any) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: editingLoan?.id ?? "",
+        module: "loans",
+      });
+      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to update loan"));
     },
   });
 
@@ -787,6 +833,13 @@ const AdminLoans = () => {
       
       const { error } = await supabase.from('loan_applications').delete().eq('id', id);
       if (error) throw error;
+
+      await logAudit({
+        action: "DELETE",
+        entity_type: "loan_application",
+        entity_id: id,
+        module: "loans",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
@@ -794,8 +847,13 @@ const AdminLoans = () => {
       setIsDeleteOpen(false);
       setSelectedLoan(null);
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to delete application");
+    onError: async (error: any, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: variables,
+        module: "loans",
+      });
+      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to delete application"));
     },
   });
 
@@ -1235,7 +1293,7 @@ const AdminLoans = () => {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              {["pending", "approved"].includes(loan.status) && (
+                              {["pending", "approved"].includes(loan.status) && can('loans', 'edit') && (
                                 <Button variant="ghost" size="icon" onClick={() => openEditDialog(loan)}>
                                   <Edit size={16} />
                                 </Button>
@@ -1747,10 +1805,12 @@ const AdminLoans = () => {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditLoanOpen(false)}>Cancel</Button>
-            <Button onClick={() => editLoanMutation.mutate()} disabled={editLoanMutation.isPending}>
-              {editLoanMutation.isPending && <Loader2 className="mr-2 animate-spin" size={16} />}
-              Save Changes
-            </Button>
+            {can('loans', 'edit') && (
+              <Button onClick={() => editLoanMutation.mutate()} disabled={editLoanMutation.isPending}>
+                {editLoanMutation.isPending && <Loader2 className="mr-2 animate-spin" size={16} />}
+                Save Changes
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1854,11 +1914,13 @@ const AdminLoans = () => {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDisburseOpen(false)}>Cancel</Button>
-            <Button onClick={handleDisburse} disabled={disburseMutation.isPending}>
-              {disburseMutation.isPending && <Loader2 className="mr-2 animate-spin" size={16} />}
-              <DollarSign size={16} className="mr-1" />
-              Confirm Disbursement
-            </Button>
+            {can('disbursement', 'disburse') && (
+              <Button onClick={handleDisburse} disabled={disburseMutation.isPending}>
+                {disburseMutation.isPending && <Loader2 className="mr-2 animate-spin" size={16} />}
+                <DollarSign size={16} className="mr-1" />
+                Confirm Disbursement
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1889,7 +1951,7 @@ const AdminLoans = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            {selectedLoan && ['pending', 'rejected', 'under_review'].includes(selectedLoan.status) && (
+            {selectedLoan && ['pending', 'rejected', 'under_review'].includes(selectedLoan.status) && can('loans', 'delete') && (
               <AlertDialogAction
                 onClick={() => selectedLoan && deleteMutation.mutate(selectedLoan.id)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

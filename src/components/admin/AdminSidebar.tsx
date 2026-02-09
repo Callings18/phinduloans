@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -51,6 +52,8 @@ interface MenuItem {
   label: string;
   path: string;
   adminOnly?: boolean;
+  /** Permission required to see item (module, action). If not set, visibility follows adminOnly only. */
+  permission?: { module: string; action: string };
 }
 
 const menuGroups: MenuGroup[] = [
@@ -65,12 +68,12 @@ const menuGroups: MenuGroup[] = [
     label: "Lending",
     defaultOpen: true,
     items: [
-      { icon: FileText, label: "Applications", path: "/admin/applications" },
-      { icon: Users, label: "Borrowers", path: "/admin/borrowers" },
+      { icon: FileText, label: "Applications", path: "/admin/applications", permission: { module: "loans", action: "view" } },
+      { icon: Users, label: "Borrowers", path: "/admin/borrowers", permission: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employees", path: "/admin/employers" },
-      { icon: Package, label: "Loan Products", path: "/admin/loan-products", adminOnly: true },
-      { icon: CreditCard, label: "Loans", path: "/admin/loans" },
-      { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
+      { icon: Package, label: "Loan Products", path: "/admin/loan-products", permission: { module: "products", action: "view" } },
+      { icon: CreditCard, label: "Loans", path: "/admin/loans", permission: { module: "loans", action: "view" } },
+      { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements", permission: { module: "disbursement", action: "view" } },
     ],
   },
   {
@@ -103,16 +106,16 @@ const menuGroups: MenuGroup[] = [
     label: "Reports & Logs",
     defaultOpen: false,
     items: [
-      { icon: BarChart3, label: "Reports", path: "/admin/reports" },
-      { icon: History, label: "Audit Logs", path: "/admin/audit-logs" },
+      { icon: BarChart3, label: "Reports", path: "/admin/reports", permission: { module: "reports", action: "view" } },
+      { icon: History, label: "Audit Logs", path: "/admin/audit-logs", permission: { module: "audit", action: "view" } },
     ],
   },
   {
     label: "HR & Payroll",
     defaultOpen: false,
     items: [
-      { icon: UserCircle, label: "HR Management", path: "/admin/hr", adminOnly: true },
-      { icon: DollarSign, label: "Payroll", path: "/admin/payroll", adminOnly: true },
+      { icon: UserCircle, label: "HR Management", path: "/admin/hr", permission: { module: "payroll", action: "view" } },
+      { icon: DollarSign, label: "Payroll", path: "/admin/payroll", permission: { module: "payroll", action: "view" } },
     ],
   },
   {
@@ -134,6 +137,7 @@ const AdminSidebar = () => {
   );
   const location = useLocation();
   const { signOut, isAdmin } = useAuth();
+  const { can } = usePermissions();
 
   const toggleGroup = (label: string) => {
     setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
@@ -190,8 +194,12 @@ const AdminSidebar = () => {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
         {menuGroups.map((group) => {
-          // Filter items based on admin status
-          const visibleItems = group.items.filter(item => !item.adminOnly || isAdmin);
+          // Filter items: adminOnly and permission-based visibility
+          const visibleItems = group.items.filter(item => {
+            if (item.adminOnly && !isAdmin) return false;
+            if (item.permission && !can(item.permission.module, item.permission.action)) return false;
+            return true;
+          });
           if (visibleItems.length === 0) return null;
 
           const isOpen = openGroups[group.label];

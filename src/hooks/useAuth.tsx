@@ -5,6 +5,28 @@ import type { User, Session } from '@supabase/supabase-js';
 import { notificationService } from "@/utils/notificationService";
 import { normalizePhoneToE164, isEmail } from "@/utils/authHelpers";
 
+/** Log auth event to audit_logs (IP + device). Fire-and-forget. */
+async function logAuthEvent(action: 'login' | 'signup') {
+  try {
+    let ip: string | null = null;
+    try {
+      const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+      const data = await res.json();
+      ip = data?.ip ?? null;
+    } catch {
+      // ignore IP fetch failure
+    }
+    const deviceInfo = typeof navigator !== 'undefined' ? { user_agent: navigator.userAgent } : null;
+    await supabase.rpc('log_auth_event', {
+      p_action: action,
+      p_ip_address: ip,
+      p_device_info: deviceInfo,
+    });
+  } catch {
+    // non-critical
+  }
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -108,31 +130,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (notifyError) {
         console.error('[Auth] Failed to send welcome email:', notifyError);
       }
-
-      try {
-        await supabase.rpc('log_auth_event', { p_action: 'SIGNUP' });
-      } catch (e) {
-        console.error('[Auth] Failed to log auth event:', e);
-      }
+      logAuthEvent('signup');
     }
 
     return { error: error as Error | null };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (!error) {
-      try {
-        await supabase.rpc('log_auth_event', { p_action: 'LOGIN' });
-      } catch (e) {
-        console.error('[Auth] Failed to log auth event:', e);
-      }
+    if (!error && data.user) {
+      logAuthEvent('login');
+      // Mark email as verified on first successful password login
+      await supabase
+        .from('profiles')
+        .update({ email_verified_at: new Date().toISOString() })
+        .eq('id', data.user.id)
+        .is('email_verified_at', null);
     }
-
     return { error: error as Error | null };
   }, []);
 

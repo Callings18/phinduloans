@@ -66,7 +66,8 @@ interface BorrowerForm {
 
 interface BlacklistData {
   reason: string;
-  duration: string; // "permanent" | number of days as string
+  duration?: string; // "permanent" | number of days as string
+  blacklist_expires_at?: string | null;
 }
 
 const emptyForm: BorrowerForm = {
@@ -94,7 +95,7 @@ const AdminBorrowers = () => {
   const [isBlacklistOpen, setIsBlacklistOpen] = useState(false);
   const [selectedBorrower, setSelectedBorrower] = useState<any>(null);
   const [formData, setFormData] = useState<BorrowerForm>(emptyForm);
-  const [blacklistData, setBlacklistData] = useState<BlacklistData>({ reason: "", duration: "permanent" });
+  const [blacklistData, setBlacklistData] = useState<BlacklistData>({ reason: "", duration: "permanent", blacklist_expires_at: null });
   const [runTour, setRunTour] = useState(false);
 
   const tourSteps: Step[] = [
@@ -265,17 +266,21 @@ const AdminBorrowers = () => {
 
   // Blacklist mutation
   const blacklistMutation = useMutation({
-    mutationFn: async ({ id, blacklist, reason, duration }: { id: string; blacklist: boolean; reason?: string; duration?: string }) => {
+    mutationFn: async ({ id, blacklist, reason, duration, blacklist_expires_at }: { id: string; blacklist: boolean; reason?: string; duration?: string; blacklist_expires_at?: string | null }) => {
       const { data: session } = await supabase.auth.getSession();
       const userId = session?.session?.user?.id;
 
       let blacklistExpiresAt: string | null = null;
-      if (blacklist && duration && duration !== "permanent") {
-        const days = parseInt(duration);
-        if (!isNaN(days) && days > 0) {
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + days);
-          blacklistExpiresAt = expiryDate.toISOString();
+      if (blacklist) {
+        if (blacklist_expires_at) {
+          blacklistExpiresAt = blacklist_expires_at;
+        } else if (duration && duration !== "permanent") {
+          const days = parseInt(duration);
+          if (!isNaN(days) && days > 0) {
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + days);
+            blacklistExpiresAt = expiryDate.toISOString();
+          }
         }
       }
 
@@ -301,7 +306,7 @@ const AdminBorrowers = () => {
           : "This borrower can now apply for loans again"
       });
       setIsBlacklistOpen(false);
-      setBlacklistData({ reason: "", duration: "permanent" });
+      setBlacklistData({ reason: "", duration: "permanent", blacklist_expires_at: null });
     },
     onError: (error: any) => {
       toast({ title: "Error updating blacklist status", description: error.message, variant: "destructive" });
@@ -746,6 +751,22 @@ const AdminBorrowers = () => {
                       {new Date(selectedBorrower.created_at).toLocaleDateString()}
                     </p>
                   </div>
+                  <div>
+                    <p className="text-muted-foreground">Email verified</p>
+                    <p className="text-foreground font-medium">
+                      {(selectedBorrower as { email_verified_at?: string | null }).email_verified_at
+                        ? `Yes (${new Date((selectedBorrower as { email_verified_at: string }).email_verified_at).toLocaleDateString()})`
+                        : "No"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Phone verified</p>
+                    <p className="text-foreground font-medium">
+                      {(selectedBorrower as { phone_verified_at?: string | null }).phone_verified_at
+                        ? `Yes (${new Date((selectedBorrower as { phone_verified_at: string }).phone_verified_at).toLocaleDateString()})`
+                        : "No"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -811,13 +832,12 @@ const AdminBorrowers = () => {
                           Blacklisted on: {new Date(selectedBorrower.blacklisted_at).toLocaleDateString()}
                         </p>
                       )}
-                      {(selectedBorrower as any).blacklist_expires_at && (
-                        <p className="text-xs text-warning font-medium">
+                      {(selectedBorrower as any).blacklist_expires_at ? (
+                        <p className="text-xs text-muted-foreground">
                           Expires: {new Date((selectedBorrower as any).blacklist_expires_at).toLocaleDateString()}
                         </p>
-                      )}
-                      {!(selectedBorrower as any).blacklist_expires_at && selectedBorrower.is_blacklisted && (
-                        <p className="text-xs text-destructive font-medium">Duration: Permanent</p>
+                      ) : selectedBorrower.is_blacklisted && (
+                        <p className="text-xs text-muted-foreground">Permanent</p>
                       )}
                       <Button
                         variant="outline"
@@ -840,7 +860,7 @@ const AdminBorrowers = () => {
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10"
                         onClick={() => {
-                          setBlacklistData({ reason: "", duration: "permanent" });
+                          setBlacklistData({ reason: "", duration: "permanent", blacklist_expires_at: null });
                           setIsBlacklistOpen(true);
                         }}
                       >
@@ -926,7 +946,7 @@ const AdminBorrowers = () => {
               <Label>Reason for Blacklisting *</Label>
               <Textarea
                 value={blacklistData.reason}
-                onChange={(e) => setBlacklistData({ ...blacklistData, reason: e.target.value })}
+                onChange={(e) => setBlacklistData((prev) => ({ ...prev, reason: e.target.value }))}
                 placeholder="Enter the reason for blacklisting this borrower (e.g., fraud, non-payment, etc.)"
                 rows={3}
               />
@@ -934,8 +954,8 @@ const AdminBorrowers = () => {
             <div className="space-y-2">
               <Label>Duration</Label>
               <Select
-                value={blacklistData.duration}
-                onValueChange={(value) => setBlacklistData({ ...blacklistData, duration: value })}
+                value={blacklistData.duration ?? "permanent"}
+                onValueChange={(value) => setBlacklistData((prev) => ({ ...prev, duration: value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select duration" />
@@ -950,7 +970,7 @@ const AdminBorrowers = () => {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {blacklistData.duration === "permanent" 
+                {blacklistData.duration === "permanent"
                   ? "This borrower will be permanently blacklisted until manually removed."
                   : `Blacklist will automatically expire after ${blacklistData.duration} days.`
                 }
@@ -974,6 +994,7 @@ const AdminBorrowers = () => {
                   blacklist: true,
                   reason: blacklistData.reason,
                   duration: blacklistData.duration,
+                  blacklist_expires_at: blacklistData.blacklist_expires_at ?? null,
                 });
               }}
               disabled={blacklistMutation.isPending}

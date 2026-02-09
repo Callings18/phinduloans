@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,13 +53,44 @@ import {
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))', 'hsl(var(--info))'];
 
 const AdminReports = () => {
+  const { can } = usePermissions();
   const [dateRange, setDateRange] = useState("6months");
+  const [filterEmployee, setFilterEmployee] = useState<string>("all");
+  const [filterProduct, setFilterProduct] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  const { data: staffList = [] } = useQuery({
+    queryKey: ["reports-staff"],
+    queryFn: async () => {
+      const { data: roles } = await supabase.from("user_roles").select("user_id").neq("role", "user").neq("role", "employer");
+      if (!roles?.length) return [];
+      const ids = roles.map((r: { user_id: string }) => r.user_id);
+      const { data: p } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+      return p ?? [];
+    },
+  });
+
+  const { data: loanProducts = [] } = useQuery({
+    queryKey: ["reports-products"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("loan_products").select("id, name").eq("is_active", true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ["admin-reports", dateRange],
+    queryKey: ["admin-reports", dateRange, filterEmployee, filterProduct, filterStatus],
     queryFn: async () => {
+      let appQuery = supabase.from("loan_applications").select("*").order("created_at", { ascending: true });
+      if (filterEmployee !== "all") appQuery = appQuery.eq("assigned_to", filterEmployee);
+      if (filterProduct !== "all") appQuery = appQuery.eq("loan_product_id", filterProduct);
+      if (filterStatus !== "all") appQuery = appQuery.eq("status", filterStatus);
+      const monthsBack = dateRange === "3months" ? 3 : dateRange === "12months" ? 12 : 6;
+      const from = subMonths(new Date(), monthsBack);
+      appQuery = appQuery.gte("created_at", from.toISOString());
       const [applications, disbursements, repayments, profiles] = await Promise.all([
-        supabase.from("loan_applications").select("*").order("created_at", { ascending: true }),
+        appQuery,
         supabase.from("disbursements").select("*"),
         supabase.from("loan_repayments").select("*"),
         supabase.from("profiles").select("id, created_at"),
@@ -226,10 +258,12 @@ const AdminReports = () => {
                 <SelectItem value="12months">Last 12 Months</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={exportReport}>
-              <Download size={16} className="mr-2" />
-              Export
-            </Button>
+            {can("reports", "export") && (
+              <Button variant="outline" onClick={exportReport}>
+                <Download size={16} className="mr-2" />
+                Export
+              </Button>
+            )}
           </div>
         </div>
 
