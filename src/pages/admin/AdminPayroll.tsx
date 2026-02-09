@@ -42,12 +42,11 @@ const AdminPayroll = () => {
   const { data: periods = [], isLoading } = useQuery({
     queryKey: ["admin-payroll-periods"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payroll_periods")
+      const { data, error } = await (supabase.from as any)("payroll_periods")
         .select("*")
         .order("period_start_date", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: canView,
   });
@@ -56,8 +55,7 @@ const AdminPayroll = () => {
     queryKey: ["admin-payroll-records", selectedPeriodId],
     queryFn: async () => {
       if (!selectedPeriodId) return [];
-      const { data, error } = await supabase
-        .from("payroll_records")
+      const { data, error } = await (supabase.from as any)("payroll_records")
         .select(`
           *,
           employee:employees(id, first_name, last_name, employee_number, department, branch)
@@ -65,7 +63,7 @@ const AdminPayroll = () => {
         .eq("payroll_period_id", selectedPeriodId)
         .order("employee_id");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: canView && !!selectedPeriodId,
   });
@@ -250,11 +248,11 @@ const AdminPayroll = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {periodRecords.map((rec: Record<string, unknown>) => (
+                    {periodRecords.map((rec: any) => (
                       <TableRow key={rec.id as string}>
                         <TableCell className="font-medium">
                           {rec.employee
-                            ? `${(rec.employee as { first_name?: string }).first_name ?? ""} ${(rec.employee as { last_name?: string }).last_name ?? ""}`
+                            ? `${rec.employee?.first_name ?? ""} ${rec.employee?.last_name ?? ""}`
                             : rec.employee_id}
                         </TableCell>
                         <TableCell>K{Number(rec.basic_salary ?? 0).toLocaleString()}</TableCell>
@@ -313,7 +311,7 @@ function CreatePeriodForm({ onSuccess, onCancel }: { onSuccess: () => void; onCa
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("payroll_periods").insert({
+      const { error } = await (supabase.from as any)("payroll_periods").insert({
         period_name: periodName,
         period_type: "monthly",
         period_start_date: periodStart,
@@ -374,25 +372,24 @@ function RunPayrollButton({
   const runMutation = useMutation({
     mutationFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
-      const { data: employees } = await supabase.from("employees").select("id").eq("is_active", true);
+      const { data: employees } = await (supabase.from as any)("employees").select("id").eq("is_active", true);
       if (!employees?.length) throw new Error("No active employees");
 
-      const { data: structures } = await supabase
-        .from("employee_salary_structure")
+      const { data: structures } = await (supabase.from as any)("employee_salary_structure")
         .select("employee_id, basic_salary, effective_date, expiry_date")
         .lte("effective_date", today);
 
       const effectiveStructures = (structures ?? []).filter(
-        (s: { expiry_date: string | null }) => s.expiry_date == null || s.expiry_date >= today
+        (s: any) => s.expiry_date == null || s.expiry_date >= today
       );
       const byEmployee: Record<string, number> = {};
-      employees.forEach((emp: { id: string }) => {
-        const forEmp = effectiveStructures.filter((s: { employee_id: string }) => s.employee_id === emp.id);
-        const latest = forEmp.sort((a: { effective_date: string }, b: { effective_date: string }) => b.effective_date.localeCompare(a.effective_date))[0];
+      employees.forEach((emp: any) => {
+        const forEmp = effectiveStructures.filter((s: any) => s.employee_id === emp.id);
+        const latest = forEmp.sort((a: any, b: any) => b.effective_date.localeCompare(a.effective_date))[0];
         byEmployee[emp.id] = latest?.basic_salary ?? 0;
       });
 
-      const records = employees.map((emp: { id: string }) => {
+      const records = employees.map((emp: any) => {
         const basic = byEmployee[emp.id] ?? 0;
         return {
           payroll_period_id: periodId,
@@ -403,11 +400,10 @@ function RunPayrollButton({
           bonus_amount: 0,
         };
       });
-      const { error: upsertError } = await supabase.from("payroll_records").upsert(records, { onConflict: "payroll_period_id,employee_id" });
+      const { error: upsertError } = await (supabase.from as any)("payroll_records").upsert(records, { onConflict: "payroll_period_id,employee_id" });
       if (upsertError) throw upsertError;
       const totalNet = records.reduce((sum: number, r: { gross_salary: number }) => sum + r.gross_salary, 0);
-      await supabase
-        .from("payroll_periods")
+      await (supabase.from as any)("payroll_periods")
         .update({
           status: "processing",
           total_employees: employees.length,

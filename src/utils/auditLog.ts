@@ -52,7 +52,7 @@ export async function logAudit(payload: AuditPayload): Promise<void> {
       details: payload.details ?? null,
       ip_address: ip,
     };
-    await supabase.from("audit_logs").insert(row);
+    await (supabase.from("audit_logs") as any).insert(row);
   } catch (e) {
     console.warn("audit_log insert failed", e);
   }

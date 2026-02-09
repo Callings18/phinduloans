@@ -85,7 +85,7 @@ const AdminReports = () => {
       let appQuery = supabase.from("loan_applications").select("*").order("created_at", { ascending: true });
       if (filterEmployee !== "all") appQuery = appQuery.eq("assigned_to", filterEmployee);
       if (filterProduct !== "all") appQuery = appQuery.eq("loan_product_id", filterProduct);
-      if (filterStatus !== "all") appQuery = appQuery.eq("status", filterStatus);
+      if (filterStatus !== "all") appQuery = appQuery.eq("status", filterStatus as any);
       const monthsBack = dateRange === "3months" ? 3 : dateRange === "12months" ? 12 : 6;
       const from = subMonths(new Date(), monthsBack);
       appQuery = appQuery.gte("created_at", from.toISOString());
