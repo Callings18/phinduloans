@@ -55,6 +55,8 @@ import {
   Loader2,
   Link2,
   Activity,
+  Shield,
+  Upload,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,6 +65,7 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp } from "@/utils/generateLoanContract";
@@ -73,10 +76,13 @@ import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
 import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/components/common/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
   under_review: { label: "Under Review", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  crb_failed: { label: "CRB Failed", color: "bg-amber-600/20 text-amber-400 border-amber-600/30" },
+  pmic_pending: { label: "PMIC Pending", color: "bg-cyan-600/20 text-cyan-400 border-cyan-600/30" },
   approved: { label: "Approved", color: "bg-green-500/20 text-green-400 border-green-500/30" },
   rejected: { label: "Rejected", color: "bg-red-500/20 text-red-400 border-red-500/30" },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
@@ -106,6 +112,7 @@ const AdminApplications = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [runTour, setRunTour] = useState(false);
   const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
+  const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
 
   const tourSteps: Step[] = [
     {
@@ -174,10 +181,13 @@ const AdminApplications = () => {
   });
 
   const [assigneeId, setAssigneeId] = useState<string>("");
+  const [noteText, setNoteText] = useState("");
+  const [noteType, setNoteType] = useState<"internal" | "borrower_visible">("internal");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { can } = usePermissions();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -385,7 +395,9 @@ const AdminApplications = () => {
         reviewed_by: user?.id,
         reviewed_at: new Date().toISOString(),
       };
-
+      if (status === "under_review") {
+        updateData.approval_stage = "under_review";
+      }
       if (reason) {
         updateData.rejection_reason = reason;
       }
@@ -396,6 +408,14 @@ const AdminApplications = () => {
         .eq('id', id);
 
       if (error) throw error;
+
+      await logAudit({
+        action: "STATUS_UPDATE",
+        entity_type: "loan_application",
+        entity_id: id,
+        module: "loans",
+        new_values: { status, rejection_reason: reason ?? null },
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
@@ -431,8 +451,17 @@ const AdminApplications = () => {
       setIsViewOpen(false);
       setRejectionReason("");
     },
-    onError: (error) => {
-      toast({ title: "Error updating application", description: error.message, variant: "destructive" });
+    onError: async (error, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: variables.id,
+        module: "loans",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error updating application",
+        description: handled ? undefined : (error as Error).message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -458,17 +487,31 @@ const AdminApplications = () => {
 
       if (disbError) throw disbError;
 
-      // Update loan status to disbursed
+      // Update loan status to disbursed and set disbursed_by
       const { error: loanError } = await supabase
         .from('loan_applications')
         .update({
           status: 'disbursed',
+          disbursed_by: user?.id,
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString(),
+          approval_stage: 'disbursed',
         })
         .eq('id', selectedApp.id);
 
       if (loanError) throw loanError;
+
+      await logAudit({
+        action: "DISBURSE",
+        entity_type: "loan_application",
+        entity_id: selectedApp.id,
+        module: "disbursement",
+        new_values: {
+          amount: selectedApp.loan_amount,
+          disbursement_method: data.disbursement_method,
+          source_account_id: data.source_account_id,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
@@ -490,8 +533,17 @@ const AdminApplications = () => {
       setIsViewOpen(false);
       resetDisbursementForm();
     },
-    onError: (error) => {
-      toast({ title: "Error disbursing loan", description: error.message, variant: "destructive" });
+    onError: async (error) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: selectedApp?.id ?? "",
+        module: "disbursement",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error disbursing loan",
+        description: handled ? undefined : (error as Error).message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -500,6 +552,13 @@ const AdminApplications = () => {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('loan_applications').delete().eq('id', id);
       if (error) throw error;
+
+      await logAudit({
+        action: "DELETE",
+        entity_type: "loan_application",
+        entity_id: id,
+        module: "loans",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
@@ -507,8 +566,17 @@ const AdminApplications = () => {
       setIsDeleteOpen(false);
       setIsViewOpen(false);
     },
-    onError: (error) => {
-      toast({ title: "Error deleting application", description: error.message, variant: "destructive" });
+    onError: async (error, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: variables,
+        module: "loans",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error deleting application",
+        description: handled ? undefined : (error as Error).message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -521,13 +589,150 @@ const AdminApplications = () => {
         .eq('id', id);
 
       if (error) throw error;
+
+      await logAudit({
+        action: "ASSIGN",
+        entity_type: "loan_application",
+        entity_id: id,
+        module: "loans",
+        new_values: { assigned_to: staffId || null },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       toast({ title: "Application assigned successfully" });
     },
+    onError: async (error, variables) => {
+      const handled = await handleUnauthorized(error, {
+        entity_type: "loan_application",
+        entity_id: variables.id,
+        module: "loans",
+      });
+      toast({
+        title: handled ? "You don't have permission to perform this action." : "Error assigning application",
+        description: handled ? undefined : (error as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Workflow transition (verify_documents, finance_approve, approve)
+  const transitionMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: string }) => {
+      const { data, error } = await supabase.rpc("transition_loan_status", {
+        p_loan_id: id,
+        p_action: action,
+      });
+      if (error) throw error;
+      const result = data as { ok: boolean; error?: string };
+      if (!result?.ok) throw new Error(result?.error || "Transition failed");
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      const msg =
+        variables.action === "verify_documents"
+          ? "Documents marked as verified"
+          : variables.action === "finance_approve"
+            ? "Finance approved"
+            : "Application approved";
+      toast({ title: msg });
+    },
     onError: (error) => {
-      toast({ title: "Error assigning application", description: error.message, variant: "destructive" });
+      toast({
+        title: "Workflow action failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Loan notes for selected application
+  const { data: loanNotes = [], refetch: refetchNotes } = useQuery({
+    queryKey: ["loan-notes", selectedApp?.id],
+    queryFn: async () => {
+      if (!selectedApp?.id) return [];
+      const { data, error } = await supabase
+        .from("loan_notes")
+        .select("id, note, type, created_at, user_id")
+        .eq("loan_id", selectedApp.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!selectedApp?.id,
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async ({ loanId, note, type }: { loanId: string; note: string; type: "internal" | "borrower_visible" }) => {
+      if (!user?.id) throw new Error("Not authenticated");
+      const { error } = await supabase.from("loan_notes").insert({
+        loan_id: loanId,
+        user_id: user.id,
+        note,
+        type,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["loan-notes", variables.loanId] });
+      setNoteText("");
+      toast({ title: "Note added" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to add note", description: (error as Error).message, variant: "destructive" });
+    },
+  });
+
+  const uploadSignedContractMutation = useMutation({
+    mutationFn: async ({ applicationId, file }: { applicationId: string; file: File }) => {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+      const fileName = `contracts/signed_${applicationId}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("loan-documents")
+        .upload(fileName, file, { contentType: file.type, upsert: true });
+      if (uploadError) throw uploadError;
+      const now = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from("loan_applications")
+        .update({
+          signed_contract_url: fileName,
+          borrower_signed: true,
+          borrower_signed_at: now,
+          signed_contract_uploaded_at: now,
+        })
+        .eq("id", applicationId);
+      if (updateError) throw updateError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      setSignedContractFile(null);
+      toast({ title: "Signed contract uploaded" });
+    },
+    onError: (error) => {
+      toast({ title: "Upload failed", description: (error as Error).message, variant: "destructive" });
+    },
+  });
+
+  const adminSignContractMutation = useMutation({
+    mutationFn: async ({ applicationId, borrowerSignedAt }: { applicationId: string; borrowerSignedAt?: string | null }) => {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("loan_applications")
+        .update({
+          admin_signed: true,
+          admin_signed_at: now,
+          borrower_signed: true,
+          borrower_signed_at: borrowerSignedAt || now,
+        })
+        .eq("id", applicationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      toast({ title: "Contract signed by admin – ready for disbursement" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to sign", description: (error as Error).message, variant: "destructive" });
     },
   });
 
@@ -617,12 +822,23 @@ const AdminApplications = () => {
   const handleApprove = async () => {
     if (!selectedApp) return;
 
+    // Final approval requires both document and finance verification; use transition_loan_status RPC
+    const docVerified = !!selectedApp.document_verified_at;
+    const financeVerified = !!selectedApp.finance_verified_at;
+    if (!docVerified || !financeVerified) {
+      toast({
+        title: "Verifications required",
+        description: "Both document verification and finance approval must be completed before final approval.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Check minimum credit score requirement from loan product
     const product = loanProducts?.find(p => p.id === selectedApp.loan_product_id);
     const minCreditScore = (product as any)?.min_credit_score || 0;
 
     if (minCreditScore > 0) {
-      // Check if risk assessment exists with sufficient credit score
       const { data: riskAssessment } = await supabase
         .from('risk_assessments')
         .select('credit_score')
@@ -649,7 +865,7 @@ const AdminApplications = () => {
     }
 
     setIsProcessing(true);
-    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'approved' });
+    await transitionMutation.mutateAsync({ id: selectedApp.id, action: 'approve' });
     setIsProcessing(false);
   };
 
@@ -685,6 +901,12 @@ const AdminApplications = () => {
   };
 
   const handleDisburse = () => {
+    if (!selectedApp) return;
+    const borrowerSigned = selectedApp.borrower_signed || !!selectedApp.signed_contract_url;
+    if (!borrowerSigned || !selectedApp.admin_signed) {
+      toast({ title: "Contract required", description: "Contract must be signed by both parties before disbursement.", variant: "destructive" });
+      return;
+    }
     if (!disbursement.source_account_id) {
       toast({ title: "Please select a funding account", description: "Disbursement requires a source account with sufficient balance.", variant: "destructive" });
       return;
@@ -708,6 +930,9 @@ const AdminApplications = () => {
     }
     disburseMutation.mutate(disbursement);
   };
+
+  const isBorrowerSigned = selectedApp ? (selectedApp.borrower_signed || !!selectedApp.signed_contract_url) : false;
+  const isFullySigned = !!selectedApp && isBorrowerSigned && !!selectedApp.admin_signed;
 
   const filteredApps = applications?.filter((app: any) => {
     const query = searchQuery.toLowerCase().trim();
@@ -924,6 +1149,8 @@ const AdminApplications = () => {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
+                  <SelectItem value="crb_failed">CRB Failed</SelectItem>
+                  <SelectItem value="pmic_pending">PMIC Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
@@ -1570,11 +1797,14 @@ const AdminApplications = () => {
 
           {selectedApp && (
             <Tabs defaultValue="details" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="risk">Risk Review</TabsTrigger>
                 <TabsTrigger value="actions">Actions</TabsTrigger>
+                <TabsTrigger value="notes" className="flex items-center gap-2">
+                  <MessageCircle size={14} /> Notes
+                </TabsTrigger>
                 <TabsTrigger value="history" className="flex items-center gap-2">
                   <Activity size={14} /> History
                 </TabsTrigger>
@@ -1730,18 +1960,326 @@ const AdminApplications = () => {
               </TabsContent>
 
               <TabsContent value="actions" className="space-y-6 mt-4">
-                {/* Workflow section placeholder - feature coming soon */}
+                {/* Approval stage and verifiers */}
+                {(selectedApp.approval_stage || selectedApp.document_verified_by || selectedApp.finance_verified_by) && (
+                  <Card className="bg-secondary/30 border-border/50">
+                    <CardContent className="p-4 space-y-2">
+                      <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Approval Stage</h4>
+                      <p className="text-sm font-medium">{selectedApp.approval_stage || '—'}</p>
+                      {selectedApp.document_verified_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Documents verified by {staffList?.find((s: any) => s.user_id === selectedApp.document_verified_by)?.profile?.full_name || 'Staff'} on {format(new Date(selectedApp.document_verified_at), 'PPp')}
+                        </p>
+                      )}
+                      {selectedApp.finance_verified_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Finance approved by {staffList?.find((s: any) => s.user_id === selectedApp.finance_verified_by)?.profile?.full_name || 'Staff'} on {format(new Date(selectedApp.finance_verified_at), 'PPp')}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Contract section: status, generate/share, upload signed, Sign & Verify, View contract */}
+                {(selectedApp.status === 'under_review' || selectedApp.status === 'approved') && (
+                  <Card className="bg-secondary/30 border-border/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <FileText size={18} />
+                        Contract
+                      </CardTitle>
+                      <CardDescription>
+                        {isFullySigned
+                          ? "Signed (both parties). Ready for disbursement."
+                          : isBorrowerSigned
+                            ? "Borrower signed. Admin must sign & verify to enable disbursement."
+                            : "Not signed. Generate contract, send to borrower, then upload signed contract or have borrower sign."}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!selectedApp) return;
+                            await generateLoanContract({
+                              id: selectedApp.id,
+                              full_name: selectedApp.full_name,
+                              email: selectedApp.email,
+                              phone: selectedApp.phone,
+                              nrc_number: selectedApp.nrc_number,
+                              address: selectedApp.address,
+                              city: selectedApp.city,
+                              date_of_birth: selectedApp.date_of_birth,
+                              employer_name: selectedApp.employer_name,
+                              job_title: selectedApp.job_title,
+                              monthly_income: Number(selectedApp.monthly_income),
+                              loan_amount: Number(selectedApp.loan_amount),
+                              loan_term_months: selectedApp.loan_term_months,
+                              interest_rate: Number(selectedApp.interest_rate),
+                              monthly_payment: Number(selectedApp.monthly_payment),
+                              total_repayment: Number(selectedApp.total_repayment),
+                              loan_purpose: selectedApp.loan_purpose,
+                            });
+                          }}
+                        >
+                          <Printer size={14} className="mr-1" /> Print
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!selectedApp) return;
+                            await downloadLoanContract({
+                              id: selectedApp.id,
+                              full_name: selectedApp.full_name,
+                              email: selectedApp.email,
+                              phone: selectedApp.phone,
+                              nrc_number: selectedApp.nrc_number,
+                              address: selectedApp.address,
+                              city: selectedApp.city,
+                              date_of_birth: selectedApp.date_of_birth,
+                              employer_name: selectedApp.employer_name,
+                              job_title: selectedApp.job_title,
+                              monthly_income: Number(selectedApp.monthly_income),
+                              loan_amount: Number(selectedApp.loan_amount),
+                              loan_term_months: selectedApp.loan_term_months,
+                              interest_rate: Number(selectedApp.interest_rate),
+                              monthly_payment: Number(selectedApp.monthly_payment),
+                              total_repayment: Number(selectedApp.total_repayment),
+                              loan_purpose: selectedApp.loan_purpose,
+                            });
+                          }}
+                        >
+                          <Download size={14} className="mr-1" /> Save PDF
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!selectedApp) return;
+                            await emailContract({
+                              id: selectedApp.id,
+                              full_name: selectedApp.full_name,
+                              email: selectedApp.email,
+                              phone: selectedApp.phone,
+                              nrc_number: selectedApp.nrc_number,
+                              address: selectedApp.address,
+                              city: selectedApp.city,
+                              date_of_birth: selectedApp.date_of_birth,
+                              employer_name: selectedApp.employer_name,
+                              job_title: selectedApp.job_title,
+                              monthly_income: Number(selectedApp.monthly_income),
+                              loan_amount: Number(selectedApp.loan_amount),
+                              loan_term_months: selectedApp.loan_term_months,
+                              interest_rate: Number(selectedApp.interest_rate),
+                              monthly_payment: Number(selectedApp.monthly_payment),
+                              total_repayment: Number(selectedApp.total_repayment),
+                              loan_purpose: selectedApp.loan_purpose,
+                            });
+                          }}
+                        >
+                          <Mail size={14} className="mr-1" /> Email
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!selectedApp) return;
+                            await shareContractViaWhatsApp({
+                              id: selectedApp.id,
+                              full_name: selectedApp.full_name,
+                              email: selectedApp.email,
+                              phone: selectedApp.phone,
+                              nrc_number: selectedApp.nrc_number,
+                              address: selectedApp.address,
+                              city: selectedApp.city,
+                              date_of_birth: selectedApp.date_of_birth,
+                              employer_name: selectedApp.employer_name,
+                              job_title: selectedApp.job_title,
+                              monthly_income: Number(selectedApp.monthly_income),
+                              loan_amount: Number(selectedApp.loan_amount),
+                              loan_term_months: selectedApp.loan_term_months,
+                              interest_rate: Number(selectedApp.interest_rate),
+                              monthly_payment: Number(selectedApp.monthly_payment),
+                              total_repayment: Number(selectedApp.total_repayment),
+                              loan_purpose: selectedApp.loan_purpose,
+                            });
+                          }}
+                        >
+                          <MessageCircle size={14} className="mr-1" /> WhatsApp
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Upload signed contract</Label>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="max-w-[220px]"
+                            onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!signedContractFile || uploadSignedContractMutation.isPending}
+                            onClick={() => {
+                              if (!selectedApp || !signedContractFile) return;
+                              uploadSignedContractMutation.mutate({ applicationId: selectedApp.id, file: signedContractFile });
+                            }}
+                          >
+                            {uploadSignedContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Upload size={14} className="mr-1" />}
+                            Upload
+                          </Button>
+                        </div>
+                      </div>
+                      {isBorrowerSigned && !selectedApp.admin_signed && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (!selectedApp) return;
+                            adminSignContractMutation.mutate({
+                              applicationId: selectedApp.id,
+                              borrowerSignedAt: selectedApp.borrower_signed_at || selectedApp.signed_contract_uploaded_at,
+                            });
+                          }}
+                          disabled={adminSignContractMutation.isPending}
+                        >
+                          {adminSignContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Shield size={14} className="mr-1" />}
+                          Sign & Verify
+                        </Button>
+                      )}
+                      {selectedApp.signed_contract_url && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from("loan-documents")
+                              .createSignedUrl(selectedApp.signed_contract_url, 3600);
+                            if (data?.signedUrl) {
+                              window.open(data.signedUrl, "_blank");
+                            } else {
+                              toast({ title: "Could not load contract", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <ExternalLink size={14} className="mr-1" /> View contract
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Status-based actions */}
                 <div className="pt-4 border-t border-border">
                   <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Application Context</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedApp.status === 'pending' && (
+                    {/* Pending: only Move to under review + Reject (no direct Approve) */}
+                    {selectedApp.status === 'pending' && can('loans', 'approve') && (
                       <Card className="bg-secondary/30 border-border/50">
                         <CardContent className="p-4 space-y-4">
                           <h4 className="font-semibold text-foreground">Review Application</h4>
-                          <div className="space-y-2">
-                            <Label>Rejection Reason *</Label>
+                          <p className="text-sm text-muted-foreground">Move to under review for document and finance verification, or reject.</p>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => updateStatusMutation.mutate({ id: selectedApp.id, status: 'under_review' })}
+                              disabled={isProcessing}
+                            >
+                              Move to Under Review
+                            </Button>
+                            <div className="space-y-2 flex-1">
+                              <Label className="text-xs">Reject</Label>
+                              <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Reason" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
+                                  <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
+                                  <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="w-full"
+                                onClick={handleReject}
+                                disabled={isProcessing || !rejectionCategory}
+                              >
+                                <XCircle size={16} className="mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Under review: Verify documents, Approve finance, then Approve (when both verified) */}
+                    {selectedApp.status === 'under_review' && (
+                      <Card className="bg-secondary/30 border-border/50">
+                        <CardContent className="p-4 space-y-4">
+                          <h4 className="font-semibold text-foreground">Under Review Actions</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Document verification and finance approval are required before final approval.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {!selectedApp.document_verified_at && can('loans', 'verify_documents') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => transitionMutation.mutate({ id: selectedApp.id, action: 'verify_documents' })}
+                                disabled={transitionMutation.isPending}
+                              >
+                                {transitionMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <FileText size={14} className="mr-1" />}
+                                Verify Documents
+                              </Button>
+                            )}
+                            {selectedApp.document_verified_at && !selectedApp.finance_verified_at && can('loans', 'finance_approve') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => transitionMutation.mutate({ id: selectedApp.id, action: 'finance_approve' })}
+                                disabled={transitionMutation.isPending}
+                              >
+                                {transitionMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <ShieldCheck size={14} className="mr-1" />}
+                                Approve Finance
+                              </Button>
+                            )}
+                            {selectedApp.document_verified_at && selectedApp.finance_verified_at && can('loans', 'approve') && (
+                              <Button
+                                size="sm"
+                                onClick={handleApprove}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
+                                Final Approve
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateStatusMutation.mutate({ id: selectedApp.id, status: 'crb_failed' })}
+                              disabled={isProcessing}
+                            >
+                              Move to CRB Failed
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateStatusMutation.mutate({ id: selectedApp.id, status: 'pmic_pending' })}
+                              disabled={isProcessing}
+                            >
+                              Move to PMIC Pending
+                            </Button>
+                          </div>
+                          <div className="space-y-2 pt-2 border-t border-border">
+                            <Label>Reject</Label>
                             <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select rejection reason" />
@@ -1750,54 +2288,48 @@ const AdminApplications = () => {
                                 <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
                                 <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
                                 <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
-                                <SelectItem value="High Debt-to-Income Ratio">High Debt-to-Income Ratio</SelectItem>
-                                <SelectItem value="Unstable Employment">Unstable Employment</SelectItem>
                                 <SelectItem value="Failed CRB Check">Failed CRB Check</SelectItem>
-                                <SelectItem value="Insufficient Collateral">Insufficient Collateral</SelectItem>
-                                <SelectItem value="Age Requirement Not Met">Age Requirement Not Met</SelectItem>
-                                <SelectItem value="Duplicate Application">Duplicate Application</SelectItem>
                                 <SelectItem value="Other">Other</SelectItem>
                               </SelectContent>
                             </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Additional Details (Optional)</Label>
                             <Textarea
-                              placeholder="Add more context or specific details..."
+                              placeholder="Additional details (optional)"
                               value={rejectionReason}
                               onChange={(e) => setRejectionReason(e.target.value)}
-                              rows={3}
+                              rows={2}
                             />
-                          </div>
-                          <div className="flex gap-2">
                             <Button
                               variant="destructive"
-                              className="flex-1"
+                              size="sm"
                               onClick={handleReject}
-                              disabled={isProcessing}
+                              disabled={isProcessing || !rejectionCategory}
                             >
                               <XCircle size={16} className="mr-1" />
                               Reject
-                            </Button>
-                            <Button
-                              className="flex-1"
-                              onClick={handleApprove}
-                              disabled={isProcessing}
-                            >
-                              <CheckCircle size={16} className="mr-1" />
-                              Approve
                             </Button>
                           </div>
                         </CardContent>
                       </Card>
                     )}
 
-                    {selectedApp.status === 'approved' && (
+                    {/* Approved but contract not signed: show message, no Disburse */}
+                    {selectedApp.status === 'approved' && can('disbursement', 'disburse') && !isFullySigned && (
+                      <Card className="bg-warning/10 border-warning/30">
+                        <CardContent className="p-4 space-y-2">
+                          <h4 className="font-semibold text-foreground">Contract required</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Contract must be signed by both parties before disbursement. Complete the Contract section below.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedApp.status === 'approved' && can('disbursement', 'disburse') && isFullySigned && (
                       <Card className="bg-secondary/30 border-border/50">
                         <CardContent className="p-4 space-y-4">
                           <h4 className="font-semibold text-foreground">Disburse Loan</h4>
                           <p className="text-sm text-muted-foreground">
-                            This loan is approved and ready for disbursement.
+                            This loan is approved and the contract is signed. Ready for disbursement.
                           </p>
                           <Button onClick={() => setIsDisburseOpen(true)} className="w-full">
                             <DollarSign size={16} className="mr-1" />
@@ -1825,53 +2357,120 @@ const AdminApplications = () => {
                 </div>
 
                 {/* Assignment action */}
-                <div className="pt-6 border-t border-border">
-                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Assignment</h4>
-                  <Card className="bg-secondary/30 border-border/50">
-                    <CardContent className="p-4 space-y-4">
-                      <div className="space-y-2">
-                        <Label>Select Staff Member</Label>
-                        <Select value={assigneeId} onValueChange={setAssigneeId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {staffList?.map((staff: any) => (
-                              <SelectItem key={staff.user_id} value={staff.user_id}>
-                                {staff.profile?.full_name || staff.profile?.email} ({staff.role.replace('_', ' ')})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => assignMutation.mutate({
-                          id: selectedApp.id,
-                          staffId: assigneeId === "unassigned" ? "" : assigneeId
-                        })}
-                        disabled={assignMutation.isPending}
-                      >
-                        {assignMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
-                        Update Assignment
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
+                {can('loans', 'assign') && (
+                  <div className="pt-6 border-t border-border">
+                    <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Assignment</h4>
+                    <Card className="bg-secondary/30 border-border/50">
+                      <CardContent className="p-4 space-y-4">
+                        <div className="space-y-2">
+                          <Label>Select Staff Member</Label>
+                          <Select value={assigneeId} onValueChange={setAssigneeId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassigned">Unassigned</SelectItem>
+                              {staffList?.map((staff: any) => (
+                                <SelectItem key={staff.user_id} value={staff.user_id}>
+                                  {staff.profile?.full_name || staff.profile?.email} ({staff.role.replace('_', ' ')})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => assignMutation.mutate({
+                            id: selectedApp.id,
+                            staffId: assigneeId === "unassigned" ? "" : assigneeId
+                          })}
+                          disabled={assignMutation.isPending}
+                        >
+                          {assignMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
+                          Update Assignment
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
 
                 {/* Delete action */}
-                <div className="pt-6 border-t border-border">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive/5"
-                    onClick={() => setIsDeleteOpen(true)}
-                  >
-                    <Trash2 size={16} className="mr-1" />
-                    Delete Application
-                  </Button>
+                {can('loans', 'delete') && (
+                  <div className="pt-6 border-t border-border">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/5"
+                      onClick={() => setIsDeleteOpen(true)}
+                    >
+                      <Trash2 size={16} className="mr-1" />
+                      Delete Application
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="notes" className="mt-4 space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Loan Notes</h4>
+                <p className="text-sm text-muted-foreground">Internal notes are staff-only; borrower-visible notes can be seen by the borrower.</p>
+                <div className="space-y-4">
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1 space-y-2">
+                      <Label>New note</Label>
+                      <Textarea
+                        placeholder="Add a note..."
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        rows={2}
+                        className="resize-none"
+                      />
+                    </div>
+                    <Select value={noteType} onValueChange={(v: "internal" | "borrower_visible") => setNoteType(v)}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="internal">Internal</SelectItem>
+                        <SelectItem value="borrower_visible">Borrower visible</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!noteText.trim() || !selectedApp) return;
+                        addNoteMutation.mutate({ loanId: selectedApp.id, note: noteText.trim(), type: noteType });
+                      }}
+                      disabled={!noteText.trim() || addNoteMutation.isPending}
+                    >
+                      {addNoteMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} className="mr-1" />}
+                      Add
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {loanNotes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No notes yet.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {loanNotes.map((n: { id: string; note: string; type: string; created_at: string; user_id: string }) => (
+                          <Card key={n.id} className="bg-secondary/30 border-border/50 p-3">
+                            <div className="flex justify-between items-start gap-2">
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{n.note}</p>
+                              <Badge variant={n.type === "borrower_visible" ? "default" : "secondary"} className="shrink-0 text-xs">
+                                {n.type === "borrower_visible" ? "Borrower visible" : "Internal"}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {format(new Date(n.created_at), "PPp")}
+                              {staffList?.find((s: any) => s.user_id === n.user_id)?.profile?.full_name && (
+                                <> · {staffList?.find((s: any) => s.user_id === n.user_id)?.profile?.full_name}</>
+                              )}
+                            </p>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </TabsContent>
 
