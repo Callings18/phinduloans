@@ -57,6 +57,7 @@ import {
   Activity,
   Shield,
   Upload,
+  Clock,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1979,23 +1980,42 @@ const AdminApplications = () => {
                   </Card>
                 )}
 
-                {/* Contract section: status, generate/share, upload signed, Sign & Verify, View contract */}
+                {/* Contract Management (same flow as Loan Details – all loans) */}
                 {(selectedApp.status === 'under_review' || selectedApp.status === 'approved') && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
                         <FileText size={18} />
-                        Contract
+                        Contract Management
                       </CardTitle>
-                      <CardDescription>
-                        {isFullySigned
-                          ? "Signed (both parties). Ready for disbursement."
-                          : isBorrowerSigned
-                            ? "Borrower signed. Admin must sign & verify to enable disbursement."
-                            : "Not signed. Generate contract, send to borrower, then upload signed contract or have borrower sign."}
-                      </CardDescription>
+                      <CardDescription>Download, share or update loan contract</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                      {/* Signing status (same as Loan Details) */}
+                      <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Signing status</p>
+                        <div className="flex flex-wrap gap-3 text-sm">
+                          <span className={isBorrowerSigned ? "text-success font-medium" : "text-muted-foreground"}>
+                            {isBorrowerSigned ? (
+                              <><CheckCircle size={14} className="inline mr-1" /> Borrower signed</>
+                            ) : (
+                              <><Clock size={14} className="inline mr-1" /> Borrower not signed yet</>
+                            )}
+                          </span>
+                          <span className={selectedApp.admin_signed ? "text-success font-medium" : "text-muted-foreground"}>
+                            {selectedApp.admin_signed ? (
+                              <><CheckCircle size={14} className="inline mr-1" /> Admin signed</>
+                            ) : (
+                              <><Clock size={14} className="inline mr-1" /> Admin not signed yet</>
+                            )}
+                          </span>
+                        </div>
+                        {!isFullySigned && (
+                          <p className="text-xs text-warning">
+                            No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.
+                          </p>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"

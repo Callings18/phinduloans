@@ -90,6 +90,22 @@ import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract } from "@/utils/generateLoanContract";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
+import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
+
+/** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
+const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
+  pending: ["under_review", "rejected"],
+  under_review: ["approved", "rejected", "crb_failed", "pmic_pending"],
+  approved: ["contract_signing"],
+  contract_signing: [],
+  disbursed: ["active"],
+  active: ["completed", "defaulted"],
+  completed: [],
+  defaulted: [],
+  rejected: [],
+  crb_failed: [],
+  pmic_pending: [],
+};
 
 interface Loan {
   id: string;
@@ -778,9 +794,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Update loan status mutation
+  // Update loan status mutation (Move to)
   const updateStatusMutation = useMutation({
-    mutationFn: async (status: "active" | "completed" | "defaulted" | "disbursed" | "pending" | "approved" | "rejected" | "under_review") => {
+    mutationFn: async (status: string) => {
       if (!loan) throw new Error("No loan selected");
       const { error } = await supabase
         .from("loan_applications")
@@ -788,9 +804,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("id", loan.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, newStatus) => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      toast.success("Loan status updated");
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      toast.success(`Moved to ${getCanonicalStatusLabel(newStatus)}`);
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to update status");
@@ -1632,88 +1649,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </div>
               </TabsContent>
 
-              {/* Actions Tab */}
+              {/* Actions Tab – same sections for all loans; only "Move to" options change by stage */}
               <TabsContent value="actions" className="m-0 space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  {/* Loan Status */}
+                <div className="space-y-4">
+                  {/* Step 1: Move to (stage transitions only) */}
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Loan Status</CardTitle>
-                      <CardDescription>Change the status of this loan</CardDescription>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <ArrowRight size={16} /> Move to
+                      </CardTitle>
+                      <CardDescription>
+                        Current stage: {getCanonicalStatusLabel(loan.status)}. Choose the next stage for this loan.
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2">
-                      {loan.status !== "active" && (
-                        <Button size="sm" onClick={() => updateStatusMutation.mutate("active")}>
-                          <Activity size={14} className="mr-1" /> Mark Active
-                        </Button>
-                      )}
-                      {loan.status !== "completed" && (
-                        <Button size="sm" variant="outline" onClick={() => updateStatusMutation.mutate("completed")}>
-                          <CheckCircle size={14} className="mr-1" /> Mark Completed
-                        </Button>
-                      )}
-                      {loan.status !== "defaulted" && (
-                        <Button size="sm" variant="destructive" onClick={() => updateStatusMutation.mutate("defaulted")}>
-                          <XCircle size={14} className="mr-1" /> Mark Defaulted
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Financial Actions */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Financial Actions</CardTitle>
-                      <CardDescription>Manage penalties and settlements</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      {overdueCount > 0 && (
-                        <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
-                          <AlertCircle size={14} className="mr-1" /> Apply Penalties
-                        </Button>
-                      )}
-                      {loan.status === "active" && (
+                      {(ALLOWED_NEXT_STATUSES[loan.status] ?? []).map((nextStatus) => (
                         <Button
+                          key={nextStatus}
                           size="sm"
-                          variant="outline"
-                          onClick={() => calculateEarlySettlementMutation.mutate()}
-                          disabled={calculateEarlySettlementMutation.isPending}
+                          variant={nextStatus === "rejected" || nextStatus === "defaulted" ? "destructive" : nextStatus === "approved" ? "default" : "outline"}
+                          onClick={() => updateStatusMutation.mutate(nextStatus)}
+                          disabled={updateStatusMutation.isPending}
                         >
-                          {calculateEarlySettlementMutation.isPending ? (
+                          {updateStatusMutation.isPending ? (
                             <Loader2 className="animate-spin mr-1" size={14} />
                           ) : (
-                            <Calculator size={14} className="mr-1" />
+                            <ArrowRight size={14} className="mr-1" />
                           )}
-                          Calculate Early Settlement
+                          Move to {getCanonicalStatusLabel(nextStatus)}
                         </Button>
+                      ))}
+                      {(ALLOWED_NEXT_STATUSES[loan.status] ?? []).length === 0 && (
+                        <p className="text-sm text-muted-foreground">No further stage moves from this status.</p>
                       )}
                     </CardContent>
                   </Card>
 
-                  {/* Loan Management */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Loan Management</CardTitle>
-                      <CardDescription>Modify loan terms or undo actions</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
-                        <RefreshCw size={14} className="mr-1" /> Restructure Loan
-                      </Button>
-                      {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
-                        <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
-                          <Undo2 size={14} className="mr-1" /> Undo Disbursement
-                        </Button>
-                      )}
-                      {(!repayments || repayments.length === 0) && (
-                        <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
-                          <Plus size={14} className="mr-1" /> Generate Schedule
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                   {/* Contract Management */}
+                  {/* Step 2: Contract Management (same for all loans) */}
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -1874,7 +1846,67 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </CardContent>
                   </Card>
 
-                  {/* Loan Schedule */}
+                  {/* Step 3: Loan Management (same for all loans; buttons enabled by status) */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <RefreshCw size={16} /> Loan Management
+                      </CardTitle>
+                      <CardDescription>Modify loan terms or undo actions</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
+                        <RefreshCw size={14} className="mr-1" /> Restructure Loan
+                      </Button>
+                      {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
+                        <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
+                          <Undo2 size={14} className="mr-1" /> Undo Disbursement
+                        </Button>
+                      )}
+                      {(!repayments || repayments.length === 0) && (
+                        <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
+                          <Plus size={14} className="mr-1" /> Generate Schedule
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Step 4: Financial Actions (same for all loans; buttons by condition) */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Banknote size={16} /> Financial Actions
+                      </CardTitle>
+                      <CardDescription>Manage penalties and settlements</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      {overdueCount > 0 && (
+                        <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
+                          <AlertCircle size={14} className="mr-1" /> Apply Penalties
+                        </Button>
+                      )}
+                      {loan.status === "active" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => calculateEarlySettlementMutation.mutate()}
+                          disabled={calculateEarlySettlementMutation.isPending}
+                        >
+                          {calculateEarlySettlementMutation.isPending ? (
+                            <Loader2 className="animate-spin mr-1" size={14} />
+                          ) : (
+                            <Calculator size={14} className="mr-1" />
+                          )}
+                          Calculate Early Settlement
+                        </Button>
+                      )}
+                      {overdueCount === 0 && loan.status !== "active" && (
+                        <p className="text-sm text-muted-foreground">No financial actions available for this stage.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Step 5: Loan Schedule */}
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -1898,7 +1930,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </CardContent>
                   </Card>
 
-                  {/* Payment Reversals Info */}
+                  {/* Step 6: Payment Reversals (when applicable) */}
                   {reversedRepayments.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2">
@@ -1924,7 +1956,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   )}
                 </div>
 
-                {/* Admin Notes */}
+                {/* Step 7: Admin Notes (same for all loans) */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
