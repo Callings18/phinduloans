@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 interface ReportsExportProps {
   open: boolean;
@@ -36,7 +37,7 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
   const { can } = usePermissions();
   const canExport = can("reports", "export");
   const [reportType, setReportType] = useState<ReportType>("loans");
-  const [exportFormat, setExportFormat] = useState<"csv" | "pdf">("csv");
+  const [exportFormat, setExportFormat] = useState<"csv" | "pdf" | "xlsx">("csv");
   const [dateRange, setDateRange] = useState("all");
   const [includeFields, setIncludeFields] = useState({
     personalInfo: true,
@@ -177,12 +178,10 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
       }
 
       if (exportFormat === "csv") {
-        // Generate CSV
         const csvContent = [
           columns.join(","),
           ...data.map(row => columns.map(col => `"${row[col] || ""}"`).join(","))
         ].join("\n");
-
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -190,6 +189,11 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
         a.download = `${reportType}-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
         a.click();
         URL.revokeObjectURL(url);
+      } else if (exportFormat === "xlsx") {
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Report");
+        XLSX.writeFile(wb, `${reportType}-report-${format(new Date(), "yyyy-MM-dd")}.xlsx`);
       } else {
         // Generate PDF
         const doc = new jsPDF();
@@ -258,14 +262,19 @@ export default function ReportsExport({ open, onOpenChange }: ReportsExportProps
 
           <div className="space-y-2">
             <Label>Export Format</Label>
-            <Select value={exportFormat} onValueChange={(v: "csv" | "pdf") => setExportFormat(v)}>
+            <Select value={exportFormat} onValueChange={(v: "csv" | "pdf" | "xlsx") => setExportFormat(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="csv">
                   <div className="flex items-center gap-2">
-                    <FileSpreadsheet size={14} /> CSV (Excel)
+                    <FileSpreadsheet size={14} /> CSV
+                  </div>
+                </SelectItem>
+                <SelectItem value="xlsx">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet size={14} /> Excel (.xlsx)
                   </div>
                 </SelectItem>
                 <SelectItem value="pdf">
