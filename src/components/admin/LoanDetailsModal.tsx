@@ -1144,8 +1144,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </CardContent>
                 </Card>
 
-                {/* Contract Signing Status - for approved loans */}
-                {(loan.status === "approved" || loan.signed_contract_url) && (
+                {/* Contract Signing Status - for approved/contract_signing loans */}
+                {(loan.status === "approved" || loan.status === "contract_signing" || loan.signed_contract_url) && (
                   <Card className={`border-2 ${
                     loan.borrower_signed && loan.admin_signed 
                       ? "border-success/50 bg-success/5" 
@@ -1482,7 +1482,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
               {/* Documents Tab */}
               <TabsContent value="documents" className="m-0">
-                <DocumentVerificationTab loanId={loan.id} />
+                <DocumentVerificationTab loanId={loan.id} borrowerId={loan.user_id} />
               </TabsContent>
 
               {/* Guarantors Tab */}
@@ -1679,7 +1679,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </CardContent>
                   </Card>
 
-                  {/* Contract Management */}
+                   {/* Contract Management */}
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -1688,6 +1688,39 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <CardDescription>Download, share or update loan contract</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      {/* Generate & Send Contract - transitions approved → contract_signing */}
+                      {loan.status === "approved" && (
+                        <Button
+                          size="sm"
+                          className="w-full mb-2"
+                          onClick={async () => {
+                            try {
+                              // Generate and send contract via all channels
+                              await handleDownloadContract();
+                              await handleContractEmail();
+                              await handleContractWhatsApp();
+                              await handleContractSMS();
+
+                              // Transition status to contract_signing
+                              const { error } = await supabase
+                                .from("loan_applications")
+                                .update({ status: "contract_signing" as any })
+                                .eq("id", loan.id);
+
+                              if (error) throw error;
+
+                              queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+                              queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+                              toast.success("Contract generated, sent to borrower, and status updated to Contract Signing");
+                            } catch (err: any) {
+                              toast.error(err.message || "Failed to generate and send contract");
+                            }
+                          }}
+                        >
+                          <Send size={14} className="mr-1" /> Generate & Send Contract
+                        </Button>
+                      )}
+
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={handleDownloadContract}>
                           <Download size={14} className="mr-1" /> Download Contract

@@ -268,7 +268,7 @@ const Apply = () => {
         .from("loan_applications")
         .select("id, full_name, loan_amount, loan_term_months, status, created_at, nrc_number, phone")
         .eq("user_id", user.id)
-        .in("status", ["pending", "under_review", "crb_failed", "pmic_pending", "approved", "disbursed", "active"])
+        .in("status", ["pending", "under_review", "approved", "disbursed", "active"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1096,7 +1096,7 @@ const Apply = () => {
           </div>
 
           {/* Blacklist gate: borrower cannot apply (respect blacklist_expires_at) */}
-          {user && profile?.is_blacklisted && (profile.blacklist_expires_at == null || new Date(profile.blacklist_expires_at) > new Date()) && (
+          {user && profile?.is_blacklisted && ((profile as any).blacklist_expires_at == null || new Date((profile as any).blacklist_expires_at) > new Date()) && (
             <div className="max-w-2xl mx-auto mb-12">
               <Alert className="border-destructive bg-destructive/10">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -1126,7 +1126,7 @@ const Apply = () => {
           )}
 
           {/* Existing Active Loan Block */}
-          {!(profile?.is_blacklisted && (profile.blacklist_expires_at == null || new Date(profile.blacklist_expires_at) > new Date())) && existingActiveLoan && (
+          {!(profile?.is_blacklisted && ((profile as any).blacklist_expires_at == null || new Date((profile as any).blacklist_expires_at) > new Date())) && existingActiveLoan && (
             <div className="max-w-2xl mx-auto mb-12">
               <Alert className="border-warning bg-warning/10">
                 <AlertTriangle className="h-5 w-5 text-warning" />
@@ -1178,7 +1178,7 @@ const Apply = () => {
           )}
 
           {/* Application form and steps: only when not blacklisted (or blacklist expired) */}
-          {!(user && profile?.is_blacklisted && (profile.blacklist_expires_at == null || new Date(profile.blacklist_expires_at) > new Date())) && (
+          {!(user && profile?.is_blacklisted && ((profile as any).blacklist_expires_at == null || new Date((profile as any).blacklist_expires_at) > new Date())) && (
           <>
           {/* Auto-save indicator */}
           {draftChecked && (

@@ -2313,6 +2313,7 @@ export type Database = {
         Row: {
           address: string | null
           avatar_url: string | null
+          blacklist_expires_at: string | null
           blacklist_reason: string | null
           blacklisted_at: string | null
           blacklisted_by: string | null
@@ -2320,6 +2321,7 @@ export type Database = {
           created_at: string
           email: string
           email_reminders: boolean | null
+          email_verified_at: string | null
           full_name: string | null
           id: string
           is_blacklisted: boolean | null
@@ -2327,12 +2329,14 @@ export type Database = {
           nrc_number: string | null
           payment_alerts: boolean | null
           phone: string | null
+          phone_verified_at: string | null
           sms_reminders: boolean | null
           updated_at: string
         }
         Insert: {
           address?: string | null
           avatar_url?: string | null
+          blacklist_expires_at?: string | null
           blacklist_reason?: string | null
           blacklisted_at?: string | null
           blacklisted_by?: string | null
@@ -2340,6 +2344,7 @@ export type Database = {
           created_at?: string
           email: string
           email_reminders?: boolean | null
+          email_verified_at?: string | null
           full_name?: string | null
           id: string
           is_blacklisted?: boolean | null
@@ -2347,12 +2352,14 @@ export type Database = {
           nrc_number?: string | null
           payment_alerts?: boolean | null
           phone?: string | null
+          phone_verified_at?: string | null
           sms_reminders?: boolean | null
           updated_at?: string
         }
         Update: {
           address?: string | null
           avatar_url?: string | null
+          blacklist_expires_at?: string | null
           blacklist_reason?: string | null
           blacklisted_at?: string | null
           blacklisted_by?: string | null
@@ -2360,6 +2367,7 @@ export type Database = {
           created_at?: string
           email?: string
           email_reminders?: boolean | null
+          email_verified_at?: string | null
           full_name?: string | null
           id?: string
           is_blacklisted?: boolean | null
@@ -2367,6 +2375,7 @@ export type Database = {
           nrc_number?: string | null
           payment_alerts?: boolean | null
           phone?: string | null
+          phone_verified_at?: string | null
           sms_reminders?: boolean | null
           updated_at?: string
         }
@@ -2647,6 +2656,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      log_auth_event: {
+        Args: { p_action: string; p_device_info?: Json; p_ip_address?: string }
+        Returns: undefined
+      }
       send_notification_via_edge_function: {
         Args: {
           p_event_type?: string
@@ -2677,6 +2690,7 @@ export type Database = {
         | "pending"
         | "under_review"
         | "approved"
+        | "contract_signing"
         | "rejected"
         | "disbursed"
         | "active"
@@ -2826,6 +2840,7 @@ export const Constants = {
         "pending",
         "under_review",
         "approved",
+        "contract_signing",
         "rejected",
         "disbursed",
         "active",

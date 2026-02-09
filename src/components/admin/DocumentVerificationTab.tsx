@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
+import AdminDocumentUpload from "./AdminDocumentUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -85,6 +86,7 @@ interface ApplicationDocumentRow {
 
 interface Props {
   loanId: string;
+  borrowerId?: string;
 }
 
 const DEFAULT_DOCUMENTS = [
@@ -98,8 +100,9 @@ const DEFAULT_DOCUMENTS = [
   { type: "contract", name: "Signed Loan Contract", required: true },
 ];
 
-export default function DocumentVerificationTab({ loanId }: Props) {
+export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
   const [isAddDocOpen, setIsAddDocOpen] = useState(false);
+  const [isAdminUploadOpen, setIsAdminUploadOpen] = useState(false);
   const [isVerifyOpen, setIsVerifyOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocumentChecklistItem | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<"verified" | "rejected">("verified");
@@ -119,6 +122,7 @@ export default function DocumentVerificationTab({ loanId }: Props) {
       const { data, error } = await supabase
         .from("loan_applications")
         .select(`
+          user_id,
           loan_product_id,
           nrc_front_url,
           nrc_back_url,
@@ -143,7 +147,7 @@ export default function DocumentVerificationTab({ loanId }: Props) {
   });
 
   const loanProductId = (loanApplication as { loan_product_id?: string } | undefined)?.loan_product_id ?? null;
-
+  const resolvedBorrowerId = borrowerId || (loanApplication as { user_id?: string } | undefined)?.user_id || "";
   // Fetch required documents from loan_products.required_documents JSONB
   const { data: productDocuments = [] } = useQuery({
     queryKey: ["loan-product-documents", loanProductId],
@@ -345,6 +349,30 @@ export default function DocumentVerificationTab({ loanId }: Props) {
         .eq("id", selectedDoc.id);
 
       if (error) throw error;
+
+      // Sync verification status to application_documents table
+      // so borrower's DocumentChecklist sees the updated status
+      const docTypeToSync = selectedDoc.document_type;
+      const appDocsToUpdate = applicationDocuments.filter(
+        (d) => d.document_type === docTypeToSync
+      );
+      
+      if (appDocsToUpdate.length > 0) {
+        const appDocStatus = verificationStatus === "verified" ? "verified" : "rejected";
+        const appDocNotes = verificationStatus === "rejected" ? rejectionReason : verificationNotes || null;
+        
+        for (const appDoc of appDocsToUpdate) {
+          await supabase
+            .from("application_documents")
+            .update({
+              status: appDocStatus,
+              notes: appDocNotes,
+              verified_at: new Date().toISOString(),
+              verified_by: user?.id,
+            })
+            .eq("id", appDoc.id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-checklist", loanId] });
@@ -453,10 +481,15 @@ export default function DocumentVerificationTab({ loanId }: Props) {
             <p className="text-muted-foreground mb-4">
               Check legacy folder if application is old.
             </p>
-            <Button onClick={() => initChecklistMutation.mutate()} disabled={initChecklistMutation.isPending}>
-              {initChecklistMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
-              <Plus size={14} className="mr-1" /> Initialize Checklist
-            </Button>
+            <div className="flex gap-2 justify-center">
+              <Button onClick={() => initChecklistMutation.mutate()} disabled={initChecklistMutation.isPending}>
+                {initChecklistMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
+                <Plus size={14} className="mr-1" /> Initialize Checklist
+              </Button>
+              <Button variant="outline" onClick={() => setIsAdminUploadOpen(true)}>
+                <Upload size={14} className="mr-1" /> Upload Document
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -520,6 +553,16 @@ export default function DocumentVerificationTab({ loanId }: Props) {
             )}
           </CardContent>
         </Card>
+
+        {/* Admin Document Upload Dialog for no-checklist view */}
+        <AdminDocumentUpload
+          loanId={loanId}
+          borrowerId={resolvedBorrowerId}
+          loanProductId={loanProductId}
+          productDocuments={productDocuments}
+          open={isAdminUploadOpen}
+          onOpenChange={setIsAdminUploadOpen}
+        />
       </div>
     );
   }
@@ -564,9 +607,14 @@ export default function DocumentVerificationTab({ loanId }: Props) {
               <CardTitle className="text-base">Document Checklist</CardTitle>
               <CardDescription>Verify borrower documents before approval</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={() => setIsAddDocOpen(true)}>
-              <Plus size={14} className="mr-1" /> Add Document
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="default" onClick={() => setIsAdminUploadOpen(true)}>
+                <Upload size={14} className="mr-1" /> Upload Document
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setIsAddDocOpen(true)}>
+                <Plus size={14} className="mr-1" /> Add to Checklist
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -870,6 +918,16 @@ export default function DocumentVerificationTab({ loanId }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Admin Document Upload Dialog */}
+      <AdminDocumentUpload
+        loanId={loanId}
+        borrowerId={resolvedBorrowerId}
+        loanProductId={loanProductId}
+        productDocuments={productDocuments}
+        open={isAdminUploadOpen}
+        onOpenChange={setIsAdminUploadOpen}
+      />
     </div>
   );
 }
