@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +106,8 @@ interface StaffMember {
 }
 
 const AdminCollections = () => {
+  const { can } = usePermissions();
+  const canManageCollections = can("collections", "manage");
   const [activeTab, setActiveTab] = useState("overdue");
   const [searchQuery, setSearchQuery] = useState("");
   const [daysOverdueFilter, setDaysOverdueFilter] = useState("all");
@@ -638,46 +641,50 @@ const AdminCollections = () => {
                               )}
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedRepayment(item);
-                                  setIsActivityDialogOpen(true);
-                                }}
-                              >
-                                <MessageSquare size={14} className="mr-1" /> Log
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedRepayment(item);
-                                  setIsAssignDialogOpen(true);
-                                }}
-                              >
-                                <UserPlus size={14} className="mr-1" /> Assign
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedRepayment(item);
-                                  setIsDemandLetterDialogOpen(true);
-                                }}
-                              >
-                                <FileText size={14} className="mr-1" /> Letter
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => {
-                                  setSelectedRepayment(item);
-                                  setIsEscalateDialogOpen(true);
-                                }}
-                              >
-                                <ArrowUpCircle size={14} className="mr-1" /> Escalate
-                              </Button>
+                              {canManageCollections && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedRepayment(item);
+                                      setIsActivityDialogOpen(true);
+                                    }}
+                                  >
+                                    <MessageSquare size={14} className="mr-1" /> Log
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedRepayment(item);
+                                      setIsAssignDialogOpen(true);
+                                    }}
+                                  >
+                                    <UserPlus size={14} className="mr-1" /> Assign
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedRepayment(item);
+                                      setIsDemandLetterDialogOpen(true);
+                                    }}
+                                  >
+                                    <FileText size={14} className="mr-1" /> Letter
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => {
+                                      setSelectedRepayment(item);
+                                      setIsEscalateDialogOpen(true);
+                                    }}
+                                  >
+                                    <ArrowUpCircle size={14} className="mr-1" /> Escalate
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>

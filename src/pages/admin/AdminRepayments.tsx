@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { notificationService } from "@/utils/notifications";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,8 @@ interface PaymentClaim {
 
 const AdminRepayments = () => {
   const { user } = useAuth();
+  const { can } = usePermissions();
+  const canRecordPayment = can("repayments", "record");
   const { data: settings } = useSystemSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -692,7 +695,7 @@ const AdminRepayments = () => {
           <BulkActions
             selectedIds={selectedRepayments}
             onAction={handleBulkAction}
-            actions={defaultRepaymentActions}
+            actions={canRecordPayment ? defaultRepaymentActions : defaultRepaymentActions.filter((a) => a.id !== "mark_paid")}
             entityName="repayments"
             onClearSelection={() => setSelectedRepayments([])}
           />
@@ -797,7 +800,7 @@ const AdminRepayments = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-col items-end gap-1">
-                            {rep.status === "pending" && claimsByRepaymentId[rep.id] && (
+                            {rep.status === "pending" && canRecordPayment && claimsByRepaymentId[rep.id] && (
                               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                                 <Badge variant="secondary" className="text-xs">Borrower reported – pending verification</Badge>
                                 <Button
@@ -811,7 +814,7 @@ const AdminRepayments = () => {
                                 </Button>
                               </div>
                             )}
-                            {rep.status === "pending" && (
+                            {rep.status === "pending" && canRecordPayment && (
                               <Button
                                 size="sm"
                                 onClick={() => handleRecordPayment(rep)}

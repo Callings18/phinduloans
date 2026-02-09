@@ -1,6 +1,7 @@
 // App v28 - clean React hooks 2026-02-04
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import AdminRoute from "./components/admin/AdminRoute";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -132,30 +133,32 @@ function App() {
                 <Route path="/login" element={<Auth />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/applications" element={<AdminApplications />} />
-                <Route path="/admin/borrowers" element={<AdminBorrowers />} />
-                <Route path="/admin/settings" element={<AdminSettings />} />
-                <Route path="/admin/employers" element={<AdminEmployers />} />
-                <Route path="/admin/disbursements" element={<AdminDisbursements />} />
-                <Route path="/admin/reports" element={<AdminReports />} />
-                <Route path="/admin/loan-products" element={<AdminLoanProducts />} />
-                <Route path="/admin/loans" element={<AdminLoans />} />
-                <Route path="/admin/repayments" element={<AdminRepayments />} />
-                <Route path="/admin/collections" element={<AdminCollections />} />
-                <Route path="/admin/staff" element={<AdminStaff />} />
-                <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
-                <Route path="/admin/write-offs" element={<AdminWriteOffs />} />
-                <Route path="/admin/bulk-repayments" element={<AdminBulkRepayments />} />
-                <Route path="/admin/contract-templates" element={<AdminContractTemplates />} />
-                <Route path="/admin/pmic" element={<AdminPMIC />} />
-                <Route path="/admin/accounts" element={<AdminAccounts />} />
-                <Route path="/admin/expenses" element={<AdminExpenses />} />
-                <Route path="/admin/court-cases" element={<AdminCourtCases />} />
-                <Route path="/admin/wallets" element={<AdminWallets />} />
-                <Route path="/admin/hr" element={<AdminHR />} />
-                <Route path="/admin/payroll" element={<AdminPayroll />} />
-                <Route path="/admin/email-log" element={<AdminEmailLog />} />
+                <Route path="/admin" element={<AdminRoute />}>
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="applications" element={<AdminApplications />} />
+                  <Route path="borrowers" element={<AdminBorrowers />} />
+                  <Route path="settings" element={<AdminSettings />} />
+                  <Route path="employers" element={<AdminEmployers />} />
+                  <Route path="disbursements" element={<AdminDisbursements />} />
+                  <Route path="reports" element={<AdminReports />} />
+                  <Route path="loan-products" element={<AdminLoanProducts />} />
+                  <Route path="loans" element={<AdminLoans />} />
+                  <Route path="repayments" element={<AdminRepayments />} />
+                  <Route path="collections" element={<AdminCollections />} />
+                  <Route path="staff" element={<AdminStaff />} />
+                  <Route path="audit-logs" element={<AdminAuditLogs />} />
+                  <Route path="write-offs" element={<AdminWriteOffs />} />
+                  <Route path="bulk-repayments" element={<AdminBulkRepayments />} />
+                  <Route path="contract-templates" element={<AdminContractTemplates />} />
+                  <Route path="pmic" element={<AdminPMIC />} />
+                  <Route path="accounts" element={<AdminAccounts />} />
+                  <Route path="expenses" element={<AdminExpenses />} />
+                  <Route path="court-cases" element={<AdminCourtCases />} />
+                  <Route path="wallets" element={<AdminWallets />} />
+                  <Route path="hr" element={<AdminHR />} />
+                  <Route path="payroll" element={<AdminPayroll />} />
+                  <Route path="email-log" element={<AdminEmailLog />} />
+                </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

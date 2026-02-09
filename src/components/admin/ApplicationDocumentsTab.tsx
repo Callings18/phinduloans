@@ -32,16 +32,6 @@ const docTypeIcons: Record<string, string> = {
 const getDocIcon = (docType: string): string =>
   docTypeIcons[docType] || docTypeIcons[docType?.toUpperCase()] || "📎";
 
-// Default required documents if no product config
-const DEFAULT_REQUIRED_DOCS = [
-  { document_type: "NRC_FRONT", document_name: "NRC Front", is_mandatory: true },
-  { document_type: "NRC_BACK", document_name: "NRC Back", is_mandatory: true },
-  { document_type: "SELFIE", document_name: "Selfie / Photo ID", is_mandatory: true },
-  { document_type: "PAYSLIP", document_name: "Latest Payslip", is_mandatory: true },
-  { document_type: "BANK_STATEMENT", document_name: "Bank Statement", is_mandatory: true },
-  { document_type: "EMPLOYER_LETTER", document_name: "Employer Letter", is_mandatory: false },
-];
-
 // Legacy column mapping
 const legacyDocColumns = [
   { key: "nrc_front_url", docType: "NRC_FRONT", label: "NRC Front" },
@@ -120,7 +110,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
   const productName = loanProduct?.name || "Unknown Product";
   const productDocuments = useMemo(() => {
     const docs = loanProduct?.required_documents as { document_type: string; document_name: string; is_mandatory: boolean }[] | null;
-    return docs && docs.length > 0 ? docs : DEFAULT_REQUIRED_DOCS;
+    return docs && docs.length > 0 ? docs : [];
   }, [loanProduct]);
 
   // Build all uploaded docs (unified + legacy)
@@ -327,11 +317,20 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Required Documents</CardTitle>
           <CardDescription>
-            Documents required for this loan product. Upload missing documents on behalf of the borrower.
+            {productDocuments.length === 0
+              ? "Required documents are configured per loan product. Configure them in Admin → Loan Products for this product."
+              : "Documents required for this loan product. Upload missing documents on behalf of the borrower."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {documentChecklist.map((row) => (
+          {productDocuments.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+              <AlertTriangle className="mx-auto h-8 w-8 mb-2 opacity-70" />
+              <p className="font-medium">No required documents configured for this product.</p>
+              <p className="mt-1">Configure required documents in Admin → Loan Products for this application&apos;s product.</p>
+            </div>
+          ) : (
+          documentChecklist.map((row) => (
             <div
               key={row.docType}
               className={`rounded-lg border p-3 transition-colors ${
@@ -445,7 +444,8 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
                 </div>
               )}
             </div>
-          ))}
+          ))
+          )}
         </CardContent>
       </Card>
 

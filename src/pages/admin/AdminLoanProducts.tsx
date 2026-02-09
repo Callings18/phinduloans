@@ -167,7 +167,21 @@ interface LoanProduct {
   guarantee_provider: string | null;
   max_guarantee_percent: number | null;
   guarantee_fee_percent: number | null;
+  required_documents?: { document_type: string; document_name: string; is_mandatory: boolean; display_order: number }[] | null;
 }
+
+export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "nrc_front", label: "NRC Front" },
+  { value: "nrc_back", label: "NRC Back" },
+  { value: "selfie", label: "Selfie" },
+  { value: "payslip", label: "Latest Payslip" },
+  { value: "payslip_2", label: "Second Payslip" },
+  { value: "payslip_3", label: "Third Payslip" },
+  { value: "bank_statement", label: "Bank Statement" },
+  { value: "employer_letter", label: "Employment Letter" },
+  { value: "proof_of_residence", label: "Proof of Residence" },
+  { value: "collateral", label: "Collateral Image" },
+];
 
 const defaultFormData = {
   name: "",
@@ -191,6 +205,7 @@ const defaultFormData = {
   penalty_frequency: "monthly",
   is_active: true,
   requirements: "",
+  required_documents: [] as { document_type: string; document_name: string; is_mandatory: boolean; display_order: number }[],
   employment_types: ["employed", "self_employed", "contract"],
   grace_period_days: 0,
   late_payment_penalty_percent: 5,
@@ -506,6 +521,7 @@ const AdminLoanProducts = () => {
         penalty_frequency: product.penalty_frequency,
         is_active: false,
         requirements: product.requirements,
+        required_documents: (product as any).required_documents ?? [],
         employment_types: product.employment_types,
         grace_period_days: product.grace_period_days,
         late_payment_penalty_percent: product.late_payment_penalty_percent,
@@ -601,6 +617,14 @@ const AdminLoanProducts = () => {
       penalty_frequency: product.penalty_frequency || "monthly",
       is_active: product.is_active,
       requirements: product.requirements?.join("\n") || "",
+      required_documents: Array.isArray((product as any).required_documents)
+        ? ((product as any).required_documents as { document_type: string; document_name: string; is_mandatory?: boolean; display_order?: number }[]).map((d, i) => ({
+            document_type: d.document_type || "",
+            document_name: d.document_name || d.doc_label || d.document_type || "",
+            is_mandatory: d.is_mandatory ?? true,
+            display_order: d.display_order ?? i + 1,
+          }))
+        : [],
       employment_types: product.employment_types || ["employed", "self_employed", "contract"],
       grace_period_days: product.grace_period_days || 0,
       late_payment_penalty_percent: product.late_payment_penalty_percent || 5,
@@ -666,6 +690,7 @@ const AdminLoanProducts = () => {
       penalty_frequency: formData.penalty_frequency,
       is_active: formData.is_active,
       requirements: formData.requirements.split("\n").filter(r => r.trim()),
+      required_documents: formData.required_documents?.length ? formData.required_documents : null,
       employment_types: formData.employment_types,
       grace_period_days: formData.grace_period_days,
       late_payment_penalty_percent: formData.late_payment_penalty_percent,
@@ -1462,6 +1487,105 @@ const AdminLoanProducts = () => {
                         onChange={(e) => setFormData({ ...formData, contract_template_url: e.target.value })}
                         placeholder="https://storage.example.com/templates/contract.pdf"
                       />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-base font-medium">Required documents (applicants must upload these)</Label>
+                          <p className="text-sm text-muted-foreground">Configure which documents applicants must upload for this product. If empty, applicants cannot complete the document step.</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setFormData({
+                            ...formData,
+                            required_documents: [
+                              ...(formData.required_documents || []),
+                              {
+                                document_type: REQUIRED_DOC_TYPE_OPTIONS[0].value,
+                                document_name: REQUIRED_DOC_TYPE_OPTIONS[0].label,
+                                is_mandatory: true,
+                                display_order: (formData.required_documents?.length ?? 0) + 1,
+                              },
+                            ],
+                          })}
+                        >
+                          <Plus className="h-4 w-4 mr-1" /> Add document
+                        </Button>
+                      </div>
+                      {(formData.required_documents?.length ?? 0) > 0 && (
+                        <div className="border rounded-md divide-y">
+                          {(formData.required_documents || []).map((doc, idx) => (
+                            <div key={idx} className="p-3 flex flex-wrap items-center gap-3 bg-muted/30">
+                              <Select
+                                value={doc.document_type}
+                                onValueChange={(v) => {
+                                  const opt = REQUIRED_DOC_TYPE_OPTIONS.find(o => o.value === v);
+                                  const next = [...(formData.required_documents || [])];
+                                  next[idx] = { ...next[idx], document_type: v, document_name: opt?.label ?? v };
+                                  setFormData({ ...formData, required_documents: next });
+                                }}
+                              >
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue placeholder="Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {REQUIRED_DOC_TYPE_OPTIONS.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                className="flex-1 min-w-[140px]"
+                                value={doc.document_name}
+                                onChange={(e) => {
+                                  const next = [...(formData.required_documents || [])];
+                                  next[idx] = { ...next[idx], document_name: e.target.value };
+                                  setFormData({ ...formData, required_documents: next });
+                                }}
+                                placeholder="Display name"
+                              />
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`req-mandatory-${idx}`}
+                                  checked={doc.is_mandatory}
+                                  onCheckedChange={(c) => {
+                                    const next = [...(formData.required_documents || [])];
+                                    next[idx] = { ...next[idx], is_mandatory: !!c };
+                                    setFormData({ ...formData, required_documents: next });
+                                  }}
+                                />
+                                <Label htmlFor={`req-mandatory-${idx}`} className="text-sm whitespace-nowrap">Mandatory</Label>
+                              </div>
+                              <Input
+                                type="number"
+                                className="w-16"
+                                min={1}
+                                value={doc.display_order}
+                                onChange={(e) => {
+                                  const next = [...(formData.required_documents || [])];
+                                  next[idx] = { ...next[idx], display_order: parseInt(e.target.value, 10) || 1 };
+                                  setFormData({ ...formData, required_documents: next });
+                                }}
+                              />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setFormData({
+                                  ...formData,
+                                  required_documents: formData.required_documents?.filter((_, i) => i !== idx) ?? [],
+                                })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Document Requirements (one per line)</Label>

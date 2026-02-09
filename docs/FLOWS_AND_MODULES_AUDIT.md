@@ -9,14 +9,15 @@
 
 ### 1.1 Route-level protection
 
-- **App.tsx** – No route guards. All routes are declared without `ProtectedRoute` or role checks.
-- **Protection is done inside layouts/pages:**
-  - **AdminLayout** (wraps every `/admin/*` page): requires `user` and `isStaff`; otherwise redirects to `/auth` or `/dashboard`.
+- **App.tsx** – Admin routes are wrapped by **AdminRoute** (route-level guard). All `/admin/*` routes are nested under `<Route path="/admin" element={<AdminRoute />}>`. AdminRoute checks `user` and `isStaff` before rendering; redirects to `/auth` or `/dashboard` to avoid a brief flash of admin UI.
+- **Protection is done at route + layout:**
+  - **AdminRoute** (wraps `/admin/*`): requires `user` and `isStaff`; otherwise redirects to `/auth` or `/dashboard`; renders `<Outlet />` for nested admin pages.
+  - **AdminLayout** (wraps every `/admin/*` page content): also requires `user` and `isStaff`; otherwise redirects or returns null. Redundant with AdminRoute but keeps defence in depth.
   - **Dashboard**: requires `user`; if `isAdmin` → redirect to `/admin`.
   - **Profile**: requires `user`; else → `/auth`.
   - **Apply**: submit requires `user`; else → `/auth`. Page itself is reachable without auth (form visible).
 
-So admin access is enforced only at layout level, not at router level.
+Admin access is enforced at route level (AdminRoute) and layout level (AdminLayout).
 
 ### 1.2 Roles (from `useAuth.tsx`)
 

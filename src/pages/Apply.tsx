@@ -175,15 +175,6 @@ const Apply = () => {
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [draftChecked, setDraftChecked] = useState(false);
 
-  const DEFAULT_PRODUCT_DOCS = [
-    { document_type: 'nrc_front', document_name: 'NRC Front', is_mandatory: true, display_order: 1 },
-    { document_type: 'nrc_back', document_name: 'NRC Back', is_mandatory: true, display_order: 2 },
-    { document_type: 'selfie', document_name: 'Selfie Photo', is_mandatory: true, display_order: 3 },
-    { document_type: 'payslip', document_name: 'Latest Payslip', is_mandatory: true, display_order: 4 },
-    { document_type: 'bank_statement', document_name: 'Bank Statement (3 months)', is_mandatory: false, display_order: 5 },
-    { document_type: 'employer_letter', document_name: 'Employment Letter', is_mandatory: false, display_order: 6 },
-  ];
-
   const { data: productDocsFromDb = [], isLoading: docsLoading } = useQuery({
     queryKey: ['loan-product-required-docs', selectedProduct?.id],
     queryFn: async () => {
@@ -205,7 +196,7 @@ const Apply = () => {
     enabled: !!selectedProduct?.id,
   });
 
-  const productDocs = productDocsFromDb.length > 0 ? productDocsFromDb : DEFAULT_PRODUCT_DOCS;
+  const productDocs = productDocsFromDb ?? [];
 
   // Fetch user profile for autofill
   const { data: profile } = useQuery({
@@ -574,16 +565,20 @@ const Apply = () => {
           loanTerm: formData.loanTerm,
         });
       } else if (step === 4) {
+        // Product must have required documents configured by admin
+        if (!productDocs || productDocs.length === 0) {
+          setErrors({ _product: "This product has no document requirements configured. Please contact support." });
+          return false;
+        }
         // Dynamic documents validation based on product requirements
         let hasErrors = false;
         const newDocErrors: Record<string, string> = {};
 
-        productDocs?.forEach((doc: any) => {
-          const docType = doc.doc_type || doc.document_type; // Support both field names
+        productDocs.forEach((doc: any) => {
+          const docType = doc.doc_type || doc.document_type;
           const docLabel = doc.doc_label || doc.document_name || docType;
           const isMandatory = doc.is_mandatory;
 
-          // Check if mandatory AND not uploaded AND not being reused
           if (isMandatory && !dynamicDocs[docType] && !formData.reusedDocs[docType]) {
             newDocErrors[docType] = `${docLabel} is required`;
             hasErrors = true;
@@ -662,6 +657,31 @@ const Apply = () => {
       toast({
         title: "Consent Required",
         description: "Please accept the terms and data consent to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!productDocs || productDocs.length === 0) {
+      toast({
+        title: "Document requirements not configured",
+        description: "This product has no document requirements configured. Please contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const missingMandatory = productDocs
+      .filter((d: any) => d.is_mandatory)
+      .filter((d: any) => {
+        const type = d.document_type || d.doc_type;
+        return !dynamicDocs[type] && !formData.reusedDocs[type];
+      });
+    if (missingMandatory.length > 0) {
+      const names = missingMandatory.map((d: any) => d.document_name || d.document_type).join(", ");
+      toast({
+        title: "Missing required documents",
+        description: `Please upload or reuse: ${names}`,
         variant: "destructive",
       });
       return;
@@ -1679,14 +1699,18 @@ const Apply = () => {
               {currentStep === 4 && (
                 <div className="space-y-6 animate-fade-in">
                   <h2 className="text-xl font-semibold text-foreground mb-6">Upload Documents</h2>
-
+                  {errors._product && (
+                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+                      {errors._product}
+                    </div>
+                  )}
                   {/* Dynamic Documents from Product Config */}
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground mb-4">Required Documents</h3>
                     {productDocs && productDocs.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {productDocs.map((doc: any) => (
-                          <div key={doc.id} className="space-y-2">
+                        {productDocs.map((doc: any, idx: number) => (
+                          <div key={doc.document_type ? `${doc.document_type}-${idx}` : `doc-${idx}`} className="space-y-2">
                             <Label className={errors[doc.document_type] ? "text-destructive" : ""}>
                               {doc.document_name} {doc.is_mandatory && "*"}
                             </Label>
@@ -1726,7 +1750,7 @@ const Apply = () => {
                               previousApplication[`${doc.document_type}_url`] && (
                                 <div className="mb-2 flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
                                   <Checkbox
-                                    id={`reuse-${doc.id}`}
+                                    id={`reuse-prev-${doc.document_type}-${idx}`}
                                     checked={formData.reusedDocs[doc.document_type] === previousApplication[`${doc.document_type}_url`]}
                                     onCheckedChange={(checked) => {
                                       const url = previousApplication[`${doc.document_type}_url`];
@@ -1743,7 +1767,7 @@ const Apply = () => {
                                       if (errors[doc.document_type]) setErrors(e => { const n = { ...e }; delete n[doc.document_type]; return n; });
                                     }}
                                   />
-                                  <label htmlFor={`reuse-${doc.id}`} className="text-sm cursor-pointer flex-1">
+                                  <label htmlFor={`reuse-prev-${doc.document_type}-${idx}`} className="text-sm cursor-pointer flex-1">
                                     <span className="font-medium">Reuse from previous application</span>
                                     <span className="block text-xs text-muted-foreground">
                                       Verified on {new Date(previousApplication.created_at).toLocaleDateString()}
@@ -1811,8 +1835,9 @@ const Apply = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-8 border-2 border-dashed rounded-xl border-border">
-                        <p className="text-muted-foreground">No documents required for this product.</p>
+                      <div className="text-center py-8 border-2 border-dashed rounded-xl border-border bg-muted/30">
+                        <p className="text-muted-foreground font-medium">This product has no document requirements configured.</p>
+                        <p className="text-sm text-muted-foreground mt-1">Please contact support or choose a different product.</p>
                       </div>
                     )}
                   </div>

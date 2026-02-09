@@ -89,17 +89,6 @@ interface Props {
   borrowerId?: string;
 }
 
-const DEFAULT_DOCUMENTS = [
-  { type: "nrc_front", name: "NRC Front", required: true },
-  { type: "nrc_back", name: "NRC Back", required: true },
-  { type: "payslip", name: "Latest Payslip", required: true },
-  { type: "bank_statement", name: "3 Months Bank Statements", required: true },
-  { type: "employer_letter", name: "Employment Confirmation Letter", required: false },
-  { type: "utility_bill", name: "Utility Bill (Proof of Address)", required: false },
-  { type: "selfie", name: "Selfie with NRC", required: true },
-  { type: "contract", name: "Signed Loan Contract", required: true },
-];
-
 export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
   const [isAddDocOpen, setIsAddDocOpen] = useState(false);
   const [isAdminUploadOpen, setIsAdminUploadOpen] = useState(false);
@@ -258,7 +247,7 @@ export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
 
   const checklistSourceDocs = productDocuments.length > 0
     ? productDocuments.map((d) => ({ type: d.document_type, name: d.document_name, required: d.is_mandatory }))
-    : DEFAULT_DOCUMENTS.map((d) => ({ type: d.type, name: d.name, required: d.required }));
+    : [];
 
   // Initialize checklist mutation (from product config when available)
   const initChecklistMutation = useMutation({
@@ -478,11 +467,21 @@ export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
           <CardContent className="py-12 text-center border-dashed border-2 border-border rounded-lg">
             <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4 opacity-30" />
             <h3 className="text-lg font-medium mb-2">No dynamic documents found for this application</h3>
-            <p className="text-muted-foreground mb-4">
-              Check legacy folder if application is old.
-            </p>
+            {productDocuments.length === 0 ? (
+              <p className="text-muted-foreground mb-4">
+                Required documents for this product are not configured. Configure them in Admin → Loan Products for this application&apos;s product.
+              </p>
+            ) : (
+              <p className="text-muted-foreground mb-4">
+                Check legacy folder if application is old.
+              </p>
+            )}
             <div className="flex gap-2 justify-center">
-              <Button onClick={() => initChecklistMutation.mutate()} disabled={initChecklistMutation.isPending}>
+              <Button
+                onClick={() => initChecklistMutation.mutate()}
+                disabled={initChecklistMutation.isPending || productDocuments.length === 0}
+                title={productDocuments.length === 0 ? "Configure required documents in Loan Products first" : undefined}
+              >
                 {initChecklistMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
                 <Plus size={14} className="mr-1" /> Initialize Checklist
               </Button>

@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
+import { usePermissions } from "@/hooks/usePermissions";
 import { notificationService } from "@/utils/notificationService";
 
 interface CourtCase {
@@ -101,6 +102,8 @@ const caseStatusConfig: Record<string, { label: string; color: string; icon: any
 };
 
 const AdminCourtCases = () => {
+  const { can } = usePermissions();
+  const canManageCourt = can("court", "manage");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -381,10 +384,12 @@ const AdminCourtCases = () => {
               Manage legal proceedings for defaulted loans
             </p>
           </div>
-          <Button className="gradient-primary" onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus size={18} className="mr-2" />
-            New Court Case
-          </Button>
+          {canManageCourt && (
+            <Button className="gradient-primary" onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus size={18} className="mr-2" />
+              New Court Case
+            </Button>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -552,13 +557,15 @@ const AdminCourtCases = () => {
                           >
                             <Eye size={16} />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(courtCase)}
-                          >
-                            <Edit size={16} />
-                          </Button>
+                          {canManageCourt && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(courtCase)}
+                            >
+                              <Edit size={16} />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -955,13 +962,15 @@ const AdminCourtCases = () => {
               <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
                 Close
               </Button>
-              <Button onClick={() => {
-                setIsViewDialogOpen(false);
-                if (selectedCase) openEditDialog(selectedCase);
-              }}>
-                <Edit size={16} className="mr-2" />
-                Edit Case
-              </Button>
+              {canManageCourt && (
+                <Button onClick={() => {
+                  setIsViewDialogOpen(false);
+                  if (selectedCase) openEditDialog(selectedCase);
+                }}>
+                  <Edit size={16} className="mr-2" />
+                  Edit Case
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

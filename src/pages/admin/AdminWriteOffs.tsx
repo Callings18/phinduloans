@@ -52,8 +52,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const AdminWriteOffs = () => {
+  const { can } = usePermissions();
+  const canManageWriteOffs = can("writeoffs", "manage");
   const [activeTab, setActiveTab] = useState("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWriteOff, setSelectedWriteOff] = useState<any>(null);
@@ -406,7 +409,7 @@ const AdminWriteOffs = () => {
                                 >
                                   <Eye size={14} />
                                 </Button>
-                                {wo.status === "pending" && (
+                                {wo.status === "pending" && canManageWriteOffs && (
                                   <>
                                     <Button
                                       size="sm"
@@ -434,7 +437,7 @@ const AdminWriteOffs = () => {
                                     </Button>
                                   </>
                                 )}
-                                {wo.status === "approved" && (
+                                {wo.status === "approved" && canManageWriteOffs && (
                                   <Button
                                     size="sm"
                                     variant="outline"
