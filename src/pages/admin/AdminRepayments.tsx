@@ -159,13 +159,12 @@ const AdminRepayments = () => {
   const { data: paymentClaims = [] } = useQuery({
     queryKey: ["admin-payment-claims"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payment_claims")
+      const { data, error } = await (supabase.from as any)("payment_claims")
         .select("*")
         .eq("status", "pending")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []) as PaymentClaim[];
+      return (data || []) as unknown as PaymentClaim[];
     },
   });
 
@@ -248,7 +247,7 @@ const AdminRepayments = () => {
       });
 
       if (claimId) {
-        await supabase.from("payment_claims").update({
+        await (supabase.from as any)("payment_claims").update({
           status: "verified",
           verified_at: new Date().toISOString(),
           verified_by: user?.id ?? null,
