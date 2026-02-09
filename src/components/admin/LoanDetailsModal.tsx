@@ -1482,7 +1482,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
               {/* Documents Tab */}
               <TabsContent value="documents" className="m-0">
-                <DocumentVerificationTab loanId={loan.id} />
+                <DocumentVerificationTab loanId={loan.id} borrowerId={loan.user_id} />
               </TabsContent>
 
               {/* Guarantors Tab */}

@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, FileText, ShieldCheck, Download, Loader2 } from "lucide-react";
+import { ExternalLink, FileText, ShieldCheck, Download, Loader2, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMemo } from "react";
+import AdminDocumentUpload from "./AdminDocumentUpload";
 
 interface ApplicationDocumentsTabProps {
   selectedApp: any;
@@ -71,6 +73,7 @@ interface UnifiedDoc {
 
 const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) => {
   const { toast } = useToast();
+  const [isAdminUploadOpen, setIsAdminUploadOpen] = useState(false);
 
   // Fetch documents from application_documents table
   const { data: appDocuments, isLoading } = useQuery({
@@ -86,6 +89,23 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       return data;
     },
     enabled: !!selectedApp?.id,
+  });
+
+  // Fetch product documents for upload dialog
+  const { data: productDocuments = [] } = useQuery({
+    queryKey: ["loan-product-documents", selectedApp?.loan_product_id],
+    queryFn: async () => {
+      if (!selectedApp?.loan_product_id) return [];
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("required_documents")
+        .eq("id", selectedApp.loan_product_id)
+        .single();
+      if (error) throw error;
+      const docs = data?.required_documents as { document_type: string; document_name: string; is_mandatory: boolean }[] | null;
+      return docs ?? [];
+    },
+    enabled: !!selectedApp?.loan_product_id,
   });
 
   // Build merged + deduplicated document list
@@ -201,11 +221,14 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         </Card>
       )}
 
-      {/* Document count summary */}
+      {/* Document count summary + Upload button */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           {mergedDocs.length} document{mergedDocs.length !== 1 ? "s" : ""} found
         </p>
+        <Button size="sm" onClick={() => setIsAdminUploadOpen(true)}>
+          <Upload size={14} className="mr-1" /> Upload Document
+        </Button>
       </div>
 
       {/* Documents grid */}
@@ -269,6 +292,16 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
           ))}
         </div>
       )}
+
+      {/* Admin Document Upload Dialog */}
+      <AdminDocumentUpload
+        loanId={selectedApp?.id || ""}
+        borrowerId={selectedApp?.user_id || ""}
+        loanProductId={selectedApp?.loan_product_id || null}
+        productDocuments={productDocuments}
+        open={isAdminUploadOpen}
+        onOpenChange={setIsAdminUploadOpen}
+      />
     </div>
   );
 };
