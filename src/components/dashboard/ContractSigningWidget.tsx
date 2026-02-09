@@ -8,11 +8,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { FileText, CheckCircle, Download, PenTool, Loader2, AlertTriangle, Clock } from "lucide-react";
+import { FileText, CheckCircle, Download, PenTool, Loader2, AlertTriangle, Clock, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import SignaturePad from "@/components/common/SignaturePad";
 import { downloadLoanContract } from "@/utils/generateLoanContract";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Loan {
   id: string;
@@ -40,6 +42,8 @@ export default function ContractSigningWidget({ userId }: Props) {
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [uploadedContractFile, setUploadedContractFile] = useState<File | null>(null);
+  const [signingMethod, setSigningMethod] = useState<"draw" | "upload">("draw");
   const queryClient = useQueryClient();
 
   // Fetch approved loans awaiting contract signing
@@ -122,9 +126,71 @@ export default function ContractSigningWidget({ userId }: Props) {
     },
   });
 
+  // Upload signed contract mutation
+  const uploadContractMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedLoan || !uploadedContractFile) throw new Error("Missing loan or file");
+
+      const fileExt = uploadedContractFile.name.split('.').pop();
+      const fileName = `${userId}/signed_contract_${selectedLoan.id}_${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from("loan-documents")
+        .upload(fileName, uploadedContractFile, {
+          contentType: uploadedContractFile.type,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { error: updateError } = await supabase
+        .from("loan_applications")
+        .update({
+          signed_contract_url: fileName,
+          signed_contract_uploaded_at: new Date().toISOString(),
+          borrower_signed: true,
+          borrower_signed_at: new Date().toISOString(),
+        })
+        .eq("id", selectedLoan.id);
+
+      if (updateError) throw updateError;
+
+      // Notify admin
+      await supabase.functions.invoke("send-notification", {
+        body: {
+          type: "admin_contract_signed",
+          loanId: selectedLoan.id,
+          borrowerName: selectedLoan.full_name,
+          borrowerPhone: selectedLoan.phone,
+          borrowerEmail: selectedLoan.email,
+          loanAmount: selectedLoan.loan_amount,
+          signatureUrl: fileName,
+        },
+      }).catch(err => console.error("Failed to notify admin:", err));
+
+      return { loanId: selectedLoan.id };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["loans-awaiting-signature", userId] });
+      queryClient.invalidateQueries({ queryKey: ["user-loans", userId] });
+      toast.success("Signed contract uploaded successfully! The admin has been notified.");
+      handleCloseDialog();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to upload signed contract");
+    },
+  });
+
   const handleSignatureCapture = (data: string, file?: File) => {
     setSignatureData(data);
     setSignatureFile(file || null);
+  };
+
+  const handleContractFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedContractFile(file);
+    }
   };
 
   const handleOpenSignDialog = (loan: Loan) => {
@@ -132,6 +198,8 @@ export default function ContractSigningWidget({ userId }: Props) {
     setIsSignDialogOpen(true);
     setSignatureData(null);
     setAgreedToTerms(false);
+    setUploadedContractFile(null);
+    setSigningMethod("draw");
   };
 
   const handleCloseDialog = () => {
@@ -140,6 +208,8 @@ export default function ContractSigningWidget({ userId }: Props) {
     setSignatureData(null);
     setSignatureFile(null);
     setAgreedToTerms(false);
+    setUploadedContractFile(null);
+    setSigningMethod("draw");
   };
 
   const handleDownloadContract = async (loan: Loan) => {
@@ -278,19 +348,58 @@ export default function ContractSigningWidget({ userId }: Props) {
                 </AlertDescription>
               </Alert>
 
-              {/* Signature Capture */}
+              {/* Signature Capture - Draw or Upload */}
               <div>
-                <Label className="text-base font-semibold mb-3 block">Your Signature</Label>
-                <SignaturePad
-                  onSave={handleSignatureCapture}
-                  disabled={signContractMutation.isPending}
-                />
-                {signatureData && (
-                  <div className="mt-3 flex items-center gap-2 text-success text-sm">
-                    <CheckCircle size={16} />
-                    Signature captured
-                  </div>
-                )}
+                <Label className="text-base font-semibold mb-3 block">Sign Your Contract</Label>
+                <Tabs value={signingMethod} onValueChange={(v) => setSigningMethod(v as "draw" | "upload")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="draw" className="flex items-center gap-2">
+                      <PenTool size={14} />
+                      Sign Digitally
+                    </TabsTrigger>
+                    <TabsTrigger value="upload" className="flex items-center gap-2">
+                      <Upload size={14} />
+                      Upload Signed Copy
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="draw" className="mt-4">
+                    <div className="bg-white rounded-lg p-2">
+                      <SignaturePad
+                        onSave={handleSignatureCapture}
+                        disabled={signContractMutation.isPending}
+                      />
+                    </div>
+                    {signatureData && (
+                      <div className="mt-3 flex items-center gap-2 text-success text-sm">
+                        <CheckCircle size={16} />
+                        Signature captured
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="upload" className="mt-4 space-y-4">
+                    <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                      <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3 opacity-50" />
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Upload your signed contract (PDF, JPG, PNG)
+                      </p>
+                      <Input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleContractFileChange}
+                        disabled={uploadContractMutation.isPending}
+                        className="max-w-xs mx-auto"
+                      />
+                    </div>
+                    {uploadedContractFile && (
+                      <div className="flex items-center gap-2 text-success text-sm">
+                        <CheckCircle size={16} />
+                        File selected: {uploadedContractFile.name}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
 
               {/* Terms Agreement */}
@@ -299,7 +408,7 @@ export default function ContractSigningWidget({ userId }: Props) {
                   id="terms"
                   checked={agreedToTerms}
                   onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
-                  disabled={signContractMutation.isPending}
+                  disabled={signContractMutation.isPending || uploadContractMutation.isPending}
                 />
                 <Label htmlFor="terms" className="text-sm leading-tight cursor-pointer">
                   I have read and understood the loan contract. I agree to the terms and conditions
@@ -311,22 +420,41 @@ export default function ContractSigningWidget({ userId }: Props) {
                 <Button variant="outline" onClick={handleCloseDialog}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={() => signContractMutation.mutate()}
-                  disabled={!signatureData || !agreedToTerms || signContractMutation.isPending}
-                >
-                  {signContractMutation.isPending ? (
-                    <>
-                      <Loader2 className="animate-spin mr-2" size={16} />
-                      Signing...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle size={16} className="mr-2" />
-                      Submit Signed Contract
-                    </>
-                  )}
-                </Button>
+                {signingMethod === "draw" ? (
+                  <Button
+                    onClick={() => signContractMutation.mutate()}
+                    disabled={!signatureData || !agreedToTerms || signContractMutation.isPending}
+                  >
+                    {signContractMutation.isPending ? (
+                      <>
+                        <Loader2 className="animate-spin mr-2" size={16} />
+                        Signing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={16} className="mr-2" />
+                        Submit Signed Contract
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => uploadContractMutation.mutate()}
+                    disabled={!uploadedContractFile || !agreedToTerms || uploadContractMutation.isPending}
+                  >
+                    {uploadContractMutation.isPending ? (
+                      <>
+                        <Loader2 className="animate-spin mr-2" size={16} />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={16} className="mr-2" />
+                        Upload Signed Contract
+                      </>
+                    )}
+                  </Button>
+                )}
               </DialogFooter>
             </div>
           )}

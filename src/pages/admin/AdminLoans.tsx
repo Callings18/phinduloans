@@ -873,6 +873,11 @@ const AdminLoans = () => {
   };
 
   const handleDisburse = () => {
+    // Dual-signature guard: both borrower and admin must have signed
+    if (!(selectedLoan as any)?.borrower_signed || !(selectedLoan as any)?.admin_signed) {
+      toast.error("Contract must be signed by both parties before disbursement. Please verify signatures in the loan details first.");
+      return;
+    }
     if (!disbursement.source_account_id) {
       toast.error("Please select a source account for disbursement");
       return;
@@ -1761,6 +1766,19 @@ const AdminLoans = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Dual-signature warning */}
+            {(!(selectedLoan as any)?.borrower_signed || !(selectedLoan as any)?.admin_signed) && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+                <AlertTriangle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">Signatures Required</p>
+                  <p className="text-xs text-muted-foreground">
+                    Contract must be signed by both borrower and admin before disbursement. 
+                    Please verify signatures in the loan details first.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Source Account *</Label>
               <Select
