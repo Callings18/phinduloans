@@ -166,7 +166,7 @@ export default function CapitalPoolWidget() {
                     <div>
                       <p className="text-sm font-medium text-foreground">{account.account_name}</p>
                       <p className="text-xs text-muted-foreground capitalize">
-                        {account.account_type.replace('_', ' ')}
+                        {(account.account_type ?? '').replace('_', ' ')}
                       </p>
                     </div>
                   </div>
