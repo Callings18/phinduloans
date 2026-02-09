@@ -255,7 +255,7 @@ const Apply = () => {
         .from("loan_applications")
         .select("id, full_name, loan_amount, loan_term_months, status, created_at, nrc_number, phone")
         .eq("user_id", user.id)
-        .in("status", ["pending", "under_review", "approved", "disbursed", "active"])
+        .in("status", ["pending", "under_review", "crb_failed", "pmic_pending", "approved", "disbursed", "active"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -963,7 +963,15 @@ const Apply = () => {
       });
 
       if (profileError) {
-        console.warn('[Apply] Profile update failed (non-critical):', profileError);
+        if (profileError.code === '23505') {
+          toast({
+            title: "Duplicate NRC and phone",
+            description: "This NRC and phone number are already registered to another account. Your application was submitted but we could not update your profile details.",
+            variant: "destructive",
+          });
+        } else {
+          console.warn('[Apply] Profile update failed (non-critical):', profileError);
+        }
       }
 
       // Clear draft on successful submission
@@ -1069,8 +1077,38 @@ const Apply = () => {
             )}
           </div>
 
+          {/* Blacklist gate: borrower cannot apply (respect blacklist_expires_at) */}
+          {user && profile?.is_blacklisted && (profile.blacklist_expires_at == null || new Date(profile.blacklist_expires_at) > new Date()) && (
+            <div className="max-w-2xl mx-auto mb-12">
+              <Alert className="border-destructive bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                <AlertDescription>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-2">
+                        You are currently not eligible
+                      </h3>
+                      <p className="text-muted-foreground text-sm">
+                        Your account is not eligible to submit new loan applications at this time.
+                        Please contact support if you believe this is an error.
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <Button variant="outline" asChild>
+                        <a href="/dashboard">Dashboard</a>
+                      </Button>
+                      <Button variant="ghost" asChild>
+                        <a href="/">Go Home</a>
+                      </Button>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
           {/* Existing Active Loan Block */}
-          {existingActiveLoan && (
+          {!(profile?.is_blacklisted && (profile.blacklist_expires_at == null || new Date(profile.blacklist_expires_at) > new Date())) && existingActiveLoan && (
             <div className="max-w-2xl mx-auto mb-12">
               <Alert className="border-warning bg-warning/10">
                 <AlertTriangle className="h-5 w-5 text-warning" />
@@ -1121,6 +1159,9 @@ const Apply = () => {
             </div>
           )}
 
+          {/* Application form and steps: only when not blacklisted (or blacklist expired) */}
+          {!(user && profile?.is_blacklisted && (profile.blacklist_expires_at == null || new Date(profile.blacklist_expires_at) > new Date())) && (
+          <>
           {/* Auto-save indicator */}
           {draftChecked && (
             <div className="max-w-2xl mx-auto mb-6">
@@ -1984,6 +2025,8 @@ const Apply = () => {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
       </main>
 
