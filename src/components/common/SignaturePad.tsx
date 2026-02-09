@@ -23,7 +23,7 @@ export default function SignaturePad({ onSave, disabled = false, height = 200 }:
   useEffect(() => {
     if (canvasRef.current && !signaturePadRef.current) {
       signaturePadRef.current = new SignaturePadLib(canvasRef.current, {
-        backgroundColor: "rgba(255, 255, 255, 0)",
+        backgroundColor: "rgb(255, 255, 255)",
         penColor: "#1a1a2e",
       });
 
@@ -105,13 +105,13 @@ export default function SignaturePad({ onSave, disabled = false, height = 200 }:
         <TabsContent value="draw" className="mt-4">
           <div className="space-y-3">
             <div 
-              className="border-2 border-dashed border-border rounded-lg bg-card overflow-hidden"
-              style={{ touchAction: "none" }}
+              className="border-2 border-dashed border-border rounded-lg overflow-hidden"
+              style={{ touchAction: "none", backgroundColor: "white" }}
             >
               <canvas
                 ref={canvasRef}
                 className="w-full cursor-crosshair"
-                style={{ height: `${height}px` }}
+                style={{ height: `${height}px`, backgroundColor: "white" }}
               />
             </div>
             <p className="text-xs text-muted-foreground text-center">

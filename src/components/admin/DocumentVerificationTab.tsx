@@ -345,6 +345,30 @@ export default function DocumentVerificationTab({ loanId }: Props) {
         .eq("id", selectedDoc.id);
 
       if (error) throw error;
+
+      // Sync verification status to application_documents table
+      // so borrower's DocumentChecklist sees the updated status
+      const docTypeToSync = selectedDoc.document_type;
+      const appDocsToUpdate = applicationDocuments.filter(
+        (d) => d.document_type === docTypeToSync
+      );
+      
+      if (appDocsToUpdate.length > 0) {
+        const appDocStatus = verificationStatus === "verified" ? "verified" : "rejected";
+        const appDocNotes = verificationStatus === "rejected" ? rejectionReason : verificationNotes || null;
+        
+        for (const appDoc of appDocsToUpdate) {
+          await supabase
+            .from("application_documents")
+            .update({
+              status: appDocStatus,
+              notes: appDocNotes,
+              verified_at: new Date().toISOString(),
+              verified_by: user?.id,
+            })
+            .eq("id", appDoc.id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document-checklist", loanId] });
