@@ -72,16 +72,16 @@ interface UnifiedDoc {
 const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) => {
   const { toast } = useToast();
 
-  // Fetch documents: use loan_application_documents (borrower writes here), not application_documents
+  // Fetch documents from application_documents table
   const { data: appDocuments, isLoading } = useQuery({
     queryKey: ["application-documents", selectedApp?.id],
     queryFn: async () => {
       const applicationId = selectedApp?.id;
       const { data, error } = await supabase
-        .from("loan_application_documents")
+        .from("application_documents")
         .select("*")
-        .eq("loan_application_id", applicationId)
-        .order("document_type", { ascending: true });
+        .eq("application_id", applicationId)
+        .order("doc_type", { ascending: true });
       if (error) throw error;
       return data;
     },
@@ -94,13 +94,13 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     const seenUrls = new Set<string>();
     const passwords: string[] = [];
 
-    // 1. Add all loan_application_documents rows (primary source; borrower writes here)
+    // 1. Add all application_documents rows (primary source)
     if (appDocuments) {
       for (const doc of appDocuments) {
-        const normalizedUrl = doc.file_url?.trim();
+        const normalizedUrl = (doc.file_url as string)?.trim();
         if (!normalizedUrl) continue;
         seenUrls.add(normalizedUrl);
-        const docType = doc.document_type ?? doc.doc_type;
+        const docType = doc.doc_type;
         docs.push({
           id: doc.id,
           docType: docType,
