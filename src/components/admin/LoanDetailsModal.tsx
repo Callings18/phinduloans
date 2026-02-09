@@ -735,7 +735,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!loan) throw new Error("No loan selected");
       const { error } = await supabase
         .from("loan_applications")
-        .update({ status })
+        .update({ status: status as any })
         .eq("id", loan.id);
       if (error) throw error;
     },
