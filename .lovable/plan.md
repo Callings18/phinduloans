@@ -1,87 +1,143 @@
 
+# Full Loan Flow Alignment -- Borrower vs Admin Synchronization
 
-# Fix: Show ALL Borrower Documents in Admin View
+## Summary of Gaps Found
 
-## Problem
+After a thorough audit of the codebase against your specification, here is what is already implemented and what needs work:
 
-The admin Documents tab currently only reads from hardcoded columns on the `loan_applications` table (e.g., `nrc_front_url`, `selfie_url`, `payslip_url`). It does **not** query the new `application_documents` table at all.
+### Already Working (No Changes Needed)
+- Account creation with email/password + OTP-based passwordless login
+- Duplicate NRC + phone unique index on profiles
+- Blacklist enforcement on Apply page (with expiry support)
+- Loan product configuration (interest, fees, terms, CRB, PMIC, required documents)
+- Duplicate loan prevention (borrower and admin sides)
+- Real-time status sync (borrower dashboard subscribes to `postgres_changes`)
+- Admin loan lifecycle: approve, reject, disburse with source account balance check
+- Repayment schedule auto-generation on disbursement completion (DB trigger)
+- Penalty calculation and auto-apply via DB functions
+- Contract signing widget (borrower signs digitally, uploads signature)
+- Admin counter-signature verification (dual-signature locking)
+- Clearance notifications on completion (DB trigger)
+- Audit logging for loan changes and repayments (DB triggers)
+- Document vault for borrower reuse
+- Admin document verification tab with payslip password display
+- Collections and court case modules
+- Accounts/ledger integration for disbursements
+- Role-based sidebar navigation (7 staff roles)
 
-This means:
-- Documents like **bank statements**, **payslip 2 & 3**, and **employer letters** that exist in the old columns are shown, but any documents stored only in `application_documents` are invisible.
-- The new `application_documents` table (which has 37 records) is completely ignored by the admin UI.
-- Payslip passwords stored in `application_documents` are not displayed.
+### Gaps to Fix (Grouped by Priority)
 
-## Root Cause
+---
 
-Looking at the code in `AdminApplications.tsx` (lines 1709-1768), the Documents tab builds its list exclusively from the `loan_applications` columns:
-```
-nrc_front_url, nrc_back_url, selfie_url, payslip_url, payslip_2_url,
-payslip_3_url, bank_statement_url, employer_letter_url, collateral_image_url, ...
-```
+## Phase 1: Status Pipeline Alignment (Critical)
 
-It never fetches from `application_documents`, so any docs stored there are invisible to the admin.
+**Problem:** The database `loan_status` enum is missing `contract_signing`. The borrower status tracker skips the Contract Signing step. The admin Loans page does not show `contract_signing` as a valid workflow step.
 
-## Solution
+**Changes:**
 
-Update the Documents tab in `AdminApplications.tsx` to:
+1. **Database migration** -- Add `contract_signing` to the `loan_status` enum:
+   ```sql
+   ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'contract_signing' AFTER 'approved';
+   ```
 
-1. **Fetch documents from `application_documents` table** for the selected application
-2. **Merge both sources** -- legacy columns from `loan_applications` AND rows from `application_documents`
-3. **Deduplicate** so the same file is not shown twice
-4. **Display payslip passwords** from both legacy field and `application_documents.payslip_password`
-5. **Show all documents** in a clean grid with view buttons
+2. **ApplicationStatusTracker.tsx** -- Add `contract_signing` step between "Approved" and "Disbursed" in the status timeline with messaging: "Please sign your contract to proceed."
+
+3. **AdminLoans.tsx status flow** -- When admin clicks "Approve", the status should transition to `approved`. When the contract is generated and sent, status moves to `contract_signing`. After both signatures are verified, admin can proceed to disburse.
+
+4. **LoanDetailsModal.tsx** -- Add a visible contract-signing verification step: show borrower signature status, allow admin to counter-sign, and only enable the "Disburse" button when `admin_signed = true`.
+
+5. **ContractSigningWidget.tsx** -- Update query to also fetch loans with status `contract_signing` (not just `approved`), since the borrower needs to sign during this stage.
+
+---
+
+## Phase 2: Admin Dashboard Missing Metrics
+
+**Problem:** The admin dashboard is missing some required KPIs from your spec.
+
+**Changes to AdminDashboard.tsx:**
+
+1. Add **"Loans Due Today"** count (repayments where `due_date = today` and `status = pending`)
+2. Add **"Blacklisted Borrowers"** count (profiles where `is_blacklisted = true` and blacklist has not expired)
+3. Add **"Principal Outstanding"** vs **"Interest Outstanding"** split (currently combined as "Outstanding Balance")
+4. Add **"Defaulted Loans"** count to stats grid
+
+---
+
+## Phase 3: Borrower "Under Review" Document Checklist
+
+**Problem:** When a loan is under review, borrowers cannot see which documents were approved/rejected/missing or re-upload.
+
+**Changes to Dashboard.tsx / ApplicationStatusTracker.tsx:**
+
+1. When status is `under_review`, show a document checklist panel pulled from `application_documents` for that loan
+2. Each document shows status: Submitted / Verified / Rejected (with reason)
+3. Allow borrower to re-upload rejected documents
+4. Admin marks documents as verified/rejected in the existing DocumentVerificationTab
+
+---
+
+## Phase 4: Blacklist Duration Support in Admin
+
+**Problem:** The `blacklist_expires_at` column exists but the admin UI does not let staff set a duration.
+
+**Changes to AdminBorrowers.tsx:**
+
+1. Add a "Duration" field (optional) to the blacklist dialog: number of days, or "Permanent"
+2. When saving, calculate `blacklist_expires_at = now + duration` or `null` for permanent
+3. Display expiry date on the borrower card when blacklisted
+
+---
+
+## Phase 5: Auth Event Logging
+
+**Problem:** The `log_auth_event` function exists but is never called from the frontend after login/signup.
+
+**Changes to useAuth.tsx:**
+
+1. After successful `signIn`, call `supabase.rpc('log_auth_event', { p_action: 'LOGIN' })`
+2. After successful `signUp`, call `supabase.rpc('log_auth_event', { p_action: 'SIGNUP' })`
+
+---
 
 ## Technical Details
 
-### Step 1: Add a query for `application_documents`
+### Database Migration (Phase 1)
 
-When the admin opens an application detail dialog, fetch all documents from the `application_documents` table for that application ID:
-
-```typescript
-const { data: appDocuments } = useQuery({
-  queryKey: ['application-documents', selectedApp?.id],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('application_documents')
-      .select('*')
-      .eq('application_id', selectedApp.id)
-      .order('doc_type', { ascending: true });
-    if (error) throw error;
-    return data;
-  },
-  enabled: !!selectedApp?.id,
-});
+```sql
+-- Add contract_signing to the loan_status enum
+ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'contract_signing' AFTER 'approved';
 ```
 
-### Step 2: Build a unified document list in the Documents tab
+### Files to Modify
 
-Combine legacy column-based documents with `application_documents` rows. Use file URL as deduplication key to avoid showing the same file twice:
+| File | Phase | Change |
+|------|-------|--------|
+| `src/components/dashboard/ApplicationStatusTracker.tsx` | 1 | Add `contract_signing` step to timeline |
+| `src/components/dashboard/ContractSigningWidget.tsx` | 1 | Query `approved` OR `contract_signing` status |
+| `src/pages/admin/AdminLoans.tsx` | 1 | Include `contract_signing` in applications tab filter and status config |
+| `src/components/admin/LoanDetailsModal.tsx` | 1 | Add contract verification gate before disburse |
+| `src/constants/loanStatusLabels.ts` | 1 | Already correct (has `contract_signing`) |
+| `src/pages/admin/AdminDashboard.tsx` | 2 | Add missing KPI cards |
+| `src/pages/Dashboard.tsx` | 3 | Add document checklist for `under_review` loans |
+| `src/pages/admin/AdminBorrowers.tsx` | 4 | Add duration field to blacklist dialog |
+| `src/hooks/useAuth.tsx` | 5 | Log auth events after login/signup |
 
-```text
-1. Start with all `application_documents` rows (these are the "primary" source)
-2. Add any legacy column docs whose file_url is NOT already in the list
-3. Display the merged list in a grid
-```
+### Implementation Order
 
-### Step 3: Show payslip passwords prominently
+1. Database migration (enum change) -- must come first
+2. Status pipeline UI alignment (both admin and borrower)
+3. Dashboard metrics enhancement
+4. Borrower document checklist during review
+5. Blacklist duration UI
+6. Auth event logging
 
-Check for payslip password from:
-- `selectedApp.payslip_password` (legacy field)
-- Any `application_documents` row where `payslip_password` is not null
+### What This Does NOT Change (Already Working)
 
-Display all found passwords in a warning card at the top of the Documents section.
-
-### Step 4: Update the Documents tab JSX
-
-Replace the current hardcoded document list (lines 1709-1768) with the merged list that shows:
-- Document type icon based on `doc_type`
-- Document label
-- Upload source (borrower/admin)
-- View button that opens a signed URL
-- Download capability
-
-### Files to Edit
-
-- `src/pages/admin/AdminApplications.tsx` -- Add `application_documents` query and update the Documents tab rendering
-
-No database changes needed -- the `application_documents` table and RLS policies already exist and are properly configured for admin access.
+- Notification triggers (approval, rejection, disbursement, payment) -- working via DB triggers
+- Loan product configuration -- fully configurable
+- CRB and PMIC modules -- available in admin
+- Dual-signature contract workflow -- implemented
+- Disbursement accounting integration -- working with balance checks
+- Collections, write-offs, court cases -- all functional
+- Real-time status updates on borrower dashboard -- subscribed to postgres_changes
+- Audit trail for all loan changes -- DB trigger active
