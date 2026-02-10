@@ -55,7 +55,8 @@ export default function ContractSigningWidget({ userId }: Props) {
         .from("loan_applications")
         .select("*")
         .eq("user_id", userId)
-        .in("status", ["approved", "contract_signing"])
+        .in("status", ["approved", "contract_signing", "disbursed", "active"])
+        .eq("borrower_signed", false)
         .is("signed_contract_url", null)
         .order("created_at", { ascending: false });
 
@@ -272,9 +273,15 @@ export default function ContractSigningWidget({ userId }: Props) {
                 </div>
                 <div>
                   <p className="font-medium">Loan Contract</p>
-                  <p className="text-sm text-muted-foreground">
-                    K{loan.loan_amount.toLocaleString()} • {loan.loan_term_months} months
-                  </p>
+                  {loan.status === "active" || loan.status === "disbursed" ? (
+                    <p className="text-sm text-muted-foreground">
+                      K{loan.loan_amount.toLocaleString()} • Please sign to complete your file
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      K{loan.loan_amount.toLocaleString()} • {loan.loan_term_months} months
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
