@@ -185,12 +185,13 @@ const Apply = () => {
         .eq('id', selectedProduct.id)
         .single();
       if (error) throw error;
-      const docs = data?.required_documents as { document_type: string; document_name: string; is_mandatory: boolean; display_order?: number }[] | null;
+      const docs = data?.required_documents as { doc_type?: string; document_type?: string; doc_label?: string; document_name?: string; is_mandatory: boolean; display_order?: number; category?: string }[] | null;
       return (docs ?? []).map((d, i) => ({
-        document_type: d.document_type,
-        document_name: d.document_name,
+        document_type: d.doc_type || d.document_type || '',
+        document_name: d.doc_label || d.document_name || '',
         is_mandatory: d.is_mandatory ?? true,
         display_order: d.display_order ?? i,
+        category: d.category || 'required',
       }));
     },
     enabled: !!selectedProduct?.id,
