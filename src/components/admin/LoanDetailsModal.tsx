@@ -268,8 +268,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan,
   });
 
-  const isDisbursed = loan.status === "disbursed" || loan.status === "active";
-  const isFullySigned = !!(loan.borrower_signed && loan.admin_signed);
+  const isDisbursed = loan?.status === "disbursed" || loan?.status === "active";
+  const isFullySigned = !!(loan?.borrower_signed && loan?.admin_signed);
   const contractMessageNotSigned = isDisbursed
     ? "This loan was disbursed without a fully signed contract. Please upload the signed contract by both parties and verify signatures to ensure compliance. This loan cannot be marked as completed until the contract is fully signed."
     : "No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.";
