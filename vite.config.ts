@@ -1,4 +1,3 @@
-// vite.config.ts v42 - force single React instance 2026-02-10
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -16,17 +15,9 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "react": path.resolve(__dirname, "node_modules/react"),
-      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
-      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
-  optimizeDeps: {
-    include: ["react", "react-dom", "react/jsx-runtime"],
-    force: true,
-  },
-  cacheDir: ".vite-cache-v42",
   build: {
     commonjsOptions: {
       include: [/node_modules/],

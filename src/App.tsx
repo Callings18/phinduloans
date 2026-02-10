@@ -1,4 +1,4 @@
-// App v42 - force cache invalidation 2026-02-10
+// App root component
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";

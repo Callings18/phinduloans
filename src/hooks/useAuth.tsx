@@ -1,4 +1,4 @@
-// useAuth v42 - force cache invalidation 2026-02-10
+// Authentication context and provider
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from '@supabase/supabase-js';
