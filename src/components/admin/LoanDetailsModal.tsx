@@ -102,7 +102,7 @@ const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
   approved: ["contract_signing"],
   contract_signing: [],
   disbursed: ["active"],
-  active: ["completed", "defaulted"],
+  active: ["defaulted"], // "completed" is removed — auto-set when fully paid with signed contract
   completed: [],
   defaulted: [],
   rejected: [],
@@ -365,10 +365,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("status", "pending");
 
       if (remainingPending && remainingPending.length === 0) {
-        await supabase
+        // Only auto-complete if contract is fully signed
+        const { data: loanData } = await supabase
           .from("loan_applications")
-          .update({ status: "completed" })
-          .eq("id", loan.id);
+          .select("borrower_signed, admin_signed")
+          .eq("id", loan.id)
+          .single();
+
+        if (loanData?.borrower_signed && loanData?.admin_signed) {
+          await supabase
+            .from("loan_applications")
+            .update({ status: "completed" as any })
+            .eq("id", loan.id);
+        } else {
+          toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
+        }
       }
 
       return { paidAmount, isPartial: paidAmount < dueAmount, isOverpayment: paidAmount > dueAmount };
@@ -1130,25 +1141,44 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </CardContent>
                 </Card>
 
-                {/* Contract Signing Status - for approved/contract_signing loans */}
-                {(loan.status === "approved" || loan.status === "contract_signing" || loan.signed_contract_url) && (
+                {/* Contract Signing Status - for ALL loans that need contract tracking */}
+                {(loan.status === "approved" || loan.status === "contract_signing" || loan.status === "disbursed" || loan.status === "active" || loan.status === "completed" || loan.signed_contract_url) && (
                   <Card className={`border-2 ${
                     loan.borrower_signed && loan.admin_signed 
                       ? "border-success/50 bg-success/5" 
-                      : "border-warning/50 bg-warning/5"
+                      : (loan.status === "disbursed" || loan.status === "active") && (!loan.borrower_signed || !loan.admin_signed)
+                        ? "border-destructive/50 bg-destructive/5"
+                        : "border-warning/50 bg-warning/5"
                   }`}>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <FileText size={16} /> Contract Signing Status
+                        <FileText size={16} /> Contract Status
                       </CardTitle>
                       <CardDescription>
                         {loan.borrower_signed && loan.admin_signed 
-                          ? "Contract has been signed by both parties - ready for disbursement"
-                          : "Contract must be signed by both parties before disbursement"
+                          ? "✅ Contract fully signed by both parties"
+                          : (loan.status === "disbursed" || loan.status === "active") && (!loan.borrower_signed || !loan.admin_signed)
+                            ? "⚠️ This loan was disbursed without a fully signed contract! Please upload the signed contract by both parties."
+                            : "Contract must be signed by both parties before disbursement"
                         }
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                      {/* Legacy loan warning */}
+                      {(loan.status === "disbursed" || loan.status === "active") && (!loan.borrower_signed || !loan.admin_signed) && (
+                        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+                          <AlertTriangle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-destructive">Missing Contract Signatures</p>
+                            <p className="text-xs text-muted-foreground">
+                              This loan was disbursed before the contract management system was in place. 
+                              Please upload the signed contract document and verify signatures to ensure compliance. 
+                              This loan <strong>cannot be marked as completed</strong> until the contract is fully signed.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-4">
                         {/* Borrower Signature */}
                         <div className={`p-3 rounded-lg border ${loan.borrower_signed || loan.signed_contract_url ? "bg-success/10 border-success/30" : "bg-muted border-border"}`}>
@@ -1169,23 +1199,46 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 </p>
                               )}
                               {loan.signed_contract_url && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="h-7 text-xs mt-2"
-                                  onClick={async () => {
-                                    const { data } = await supabase.storage
-                                      .from('loan-documents')
-                                      .createSignedUrl(loan.signed_contract_url!, 3600);
-                                    if (data?.signedUrl) {
-                                      window.open(data.signedUrl, '_blank');
-                                    } else {
-                                      toast.error('Could not retrieve signed contract');
-                                    }
-                                  }}
-                                >
-                                  <Download size={12} className="mr-1" /> View Signature
-                                </Button>
+                                <div className="flex gap-1 mt-2">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-7 text-xs"
+                                    onClick={async () => {
+                                      const { data } = await supabase.storage
+                                        .from('loan-documents')
+                                        .createSignedUrl(loan.signed_contract_url!, 3600);
+                                      if (data?.signedUrl) {
+                                        window.open(data.signedUrl, '_blank');
+                                      } else {
+                                        toast.error('Could not retrieve signed contract');
+                                      }
+                                    }}
+                                  >
+                                    <Download size={12} className="mr-1" /> View
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-7 text-xs"
+                                    onClick={async () => {
+                                      const { data } = await supabase.storage
+                                        .from('loan-documents')
+                                        .createSignedUrl(loan.signed_contract_url!, 3600);
+                                      if (data?.signedUrl) {
+                                        const link = document.createElement('a');
+                                        link.href = data.signedUrl;
+                                        link.download = `signed_contract_${loan.id.slice(0,8)}.pdf`;
+                                        link.click();
+                                        toast.success('Downloading signed contract');
+                                      } else {
+                                        toast.error('Could not download contract');
+                                      }
+                                    }}
+                                  >
+                                    <Download size={12} className="mr-1" /> Download
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           ) : (
@@ -1237,8 +1290,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                       toast.error('Failed to sign contract');
                                     } else {
                                       await logAudit({ action: 'CONTRACT_SIGNED_ADMIN', entity_type: 'loan_application', entity_id: loan.id });
-                                      toast.success('Contract signed by admin - ready for disbursement!');
+                                      toast.success('Contract signed by admin!');
                                       queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
+                                      queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
                                     }
                                   }}
                                 >
@@ -1250,8 +1304,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         </div>
                       </div>
 
+                      {/* Upload signed contract for legacy loans */}
+                      {!loan.signed_contract_url && (
+                        <div className="space-y-3 border-t border-border pt-4">
+                          <Label className="text-sm font-medium">Upload Signed Contract</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Upload the contract document signed by both borrower and admin
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <Input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setSignedContractFile(file);
+                              }}
+                              className="flex-1"
+                            />
+                            {signedContractFile && (
+                              <Button
+                                size="sm"
+                                onClick={() => uploadSignedContractMutation.mutate(signedContractFile)}
+                                disabled={uploadSignedContractMutation.isPending}
+                              >
+                                {uploadSignedContractMutation.isPending ? (
+                                  <Loader2 size={14} className="animate-spin mr-1" />
+                                ) : (
+                                  <Upload size={14} className="mr-1" />
+                                )}
+                                Upload
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Status Summary */}
-                      {!(loan.borrower_signed && loan.admin_signed) && !loan.signed_contract_url && (
+                      {!(loan.borrower_signed && loan.admin_signed) && !loan.signed_contract_url && (loan.status === "approved" || loan.status === "contract_signing") && (
                         <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
                           <div className="flex items-start gap-2">
                             <AlertTriangle size={16} className="text-warning mt-0.5" />

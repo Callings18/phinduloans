@@ -33,6 +33,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -64,6 +71,8 @@ import {
   Phone,
   Building,
   Banknote,
+  MoreHorizontal,
+  Download,
 } from "lucide-react";
 import {
   Table,
@@ -1292,34 +1301,65 @@ const AdminLoans = () => {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              {["pending", "approved"].includes(loan.status) && can('loans', 'edit') && (
-                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(loan)}>
-                                  <Edit size={16} />
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  Actions
+                                  <MoreHorizontal size={14} className="ml-1" />
                                 </Button>
-                              )}
-                              {["active", "disbursed"].includes(loan.status) && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openQuickPayment(loan)}
-                                >
-                                  <Receipt size={14} className="mr-1" />
-                                  Pay
-                                </Button>
-                              )}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem onClick={() => {
                                   setSelectedLoan(loan);
                                   setIsDetailsOpen(true);
-                                }}
-                              >
-                                <Eye size={16} className="mr-1" />
-                                View
-                              </Button>
-                            </div>
+                                }}>
+                                  <Eye size={14} className="mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                {["pending", "approved"].includes(loan.status) && can('loans', 'edit') && (
+                                  <DropdownMenuItem onClick={() => openEditDialog(loan)}>
+                                    <Edit size={14} className="mr-2" />
+                                    Edit Loan
+                                  </DropdownMenuItem>
+                                )}
+                                {["active", "disbursed"].includes(loan.status) && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => openQuickPayment(loan)}>
+                                      <Receipt size={14} className="mr-2" />
+                                      Record Payment
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {["active", "disbursed"].includes(loan.status) && (
+                                  <DropdownMenuItem onClick={async () => {
+                                    const { downloadLoanSchedule } = await import("@/utils/generateLoanSchedule");
+                                    // minimal schedule download
+                                    toast.success("Opening loan details for schedule...");
+                                    setSelectedLoan(loan);
+                                    setIsDetailsOpen(true);
+                                  }}>
+                                    <Download size={14} className="mr-2" />
+                                    View Schedule
+                                  </DropdownMenuItem>
+                                )}
+                                {["pending", "rejected", "under_review"].includes(loan.status) && can('loans', 'delete') && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => {
+                                        setSelectedLoan(loan);
+                                        setIsDeleteOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 size={14} className="mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
