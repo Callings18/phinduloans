@@ -268,6 +268,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan,
   });
 
+  const isDisbursed = loan.status === "disbursed" || loan.status === "active";
+  const isFullySigned = !!(loan.borrower_signed && loan.admin_signed);
+  const contractMessageNotSigned = isDisbursed
+    ? "This loan was disbursed without a fully signed contract. Please upload the signed contract by both parties and verify signatures to ensure compliance. This loan cannot be marked as completed until the contract is fully signed."
+    : "No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.";
+
   // Fetch collection activities
   const { data: collectionActivities } = useQuery({
     queryKey: ["loan-collection-activities", loan?.id],
@@ -1130,8 +1136,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </CardContent>
                 </Card>
 
-                {/* Contract Signing Status - for approved/contract_signing loans */}
-                {(loan.status === "approved" || loan.status === "contract_signing" || loan.signed_contract_url) && (
+                {/* Contract Signing Status - approved/contract_signing or disbursed but not fully signed */}
+                {((loan.status === "approved" || loan.status === "contract_signing" || loan.signed_contract_url) || (isDisbursed && !isFullySigned)) && (
                   <Card className={`border-2 ${
                     loan.borrower_signed && loan.admin_signed 
                       ? "border-success/50 bg-success/5" 
@@ -1142,9 +1148,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <FileText size={16} /> Contract Signing Status
                       </CardTitle>
                       <CardDescription>
-                        {loan.borrower_signed && loan.admin_signed 
-                          ? "Contract has been signed by both parties - ready for disbursement"
-                          : "Contract must be signed by both parties before disbursement"
+                        {isFullySigned
+                          ? (isDisbursed ? "Contract signed by both parties." : "Contract has been signed by both parties - ready for disbursement")
+                          : contractMessageNotSigned
                         }
                       </CardDescription>
                     </CardHeader>
@@ -1250,15 +1256,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         </div>
                       </div>
 
-                      {/* Status Summary */}
-                      {!(loan.borrower_signed && loan.admin_signed) && !loan.signed_contract_url && (
+                      {/* Status Summary - same message as Actions tab */}
+                      {!isFullySigned && (
                         <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
                           <div className="flex items-start gap-2">
                             <AlertTriangle size={16} className="text-warning mt-0.5" />
                             <div>
-                              <p className="text-sm font-medium">Disbursement Locked</p>
+                              <p className="text-sm font-medium">{isDisbursed ? "Missing Contract Signatures" : "Disbursement Locked"}</p>
                               <p className="text-xs text-muted-foreground">
-                                The borrower must sign the contract first, then admin must verify and counter-sign before disbursement can proceed.
+                                {contractMessageNotSigned}
                               </p>
                             </div>
                           </div>
@@ -1651,9 +1657,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             )}
                           </span>
                         </div>
-                        {!(loan.borrower_signed && loan.admin_signed) && (
+                        {!isFullySigned && (
                           <p className="text-xs text-warning">
-                            No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.
+                            {contractMessageNotSigned}
                           </p>
                         )}
                       </div>

@@ -978,6 +978,10 @@ const AdminApplications = () => {
 
   const isBorrowerSigned = selectedApp ? (selectedApp.borrower_signed || !!selectedApp.signed_contract_url) : false;
   const isFullySigned = !!selectedApp && isBorrowerSigned && !!selectedApp.admin_signed;
+  const isDisbursed = selectedApp?.status === "disbursed";
+  const contractMessageNotSigned = isDisbursed
+    ? "This loan was disbursed without a fully signed contract. Please upload the signed contract by both parties and verify signatures to ensure compliance. This loan cannot be marked as completed until the contract is fully signed."
+    : "No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.";
 
   const filteredApps = applications?.filter((app: any) => {
     const query = searchQuery.toLowerCase().trim();
@@ -2049,8 +2053,8 @@ const AdminApplications = () => {
                   </Card>
                 )}
 
-                {/* Contract Management (same flow as Loan Details – all loans) */}
-                {(selectedApp.status === 'under_review' || selectedApp.status === 'approved') && (
+                {/* Contract Management (same flow as Loan Details – same message on Overview and Actions) */}
+                {(selectedApp.status === 'under_review' || selectedApp.status === 'approved' || (selectedApp.status === 'disbursed' && !isFullySigned)) && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -2060,7 +2064,7 @@ const AdminApplications = () => {
                       <CardDescription>Download, share or update loan contract</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* Signing status (same as Loan Details) */}
+                      {/* Signing status (same message as Loan Details Overview and Actions) */}
                       <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Signing status</p>
                         <div className="flex flex-wrap gap-3 text-sm">
@@ -2081,7 +2085,7 @@ const AdminApplications = () => {
                         </div>
                         {!isFullySigned && (
                           <p className="text-xs text-warning">
-                            No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.
+                            {contractMessageNotSigned}
                           </p>
                         )}
                       </div>
@@ -2408,13 +2412,13 @@ const AdminApplications = () => {
                       </Card>
                     )}
 
-                    {/* Approved but contract not signed: show message, no Disburse */}
+                    {/* Approved but contract not signed: show message, no Disburse (same message as Contract Management) */}
                     {selectedApp.status === 'approved' && can('disbursement', 'disburse') && !isFullySigned && (
                       <Card className="bg-warning/10 border-warning/30">
                         <CardContent className="p-4 space-y-2">
-                          <h4 className="font-semibold text-foreground">Contract required</h4>
+                          <h4 className="font-semibold text-foreground">{isDisbursed ? "Missing Contract Signatures" : "Contract required"}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Contract must be signed by both parties before disbursement. Complete the Contract section below.
+                            {contractMessageNotSigned}
                           </p>
                         </CardContent>
                       </Card>
