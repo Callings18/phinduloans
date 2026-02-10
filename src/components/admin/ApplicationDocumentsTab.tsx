@@ -24,6 +24,12 @@ const docTypeIcons: Record<string, string> = {
   BANK_STATEMENT: "🏦", EMPLOYER_LETTER: "✉️", COLLATERAL_DOC: "🖼️",
   GUARANTOR_DOC: "👥", CONTRACT_SIGNED: "📝", CONTRACT_UNSIGNED: "📋",
   PROOF_OF_RESIDENCE: "🏠", OTHER: "📎",
+  BUSINESS_REGISTRATION: "🏢", BUSINESS_BANK_STATEMENT: "🏦",
+  TAX_COMPLIANCE: "📋", BUSINESS_PLAN: "📊",
+  COLLATERAL_OWNERSHIP: "📜", COLLATERAL_VALUATION: "💰",
+  COLLATERAL_PHOTOS: "📷", PROOF_OF_INCOME: "💵",
+  VEHICLE_REGISTRATION: "🚗", VEHICLE_VALUATION: "🚗", VEHICLE_PHOTOS: "📷",
+  GUARANTOR_NRC: "🪪", GUARANTOR_PAYSLIP: "📄",
   nrc_front: "🪪", nrc_back: "🪪", selfie: "📸", payslip: "📄",
   bank_statement: "🏦", employer_letter: "✉️", collateral: "🖼️",
   guarantor: "👥", contract: "📝", proof_of_residence: "🏠",
@@ -66,6 +72,7 @@ interface RequiredDocRow {
   docType: string;
   docName: string;
   isMandatory: boolean;
+  category: string;
   uploadedDocs: UploadedDoc[];
   isUploaded: boolean;
 }
@@ -109,8 +116,15 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
 
   const productName = loanProduct?.name || "Unknown Product";
   const productDocuments = useMemo(() => {
-    const docs = loanProduct?.required_documents as { document_type: string; document_name: string; is_mandatory: boolean }[] | null;
-    return docs && docs.length > 0 ? docs : [];
+    const raw = loanProduct?.required_documents as { doc_type?: string; document_type?: string; doc_label?: string; document_name?: string; is_mandatory: boolean; category?: string; display_order?: number }[] | null;
+    if (!raw || raw.length === 0) return [];
+    return raw.map((d) => ({
+      document_type: d.doc_type || d.document_type || '',
+      document_name: d.doc_label || d.document_name || '',
+      is_mandatory: d.is_mandatory ?? true,
+      category: d.category || 'required',
+      display_order: d.display_order ?? 0,
+    })).sort((a, b) => a.display_order - b.display_order);
   }, [loanProduct]);
 
   // Build all uploaded docs (unified + legacy)
@@ -162,11 +176,17 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         docType: reqDoc.document_type,
         docName: reqDoc.document_name,
         isMandatory: reqDoc.is_mandatory,
+        category: reqDoc.category || 'required',
         uploadedDocs: matchingUploads,
         isUploaded: matchingUploads.length > 0,
       };
     });
   }, [productDocuments, allUploadedDocs]);
+
+  // Group by category
+  const kycDocs = documentChecklist.filter(d => d.category === 'kyc');
+  const requiredDocs = documentChecklist.filter(d => d.category === 'required');
+  const optionalDocs = documentChecklist.filter(d => d.category === 'optional');
 
   // Extra uploaded docs not in the required list
   const extraDocs = useMemo(() => {
@@ -254,6 +274,90 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     e.target.value = "";
   };
 
+  const renderDocRow = (row: RequiredDocRow) => (
+    <div
+      key={row.docType}
+      className={`rounded-lg border p-3 transition-colors ${
+        row.isUploaded
+          ? "border-success/30 bg-success/5"
+          : row.isMandatory
+          ? "border-warning/30 bg-warning/5"
+          : "border-border bg-secondary/10"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-lg flex-shrink-0">{getDocIcon(row.docType)}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground">{row.docName}</span>
+              {row.isMandatory && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Required</Badge>
+              )}
+            </div>
+            {row.isUploaded ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <CheckCircle size={12} className="text-success" />
+                <span className="text-xs text-success">
+                  {row.uploadedDocs.length} file{row.uploadedDocs.length > 1 ? "s" : ""} uploaded
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 mt-0.5">
+                {row.isMandatory ? (
+                  <>
+                    <AlertTriangle size={12} className="text-warning" />
+                    <span className="text-xs text-warning">Pending — not yet uploaded</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock size={12} className="text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Optional — not uploaded</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {row.uploadedDocs.map((doc, idx) => (
+            <Button key={doc.id} variant="ghost" size="sm" className="h-8 px-2"
+              onClick={() => handleViewDocument(doc.fileUrl)} title={`View ${doc.label}`}>
+              <Eye size={14} />
+              {row.uploadedDocs.length > 1 && <span className="ml-0.5 text-xs">{idx + 1}</span>}
+            </Button>
+          ))}
+          <Button variant={row.isUploaded ? "outline" : "default"} size="sm" className="h-8"
+            onClick={() => triggerFileInput(row.docType)} disabled={uploadingDocType === row.docType}>
+            {uploadingDocType === row.docType ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            <span className="ml-1 hidden sm:inline">Upload</span>
+          </Button>
+        </div>
+      </div>
+      {row.uploadedDocs.length > 0 && (
+        <div className="mt-2 space-y-1 pl-8">
+          {row.uploadedDocs.map((doc) => (
+            <div key={doc.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <FileText size={10} />
+              <span className="truncate">{doc.label}</span>
+              {doc.monthTag && <span>({doc.monthTag})</span>}
+              {doc.status && (
+                <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
+                  doc.status === "verified" ? "bg-success/20 text-success border-success/30" :
+                  doc.status === "rejected" ? "bg-destructive/20 text-destructive border-destructive/30" :
+                  "bg-info/20 text-info border-info/30"
+                }`}>{doc.status}</Badge>
+              )}
+              {doc.payslipPassword && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-warning/20 text-warning border-warning/30">🔒 pwd</Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="py-12 text-center">
@@ -312,142 +416,62 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         </Card>
       )}
 
-      {/* Required Documents Checklist */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Required Documents</CardTitle>
-          <CardDescription>
-            {productDocuments.length === 0
-              ? "Required documents are configured per loan product. Configure them in Admin → Loan Products for this product."
-              : "Documents required for this loan product. Upload missing documents on behalf of the borrower."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {productDocuments.length === 0 ? (
+      {/* Documents by Category */}
+      {productDocuments.length === 0 ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Required Documents</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
               <AlertTriangle className="mx-auto h-8 w-8 mb-2 opacity-70" />
               <p className="font-medium">No required documents configured for this product.</p>
-              <p className="mt-1">Configure required documents in Admin → Loan Products for this application&apos;s product.</p>
+              <p className="mt-1">Configure required documents in Admin → Loan Products.</p>
             </div>
-          ) : (
-          documentChecklist.map((row) => (
-            <div
-              key={row.docType}
-              className={`rounded-lg border p-3 transition-colors ${
-                row.isUploaded
-                  ? "border-success/30 bg-success/5"
-                  : row.isMandatory
-                  ? "border-warning/30 bg-warning/5"
-                  : "border-border bg-secondary/10"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className="text-lg flex-shrink-0">{getDocIcon(row.docType)}</span>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{row.docName}</span>
-                      {row.isMandatory && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          Required
-                        </Badge>
-                      )}
-                    </div>
-                    {row.isUploaded ? (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <CheckCircle size={12} className="text-success" />
-                        <span className="text-xs text-success">
-                          {row.uploadedDocs.length} file{row.uploadedDocs.length > 1 ? "s" : ""} uploaded
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        {row.isMandatory ? (
-                          <>
-                            <AlertTriangle size={12} className="text-warning" />
-                            <span className="text-xs text-warning">Pending — not yet uploaded</span>
-                          </>
-                        ) : (
-                          <>
-                            <Clock size={12} className="text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Optional — not uploaded</span>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {/* View buttons for each uploaded file */}
-                  {row.uploadedDocs.map((doc, idx) => (
-                    <Button
-                      key={doc.id}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2"
-                      onClick={() => handleViewDocument(doc.fileUrl)}
-                      title={`View ${doc.label}`}
-                    >
-                      <Eye size={14} />
-                      {row.uploadedDocs.length > 1 && (
-                        <span className="ml-0.5 text-xs">{idx + 1}</span>
-                      )}
-                    </Button>
-                  ))}
-
-                  {/* Upload button */}
-                  <Button
-                    variant={row.isUploaded ? "outline" : "default"}
-                    size="sm"
-                    className="h-8"
-                    onClick={() => triggerFileInput(row.docType)}
-                    disabled={uploadingDocType === row.docType}
-                  >
-                    {uploadingDocType === row.docType ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Upload size={14} />
-                    )}
-                    <span className="ml-1 hidden sm:inline">Upload</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Show uploaded file details */}
-              {row.uploadedDocs.length > 0 && (
-                <div className="mt-2 space-y-1 pl-8">
-                  {row.uploadedDocs.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <FileText size={10} />
-                      <span className="truncate">{doc.label}</span>
-                      {doc.monthTag && <span>({doc.monthTag})</span>}
-                      {doc.status && (
-                        <Badge
-                          variant="outline"
-                          className={`text-[9px] px-1 py-0 ${
-                            doc.status === "verified" ? "bg-success/20 text-success border-success/30" :
-                            doc.status === "rejected" ? "bg-destructive/20 text-destructive border-destructive/30" :
-                            "bg-info/20 text-info border-info/30"
-                          }`}
-                        >
-                          {doc.status}
-                        </Badge>
-                      )}
-                      {doc.payslipPassword && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-warning/20 text-warning border-warning/30">
-                          🔒 pwd
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* KYC / Identity Documents */}
+          {kycDocs.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">🪪 KYC / Identity Documents</CardTitle>
+                <CardDescription>Identity verification documents required for all products</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {kycDocs.map((row) => renderDocRow(row))}
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+
+          {/* Product-Specific Required Documents */}
+          {requiredDocs.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">📋 Product-Specific Documents</CardTitle>
+                <CardDescription>Documents specifically required for {productName}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {requiredDocs.map((row) => renderDocRow(row))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Optional Documents */}
+          {optionalDocs.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">📎 Optional Documents</CardTitle>
+                <CardDescription>Additional supporting documents (not mandatory)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {optionalDocs.map((row) => renderDocRow(row))}
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
 
       {/* Extra uploaded documents not in required list */}
       {extraDocs.length > 0 && (
