@@ -52,6 +52,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import GuidedTour from "@/components/common/GuidedTour";
+import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
 
@@ -769,6 +770,9 @@ const AdminBorrowers = () => {
                   </div>
                 </div>
               </div>
+
+              {/* KYC / Identity Documents */}
+              <BorrowerKYCSection borrowerId={selectedBorrower.id} />
 
               {/* Loan History */}
               <div className="space-y-4">
