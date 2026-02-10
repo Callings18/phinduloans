@@ -1,4 +1,4 @@
-// Main v42 - force cache invalidation 2026-02-10
+// Main entry point
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource/outfit/300.css";
