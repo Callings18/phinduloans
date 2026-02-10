@@ -101,6 +101,7 @@ const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
   under_review: ["approved", "rejected", "crb_failed", "pmic_pending"],
   approved: ["contract_signing"],
   contract_signing: [],
+  awaiting_disbursement: [],
   disbursed: ["active"],
   active: ["defaulted"], // "completed" is removed — auto-set when fully paid with signed contract
   completed: [],
@@ -206,6 +207,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isContractEditOpen, setIsContractEditOpen] = useState(false);
   const [contractNotes, setContractNotes] = useState("");
   const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
+  const [signaturePreviewUrl, setSignaturePreviewUrl] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const { data: settings } = useSystemSettings();
@@ -936,6 +938,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       completed: { color: "bg-primary/20 text-primary border-primary/30", icon: CheckCircle },
       defaulted: { color: "bg-destructive/20 text-destructive border-destructive/30", icon: XCircle },
       pending: { color: "bg-warning/20 text-warning border-warning/30", icon: Clock },
+      awaiting_disbursement: { color: "bg-info/20 text-info border-info/30", icon: DollarSign },
       paid: { color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
       overdue: { color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle },
       reversed: { color: "bg-muted text-muted-foreground border-muted", icon: RotateCcw },
@@ -944,7 +947,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     return (
       <Badge variant="outline" className={`${color} capitalize`}>
         <Icon size={12} className="mr-1" />
-        {status}
+        {getCanonicalStatusLabel(status)}
       </Badge>
     );
   };
@@ -1198,7 +1201,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                         .from('loan-documents')
                                         .createSignedUrl(loan.signed_contract_url!, 3600);
                                       if (data?.signedUrl) {
-                                        window.open(data.signedUrl, '_blank');
+                                        setSignaturePreviewUrl(data.signedUrl);
                                       } else {
                                         toast.error('Could not retrieve signed contract');
                                       }
@@ -1264,22 +1267,49 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                   className="h-7 text-xs"
                                   onClick={async () => {
                                     const now = new Date().toISOString();
+                                    const isLegacy = loan.status === "disbursed" || loan.status === "active";
+                                    const updateData: any = {
+                                      admin_signed: true,
+                                      admin_signed_at: now,
+                                      admin_signed_by: user?.id ?? null,
+                                      borrower_signed: true,
+                                      borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
+                                      contract_fully_signed_at: now,
+                                    };
+                                    // Only transition to awaiting_disbursement for non-legacy loans
+                                    if (!isLegacy && loan.status === "contract_signing") {
+                                      updateData.status = "awaiting_disbursement";
+                                    }
                                     const { error } = await supabase
                                       .from('loan_applications')
-                                      .update({
-                                        admin_signed: true,
-                                        admin_signed_at: now,
-                                        admin_signed_by: user?.id ?? null,
-                                        borrower_signed: true,
-                                        borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
-                                      })
+                                      .update(updateData)
                                       .eq('id', loan.id);
                                     
                                     if (error) {
                                       toast.error('Failed to sign contract');
                                     } else {
                                       await logAudit({ action: 'CONTRACT_SIGNED_ADMIN', entity_type: 'loan_application', entity_id: loan.id });
-                                      toast.success('Contract signed by admin!');
+                                      // Notify borrower
+                                      await supabase.functions.invoke("send-notification", {
+                                        body: {
+                                          type: "sms",
+                                          to: loan.phone,
+                                          message: `Dear ${loan.full_name}, your loan contract has been fully signed by both parties. ${isLegacy ? "Thank you for completing your records." : "Your loan is now awaiting disbursement. Funds will be released shortly."} - Phindu Credit Solutions`,
+                                          userId: loan.user_id,
+                                          title: "Contract Fully Signed",
+                                        },
+                                      }).catch(() => {});
+                                      await supabase.functions.invoke("send-notification", {
+                                        body: {
+                                          type: "email",
+                                          to: loan.email,
+                                          subject: "Contract Fully Signed",
+                                          message: `Dear ${loan.full_name},\n\nYour loan contract (Ref: PCS-${loan.id.slice(0,8).toUpperCase()}) has been fully signed by both parties.\n\n${isLegacy ? "Thank you for completing your records." : "Your loan is now awaiting disbursement. Funds will be released shortly."}\n\nBest regards,\nPhindu Credit Solutions Limited`,
+                                          userId: loan.user_id,
+                                          title: "Contract Fully Signed",
+                                        },
+                                      }).catch(() => {});
+                                      toast.success(isLegacy ? 'Contract signed by admin!' : 'Contract signed — loan moved to Awaiting Disbursement');
                                       queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
                                       queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
                                     }
@@ -1767,23 +1797,39 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           size="sm"
                           onClick={async () => {
                             const now = new Date().toISOString();
+                            const isLegacy = loan.status === "disbursed" || loan.status === "active";
+                            const updateData: any = {
+                              admin_signed: true,
+                              admin_signed_at: now,
+                              admin_signed_by: user?.id ?? null,
+                              borrower_signed: true,
+                              borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
+                              contract_fully_signed_at: now,
+                            };
+                            if (!isLegacy && loan.status === "contract_signing") {
+                              updateData.status = "awaiting_disbursement";
+                            }
                             const { error } = await supabase
                               .from("loan_applications")
-                              .update({
-                                admin_signed: true,
-                                admin_signed_at: now,
-                                admin_signed_by: user?.id ?? null,
-                                borrower_signed: true,
-                                borrower_signed_at: loan.borrower_signed_at || loan.signed_contract_uploaded_at || now,
-                              })
+                              .update(updateData)
                               .eq("id", loan.id);
                             if (error) {
                               toast.error("Failed to sign contract");
                             } else {
                               await logAudit({ action: 'CONTRACT_SIGNED_ADMIN', entity_type: 'loan_application', entity_id: loan.id });
+                              // Notify borrower
+                              await supabase.functions.invoke("send-notification", {
+                                body: {
+                                  type: "sms",
+                                  to: loan.phone,
+                                  message: `Dear ${loan.full_name}, your loan contract has been fully signed. ${isLegacy ? "Thank you." : "Your loan is now awaiting disbursement."} - Phindu Credit Solutions`,
+                                  userId: loan.user_id,
+                                  title: "Contract Fully Signed",
+                                },
+                              }).catch(() => {});
                               queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
                               queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-                              toast.success("Contract signed by admin – ready for disbursement");
+                              toast.success(isLegacy ? "Contract signed by admin" : "Contract signed — loan moved to Awaiting Disbursement");
                             }
                           }}
                         >
@@ -1798,7 +1844,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             const { data } = await supabase.storage
                               .from("loan-documents")
                               .createSignedUrl(loan.signed_contract_url!, 3600);
-                            if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                            if (data?.signedUrl) setSignaturePreviewUrl(data.signedUrl);
                             else toast.error("Could not load contract");
                           }}
                         >
@@ -2513,6 +2559,54 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 Save Notes
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Signature/Contract Preview Dialog */}
+      <Dialog open={!!signaturePreviewUrl} onOpenChange={(open) => { if (!open) setSignaturePreviewUrl(null); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText size={20} /> Signed Contract / Signature
+            </DialogTitle>
+            <DialogDescription>
+              Preview of the borrower's signed contract or signature
+            </DialogDescription>
+          </DialogHeader>
+          {signaturePreviewUrl && (
+            <div className="flex-1 overflow-auto max-h-[70vh]">
+              {signaturePreviewUrl.includes('.pdf') ? (
+                <iframe
+                  src={signaturePreviewUrl}
+                  className="w-full h-[65vh] rounded-lg border border-border"
+                  title="Contract Preview"
+                />
+              ) : (
+                <img
+                  src={signaturePreviewUrl}
+                  alt="Borrower Signature"
+                  className="max-w-full max-h-[65vh] mx-auto rounded-lg border border-border"
+                />
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setSignaturePreviewUrl(null)}>
+              Close
+            </Button>
+            {signaturePreviewUrl && (
+              <Button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = signaturePreviewUrl;
+                  link.download = `signed_contract_${loan.id.slice(0,8)}`;
+                  link.click();
+                }}
+              >
+                <Download size={14} className="mr-1" /> Download
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
