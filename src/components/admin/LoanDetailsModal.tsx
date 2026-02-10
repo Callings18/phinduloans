@@ -1812,35 +1812,44 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           size="sm"
                           className="w-full mb-2"
                           onClick={async () => {
-                            try {
-                              // Save generated contract to storage and set contract_url
-                              await uploadContractAndSaveUrl(loan as any);
-                              // Generate and send contract via all channels
-                              await handleDownloadContract();
-                              await handleContractEmail();
-                              await handleContractWhatsApp();
-                              await handleContractSMS();
+                             try {
+                               // 1. Upload contract to storage
+                               await uploadContractAndSaveUrl(loan as any);
 
-                              // Transition status to contract_signing
-                              const { error } = await supabase
-                                .from("loan_applications")
-                                .update({ status: "contract_signing" as any })
-                                .eq("id", loan.id);
+                               // 2. Update status IMMEDIATELY (before notifications)
+                               const { error: statusError } = await supabase
+                                 .from("loan_applications")
+                                 .update({ status: "contract_signing" as any })
+                                 .eq("id", loan.id);
 
-                              if (error) throw error;
+                               if (statusError) throw statusError;
 
-                              const dashboardUrl = typeof window !== "undefined" ? `${window.location.origin}/dashboard` : "";
-                              const contractReadyMessage = `Your loan contract is ready for signing. Log in to your dashboard to sign.${dashboardUrl ? ` ${dashboardUrl}` : ""}`;
-                              await supabase.functions.invoke("send-notification", {
-                                body: { type: "sms", to: loan.phone, message: contractReadyMessage, userId: loan.user_id, title: "Contract ready for signing" },
-                              }).catch(() => {});
-                              await supabase.functions.invoke("send-notification", {
-                                body: { type: "email", to: loan.email, subject: "Contract ready for signing", message: contractReadyMessage, userId: loan.user_id, title: "Contract ready for signing" },
-                              }).catch(() => {});
+                               // 3. Send notifications (each wrapped so failures don't break flow)
+                               await handleDownloadContract().catch((err: any) => {
+                                 console.error("Failed to download contract:", err);
+                               });
+                               await handleContractEmail().catch((err: any) => {
+                                 console.error("Failed to send email:", err);
+                               });
+                               await handleContractWhatsApp().catch((err: any) => {
+                                 console.error("Failed to send WhatsApp:", err);
+                               });
+                               await handleContractSMS().catch((err: any) => {
+                                 console.error("Failed to send SMS:", err);
+                               });
 
-                              queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-                              queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-                              toast.success("Contract generated, sent to borrower, and status updated to Contract Signing");
+                               const dashboardUrl = typeof window !== "undefined" ? `${window.location.origin}/dashboard` : "";
+                               const contractReadyMessage = `Your loan contract is ready for signing. Log in to your dashboard to sign.${dashboardUrl ? ` ${dashboardUrl}` : ""}`;
+                               await supabase.functions.invoke("send-notification", {
+                                 body: { type: "sms", to: loan.phone, message: contractReadyMessage, userId: loan.user_id, title: "Contract ready for signing" },
+                               }).catch(() => {});
+                               await supabase.functions.invoke("send-notification", {
+                                 body: { type: "email", to: loan.email, subject: "Contract ready for signing", message: contractReadyMessage, userId: loan.user_id, title: "Contract ready for signing" },
+                               }).catch(() => {});
+
+                               queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+                               queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+                               toast.success("Contract generated, sent to borrower, and status updated to Contract Signing");
                             } catch (err: any) {
                               toast.error(err.message || "Failed to generate and send contract");
                             }
