@@ -1,0 +1,242 @@
+import { useState, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { getSignedUrl } from "@/utils/storageHelpers";
+import {
+  FileText, Upload, Eye, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
+} from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+const KYC_DOC_TYPES = [
+  { type: "nrc_front", label: "NRC (Front)", accept: "image/*", capture: true },
+  { type: "nrc_back", label: "NRC (Back)", accept: "image/*", capture: true },
+  { type: "selfie", label: "Selfie / Passport Photo", accept: "image/*", capture: true },
+  { type: "proof_of_residence", label: "Proof of Residence", accept: "image/*,application/pdf", capture: false },
+];
+
+interface Props {
+  userId: string;
+}
+
+export default function ProfileDocumentVault({ userId }: Props) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const { data: vaultDocs = [], isLoading } = useQuery({
+    queryKey: ["borrower-kyc-vault", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("borrower_document_vault")
+        .select("*")
+        .eq("borrower_id", userId)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!userId,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async ({ file, docType, label }: { file: File; docType: string; label: string }) => {
+      setUploadingType(docType);
+      const ext = file.name.split(".").pop() || "bin";
+      const path = `kyc/${userId}/${docType}_${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("loan-documents")
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from("borrower_document_vault").insert({
+        borrower_id: userId,
+        doc_type: docType,
+        doc_label: label,
+        file_url: path,
+        file_name: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+      });
+      if (dbError) throw dbError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", userId] });
+      toast({ title: "Document uploaded successfully" });
+      setUploadingType(null);
+    },
+    onError: (e: any) => {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+      setUploadingType(null);
+    },
+  });
+
+  const handlePreview = async (fileUrl: string) => {
+    const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
+    if (url) setPreviewUrl(url);
+    else toast({ title: "Could not load document", variant: "destructive" });
+  };
+
+  const handleFileSelect = (docType: string, label: string, file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum 10MB", variant: "destructive" });
+      return;
+    }
+    uploadMutation.mutate({ file, docType, label });
+  };
+
+  // Map by type (most recent)
+  const docsByType: Record<string, typeof vaultDocs[0]> = {};
+  vaultDocs.forEach((d) => {
+    if (!docsByType[d.doc_type]) docsByType[d.doc_type] = d;
+  });
+
+  const verifiedCount = KYC_DOC_TYPES.filter((t) => docsByType[t.type]?.is_verified).length;
+  const allVerified = verifiedCount === KYC_DOC_TYPES.length;
+
+  return (
+    <>
+      <Card className="glass border-border/50">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className={allVerified ? "text-emerald-400" : "text-muted-foreground"} size={20} />
+                Identity Documents (KYC)
+              </CardTitle>
+              <CardDescription>
+                Upload your identity documents once — they'll be reused for all future applications
+              </CardDescription>
+            </div>
+            {allVerified && (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                ✅ Fully Verified
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {KYC_DOC_TYPES.map((kycType) => {
+                const doc = docsByType[kycType.type];
+                const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
+                const isUploading = uploadingType === kycType.type;
+
+                return (
+                  <div
+                    key={kycType.type}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-secondary/30 border border-border/50 gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                        <FileText className="text-primary" size={20} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground text-sm">{kycType.label}</p>
+                        {doc ? (
+                          <p className="text-xs text-muted-foreground">
+                            {doc.file_name} • Uploaded {new Date(doc.uploaded_at).toLocaleDateString()}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                        )}
+                        {isRejected && (
+                          <p className="text-xs text-destructive mt-0.5">
+                            <AlertTriangle size={10} className="inline mr-1" />
+                            {doc.notes?.replace("Rejected: ", "")} — Please re-upload
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      {!doc || isRejected ? (
+                        <>
+                          <Badge variant="outline" className="text-muted-foreground gap-1">
+                            {isRejected ? <XCircle size={12} /> : <AlertTriangle size={12} />}
+                            {isRejected ? "Rejected" : "Missing"}
+                          </Badge>
+                          <input
+                            type="file"
+                            ref={(el) => { fileRefs.current[kycType.type] = el; }}
+                            className="hidden"
+                            accept={kycType.accept}
+                            capture={kycType.capture ? "environment" : undefined}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileSelect(kycType.type, kycType.label, file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fileRefs.current[kycType.type]?.click()}
+                            disabled={isUploading}
+                          >
+                            {isUploading ? (
+                              <Loader2 size={14} className="mr-1 animate-spin" />
+                            ) : kycType.capture ? (
+                              <Camera size={14} className="mr-1" />
+                            ) : (
+                              <Upload size={14} className="mr-1" />
+                            )}
+                            Upload
+                          </Button>
+                        </>
+                      ) : doc.is_verified ? (
+                        <>
+                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border gap-1">
+                            <CheckCircle size={12} /> Verified
+                          </Badge>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}>
+                            <Eye size={14} />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1">
+                            <Clock size={12} /> Pending Review
+                          </Badge>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}>
+                            <Eye size={14} />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Preview Dialog */}
+      <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Document Preview</DialogTitle>
+          </DialogHeader>
+          {previewUrl && (
+            previewUrl.includes(".pdf") ? (
+              <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg" />
+            ) : (
+              <img src={previewUrl} alt="Document" className="w-full max-h-[70vh] object-contain rounded-lg" />
+            )
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

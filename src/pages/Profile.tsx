@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,8 +28,7 @@ import {
     Clock,
     Calendar,
     CreditCard,
-    Eye,
-    Download
+
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -99,37 +97,7 @@ const Profile = () => {
         enabled: !!user?.id,
     });
 
-  // Fetch user's documents from past applications
-  const { data: documents } = useQuery({
-    queryKey: ['user-documents', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      // Get documents from past loan applications
-      const { data, error } = await supabase
-        .from('loan_applications')
-        .select('id, nrc_front_url, nrc_back_url, selfie_url, payslip_url, bank_statement_url, employer_letter_url, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
 
-      if (error) throw error;
-      
-      // Transform to document list format
-      if (data && data[0]) {
-        const app = data[0];
-        const docs: any[] = [];
-        if (app.nrc_front_url) docs.push({ document_type: 'NRC Front', file_url: app.nrc_front_url, created_at: app.created_at });
-        if (app.nrc_back_url) docs.push({ document_type: 'NRC Back', file_url: app.nrc_back_url, created_at: app.created_at });
-        if (app.selfie_url) docs.push({ document_type: 'Selfie', file_url: app.selfie_url, created_at: app.created_at });
-        if (app.payslip_url) docs.push({ document_type: 'Payslip', file_url: app.payslip_url, created_at: app.created_at });
-        if (app.bank_statement_url) docs.push({ document_type: 'Bank Statement', file_url: app.bank_statement_url, created_at: app.created_at });
-        if (app.employer_letter_url) docs.push({ document_type: 'Employer Letter', file_url: app.employer_letter_url, created_at: app.created_at });
-        return docs;
-      }
-      return [];
-    },
-    enabled: !!user?.id,
-  });
 
     // Fetch loan applications summary
     const { data: applicationsSummary } = useQuery({
@@ -221,9 +189,7 @@ const Profile = () => {
 
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <Navbar />
-
-            <main className="pt-24 pb-16">
+            <main className="pt-8 pb-16">
                 <div className="container mx-auto px-4 max-w-5xl">
                     {/* Profile Header */}
                     <Card className="glass border-border/50 mb-8">
@@ -415,64 +381,9 @@ const Profile = () => {
                             </Card>
                         </TabsContent>
 
-                        {/* Documents Tab */}
+                        {/* Documents Tab - KYC Vault with Upload */}
                         <TabsContent value="documents">
-                            <Card className="glass border-border/50">
-                                <CardHeader>
-                                    <CardTitle>Document Vault</CardTitle>
-                                    <CardDescription>View documents you've uploaded for loan applications</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    {documents && documents.length > 0 ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {documents.map((doc: any) => (
-                                                <div
-                                                    key={doc.id}
-                                                    className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 border border-border/50"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                                                            <FileText className="text-primary" size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-medium text-foreground text-sm">{doc.document_type?.replace(/_/g, ' ')}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {doc.created_at ? format(new Date(doc.created_at), 'MMM dd, yyyy') : 'N/A'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge className={
-                                                            doc.status === 'verified'
-                                                                ? 'bg-success/20 text-success border-success/30'
-                                                                : doc.status === 'rejected'
-                                                                    ? 'bg-destructive/20 text-destructive border-destructive/30'
-                                                                    : 'bg-warning/20 text-warning border-warning/30'
-                                                        }>
-                                                            {doc.status || 'pending'}
-                                                        </Badge>
-                                                        {doc.file_url && (
-                                                            <Button variant="ghost" size="sm" asChild>
-                                                                <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                                                                    <Eye size={16} />
-                                                                </a>
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-12">
-                                            <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
-                                                <FileText className="text-muted-foreground" size={32} />
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-foreground mb-2">No Documents</h3>
-                                            <p className="text-muted-foreground">Documents uploaded during loan applications will appear here</p>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                            <ProfileDocumentVault userId={user?.id || ""} />
                         </TabsContent>
 
                         {/* Security Tab */}
@@ -634,7 +545,6 @@ const Profile = () => {
                 </div>
             </main>
 
-            <Footer />
         </div>
     );
 };
