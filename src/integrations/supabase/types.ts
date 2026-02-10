@@ -2135,6 +2135,70 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_claims: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          loan_id: string
+          receipt_url: string | null
+          reference: string
+          repayment_id: string
+          status: string
+          user_id: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          loan_id: string
+          receipt_url?: string | null
+          reference: string
+          repayment_id: string
+          status?: string
+          user_id: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          loan_id?: string
+          receipt_url?: string | null
+          reference?: string
+          repayment_id?: string
+          status?: string
+          user_id?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_claims_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_claims_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "payment_claims_repayment_id_fkey"
+            columns: ["repayment_id"]
+            isOneToOne: false
+            referencedRelation: "loan_repayments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_gateway_settings: {
         Row: {
           api_key: string | null
