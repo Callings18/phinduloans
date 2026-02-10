@@ -107,8 +107,8 @@ const AdminDisbursements = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_applications")
-        .select("id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url")
-        .eq("status", "approved")
+        .select("id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url, status")
+        .in("status", ["approved", "awaiting_disbursement"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -120,6 +120,7 @@ const AdminDisbursements = () => {
         borrower_signed: boolean | null;
         admin_signed: boolean | null;
         signed_contract_url: string | null;
+        status: string;
       }>;
     },
   });
@@ -377,17 +378,23 @@ const AdminDisbursements = () => {
                           const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
                           const isAdminSigned = loan.admin_signed;
                           const isReady = isBorrowerSigned && isAdminSigned;
+                          const isAwaitingDisbursement = loan.status === "awaiting_disbursement";
                           
                           return (
                             <SelectItem key={loan.id} value={loan.id}>
                               <div className="flex items-center gap-2">
-                                {isReady ? (
+                                {isAwaitingDisbursement ? (
+                                  <CheckCircle size={14} className="text-success" />
+                                ) : isReady ? (
                                   <CheckCircle size={14} className="text-success" />
                                 ) : (
                                   <Clock size={14} className="text-warning" />
                                 )}
                                 <span>{loan.full_name} - K{Number(loan.loan_amount).toLocaleString()}</span>
-                                {!isReady && (
+                                {isAwaitingDisbursement && (
+                                  <span className="text-xs text-success">(Ready)</span>
+                                )}
+                                {!isReady && !isAwaitingDisbursement && (
                                   <span className="text-xs text-warning">(Contract pending)</span>
                                 )}
                               </div>

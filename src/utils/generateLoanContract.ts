@@ -26,6 +26,12 @@ interface LoanData {
   loan_product_id?: string | null;
 }
 
+export interface SignatureOptions {
+  borrowerSignatureDataUrl?: string;
+  borrowerSignedAt?: string;
+  adminSignedAt?: string;
+}
+
 interface ContractTemplate {
   id: string;
   name: string;
@@ -218,7 +224,7 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
 };
 
 // Default template fallback (used when no custom template exists)
-const createDefaultContractPDF = (loan: LoanData): jsPDF => {
+const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): jsPDF => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -349,20 +355,45 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
   
   doc.text('BORROWER:', margin, yPos);
   yPos += 10;
-  doc.line(margin, yPos, margin + 80, yPos);
-  yPos += 5;
+  
+  // If borrower signature provided, embed it
+  if (options?.borrowerSignatureDataUrl) {
+    try {
+      doc.addImage(options.borrowerSignatureDataUrl, 'PNG', margin, yPos - 5, 60, 20);
+      yPos += 20;
+    } catch (e) {
+      doc.line(margin, yPos, margin + 80, yPos);
+      yPos += 5;
+    }
+  } else {
+    doc.line(margin, yPos, margin + 80, yPos);
+    yPos += 5;
+  }
+  
   doc.text(`Name: ${loan.full_name}`, margin, yPos);
   yPos += 5;
-  doc.text('Date: ____________________', margin, yPos);
+  doc.text(`Date: ${options?.borrowerSignedAt ? new Date(options.borrowerSignedAt).toLocaleDateString('en-GB') : '____________________'}`, margin, yPos);
   
-  yPos -= 20;
+  yPos -= (options?.borrowerSignatureDataUrl ? 30 : 20);
   doc.text('FOR PHINDU CREDIT SOLUTIONS LTD:', pageWidth - margin - 80, yPos);
   yPos += 10;
-  doc.line(pageWidth - margin - 80, yPos, pageWidth - margin, yPos);
-  yPos += 5;
-  doc.text('Name: ____________________', pageWidth - margin - 80, yPos);
-  yPos += 5;
-  doc.text('Date: ____________________', pageWidth - margin - 80, yPos);
+  
+  // If admin signature present, add text indicator
+  if (options?.adminSignedAt) {
+    doc.setFont('helvetica', 'italic');
+    doc.text('[Digitally Signed]', pageWidth - margin - 80, yPos);
+    doc.setFont('helvetica', 'normal');
+    yPos += 5;
+    doc.text(`Name: Authorized Signatory`, pageWidth - margin - 80, yPos);
+    yPos += 5;
+    doc.text(`Date: ${new Date(options.adminSignedAt).toLocaleDateString('en-GB')}`, pageWidth - margin - 80, yPos);
+  } else {
+    doc.line(pageWidth - margin - 80, yPos, pageWidth - margin, yPos);
+    yPos += 5;
+    doc.text('Name: ____________________', pageWidth - margin - 80, yPos);
+    yPos += 5;
+    doc.text('Date: ____________________', pageWidth - margin - 80, yPos);
+  }
 
   yPos = 285;
   doc.setFontSize(8);
@@ -374,7 +405,7 @@ const createDefaultContractPDF = (loan: LoanData): jsPDF => {
 };
 
 // Main function to create contract PDF (async to fetch template)
-const createContractPDF = async (loan: LoanData): Promise<jsPDF> => {
+const createContractPDF = async (loan: LoanData, options?: SignatureOptions): Promise<jsPDF> => {
   const template = await fetchActiveTemplate(loan.loan_product_id);
   
   if (template) {
@@ -383,7 +414,41 @@ const createContractPDF = async (loan: LoanData): Promise<jsPDF> => {
     return createContractPDFFromTemplate(processedContent, loan);
   } else {
     console.log('No custom template found, using default template');
-    return createDefaultContractPDF(loan);
+    return createDefaultContractPDF(loan, options);
+  }
+};
+
+/**
+ * Generate a signed contract PDF with borrower signature embedded.
+ * Upload to storage and return the file path.
+ */
+export const generateSignedContractPDF = async (
+  loan: LoanData,
+  signatureDataUrl: string,
+  borrowerSignedAt?: string,
+  adminSignedAt?: string,
+): Promise<string | null> => {
+  try {
+    const doc = await createContractPDF(loan, {
+      borrowerSignatureDataUrl: signatureDataUrl,
+      borrowerSignedAt: borrowerSignedAt || new Date().toISOString(),
+      adminSignedAt,
+    });
+    const pdfBlob = doc.output('blob');
+    const fileName = `contracts/signed_contract_${loan.id}_${Date.now()}.pdf`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('loan-documents')
+      .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
+
+    if (uploadError) {
+      console.error('Failed to upload signed contract PDF:', uploadError);
+      return null;
+    }
+    return fileName;
+  } catch (error) {
+    console.error('Error generating signed contract PDF:', error);
+    return null;
   }
 };
 

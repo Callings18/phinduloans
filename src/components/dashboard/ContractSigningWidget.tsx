@@ -12,7 +12,7 @@ import { FileText, CheckCircle, Download, PenTool, Loader2, AlertTriangle, Clock
 import { toast } from "sonner";
 import { format } from "date-fns";
 import SignaturePad from "@/components/common/SignaturePad";
-import { downloadLoanContract } from "@/utils/generateLoanContract";
+import { downloadLoanContract, generateSignedContractPDF } from "@/utils/generateLoanContract";
 import { logAudit } from "@/utils/auditLog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,24 +71,45 @@ export default function ContractSigningWidget({ userId }: Props) {
     mutationFn: async () => {
       if (!selectedLoan || !signatureData) throw new Error("Missing loan or signature");
 
-      // Upload signature image
+      // Upload raw signature image
       const signatureBlob = await fetch(signatureData).then(r => r.blob());
-      const fileName = `${userId}/signature_${selectedLoan.id}_${Date.now()}.png`;
+      const sigFileName = `${userId}/signature_${selectedLoan.id}_${Date.now()}.png`;
       
       const { error: uploadError } = await supabase.storage
         .from("loan-documents")
-        .upload(fileName, signatureBlob, {
+        .upload(sigFileName, signatureBlob, {
           contentType: "image/png",
           upsert: true,
         });
 
       if (uploadError) throw uploadError;
 
-      // Update loan with signed contract reference
+      // Generate signed contract PDF with signature embedded
+      const signedPdfPath = await generateSignedContractPDF(
+        {
+          id: selectedLoan.id,
+          full_name: selectedLoan.full_name,
+          email: selectedLoan.email,
+          phone: selectedLoan.phone,
+          loan_amount: selectedLoan.loan_amount,
+          loan_term_months: selectedLoan.loan_term_months,
+          interest_rate: selectedLoan.interest_rate,
+          monthly_payment: selectedLoan.monthly_payment,
+          total_repayment: selectedLoan.total_repayment,
+          loan_purpose: '',
+          nrc_number: '',
+          monthly_income: 0,
+          created_at: '',
+        } as any,
+        signatureData,
+        new Date().toISOString(),
+      );
+
+      // Update loan with signed contract reference (use PDF if generated, else raw signature)
       const { error: updateError } = await supabase
         .from("loan_applications")
         .update({
-          signed_contract_url: fileName,
+          signed_contract_url: signedPdfPath || sigFileName,
           signed_contract_uploaded_at: new Date().toISOString(),
           borrower_signed: true,
           borrower_signed_at: new Date().toISOString(),
@@ -112,7 +133,7 @@ export default function ContractSigningWidget({ userId }: Props) {
           borrowerPhone: selectedLoan.phone,
           borrowerEmail: selectedLoan.email,
           loanAmount: selectedLoan.loan_amount,
-          signatureUrl: fileName,
+          signatureUrl: signedPdfPath || sigFileName,
         },
       });
 
