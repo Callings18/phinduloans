@@ -241,11 +241,11 @@ const Apply = () => {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from("borrower_document_vault")
-        .select("doc_type, file_url, doc_label")
+        .select("doc_type, file_url, doc_label, is_verified")
         .eq("borrower_id", user.id)
         .order("uploaded_at", { ascending: false });
       if (error) return [];
-      return (data ?? []).map(d => ({ document_type: d.doc_type, file_url: d.file_url, document_name: d.doc_label })) as { document_type: string; file_url: string; document_name: string }[];
+      return (data ?? []).map(d => ({ document_type: d.doc_type, file_url: d.file_url, document_name: d.doc_label, is_verified: d.is_verified ?? false })) as { document_type: string; file_url: string; document_name: string; is_verified: boolean }[];
     },
     enabled: !!user?.id,
   });
@@ -580,7 +580,7 @@ const Apply = () => {
           const docLabel = doc.doc_label || doc.document_name || docType;
           const isMandatory = doc.is_mandatory;
 
-          if (isMandatory && !dynamicDocs[docType] && !formData.reusedDocs[docType]) {
+          if (isMandatory && !dynamicDocs[docType] && !formData.reusedDocs[docType] && !vaultByType[docType]?.is_verified) {
             newDocErrors[docType] = `${docLabel} is required`;
             hasErrors = true;
           }
@@ -676,7 +676,7 @@ const Apply = () => {
       .filter((d: any) => d.is_mandatory)
       .filter((d: any) => {
         const type = d.document_type || d.doc_type;
-        return !dynamicDocs[type] && !formData.reusedDocs[type];
+        return !dynamicDocs[type] && !formData.reusedDocs[type] && !vaultByType[type]?.is_verified;
       });
     if (missingMandatory.length > 0) {
       const names = missingMandatory.map((d: any) => d.document_name || d.document_type).join(", ");
@@ -1716,8 +1716,19 @@ const Apply = () => {
                               {doc.document_name} {doc.is_mandatory && "*"}
                             </Label>
 
-                            {/* Reuse from Document Vault */}
-                            {vaultByType[doc.document_type] && (
+                            {/* Auto-skip verified KYC docs from vault */}
+                            {vaultByType[doc.document_type]?.is_verified ? (
+                              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                                <CheckCircle size={18} className="text-emerald-400" />
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">Already verified ✅</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    This document is in your identity vault and has been approved. No need to re-upload.
+                                  </p>
+                                </div>
+                              </div>
+                            ) : vaultByType[doc.document_type] ? (
+                              /* Reuse from Document Vault (not yet verified) */
                               <div className="mb-2 flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
                                 <Checkbox
                                   id={`reuse-vault-${doc.document_type}`}
@@ -1740,11 +1751,11 @@ const Apply = () => {
                                 />
                                 <label htmlFor={`reuse-vault-${doc.document_type}`} className="text-sm cursor-pointer flex-1">
                                   <span className="font-medium">Reuse from Document Vault</span>
-                                  <span className="block text-xs text-muted-foreground">Saved for future applications</span>
+                                  <span className="block text-xs text-muted-foreground">Saved for future applications (pending verification)</span>
                                 </label>
-                                <CheckCircle size={16} className="text-success" />
+                                <Clock size={16} className="text-yellow-400" />
                               </div>
-                            )}
+                            ) : null}
                             {/* Reuse from previous application */}
                             {previousApplication &&
                               ['nrc_front', 'nrc_back', 'payslip', 'selfie'].includes(doc.document_type) &&

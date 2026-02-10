@@ -15,6 +15,7 @@ import QuickApply from "@/components/dashboard/QuickApply";
 import WalletWidget from "@/components/dashboard/WalletWidget";
 import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
 import DocumentChecklist from "@/components/dashboard/DocumentChecklist";
+import KYCStatusWidget from "@/components/dashboard/KYCStatusWidget";
 import { Step } from "react-joyride";
 import {
   CreditCard,
@@ -447,6 +448,13 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* KYC Status Widget */}
+          {user && (
+            <div className="mb-6">
+              <KYCStatusWidget userId={user.id} />
+            </div>
+          )}
 
           {/* Contract Signing Widget - Show if any contracts need signing */}
           {user && (
