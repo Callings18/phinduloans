@@ -355,7 +355,7 @@ const AdminLoanProducts = () => {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as LoanProduct[];
+      return data as unknown as LoanProduct[];
     },
   });
 
@@ -618,7 +618,7 @@ const AdminLoanProducts = () => {
       is_active: product.is_active,
       requirements: product.requirements?.join("\n") || "",
       required_documents: Array.isArray((product as any).required_documents)
-        ? ((product as any).required_documents as { document_type: string; document_name: string; is_mandatory?: boolean; display_order?: number }[]).map((d, i) => ({
+        ? ((product as any).required_documents as { document_type: string; document_name: string; doc_label?: string; is_mandatory?: boolean; display_order?: number }[]).map((d, i) => ({
             document_type: d.document_type || "",
             document_name: d.document_name || d.doc_label || d.document_type || "",
             is_mandatory: d.is_mandatory ?? true,
@@ -1569,7 +1569,6 @@ const AdminLoanProducts = () => {
                                   setFormData({ ...formData, required_documents: next });
                                 }}
                               />
-                              </div>
                               <Button
                                 type="button"
                                 variant="ghost"
