@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.send-notification]
 verify_jwt = false
+
+[functions.create-staff-user]
+verify_jwt = false
