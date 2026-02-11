@@ -29,6 +29,7 @@ import {
   UserCircle,
   DollarSign,
   Mail,
+  BookOpen,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo.png";
 import { useState } from "react";
@@ -127,6 +128,7 @@ const menuGroups: MenuGroup[] = [
       { icon: Shield, label: "Staff", path: "/admin/staff", adminOnly: true, badge: "New" },
       { icon: FileSignature, label: "Contracts", path: "/admin/contract-templates", adminOnly: true },
       { icon: Mail, label: "Email Log", path: "/admin/email-log", adminOnly: true },
+      { icon: BookOpen, label: "User Guide", path: "/admin/user-guide", badge: "New" },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
     ],
   },
