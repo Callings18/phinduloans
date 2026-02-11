@@ -299,6 +299,138 @@ export type Database = {
         }
         Relationships: []
       }
+      borrower_kyc_info: {
+        Row: {
+          account_type: string | null
+          admin_notes: string | null
+          airtel_money_number: string | null
+          bank_account_holder_name: string | null
+          bank_account_number: string | null
+          bank_branch: string | null
+          bank_name: string | null
+          borrower_id: string
+          created_at: string | null
+          id: string
+          is_verified: boolean | null
+          mobile_money_account_name: string | null
+          mtn_mobile_money_number: string | null
+          nok_address: string | null
+          nok_alt_phone: string | null
+          nok_district: string | null
+          nok_full_name: string | null
+          nok_nrc_number: string | null
+          nok_phone: string | null
+          nok_relationship: string | null
+          updated_at: string | null
+          verified_at: string | null
+          verified_by: string | null
+          zamtel_kwacha_number: string | null
+        }
+        Insert: {
+          account_type?: string | null
+          admin_notes?: string | null
+          airtel_money_number?: string | null
+          bank_account_holder_name?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_name?: string | null
+          borrower_id: string
+          created_at?: string | null
+          id?: string
+          is_verified?: boolean | null
+          mobile_money_account_name?: string | null
+          mtn_mobile_money_number?: string | null
+          nok_address?: string | null
+          nok_alt_phone?: string | null
+          nok_district?: string | null
+          nok_full_name?: string | null
+          nok_nrc_number?: string | null
+          nok_phone?: string | null
+          nok_relationship?: string | null
+          updated_at?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+          zamtel_kwacha_number?: string | null
+        }
+        Update: {
+          account_type?: string | null
+          admin_notes?: string | null
+          airtel_money_number?: string | null
+          bank_account_holder_name?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_name?: string | null
+          borrower_id?: string
+          created_at?: string | null
+          id?: string
+          is_verified?: boolean | null
+          mobile_money_account_name?: string | null
+          mtn_mobile_money_number?: string | null
+          nok_address?: string | null
+          nok_alt_phone?: string | null
+          nok_district?: string | null
+          nok_full_name?: string | null
+          nok_nrc_number?: string | null
+          nok_phone?: string | null
+          nok_relationship?: string | null
+          updated_at?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+          zamtel_kwacha_number?: string | null
+        }
+        Relationships: []
+      }
+      borrower_references: {
+        Row: {
+          address: string | null
+          alt_phone: string | null
+          borrower_id: string
+          created_at: string | null
+          full_name: string
+          id: string
+          is_verified: boolean | null
+          occupation: string | null
+          phone: string
+          relationship: string
+          verification_notes: string | null
+          verified_at: string | null
+          verified_by: string | null
+          years_known: number | null
+        }
+        Insert: {
+          address?: string | null
+          alt_phone?: string | null
+          borrower_id: string
+          created_at?: string | null
+          full_name: string
+          id?: string
+          is_verified?: boolean | null
+          occupation?: string | null
+          phone: string
+          relationship: string
+          verification_notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+          years_known?: number | null
+        }
+        Update: {
+          address?: string | null
+          alt_phone?: string | null
+          borrower_id?: string
+          created_at?: string | null
+          full_name?: string
+          id?: string
+          is_verified?: boolean | null
+          occupation?: string | null
+          phone?: string
+          relationship?: string
+          verification_notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+          years_known?: number | null
+        }
+        Relationships: []
+      }
       brevo_whatsapp_templates: {
         Row: {
           created_at: string
