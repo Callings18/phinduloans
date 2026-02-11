@@ -65,10 +65,11 @@ interface QuickApplyProps {
   userId: string;
   profile: Profile | null;
   kycVerified?: boolean;
+  hasActiveLoan?: boolean;
   onSuccess?: () => void;
 }
 
-const QuickApply = ({ userId, profile, kycVerified = false, onSuccess }: QuickApplyProps) => {
+const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = false, onSuccess }: QuickApplyProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -178,6 +179,15 @@ const QuickApply = ({ userId, profile, kycVerified = false, onSuccess }: QuickAp
     : null;
 
   const handleQuickApply = async () => {
+    if (hasActiveLoan) {
+      toast({
+        title: "Active Loan Exists",
+        description: "You already have an active loan. Please complete your current loan before applying for a new one.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!kycVerified) {
       toast({
         title: "KYC Verification Required",
@@ -291,14 +301,19 @@ const QuickApply = ({ userId, profile, kycVerified = false, onSuccess }: QuickAp
   return (
     <>
       <Card className="glass border-border/50 overflow-hidden">
-        <div className={`${kycVerified ? 'gradient-primary' : 'bg-muted/50'} p-6`}>
+        <div className={`${kycVerified && !hasActiveLoan ? 'gradient-primary' : 'bg-muted/50'} p-6`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h3 className={`text-xl font-bold ${kycVerified ? 'text-primary-foreground' : 'text-foreground'}`}>
-                  {kycVerified ? 'Quick Apply' : 'Apply for a Loan'}
+                <h3 className={`text-xl font-bold ${kycVerified && !hasActiveLoan ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  {hasActiveLoan ? 'Loan in Progress' : kycVerified ? 'Quick Apply' : 'Apply for a Loan'}
                 </h3>
-                {kycVerified ? (
+                {hasActiveLoan ? (
+                  <Badge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-500/10">
+                    <CreditCard size={12} className="mr-1" />
+                    Active Loan
+                  </Badge>
+                ) : kycVerified ? (
                   <Badge className="bg-white/20 text-white border-white/30">
                     <Zap size={12} className="mr-1" />
                     Fast Track
@@ -310,14 +325,24 @@ const QuickApply = ({ userId, profile, kycVerified = false, onSuccess }: QuickAp
                   </Badge>
                 )}
               </div>
-              <p className={`text-sm ${kycVerified ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
-                {kycVerified
+              <p className={`text-sm ${kycVerified && !hasActiveLoan ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                {hasActiveLoan
+                  ? "You have an active loan. Complete it before applying for a new one."
+                  : kycVerified
                   ? "Your documents are on file – apply in seconds"
                   : "Your identity documents must be verified before you can apply"}
               </p>
             </div>
             <div className="flex gap-2">
-              {kycVerified ? (
+              {hasActiveLoan ? (
+                <Button 
+                  variant="outline" 
+                  disabled
+                >
+                  <CreditCard size={18} className="mr-2" />
+                  Application Locked
+                </Button>
+              ) : kycVerified ? (
                 <>
                   <Button 
                     variant="secondary" 
@@ -547,7 +572,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, onSuccess }: QuickAp
             <Button 
               variant="hero" 
               onClick={handleQuickApply}
-              disabled={isSubmitting || !isProfileComplete || needsDocuments}
+              disabled={isSubmitting || !isProfileComplete || needsDocuments || hasActiveLoan}
             >
               {isSubmitting ? (
                 <>
