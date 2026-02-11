@@ -43,6 +43,7 @@ import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
+import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 
 // Inline Theme - no external module
 type Theme = "dark" | "light" | "system";
@@ -160,6 +161,7 @@ function App() {
                   <Route path="payroll" element={<AdminPayroll />} />
                   <Route path="email-log" element={<AdminEmailLog />} />
                   <Route path="user-guide" element={<AdminUserGuide />} />
+                  <Route path="roles-permissions" element={<AdminRolesPermissions />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
