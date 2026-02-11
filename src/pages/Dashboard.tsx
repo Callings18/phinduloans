@@ -495,6 +495,7 @@ const Dashboard = () => {
                   userId={user.id}
                   profile={profile}
                   kycVerified={kycVerified}
+                  hasActiveLoan={activeLoans.length > 0}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
                 />
               )}
