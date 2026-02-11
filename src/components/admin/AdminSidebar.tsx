@@ -7,6 +7,7 @@ import {
   FileText,
   Users,
   Shield,
+  ShieldCheck,
   Building2,
   CreditCard,
   BarChart3,
@@ -126,6 +127,7 @@ const menuGroups: MenuGroup[] = [
     defaultOpen: false,
     items: [
       { icon: Shield, label: "Staff", path: "/admin/staff", adminOnly: true, badge: "New" },
+      { icon: ShieldCheck, label: "Roles & Permissions", path: "/admin/roles-permissions", adminOnly: true, badge: "New" },
       { icon: FileSignature, label: "Contracts", path: "/admin/contract-templates", adminOnly: true },
       { icon: Mail, label: "Email Log", path: "/admin/email-log", adminOnly: true },
       { icon: BookOpen, label: "User Guide", path: "/admin/user-guide", badge: "New" },
