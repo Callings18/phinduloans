@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ZAMBIAN_CITIES_LIST } from "@/constants/zambianLocations";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -297,7 +298,7 @@ const AdminHR = () => {
       {canManage && (
         <>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Employee</DialogTitle>
                 <DialogDescription>Create a new employee record. Link to an auth user (staff) optionally.</DialogDescription>
@@ -314,7 +315,7 @@ const AdminHR = () => {
           </Dialog>
           {editId && (
             <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Edit Employee</DialogTitle>
                   <DialogDescription>Update department, branch, commission, and status.</DialogDescription>
@@ -449,9 +450,18 @@ function AddEditEmployeeForm({
     },
   });
 
+  const DEPARTMENTS = ["Finance", "Operations", "Lending", "Collections", "IT", "Human Resources", "Administration", "Marketing", "Legal", "Compliance"];
+  const BRANCHES = ["Lusaka Main", "Kitwe", "Ndola", "Livingstone", "Kabwe", "Chipata", "Solwezi", "Kasama", "Mongu", "Mansa"];
+
+  const handleNrcChange = (val: string) => {
+    // Auto-format NRC: digits/digits/digits e.g. 626914/10/1
+    const raw = val.replace(/[^0-9/]/g, "");
+    setForm({ ...form, nrc_number: raw });
+  };
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label>First name</Label>
           <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
@@ -460,76 +470,92 @@ function AddEditEmployeeForm({
           <Label>Last name</Label>
           <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
         </div>
+        <div className="space-y-2">
+          <Label>Employee number</Label>
+          <Input value={form.employee_number} onChange={(e) => setForm({ ...form, employee_number: e.target.value })} placeholder="e.g. PHINDU-001" />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label>Email</Label>
-        <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Email</Label>
+          <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Phone</Label>
+          <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>NRC number</Label>
+          <Input value={form.nrc_number} onChange={e => handleNrcChange(e.target.value)} placeholder="e.g. 626914/10/1" />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label>Phone</Label>
-        <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-      </div>
-      <div className="space-y-2">
-        <Label>Employee number</Label>
-        <Input value={form.employee_number} onChange={(e) => setForm({ ...form, employee_number: e.target.value })} placeholder="e.g. PHINDU-001" />
-      </div>
-      <div className="space-y-2">
-        <Label>NRC number</Label>
-        <Input value={form.nrc_number} onChange={(e) => setForm({ ...form, nrc_number: e.target.value })} />
-      </div>
-      <div className="space-y-2">
-        <Label>Date of birth</Label>
-        <Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Date of birth</Label>
+          <Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
+        </div>
         <div className="space-y-2">
           <Label>Department</Label>
-          <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} placeholder="e.g. Finance" />
+          <Select value={form.department || "none"} onValueChange={(v) => setForm({ ...form, department: v === "none" ? "" : v })}>
+            <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— Select —</SelectItem>
+              {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label>Position</Label>
           <Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
         </div>
       </div>
-      <div className="space-y-2">
-        <Label>Employment type</Label>
-        <Select value={form.employment_type} onValueChange={(v) => setForm({ ...form, employment_type: v })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="permanent">Permanent</SelectItem>
-            <SelectItem value="contract">Contract</SelectItem>
-            <SelectItem value="temporary">Temporary</SelectItem>
-            <SelectItem value="intern">Intern</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Employment type</Label>
+          <Select value={form.employment_type} onValueChange={(v) => setForm({ ...form, employment_type: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="permanent">Permanent</SelectItem>
+              <SelectItem value="contract">Contract</SelectItem>
+              <SelectItem value="temporary">Temporary</SelectItem>
+              <SelectItem value="intern">Intern</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Employment start date</Label>
+          <Input type="date" value={form.employment_start_date} onChange={(e) => setForm({ ...form, employment_start_date: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Commission %</Label>
+          <Input type="number" min={0} step={0.5} value={form.commission_percentage} onChange={(e) => setForm({ ...form, commission_percentage: e.target.value })} />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label>Employment start date</Label>
-        <Input type="date" value={form.employment_start_date} onChange={(e) => setForm({ ...form, employment_start_date: e.target.value })} />
-      </div>
-      <div className="space-y-2">
-        <Label>Address</Label>
-        <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-      </div>
-      <div className="space-y-2">
-        <Label>City</Label>
-        <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-      </div>
-      <div className="space-y-2">
-        <Label>Branch</Label>
-        <Input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} placeholder="e.g. Lusaka Main" />
-      </div>
-      <div className="space-y-2">
-        <Label>Commission %</Label>
-        <Input
-          type="number"
-          min={0}
-          step={0.5}
-          value={form.commission_percentage}
-          onChange={(e) => setForm({ ...form, commission_percentage: e.target.value })}
-        />
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Town / City</Label>
+          <Select value={form.city || "none"} onValueChange={(v) => setForm({ ...form, city: v === "none" ? "" : v })}>
+            <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— Select —</SelectItem>
+              {ZAMBIAN_CITIES_LIST.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Branch</Label>
+          <Select value={form.branch || "none"} onValueChange={(v) => setForm({ ...form, branch: v === "none" ? "" : v })}>
+            <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— Select —</SelectItem>
+              {BRANCHES.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Address</Label>
+          <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </div>
       </div>
       <div className="space-y-2">
         <Label>Link to auth user (staff)</Label>
