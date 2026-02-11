@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
+import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
+import KYCNextOfKin from "@/components/dashboard/KYCNextOfKin";
+import KYCReferences from "@/components/dashboard/KYCReferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -382,8 +385,11 @@ const Profile = () => {
                         </TabsContent>
 
                         {/* Documents Tab - KYC Vault with Upload */}
-                        <TabsContent value="documents">
+                        <TabsContent value="documents" className="space-y-6">
                             <ProfileDocumentVault userId={user?.id || ""} />
+                            <KYCFinancialInfo userId={user?.id || ""} />
+                            <KYCNextOfKin userId={user?.id || ""} />
+                            <KYCReferences userId={user?.id || ""} />
                         </TabsContent>
 
                         {/* Security Tab */}
