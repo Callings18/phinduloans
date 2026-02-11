@@ -92,8 +92,10 @@ import { logAudit } from "@/utils/auditLog";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
@@ -183,6 +185,9 @@ interface EarlySettlement {
 
 export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const { user } = useAuth();
+  const { can } = usePermissions();
+  const canApprove = can("loans", "approve");
+  const canFinanceApprove = can("loans", "finance_approve");
   const [activeTab, setActiveTab] = useState("overview");
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
@@ -752,6 +757,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const updateStatusMutation = useMutation({
     mutationFn: async (status: string) => {
       if (!loan) throw new Error("No loan selected");
+      // Permission check: only users with approve permission can move to approved
+      if (status === "approved" && !canApprove) {
+        throw new Error("You don't have permission to approve loans");
+      }
       const { error } = await supabase
         .from("loan_applications")
         .update({ status: status as any })
@@ -1709,22 +1718,37 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2">
-                      {(ALLOWED_NEXT_STATUSES[loan.status] ?? []).map((nextStatus) => (
-                        <Button
-                          key={nextStatus}
-                          size="sm"
-                          variant={nextStatus === "rejected" || nextStatus === "defaulted" ? "destructive" : nextStatus === "approved" ? "default" : "outline"}
-                          onClick={() => updateStatusMutation.mutate(nextStatus)}
-                          disabled={updateStatusMutation.isPending}
-                        >
-                          {updateStatusMutation.isPending ? (
-                            <Loader2 className="animate-spin mr-1" size={14} />
-                          ) : (
-                            <ArrowRight size={14} className="mr-1" />
-                          )}
-                          Move to {getCanonicalStatusLabel(nextStatus)}
-                        </Button>
-                      ))}
+                      {(ALLOWED_NEXT_STATUSES[loan.status] ?? []).map((nextStatus) => {
+                        const needsApprovePermission = nextStatus === "approved";
+                        const isDisabledByPermission = needsApprovePermission && !canApprove;
+
+                        const btn = (
+                          <Button
+                            key={nextStatus}
+                            size="sm"
+                            variant={nextStatus === "rejected" || nextStatus === "defaulted" ? "destructive" : nextStatus === "approved" ? "default" : "outline"}
+                            onClick={() => updateStatusMutation.mutate(nextStatus)}
+                            disabled={updateStatusMutation.isPending || isDisabledByPermission}
+                          >
+                            {updateStatusMutation.isPending ? (
+                              <Loader2 className="animate-spin mr-1" size={14} />
+                            ) : (
+                              <ArrowRight size={14} className="mr-1" />
+                            )}
+                            Move to {getCanonicalStatusLabel(nextStatus)}
+                          </Button>
+                        );
+
+                        if (isDisabledByPermission) {
+                          return (
+                            <Tooltip key={nextStatus}>
+                              <TooltipTrigger asChild><span>{btn}</span></TooltipTrigger>
+                              <TooltipContent>You don't have permission to approve loans</TooltipContent>
+                            </Tooltip>
+                          );
+                        }
+                        return btn;
+                      })}
                       {(ALLOWED_NEXT_STATUSES[loan.status] ?? []).length === 0 && (
                         <p className="text-sm text-muted-foreground">No further stage moves from this status.</p>
                       )}
