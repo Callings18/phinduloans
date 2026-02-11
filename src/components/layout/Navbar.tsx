@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PhinduAI from "../common/PhinduAI";
-import phinduLogo from "@/assets/phindu-logo.png";
+import phinduLogo from "@/assets/phindu-logo-white.png";
 import ThemeToggle from "../common/ThemeToggle";
 import NotificationCenter from "../common/NotificationCenter";
 
@@ -40,7 +40,7 @@ const Navbar = () => {
               <img
                 src={phinduLogo}
                 alt="Phindu Credit Solutions"
-                className="h-10 object-contain group-hover:opacity-90 transition-opacity duration-300"
+                className="h-10 object-contain invert dark:invert-0 group-hover:opacity-90 transition-opacity duration-300"
               />
             </Link>
 

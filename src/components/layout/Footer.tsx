@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
-import phinduLogo from "@/assets/phindu-logo.png";
+import phinduLogo from "@/assets/phindu-logo-white.png";
 
 const Footer = () => {
   const { data: settings } = useSystemSettings();
@@ -16,7 +16,7 @@ const Footer = () => {
             <img
               src={phinduLogo}
               alt="Phindu Credit Solutions"
-              className="h-12 object-contain"
+              className="h-12 object-contain invert dark:invert-0"
             />
             <p className="text-muted-foreground text-sm">
               Money when you need it. Fast, secure, and transparent lending solutions for Zambia.

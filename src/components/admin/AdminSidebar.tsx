@@ -32,7 +32,7 @@ import {
   Mail,
   BookOpen,
 } from "lucide-react";
-import phinduLogo from "@/assets/phindu-logo.png";
+import phinduLogo from "@/assets/phindu-logo-white.png";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -167,7 +167,7 @@ const AdminSidebar = () => {
             <img
               src={phinduLogo}
               alt="Phindu Credit"
-              className="h-10 object-contain"
+              className="h-10 object-contain invert dark:invert-0"
             />
           </div>
         )}
@@ -175,7 +175,7 @@ const AdminSidebar = () => {
           <img
             src={phinduLogo}
             alt="Phindu"
-            className="h-8 w-8 object-contain mx-auto rounded"
+            className="h-8 w-8 object-contain mx-auto rounded invert dark:invert-0"
           />
         )}
       </div>
