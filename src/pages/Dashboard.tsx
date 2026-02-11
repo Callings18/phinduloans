@@ -213,14 +213,34 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
+  // Also check borrower_kyc_info for admin-level KYC approval
+  const { data: kycInfo } = useQuery({
+    queryKey: ["borrower-kyc-info-status", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("borrower_kyc_info")
+        .select("is_verified")
+        .eq("borrower_id", user.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   const kycVerified = useMemo(() => {
+    // If admin has approved KYC via borrower_kyc_info, consider it verified
+    if (kycInfo?.is_verified === true) return true;
+
+    // Otherwise check individual document verification in vault
     const KYC_TYPES = ["nrc_front", "nrc_back", "selfie", "proof_of_residence"];
     const docsByType: Record<string, boolean> = {};
     kycVaultDocs.forEach((d) => {
       if (!docsByType.hasOwnProperty(d.doc_type)) docsByType[d.doc_type] = !!d.is_verified;
     });
     return KYC_TYPES.every((t) => docsByType[t] === true);
-  }, [kycVaultDocs]);
+  }, [kycVaultDocs, kycInfo]);
 
   const submitPaymentClaimMutation = useMutation({
     mutationFn: async () => {
