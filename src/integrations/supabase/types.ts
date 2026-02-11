@@ -1391,6 +1391,8 @@ export type Database = {
           admin_signed_at: string | null
           admin_signed_by: string | null
           approval_stage: string | null
+          approved_at: string | null
+          approved_by: string | null
           assigned_to: string | null
           bank_statement_url: string | null
           borrower_signed: boolean | null
@@ -1407,6 +1409,7 @@ export type Database = {
           crb_consent_timestamp: string | null
           created_at: string
           date_of_birth: string | null
+          disbursed_at: string | null
           disbursed_by: string | null
           document_verified_at: string | null
           document_verified_by: string | null
@@ -1439,6 +1442,8 @@ export type Database = {
           payslip_password: string | null
           payslip_url: string | null
           phone: string
+          recommended_at: string | null
+          recommended_by: string | null
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -1462,6 +1467,8 @@ export type Database = {
           admin_signed_at?: string | null
           admin_signed_by?: string | null
           approval_stage?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
           borrower_signed?: boolean | null
@@ -1478,6 +1485,7 @@ export type Database = {
           crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
+          disbursed_at?: string | null
           disbursed_by?: string | null
           document_verified_at?: string | null
           document_verified_by?: string | null
@@ -1510,6 +1518,8 @@ export type Database = {
           payslip_password?: string | null
           payslip_url?: string | null
           phone: string
+          recommended_at?: string | null
+          recommended_by?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1533,6 +1543,8 @@ export type Database = {
           admin_signed_at?: string | null
           admin_signed_by?: string | null
           approval_stage?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           assigned_to?: string | null
           bank_statement_url?: string | null
           borrower_signed?: boolean | null
@@ -1549,6 +1561,7 @@ export type Database = {
           crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
+          disbursed_at?: string | null
           disbursed_by?: string | null
           document_verified_at?: string | null
           document_verified_by?: string | null
@@ -1581,6 +1594,8 @@ export type Database = {
           payslip_password?: string | null
           payslip_url?: string | null
           phone?: string
+          recommended_at?: string | null
+          recommended_by?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
