@@ -77,7 +77,7 @@ const statusConfig = {
 };
 
 const Dashboard = () => {
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading, isAdmin, isStaff } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
@@ -115,10 +115,10 @@ const Dashboard = () => {
     if (!isLoading && !user) {
       navigate('/auth');
     }
-    if (!isLoading && user && isAdmin) {
+    if (!isLoading && user && isStaff) {
       navigate('/admin');
     }
-  }, [user, isLoading, isAdmin, navigate]);
+  }, [user, isLoading, isStaff, navigate]);
 
   const { data: loans, isLoading: loansLoading } = useQuery({
     queryKey: ['user-loans', user?.id],

@@ -31,15 +31,15 @@ const Auth = () => {
   const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  const { signIn, signUp, sendOtp, user, isLoading } = useAuth();
+  const { signIn, signUp, sendOtp, user, isLoading, isStaff } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate('/dashboard');
+      navigate(isStaff ? '/admin' : '/dashboard');
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, isStaff, navigate]);
 
   const validateForm = () => {
     try {
