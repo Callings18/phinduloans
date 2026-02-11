@@ -196,6 +196,31 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
+  // Check if KYC documents are all verified
+  const { data: kycVaultDocs = [] } = useQuery({
+    queryKey: ["borrower-kyc-vault-status", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from("borrower_document_vault")
+        .select("doc_type, is_verified")
+        .eq("borrower_id", user.id)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user?.id,
+  });
+
+  const kycVerified = useMemo(() => {
+    const KYC_TYPES = ["nrc_front", "nrc_back", "selfie", "proof_of_residence"];
+    const docsByType: Record<string, boolean> = {};
+    kycVaultDocs.forEach((d) => {
+      if (!docsByType.hasOwnProperty(d.doc_type)) docsByType[d.doc_type] = !!d.is_verified;
+    });
+    return KYC_TYPES.every((t) => docsByType[t] === true);
+  }, [kycVaultDocs]);
+
   const submitPaymentClaimMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id || !submitPaymentRepayment) throw new Error("Missing user or repayment");
@@ -469,6 +494,7 @@ const Dashboard = () => {
                 <QuickApply
                   userId={user.id}
                   profile={profile}
+                  kycVerified={kycVerified}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
                 />
               )}

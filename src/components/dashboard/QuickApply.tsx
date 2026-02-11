@@ -64,10 +64,11 @@ interface LoanProduct {
 interface QuickApplyProps {
   userId: string;
   profile: Profile | null;
+  kycVerified?: boolean;
   onSuccess?: () => void;
 }
 
-const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
+const QuickApply = ({ userId, profile, kycVerified = false, onSuccess }: QuickApplyProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -177,6 +178,15 @@ const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
     : null;
 
   const handleQuickApply = async () => {
+    if (!kycVerified) {
+      toast({
+        title: "KYC Verification Required",
+        description: "Your identity documents must be verified by admin before you can apply for a loan.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!isProfileComplete) {
       toast({
         title: "Complete Your Profile",
@@ -188,7 +198,6 @@ const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
     }
 
     if (!hasRequiredDocs) {
-      // Redirect to full apply page to upload documents
       setNeedsDocuments(true);
       return;
     }
@@ -282,39 +291,60 @@ const QuickApply = ({ userId, profile, onSuccess }: QuickApplyProps) => {
   return (
     <>
       <Card className="glass border-border/50 overflow-hidden">
-        <div className="gradient-primary p-6">
+        <div className={`${kycVerified ? 'gradient-primary' : 'bg-muted/50'} p-6`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-xl font-bold text-primary-foreground">Quick Apply</h3>
-                <Badge className="bg-white/20 text-white border-white/30">
-                  <Zap size={12} className="mr-1" />
-                  Fast Track
-                </Badge>
+                <h3 className={`text-xl font-bold ${kycVerified ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  {kycVerified ? 'Quick Apply' : 'Apply for a Loan'}
+                </h3>
+                {kycVerified ? (
+                  <Badge className="bg-white/20 text-white border-white/30">
+                    <Zap size={12} className="mr-1" />
+                    Fast Track
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-yellow-400 border-yellow-500/30 bg-yellow-500/10">
+                    <AlertCircle size={12} className="mr-1" />
+                    KYC Pending
+                  </Badge>
+                )}
               </div>
-              <p className="text-primary-foreground/80 text-sm">
-                {hasRequiredDocs 
-                  ? "Apply instantly using your saved profile & documents" 
-                  : "Your documents are on file - apply in seconds"}
+              <p className={`text-sm ${kycVerified ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                {kycVerified
+                  ? "Your documents are on file – apply in seconds"
+                  : "Your identity documents must be verified before you can apply"}
               </p>
             </div>
             <div className="flex gap-2">
-              <Button 
-                variant="secondary" 
-                onClick={() => setIsOpen(true)}
-                className="bg-white/20 border-white/30 text-white hover:bg-white/30"
-              >
-                <Zap size={18} className="mr-2" />
-                Quick Apply
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => navigate("/apply")}
-                className="border-white/30 text-white hover:bg-white/10"
-              >
-                <FileText size={18} className="mr-2" />
-                Full Application
-              </Button>
+              {kycVerified ? (
+                <>
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => setIsOpen(true)}
+                    className="bg-white/20 border-white/30 text-white hover:bg-white/30"
+                  >
+                    <Zap size={18} className="mr-2" />
+                    Quick Apply
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate("/apply")}
+                    className="border-white/30 text-white hover:bg-white/10"
+                  >
+                    <FileText size={18} className="mr-2" />
+                    Full Application
+                  </Button>
+                </>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate("/profile")}
+                >
+                  <Upload size={18} className="mr-2" />
+                  Upload Documents
+                </Button>
+              )}
             </div>
           </div>
         </div>
