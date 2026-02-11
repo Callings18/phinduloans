@@ -31,7 +31,8 @@ import {
     Clock,
     Calendar,
     CreditCard,
-
+    ArrowLeft,
+    Home,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -192,8 +193,17 @@ const Profile = () => {
 
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <main className="pt-8 pb-16">
+            <main className="pt-8 pb-24">
                 <div className="container mx-auto px-4 max-w-5xl">
+                    {/* Back to Dashboard */}
+                    <Button
+                        variant="ghost"
+                        className="mb-4 gap-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => navigate('/dashboard')}
+                    >
+                        <ArrowLeft size={18} />
+                        Back to Dashboard
+                    </Button>
                     {/* Profile Header */}
                     <Card className="glass border-border/50 mb-8">
                         <CardContent className="p-8">
@@ -551,6 +561,22 @@ const Profile = () => {
                 </div>
             </main>
 
+            {/* Sticky bottom bar */}
+            <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/80 backdrop-blur-lg">
+                <div className="container mx-auto px-4 max-w-5xl flex items-center justify-between py-3">
+                    <p className="text-sm text-muted-foreground hidden sm:block">
+                        Done updating? Head back to your dashboard.
+                    </p>
+                    <Button
+                        variant="hero"
+                        onClick={() => navigate('/dashboard')}
+                        className="ml-auto gap-2"
+                    >
+                        <Home size={16} />
+                        Go to Dashboard
+                    </Button>
+                </div>
+            </div>
         </div>
     );
 };
