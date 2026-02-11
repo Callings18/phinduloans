@@ -85,6 +85,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
 import GuarantorTab from "./GuarantorTab";
+import ApprovalWorkflowTab from "./ApprovalWorkflowTab";
 import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
@@ -147,6 +148,20 @@ interface Loan {
   borrower_signed_at?: string | null;
   admin_signed?: boolean;
   admin_signed_at?: string | null;
+  // Approval workflow fields
+  approval_stage?: string | null;
+  document_verified_by?: string | null;
+  document_verified_at?: string | null;
+  finance_verified_by?: string | null;
+  finance_verified_at?: string | null;
+  recommended_by?: string | null;
+  recommended_at?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  disbursed_by?: string | null;
+  disbursed_at?: string | null;
 }
 
 interface Repayment {
@@ -985,7 +1000,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-8 w-full">
+            <TabsList className="grid grid-cols-9 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
@@ -994,6 +1009,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </TabsTrigger>
               <TabsTrigger value="documents" className="text-xs">
                 <FolderCheck size={14} className="mr-1 hidden sm:inline" /> Documents
+              </TabsTrigger>
+              <TabsTrigger value="approval" className="text-xs">
+                <Shield size={14} className="mr-1 hidden sm:inline" /> Approval
               </TabsTrigger>
               <TabsTrigger value="guarantors" className="text-xs">
                 <Shield size={14} className="mr-1 hidden sm:inline" /> Guarantors
@@ -1589,6 +1607,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               {/* Documents Tab */}
               <TabsContent value="documents" className="m-0">
                 <DocumentVerificationTab loanId={loan.id} borrowerId={loan.user_id} />
+              </TabsContent>
+
+              {/* Approval & Notes Tab */}
+              <TabsContent value="approval" className="m-0">
+                <ApprovalWorkflowTab loan={loan} />
               </TabsContent>
 
               {/* Guarantors Tab */}
