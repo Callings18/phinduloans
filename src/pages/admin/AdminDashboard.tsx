@@ -10,6 +10,7 @@ import PortfolioHealthCards from "@/components/admin/PortfolioHealthCards";
 import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
 import ProductMixChart from "@/components/admin/ProductMixChart";
 import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
+import LoanOfficerPerformanceTable from "@/components/admin/LoanOfficerPerformanceTable";
 import { Step } from "react-joyride";
 import {
   DropdownMenu,
@@ -934,6 +935,9 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Loan Officer Performance */}
+        <LoanOfficerPerformanceTable />
 
         {/* Recent Applications */}
         <Card className="border-border/50 bg-card/80 backdrop-blur-sm tour-admin-recent">
