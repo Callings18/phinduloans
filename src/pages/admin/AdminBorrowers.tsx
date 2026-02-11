@@ -47,6 +47,9 @@ import {
   Ban,
   CheckCircle,
   AlertTriangle,
+  ShieldCheck,
+  Clock,
+  FileText,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -152,6 +155,29 @@ const AdminBorrowers = () => {
         counts[loan.user_id] = (counts[loan.user_id] || 0) + 1;
       });
       return counts;
+    },
+  });
+
+  // KYC status for all borrowers
+  const { data: kycStatuses } = useQuery({
+    queryKey: ['borrower-kyc-statuses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('borrower_document_vault')
+        .select('borrower_id, doc_type, is_verified');
+      if (error) throw error;
+      
+      const statusMap: Record<string, { uploaded: number; verified: number }> = {};
+      const requiredTypes = ['nrc_front', 'nrc_back', 'selfie', 'proof_of_residence'];
+      
+      data?.forEach(doc => {
+        if (!statusMap[doc.borrower_id]) statusMap[doc.borrower_id] = { uploaded: 0, verified: 0 };
+        if (requiredTypes.includes(doc.doc_type)) {
+          statusMap[doc.borrower_id].uploaded++;
+          if (doc.is_verified) statusMap[doc.borrower_id].verified++;
+        }
+      });
+      return statusMap;
     },
   });
 
@@ -476,9 +502,28 @@ const AdminBorrowers = () => {
                         </h4>
                         {borrower.is_blacklisted && (
                           <Badge variant="destructive" className="text-xs">Blacklisted</Badge>
-                        )}
+                         )}
+                        {(() => {
+                          const kyc = kycStatuses?.[borrower.id];
+                          if (!kyc) return null;
+                          if (kyc.verified >= 4) return (
+                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border text-xs gap-1">
+                              <ShieldCheck size={10} /> KYC Verified
+                            </Badge>
+                          );
+                          if (kyc.uploaded >= 4) return (
+                            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border text-xs gap-1">
+                              <Clock size={10} /> Pending KYC
+                            </Badge>
+                          );
+                          if (kyc.uploaded > 0) return (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <FileText size={10} /> KYC {kyc.uploaded}/4
+                            </Badge>
+                          );
+                          return null;
+                        })()}
                       </div>
-                      <p className="text-muted-foreground text-sm truncate">{borrower.email}</p>
                     </div>
                   </div>
 

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 const KYC_DOC_TYPES = [
   { type: "nrc_front", label: "NRC (Front)", accept: "image/*", capture: true },
   { type: "nrc_back", label: "NRC (Back)", accept: "image/*", capture: true },
-  { type: "selfie", label: "Selfie / Passport Photo", accept: "image/*", capture: true },
+  { type: "selfie", label: "Selfie Holding NRC", accept: "image/*", capture: true },
   { type: "proof_of_residence", label: "Proof of Residence", accept: "image/*,application/pdf", capture: false },
 ];
 
@@ -65,10 +65,53 @@ export default function ProfileDocumentVault({ userId }: Props) {
       });
       if (dbError) throw dbError;
     },
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", userId] });
       toast({ title: "Document uploaded successfully" });
       setUploadingType(null);
+
+      // Check if all KYC docs are now uploaded → notify admin
+      try {
+        const { data: allDocs } = await supabase
+          .from("borrower_document_vault")
+          .select("doc_type")
+          .eq("borrower_id", userId);
+        const uploadedTypes = new Set(allDocs?.map(d => d.doc_type) || []);
+        const allUploaded = KYC_DOC_TYPES.every(t => uploadedTypes.has(t.type));
+        if (allUploaded) {
+          // Get borrower name for the notification
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", userId)
+            .single();
+          const name = profile?.full_name || "A borrower";
+          // Send notification via edge function (fire-and-forget)
+          supabase.functions.invoke("send-notification", {
+            body: {
+              type: "email",
+              to: "", // Edge function will use admin email from settings
+              subject: "KYC Documents Submitted - Pending Verification",
+              message: `${name} has completed uploading all KYC documents (NRC Front, NRC Back, Selfie Holding NRC, Proof of Residence). Please log in to verify their documents.`,
+              title: "KYC Submission Complete",
+              eventType: "kyc_completed",
+              notifyAdmins: true,
+            },
+          }).catch(() => {});
+          supabase.functions.invoke("send-notification", {
+            body: {
+              type: "sms",
+              to: "",
+              message: `${name} has completed KYC document uploads. Please log in to verify. - Phindu Finance`,
+              title: "KYC Submission Complete",
+              eventType: "kyc_completed",
+              notifyAdmins: true,
+            },
+          }).catch(() => {});
+        }
+      } catch {
+        // Non-critical, don't block UI
+      }
     },
     onError: (e: any) => {
       toast({ title: "Upload failed", description: e.message, variant: "destructive" });

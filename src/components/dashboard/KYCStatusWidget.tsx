@@ -9,7 +9,7 @@ import { ShieldCheck, Clock, AlertTriangle, CheckCircle, XCircle, Upload } from 
 const KYC_DOC_TYPES = [
   { type: "nrc_front", label: "NRC (Front)" },
   { type: "nrc_back", label: "NRC (Back)" },
-  { type: "selfie", label: "Selfie / Passport Photo" },
+  { type: "selfie", label: "Selfie Holding NRC" },
   { type: "proof_of_residence", label: "Proof of Residence" },
 ];
 
