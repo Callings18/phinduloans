@@ -1129,6 +1129,9 @@ export type Database = {
       }
       employees: {
         Row: {
+          bank_account_number: string | null
+          bank_branch: string | null
+          bank_name: string | null
           branch: string | null
           commission_percentage: number | null
           created_at: string | null
@@ -1136,15 +1139,26 @@ export type Database = {
           email: string | null
           full_name: string
           hire_date: string | null
+          housing_allowance: number | null
           id: string
           is_active: boolean | null
+          lunch_allowance: number | null
+          napsa_number: string | null
+          nhima_number: string | null
+          other_allowances: number | null
+          payment_method: string | null
           phone: string | null
           position: string | null
           salary: number | null
+          tpin: string | null
+          transport_allowance: number | null
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_name?: string | null
           branch?: string | null
           commission_percentage?: number | null
           created_at?: string | null
@@ -1152,15 +1166,26 @@ export type Database = {
           email?: string | null
           full_name: string
           hire_date?: string | null
+          housing_allowance?: number | null
           id?: string
           is_active?: boolean | null
+          lunch_allowance?: number | null
+          napsa_number?: string | null
+          nhima_number?: string | null
+          other_allowances?: number | null
+          payment_method?: string | null
           phone?: string | null
           position?: string | null
           salary?: number | null
+          tpin?: string | null
+          transport_allowance?: number | null
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_name?: string | null
           branch?: string | null
           commission_percentage?: number | null
           created_at?: string | null
@@ -1168,11 +1193,19 @@ export type Database = {
           email?: string | null
           full_name?: string
           hire_date?: string | null
+          housing_allowance?: number | null
           id?: string
           is_active?: boolean | null
+          lunch_allowance?: number | null
+          napsa_number?: string | null
+          nhima_number?: string | null
+          other_allowances?: number | null
+          payment_method?: string | null
           phone?: string | null
           position?: string | null
           salary?: number | null
+          tpin?: string | null
+          transport_allowance?: number | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -2426,6 +2459,246 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payroll_records: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          basic_salary: number
+          commission_amount: number
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          gross_pay: number
+          housing_allowance: number
+          id: string
+          loan_deduction: number
+          lunch_allowance: number
+          napsa_employee: number
+          napsa_employer: number
+          net_pay: number
+          nhima_employee: number
+          nhima_employer: number
+          notes: string | null
+          other_allowances: number
+          other_deductions: number
+          overtime_pay: number
+          paid_at: string | null
+          paye_tax: number
+          payment_reference: string | null
+          payroll_month: number
+          payroll_run_id: string | null
+          payroll_year: number
+          pension_deduction: number
+          status: string
+          total_deductions: number
+          total_employer_cost: number
+          transport_allowance: number
+          union_dues: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          basic_salary?: number
+          commission_amount?: number
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          gross_pay?: number
+          housing_allowance?: number
+          id?: string
+          loan_deduction?: number
+          lunch_allowance?: number
+          napsa_employee?: number
+          napsa_employer?: number
+          net_pay?: number
+          nhima_employee?: number
+          nhima_employer?: number
+          notes?: string | null
+          other_allowances?: number
+          other_deductions?: number
+          overtime_pay?: number
+          paid_at?: string | null
+          paye_tax?: number
+          payment_reference?: string | null
+          payroll_month: number
+          payroll_run_id?: string | null
+          payroll_year: number
+          pension_deduction?: number
+          status?: string
+          total_deductions?: number
+          total_employer_cost?: number
+          transport_allowance?: number
+          union_dues?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          basic_salary?: number
+          commission_amount?: number
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          gross_pay?: number
+          housing_allowance?: number
+          id?: string
+          loan_deduction?: number
+          lunch_allowance?: number
+          napsa_employee?: number
+          napsa_employer?: number
+          net_pay?: number
+          nhima_employee?: number
+          nhima_employer?: number
+          notes?: string | null
+          other_allowances?: number
+          other_deductions?: number
+          overtime_pay?: number
+          paid_at?: string | null
+          paye_tax?: number
+          payment_reference?: string | null
+          payroll_month?: number
+          payroll_run_id?: string | null
+          payroll_year?: number
+          pension_deduction?: number
+          status?: string
+          total_deductions?: number
+          total_employer_cost?: number
+          transport_allowance?: number
+          union_dues?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_records_payroll_run_id_fkey"
+            columns: ["payroll_run_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_runs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          payroll_month: number
+          payroll_year: number
+          status: string
+          total_employees: number
+          total_employer_cost: number
+          total_gross: number
+          total_napsa: number
+          total_net: number
+          total_nhima: number
+          total_paye: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payroll_month: number
+          payroll_year: number
+          status?: string
+          total_employees?: number
+          total_employer_cost?: number
+          total_gross?: number
+          total_napsa?: number
+          total_net?: number
+          total_nhima?: number
+          total_paye?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payroll_month?: number
+          payroll_year?: number
+          status?: string
+          total_employees?: number
+          total_employer_cost?: number
+          total_gross?: number
+          total_napsa?: number
+          total_net?: number
+          total_nhima?: number
+          total_paye?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payroll_tax_config: {
+        Row: {
+          band_max: number | null
+          band_min: number | null
+          ceiling_amount: number | null
+          config_type: string
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          employee_rate_percent: number | null
+          employer_rate_percent: number | null
+          id: string
+          is_active: boolean
+          label: string | null
+          notes: string | null
+          rate_percent: number | null
+          updated_at: string
+        }
+        Insert: {
+          band_max?: number | null
+          band_min?: number | null
+          ceiling_amount?: number | null
+          config_type: string
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          employee_rate_percent?: number | null
+          employer_rate_percent?: number | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          notes?: string | null
+          rate_percent?: number | null
+          updated_at?: string
+        }
+        Update: {
+          band_max?: number | null
+          band_min?: number | null
+          ceiling_amount?: number | null
+          config_type?: string
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          employee_rate_percent?: number | null
+          employer_rate_percent?: number | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          notes?: string | null
+          rate_percent?: number | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       permissions: {
         Row: {
