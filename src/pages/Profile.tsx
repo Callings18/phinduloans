@@ -33,7 +33,12 @@ import {
     CreditCard,
     ArrowLeft,
     Home,
+    LogOut,
+    Lock,
+    Eye,
+    EyeOff,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -77,6 +82,12 @@ const Profile = () => {
         marketing: false,
     });
     const [isSavingNotifications, setIsSavingNotifications] = useState(false);
+    const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -178,6 +189,41 @@ const Profile = () => {
         updateProfileMutation.mutate(formData);
     };
 
+    const handleChangePassword = async () => {
+        if (newPassword.length < 6) {
+            toast({ title: "Password too short", description: "Minimum 6 characters required", variant: "destructive" });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast({ title: "Passwords don't match", variant: "destructive" });
+            return;
+        }
+        setIsChangingPassword(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            toast({ title: "Password Changed", description: "Your password has been updated successfully." });
+            setShowPasswordDialog(false);
+            setNewPassword("");
+            setConfirmPassword("");
+        } catch (error: any) {
+            toast({ title: "Failed to change password", description: error.message, variant: "destructive" });
+        } finally {
+            setIsChangingPassword(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        setIsLoggingOut(true);
+        try {
+            await supabase.auth.signOut();
+            navigate("/auth");
+        } catch {
+            toast({ title: "Logout failed", variant: "destructive" });
+            setIsLoggingOut(false);
+        }
+    };
+
     const getInitials = (name: string | null) => {
         if (!name) return "U";
         return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -192,7 +238,7 @@ const Profile = () => {
     }
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <>
             <main className="pt-8 pb-24">
                 <div className="container mx-auto px-4 max-w-5xl">
                     {/* Back to Dashboard */}
@@ -413,14 +459,14 @@ const Profile = () => {
                                     <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/30">
                                         <div className="flex items-center gap-4">
                                             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                                                <Shield className="text-primary" size={20} />
+                                                <Lock className="text-primary" size={20} />
                                             </div>
                                             <div>
                                                 <h4 className="font-medium text-foreground">Password</h4>
                                                 <p className="text-sm text-muted-foreground">Change your account password</p>
                                             </div>
                                         </div>
-                                        <Button variant="outline">Change Password</Button>
+                                        <Button variant="outline" onClick={() => setShowPasswordDialog(true)}>Change Password</Button>
                                     </div>
 
                                     <Separator />
@@ -439,6 +485,25 @@ const Profile = () => {
                                                 </span>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <Separator />
+
+                                    {/* Log Out */}
+                                    <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5 border border-destructive/20">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
+                                                <LogOut className="text-destructive" size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-medium text-foreground">Log Out</h4>
+                                                <p className="text-sm text-muted-foreground">Sign out of your account</p>
+                                            </div>
+                                        </div>
+                                        <Button variant="destructive" onClick={handleLogout} disabled={isLoggingOut}>
+                                            {isLoggingOut ? <Loader2 size={16} className="mr-2 animate-spin" /> : <LogOut size={16} className="mr-2" />}
+                                            Log Out
+                                        </Button>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -577,7 +642,56 @@ const Profile = () => {
                     </Button>
                 </div>
             </div>
-        </div>
+
+            {/* Change Password Dialog */}
+            <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Change Password</DialogTitle>
+                        <DialogDescription>Enter your new password below.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="new-password">New Password</Label>
+                            <div className="relative">
+                                <Input
+                                    id="new-password"
+                                    type={showPassword ? "text" : "password"}
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    placeholder="Min. 6 characters"
+                                    className="pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="confirm-password">Confirm Password</Label>
+                            <Input
+                                id="confirm-password"
+                                type={showPassword ? "text" : "password"}
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Re-enter password"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>Cancel</Button>
+                        <Button variant="hero" onClick={handleChangePassword} disabled={isChangingPassword}>
+                            {isChangingPassword ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Lock size={16} className="mr-2" />}
+                            Update Password
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 
