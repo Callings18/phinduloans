@@ -11,9 +11,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Shield, Plus, Search, UserCog, Trash2, Loader2, Info } from "lucide-react";
+import { Shield, Plus, Search, UserCog, Trash2, Loader2, Info, UserPlus, Copy, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Label } from "@/components/ui/label";
 
 const STAFF_ROLES = [
     { value: "super_admin", label: "Super Admin", color: "bg-red-500/10 text-red-500 border-red-500/20" },
@@ -42,48 +43,51 @@ const AdminStaff = () => {
     const { can } = usePermissions();
     const canManageStaff = can("settings", "manage") || isAdmin;
     const queryClient = useQueryClient();
+
+    // Existing user search/assign dialog
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedRole, setSelectedRole] = useState("loan_officer");
     const [searchResult, setSearchResult] = useState<any>(null);
     const [isSearching, setIsSearching] = useState(false);
 
+    // Create new staff dialog
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [createForm, setCreateForm] = useState({ email: "", full_name: "", phone: "", role: "loan_officer" });
+    const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    // Edit role dialog
+    const [editingStaff, setEditingStaff] = useState<any>(null);
+    const [editRole, setEditRole] = useState("");
+
     // Fetch all staff
     const { data: staffList, isLoading } = useQuery({
         queryKey: ['staff-list'],
         queryFn: async () => {
-            // 1. Get all roles checking for staff types
             const { data: roles, error: rolesError } = await supabase
                 .from('user_roles')
                 .select('*')
                 .neq('role', 'user')
                 .neq('role', 'employer');
-
             if (rolesError) throw rolesError;
-
             if (!roles || roles.length === 0) return [];
 
-            // 2. Get profiles for these users
             const userIds = roles.map(r => r.user_id);
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
                 .select('*')
                 .in('id', userIds);
-
             if (profilesError) throw profilesError;
 
-            // 3. Merge data
             return roles.map(role => {
                 const profile = profiles?.find(p => p.id === role.user_id);
-                return {
-                    ...role,
-                    profile: profile || { full_name: 'Unknown', email: 'Unknown' }
-                };
+                return { ...role, profile: profile || { full_name: 'Unknown', email: 'Unknown' } };
             });
         }
     });
 
-    // Search user mutation
+    // Search existing user
     const searchUser = async () => {
         if (!searchTerm) return;
         setIsSearching(true);
@@ -94,38 +98,23 @@ const AdminStaff = () => {
                 .select('*')
                 .or(`email.eq.${searchTerm},nrc_number.eq.${searchTerm}`)
                 .single();
-
-            if (error) {
-                toast.error("User not found");
-            } else {
-                setSearchResult(data);
-            }
-        } catch (e) {
-            toast.error("Error searching user");
-        } finally {
-            setIsSearching(false);
-        }
+            if (error) toast.error("User not found");
+            else setSearchResult(data);
+        } catch { toast.error("Error searching user"); }
+        finally { setIsSearching(false); }
     };
 
-    // Add/Update Staff Mutation
+    // Assign role to existing user
     const assignRoleMutation = useMutation({
-        mutationFn: async ({ userId, role }: { userId: string, role: string }) => {
-            // Check if user already has a role
+        mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
             const { data: existingRole } = await supabase
-                .from('user_roles')
-                .select('*')
-                .eq('user_id', userId)
-                .maybeSingle();
-
+                .from('user_roles').select('*').eq('user_id', userId).maybeSingle();
             if (existingRole) {
-                const { error } = await supabase
-                    .from('user_roles')
-                    .update({ role: role as any })
-                    .eq('id', existingRole.id);
+                const { error } = await supabase.from('user_roles')
+                    .update({ role: role as any }).eq('id', existingRole.id);
                 if (error) throw error;
             } else {
-                const { error } = await supabase
-                    .from('user_roles')
+                const { error } = await supabase.from('user_roles')
                     .insert({ user_id: userId, role: role as any });
                 if (error) throw error;
             }
@@ -137,37 +126,70 @@ const AdminStaff = () => {
             setSearchTerm("");
             toast.success("Staff role assigned successfully");
         },
-        onError: (error) => {
-            console.error(error);
-            toast.error("Failed to assign role");
-        }
+        onError: () => toast.error("Failed to assign role"),
     });
 
-    // Remove Staff Mutation (Demote to user)
+    // Create new staff user via edge function
+    const createStaffMutation = useMutation({
+        mutationFn: async (form: typeof createForm) => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error("Not authenticated");
+
+            const res = await supabase.functions.invoke("create-staff-user", {
+                body: form,
+            });
+            if (res.error) throw new Error(res.error.message || "Failed to create user");
+            if (res.data?.error) throw new Error(res.data.error);
+            return res.data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['staff-list'] });
+            setCreatedCredentials({ email: createForm.email, password: data.temp_password });
+            setCreateForm({ email: "", full_name: "", phone: "", role: "loan_officer" });
+            toast.success("Staff user created successfully");
+        },
+        onError: (error: Error) => toast.error(error.message),
+    });
+
+    // Edit role mutation
+    const editRoleMutation = useMutation({
+        mutationFn: async ({ roleRecordId, newRole }: { roleRecordId: string; newRole: string }) => {
+            const { error } = await supabase.from('user_roles')
+                .update({ role: newRole as any }).eq('id', roleRecordId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['staff-list'] });
+            setEditingStaff(null);
+            toast.success("Role updated successfully");
+        },
+        onError: () => toast.error("Failed to update role"),
+    });
+
+    // Remove staff
     const removeStaffMutation = useMutation({
         mutationFn: async (roleId: string) => {
-            const { error } = await supabase
-                .from('user_roles')
-                .update({ role: 'user' }) // Soft remove by setting to user
-                .eq('id', roleId);
+            const { error } = await supabase.from('user_roles')
+                .update({ role: 'user' }).eq('id', roleId);
             if (error) throw error;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['staff-list'] });
             toast.success("Staff member removed");
         },
-        onError: () => toast.error("Failed to remove staff")
+        onError: () => toast.error("Failed to remove staff"),
     });
 
     const getRoleBadge = (role: string) => {
-        const config = STAFF_ROLES.find(r => r.value === role) ||
-            { label: role, color: "bg-gray-100 text-gray-800" };
+        const config = STAFF_ROLES.find(r => r.value === role) || { label: role, color: "bg-gray-100 text-gray-800" };
+        return <Badge variant="outline" className={`${config.color} capitalize`}>{config.label}</Badge>;
+    };
 
-        return (
-            <Badge variant="outline" className={`${config.color} capitalize`}>
-                {config.label}
-            </Badge>
-        );
+    const handleCopyCredentials = () => {
+        if (!createdCredentials) return;
+        navigator.clipboard.writeText(`Email: ${createdCredentials.email}\nTemporary Password: ${createdCredentials.password}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     };
 
     if (!canManageStaff) {
@@ -175,11 +197,9 @@ const AdminStaff = () => {
             <AdminLayout>
                 <div className="space-y-6">
                     <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
-                    <Card>
-                        <CardContent className="p-6">
-                            <p className="text-muted-foreground">You don&apos;t have permission to manage staff and roles.</p>
-                        </CardContent>
-                    </Card>
+                    <Card><CardContent className="p-6">
+                        <p className="text-muted-foreground">You don&apos;t have permission to manage staff and roles.</p>
+                    </CardContent></Card>
                 </div>
             </AdminLayout>
         );
@@ -188,88 +208,189 @@ const AdminStaff = () => {
     return (
         <AdminLayout>
             <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
-                        <p className="text-muted-foreground mt-1">
-                            Manage system access and employee roles (RBAC)
-                        </p>
+                        <p className="text-muted-foreground mt-1">Manage system access and employee roles (RBAC)</p>
                     </div>
-                    <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="gradient-primary shadow-button">
-                                <Plus size={18} className="mr-2" />
-                                Add Staff
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Add New Staff Member</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                                <div className="flex gap-2">
-                                    <Input
-                                        placeholder="Search by Email or NRC"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
-                                    <Button variant="secondary" onClick={searchUser} disabled={isSearching}>
-                                        {isSearching ? <Loader2 className="animate-spin" /> : <Search size={18} />}
-                                    </Button>
-                                </div>
-
-                                {searchResult && (
-                                    <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar>
-                                                <AvatarImage src={searchResult.avatar_url} />
-                                                <AvatarFallback>{searchResult.full_name?.charAt(0)}</AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <p className="font-medium">{searchResult.full_name}</p>
-                                                <p className="text-sm text-muted-foreground">{searchResult.email}</p>
+                    <div className="flex gap-2">
+                        {/* Create New Staff User */}
+                        <Dialog open={isCreateOpen} onOpenChange={(open) => {
+                            setIsCreateOpen(open);
+                            if (!open) setCreatedCredentials(null);
+                        }}>
+                            <DialogTrigger asChild>
+                                <Button className="gradient-primary shadow-button">
+                                    <UserPlus size={18} className="mr-2" />Create Staff User
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Create New Staff User</DialogTitle>
+                                </DialogHeader>
+                                {createdCredentials ? (
+                                    <div className="space-y-4 py-4">
+                                        <div className="p-4 border rounded-lg bg-green-500/10 border-green-500/20 space-y-3">
+                                            <p className="font-medium text-green-600">✅ User created successfully!</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Share these credentials securely with the new staff member. They should change their password on first login.
+                                            </p>
+                                            <div className="bg-muted p-3 rounded-md font-mono text-sm space-y-1">
+                                                <p>Email: <span className="text-foreground">{createdCredentials.email}</span></p>
+                                                <p>Temp Password: <span className="text-foreground">{createdCredentials.password}</span></p>
                                             </div>
+                                            <Button variant="outline" className="w-full" onClick={handleCopyCredentials}>
+                                                {copied ? <Check size={16} className="mr-2" /> : <Copy size={16} className="mr-2" />}
+                                                {copied ? "Copied!" : "Copy Credentials"}
+                                            </Button>
                                         </div>
-
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4 py-4">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium">Assign Role</label>
-                                            <Select value={selectedRole} onValueChange={setSelectedRole}>
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
+                                            <Label>Full Name *</Label>
+                                            <Input placeholder="John Mwale" value={createForm.full_name}
+                                                onChange={(e) => setCreateForm(f => ({ ...f, full_name: e.target.value }))} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Email *</Label>
+                                            <Input type="email" placeholder="john@company.com" value={createForm.email}
+                                                onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value }))} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Phone (optional)</Label>
+                                            <Input placeholder="+260 9XX XXX XXX" value={createForm.phone}
+                                                onChange={(e) => setCreateForm(f => ({ ...f, phone: e.target.value }))} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Role *</Label>
+                                            <Select value={createForm.role} onValueChange={(v) => setCreateForm(f => ({ ...f, role: v }))}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
                                                 <SelectContent>
-                                                    {STAFF_ROLES.map(role => (
-                                                        <SelectItem key={role.value} value={role.value}>
-                                                            {role.label}
-                                                        </SelectItem>
+                                                    {STAFF_ROLES.map(r => (
+                                                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            {ROLE_DESCRIPTIONS[selectedRole] && (
+                                            {ROLE_DESCRIPTIONS[createForm.role] && (
                                                 <p className="text-xs text-muted-foreground flex items-start gap-1">
-                                                    <Info size={12} className="shrink-0 mt-0.5" />
-                                                    {ROLE_DESCRIPTIONS[selectedRole]}
+                                                    <Info size={12} className="shrink-0 mt-0.5" />{ROLE_DESCRIPTIONS[createForm.role]}
                                                 </p>
                                             )}
                                         </div>
-
-                                        <Button
-                                            className="w-full"
-                                            onClick={() => assignRoleMutation.mutate({
-                                                userId: searchResult.id,
-                                                role: selectedRole
-                                            })}
-                                            disabled={assignRoleMutation.isPending}
-                                        >
-                                            {assignRoleMutation.isPending && <Loader2 className="animate-spin mr-2" />}
-                                            Confirm Assignment
+                                        <Button className="w-full" disabled={!createForm.email || !createForm.full_name || createStaffMutation.isPending}
+                                            onClick={() => createStaffMutation.mutate(createForm)}>
+                                            {createStaffMutation.isPending && <Loader2 className="animate-spin mr-2" />}
+                                            Create Staff User
                                         </Button>
                                     </div>
                                 )}
-                            </div>
-                        </DialogContent>
-                    </Dialog>
+                            </DialogContent>
+                        </Dialog>
+
+                        {/* Assign Existing User */}
+                        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline"><Plus size={18} className="mr-2" />Assign Existing User</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Assign Role to Existing User</DialogTitle></DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="flex gap-2">
+                                        <Input placeholder="Search by Email or NRC" value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)} />
+                                        <Button variant="secondary" onClick={searchUser} disabled={isSearching}>
+                                            {isSearching ? <Loader2 className="animate-spin" /> : <Search size={18} />}
+                                        </Button>
+                                    </div>
+                                    {searchResult && (
+                                        <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar>
+                                                    <AvatarImage src={searchResult.avatar_url} />
+                                                    <AvatarFallback>{searchResult.full_name?.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="font-medium">{searchResult.full_name}</p>
+                                                    <p className="text-sm text-muted-foreground">{searchResult.email}</p>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Assign Role</Label>
+                                                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {STAFF_ROLES.map(r => (
+                                                            <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {ROLE_DESCRIPTIONS[selectedRole] && (
+                                                    <p className="text-xs text-muted-foreground flex items-start gap-1">
+                                                        <Info size={12} className="shrink-0 mt-0.5" />{ROLE_DESCRIPTIONS[selectedRole]}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <Button className="w-full" disabled={assignRoleMutation.isPending}
+                                                onClick={() => assignRoleMutation.mutate({ userId: searchResult.id, role: selectedRole })}>
+                                                {assignRoleMutation.isPending && <Loader2 className="animate-spin mr-2" />}
+                                                Confirm Assignment
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </div>
+
+                {/* Edit Role Dialog */}
+                <Dialog open={!!editingStaff} onOpenChange={(open) => { if (!open) setEditingStaff(null); }}>
+                    <DialogContent>
+                        <DialogHeader><DialogTitle>Edit Staff Role</DialogTitle></DialogHeader>
+                        {editingStaff && (
+                            <div className="space-y-4 py-4">
+                                <div className="flex items-center gap-3">
+                                    <Avatar className="h-10 w-10">
+                                        <AvatarImage src={editingStaff.profile?.avatar_url} />
+                                        <AvatarFallback className="bg-primary/10 text-primary">
+                                            {editingStaff.profile?.full_name?.charAt(0) || 'U'}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <p className="font-medium">{editingStaff.profile?.full_name}</p>
+                                        <p className="text-sm text-muted-foreground">{editingStaff.profile?.email}</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Current Role</Label>
+                                    <div>{getRoleBadge(editingStaff.role)}</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>New Role</Label>
+                                    <Select value={editRole} onValueChange={setEditRole}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            {STAFF_ROLES.map(r => (
+                                                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {ROLE_DESCRIPTIONS[editRole] && (
+                                        <p className="text-xs text-muted-foreground flex items-start gap-1">
+                                            <Info size={12} className="shrink-0 mt-0.5" />{ROLE_DESCRIPTIONS[editRole]}
+                                        </p>
+                                    )}
+                                </div>
+                                <Button className="w-full" disabled={editRoleMutation.isPending || editRole === editingStaff.role}
+                                    onClick={() => editRoleMutation.mutate({ roleRecordId: editingStaff.id, newRole: editRole })}>
+                                    {editRoleMutation.isPending && <Loader2 className="animate-spin mr-2" />}
+                                    Update Role
+                                </Button>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
 
                 <Card className="border-border/50">
                     <CardHeader>
@@ -293,6 +414,12 @@ const AdminStaff = () => {
                                             <Loader2 className="animate-spin h-8 w-8 mx-auto text-primary" />
                                         </TableCell>
                                     </TableRow>
+                                ) : staffList?.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                                            No staff members found. Create one to get started.
+                                        </TableCell>
+                                    </TableRow>
                                 ) : staffList?.map((staff: any) => (
                                     <TableRow key={staff.id}>
                                         <TableCell>
@@ -309,28 +436,21 @@ const AdminStaff = () => {
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell>
-                                            {getRoleBadge(staff.role)}
-                                        </TableCell>
+                                        <TableCell>{getRoleBadge(staff.role)}</TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
                                             {new Date(staff.created_at).toLocaleDateString()}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
-                                                <Button variant="ghost" size="icon" className="hover:text-primary">
+                                                <Button variant="ghost" size="icon" className="hover:text-primary"
+                                                    onClick={() => { setEditingStaff(staff); setEditRole(staff.role); }}>
                                                     <UserCog size={16} />
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="hover:text-destructive"
-                                                    onClick={() => {
-                                                        if (confirm('Are you sure you want to remove this staff member?')) {
-                                                            removeStaffMutation.mutate(staff.id);
-                                                        }
-                                                    }}
+                                                <Button variant="ghost" size="icon" className="hover:text-destructive"
                                                     disabled={staff.role === 'super_admin'}
-                                                >
+                                                    onClick={() => {
+                                                        if (confirm('Remove this staff member?')) removeStaffMutation.mutate(staff.id);
+                                                    }}>
                                                     <Trash2 size={16} />
                                                 </Button>
                                             </div>
