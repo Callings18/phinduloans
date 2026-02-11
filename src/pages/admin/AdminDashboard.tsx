@@ -6,6 +6,10 @@ import GuidedTour from "@/components/common/GuidedTour";
 import QuickActions from "@/components/admin/QuickActions";
 import ModuleWidgets from "@/components/admin/ModuleWidgets";
 import CapitalPoolWidget from "@/components/dashboard/CapitalPoolWidget";
+import PortfolioHealthCards from "@/components/admin/PortfolioHealthCards";
+import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
+import ProductMixChart from "@/components/admin/ProductMixChart";
+import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
 import { Step } from "react-joyride";
 import {
   DropdownMenu,
@@ -404,6 +408,15 @@ const AdminDashboard = () => {
           <ModuleWidgets />
         </div>
 
+        {/* Portfolio Health KPIs */}
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+            <TrendingUp size={18} className="text-primary" />
+            Portfolio Health
+          </h2>
+          <PortfolioHealthCards />
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 tour-admin-stats">
           <Card className="relative overflow-hidden border-border/50 bg-gradient-to-br from-primary/10 via-card to-card group hover:border-primary/50 transition-all duration-300">
@@ -764,6 +777,22 @@ const AdminDashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* KPI Charts: Disbursement Trends + Repayment Performance */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DisbursementTrendsChart />
+          <RepaymentPerformanceChart />
+        </div>
+
+        {/* Product Mix */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <ProductMixChart />
+          </div>
+          <div className="lg:col-span-2">
+            {/* Existing Lending Analytics chart kept below */}
+          </div>
+        </div>
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
