@@ -148,8 +148,13 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
     previousApplication?.selfie_url && 
     previousApplication?.payslip_url;
 
-  // Check if profile is complete
-  const isProfileComplete = profile?.full_name && profile?.phone && profile?.nrc_number && profile?.address;
+  // Check if profile is complete - only require essential fields
+  const isProfileComplete = !!(profile?.full_name && profile?.phone && profile?.nrc_number);
+  
+  const missingFields: string[] = [];
+  if (!profile?.full_name) missingFields.push("Full Name");
+  if (!profile?.phone) missingFields.push("Phone");
+  if (!profile?.nrc_number) missingFields.push("NRC Number");
 
   useEffect(() => {
     if (loanProducts && loanProducts.length > 0 && !selectedProduct) {
@@ -391,7 +396,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Your profile is incomplete. Please update your profile first.
+                Your profile is missing: {missingFields.join(", ")}. Please update your profile first.
                 <Button variant="link" className="p-0 h-auto ml-1" onClick={() => navigate("/profile")}>
                   Update Profile
                 </Button>
