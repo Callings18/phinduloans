@@ -38,6 +38,7 @@ import {
   ChevronUp,
   Activity,
   User,
+  LogOut,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,7 +78,7 @@ const statusConfig = {
 };
 
 const Dashboard = () => {
-  const { user, isLoading, isAdmin, isStaff } = useAuth();
+  const { user, isLoading, isAdmin, isStaff, signOut } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
@@ -393,6 +394,15 @@ const Dashboard = () => {
               >
                 <HelpCircle size={18} className="mr-2 text-primary" />
                 How it works
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="glass border-destructive/50 text-destructive hover:bg-destructive/10"
+                onClick={async () => { await signOut(); navigate('/auth'); }}
+              >
+                <LogOut size={18} className="mr-2" />
+                Log Out
               </Button>
             </div>
           </div>
