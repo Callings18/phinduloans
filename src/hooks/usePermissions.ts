@@ -55,14 +55,58 @@ export function usePermissions() {
   const can = useCallback(
     (module: string, action: string) => {
       if (authLoading || loading) return false;
-      // Fallback: if RBAC not run or empty, treat super_admin/admin as full access
       if (permissionSet.size === 0 && isAdmin) return true;
       return permissionSet.has(permKey(module, action));
     },
     [permissionSet, authLoading, loading, isAdmin]
   );
 
+  /** Check by "module:action" string, e.g. hasPermission("loans:approve") */
+  const hasPermission = useCallback(
+    (permissionName: string) => {
+      if (authLoading || loading) return false;
+      if (permissionSet.size === 0 && isAdmin) return true;
+      // Support both "module:action" and "module_action" formats
+      if (permissionSet.has(permissionName)) return true;
+      const parts = permissionName.includes(":") ? permissionName.split(":") : permissionName.split("_");
+      if (parts.length >= 2) {
+        const action = parts.pop()!;
+        const module = parts.join("_");
+        return permissionSet.has(permKey(module, action));
+      }
+      return false;
+    },
+    [permissionSet, authLoading, loading, isAdmin]
+  );
+
+  /** Check if user has a specific role name */
+  const hasRole = useCallback(
+    (roleName: string) => {
+      if (isAdmin && (roleName === "admin" || roleName === "super_admin")) return true;
+      // Role check is approximated via permissions; for exact role check use useAuth
+      return false;
+    },
+    [isAdmin]
+  );
+
   const isLoading = authLoading || loading;
 
-  return useMemo(() => ({ can, permissions: permissionSet, isLoading }), [can, permissionSet, isLoading]);
+  return useMemo(
+    () => ({ can, hasPermission, hasRole, permissions: permissionSet, isLoading }),
+    [can, hasPermission, hasRole, permissionSet, isLoading]
+  );
 }
+
+// ── Helper functions for common permission checks ──
+
+export const canApproveLoan = (perms: Set<string>) =>
+  perms.has("loans:approve") || perms.has("loans:finance_approve");
+
+export const canDisburseFunds = (perms: Set<string>) =>
+  perms.has("disbursement:disburse") || perms.has("disbursement:create");
+
+export const canViewReports = (perms: Set<string>) =>
+  perms.has("reports:view") || perms.has("reports:export");
+
+export const canManageUsers = (perms: Set<string>) =>
+  perms.has("settings:manage") || perms.has("users:manage");
