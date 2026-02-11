@@ -416,7 +416,9 @@ function AddEditEmployeeForm({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const fullName = `${form.first_name} ${form.last_name}`.trim();
       const payload = {
+        full_name: fullName,
         first_name: form.first_name,
         last_name: form.last_name,
         email: form.email,
