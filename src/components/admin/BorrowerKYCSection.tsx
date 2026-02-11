@@ -88,7 +88,26 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
       toast({ title: "Document approved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const approveAllMutation = useMutation({
+    mutationFn: async (docIds: string[]) => {
+      const { data: session } = await supabase.auth.getSession();
+      const adminId = session?.session?.user?.id;
+      const { error } = await supabase
+        .from("borrower_document_vault")
+        .update({ is_verified: true, verified_by: adminId, verified_at: new Date().toISOString(), notes: null })
+        .in("id", docIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+      toast({ title: "All documents approved" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -167,9 +186,24 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
           <div className="flex items-center gap-2 mb-3">
             <ShieldCheck className={allDocsVerified ? "text-emerald-400" : "text-muted-foreground"} size={18} />
             <h4 className="font-semibold text-foreground">KYC / Identity Documents</h4>
-            {allDocsVerified && (
+            {allDocsVerified ? (
               <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border ml-auto">✅ Fully Verified</Badge>
-            )}
+            ) : (() => {
+              const pendingDocs = KYC_DOC_TYPES
+                .map(t => docsByType[t.type])
+                .filter(d => d && !d.is_verified && !(d.verified_at && d.notes?.startsWith("Rejected:")));
+              return pendingDocs.length > 1 ? (
+                <Button
+                  size="sm"
+                  className="ml-auto h-7 text-xs"
+                  onClick={() => approveAllMutation.mutate(pendingDocs.map(d => d.id))}
+                  disabled={approveAllMutation.isPending}
+                >
+                  <CheckCircle size={12} className="mr-1" />
+                  Approve All ({pendingDocs.length})
+                </Button>
+              ) : null;
+            })()}
           </div>
 
           {isLoading ? (
