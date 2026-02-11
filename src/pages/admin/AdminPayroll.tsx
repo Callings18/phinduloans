@@ -3,14 +3,12 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -22,119 +20,312 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CreditCard, DollarSign, Users, Calendar, Plus, Loader2, Download, CheckCircle } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import {
+  DollarSign,
+  Users,
+  Calendar,
+  Loader2,
+  Download,
+  CheckCircle,
+  Play,
+  Eye,
+  Banknote,
+  FileText,
+  TrendingUp,
+} from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  fetchTaxConfig,
+  calculatePayroll,
+  formatZMW,
+  getMonthName,
+  type PayrollCalculation,
+  type TaxConfig,
+} from "@/utils/payrollCalculations";
+import PayslipDetailModal from "@/components/admin/PayslipDetailModal";
+import { generatePayslipPDF, generateAllPayslipsPDF } from "@/utils/payslipPdfGenerator";
+
+const currentYear = new Date().getFullYear();
+const currentMonth = new Date().getMonth() + 1;
 
 const AdminPayroll = () => {
   const { can } = usePermissions();
-  const canManage = can("payroll", "manage");
-  const canView = can("payroll", "view");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
-  const { toast } = useToast();
+  const { user } = useAuth();
+  const canManage = can("payroll", "manage") || can("payroll", "view");
   const queryClient = useQueryClient();
 
-  const { data: periods = [], isLoading } = useQuery({
-    queryKey: ["admin-payroll-periods"],
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
+
+  // ── Queries ──────────────────────────────────────────────
+
+  const { data: payrollRuns = [], isLoading: runsLoading } = useQuery({
+    queryKey: ["payroll-runs"],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("payroll_periods")
+      const { data, error } = await (supabase.from("payroll_runs") as any)
         .select("*")
-        .order("period_start_date", { ascending: false });
+        .order("payroll_year", { ascending: false })
+        .order("payroll_month", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as any[];
+      return data || [];
     },
-    enabled: canView,
+    enabled: canManage,
   });
 
-  const { data: periodRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ["admin-payroll-records", selectedPeriodId],
+  const { data: runRecords = [], isLoading: recordsLoading } = useQuery({
+    queryKey: ["payroll-run-records", expandedRunId],
     queryFn: async () => {
-      if (!selectedPeriodId) return [];
-      const { data, error } = await (supabase.from as any)("payroll_records")
-        .select(`
-          *,
-          employee:employees(id, first_name, last_name, employee_number, department, branch)
-        `)
-        .eq("payroll_period_id", selectedPeriodId)
-        .order("employee_id");
+      if (!expandedRunId) return [];
+      const { data, error } = await (supabase.from("payroll_records") as any)
+        .select("*, employees(id, full_name, email, department, position, bank_name, bank_account_number)")
+        .eq("payroll_run_id", expandedRunId)
+        .order("basic_salary", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as any[];
+      return data || [];
     },
-    enabled: canView && !!selectedPeriodId,
+    enabled: !!expandedRunId,
   });
 
-  const selectedPeriod = periods.find((p: { id: string }) => p.id === selectedPeriodId);
+  // ── Generate Payroll Mutation ────────────────────────────
 
-  if (!canView) {
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+
+      // 1. Check if run already exists
+      const { data: existing } = await (supabase.from("payroll_runs") as any)
+        .select("id")
+        .eq("payroll_month", selectedMonth)
+        .eq("payroll_year", selectedYear)
+        .maybeSingle();
+      if (existing) throw new Error(`Payroll for ${getMonthName(selectedMonth)} ${selectedYear} already exists`);
+
+      // 2. Fetch active employees
+      const { data: employees, error: empErr } = await (supabase.from("employees") as any)
+        .select("id, full_name, salary, housing_allowance, transport_allowance, lunch_allowance, other_allowances, commission_percentage, user_id")
+        .eq("is_active", true);
+      if (empErr) throw empErr;
+      if (!employees?.length) throw new Error("No active employees found");
+
+      // 3. Fetch tax config
+      const taxConfig = await fetchTaxConfig();
+
+      // 4. Calculate commission from loans processed
+      const commissionByEmployee: Record<string, number> = {};
+      for (const emp of employees) {
+        if (!emp.user_id || !emp.commission_percentage) continue;
+        const { data: loans } = await (supabase.from("loan_applications") as any)
+          .select("loan_amount")
+          .or(`approved_by.eq.${emp.user_id},disbursed_by.eq.${emp.user_id}`)
+          .gte("approved_at", `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`)
+          .lt("approved_at", selectedMonth === 12
+            ? `${selectedYear + 1}-01-01`
+            : `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`
+          );
+        if (loans?.length) {
+          const totalDisbursed = loans.reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
+          commissionByEmployee[emp.id] = Math.round(totalDisbursed * (emp.commission_percentage / 100) * 100) / 100;
+        }
+      }
+
+      // 5. Calculate payroll for each employee
+      const calculations: PayrollCalculation[] = employees.map((emp: any) => {
+        return calculatePayroll({
+          employee: emp,
+          commission: commissionByEmployee[emp.id] || 0,
+          taxConfig,
+        });
+      });
+
+      // 6. Create payroll_run
+      const totals = calculations.reduce(
+        (acc, c) => ({
+          gross: acc.gross + c.gross_pay,
+          paye: acc.paye + c.paye_tax,
+          nhima: acc.nhima + c.nhima_employee + c.nhima_employer,
+          napsa: acc.napsa + c.napsa_employee + c.napsa_employer,
+          net: acc.net + c.net_pay,
+          employerCost: acc.employerCost + c.total_employer_cost,
+        }),
+        { gross: 0, paye: 0, nhima: 0, napsa: 0, net: 0, employerCost: 0 }
+      );
+
+      const { data: run, error: runErr } = await (supabase.from("payroll_runs") as any)
+        .insert({
+          payroll_month: selectedMonth,
+          payroll_year: selectedYear,
+          total_employees: employees.length,
+          total_gross: Math.round(totals.gross * 100) / 100,
+          total_paye: Math.round(totals.paye * 100) / 100,
+          total_nhima: Math.round(totals.nhima * 100) / 100,
+          total_napsa: Math.round(totals.napsa * 100) / 100,
+          total_net: Math.round(totals.net * 100) / 100,
+          total_employer_cost: Math.round(totals.employerCost * 100) / 100,
+          status: "draft",
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
+      if (runErr) throw runErr;
+
+      // 7. Create payroll_records
+      const records = calculations.map((c) => ({
+        employee_id: c.employee_id,
+        payroll_run_id: run.id,
+        payroll_month: selectedMonth,
+        payroll_year: selectedYear,
+        basic_salary: c.basic_salary,
+        housing_allowance: c.housing_allowance,
+        transport_allowance: c.transport_allowance,
+        lunch_allowance: c.lunch_allowance,
+        other_allowances: c.other_allowances,
+        overtime_pay: c.overtime_pay,
+        commission_amount: c.commission_amount,
+        gross_pay: c.gross_pay,
+        paye_tax: c.paye_tax,
+        nhima_employee: c.nhima_employee,
+        nhima_employer: c.nhima_employer,
+        napsa_employee: c.napsa_employee,
+        napsa_employer: c.napsa_employer,
+        loan_deduction: c.loan_deduction,
+        pension_deduction: c.pension_deduction,
+        union_dues: c.union_dues,
+        other_deductions: c.other_deductions,
+        total_deductions: c.total_deductions,
+        net_pay: c.net_pay,
+        total_employer_cost: c.total_employer_cost,
+        status: "draft",
+        created_by: user.id,
+      }));
+
+      const { error: recErr } = await (supabase.from("payroll_records") as any).insert(records);
+      if (recErr) throw recErr;
+
+      return { count: employees.length, runId: run.id };
+    },
+    onSuccess: ({ count }) => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
+      toast.success(`Payroll generated for ${getMonthName(selectedMonth)} ${selectedYear} — ${count} employees`);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to generate payroll"),
+  });
+
+  // ── Approve / Pay Mutations ──────────────────────────────
+
+  const approveMutation = useMutation({
+    mutationFn: async (runId: string) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await (supabase.from("payroll_runs") as any)
+        .update({ status: "approved", approved_by: user.id, approved_at: new Date().toISOString() })
+        .eq("id", runId);
+      if (error) throw error;
+      await (supabase.from("payroll_records") as any)
+        .update({ status: "approved" })
+        .eq("payroll_run_id", runId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll-run-records"] });
+      toast.success("Payroll approved");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: async (runId: string) => {
+      const now = new Date().toISOString();
+      const { error } = await (supabase.from("payroll_runs") as any)
+        .update({ status: "paid" })
+        .eq("id", runId);
+      if (error) throw error;
+      await (supabase.from("payroll_records") as any)
+        .update({ status: "paid", paid_at: now })
+        .eq("payroll_run_id", runId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll-run-records"] });
+      toast.success("Payroll marked as paid");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // ── Permission Guard ─────────────────────────────────────
+
+  if (!canManage) {
     return (
       <AdminLayout>
         <div className="space-y-6">
           <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-muted-foreground">You don&apos;t have permission to view this page.</p>
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-6"><p className="text-muted-foreground">You don't have permission to view this page.</p></CardContent></Card>
         </div>
       </AdminLayout>
     );
   }
 
-  const totalNet = periods.reduce((sum: number, p: { total_net?: number }) => sum + Number(p.total_net ?? 0), 0);
-  const nextPay = periods.find((p: { status: string; pay_date: string }) => p.status === "approved" || p.status === "draft");
+  // ── Summary Cards ────────────────────────────────────────
+
+  const latestRun = payrollRuns[0];
+  const totalPaidRuns = payrollRuns.filter((r: any) => r.status === "paid").length;
+  const totalNetAllTime = payrollRuns.reduce((s: number, r: any) => s + Number(r.total_net || 0), 0);
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      draft: "bg-muted text-muted-foreground",
+      approved: "bg-primary/10 text-primary border-primary/30",
+      paid: "bg-success/10 text-success border-success/30",
+      cancelled: "bg-destructive/10 text-destructive border-destructive/30",
+    };
+    return <Badge variant="outline" className={map[status] || ""}>{status}</Badge>;
+  };
+
+  const expandedRun = payrollRuns.find((r: any) => r.id === expandedRunId);
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
-            <p className="text-muted-foreground">Manage payroll periods, runs, and payslips</p>
-          </div>
-          {canManage && (
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus size={16} className="mr-2" />
-              New Period
-            </Button>
-          )}
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
+          <p className="text-muted-foreground">Generate, approve, and manage monthly payroll with Zambian statutory deductions</p>
         </div>
 
+        {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Payroll Periods</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{periods.length}</div>
-              <p className="text-xs text-muted-foreground">Total periods</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Net (all)</CardTitle>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">K{totalNet.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-              <p className="text-xs text-muted-foreground">Sum of period totals</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Next pay date</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Runs</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {nextPay ? format(new Date(nextPay.pay_date), "MMM d") : "—"}
-              </div>
-              <p className="text-xs text-muted-foreground">From next period</p>
+              <div className="text-2xl font-bold">{payrollRuns.length}</div>
+              <p className="text-xs text-muted-foreground">{totalPaidRuns} paid</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Latest Net Pay</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{latestRun ? formatZMW(Number(latestRun.total_net || 0)) : "—"}</div>
+              <p className="text-xs text-muted-foreground">{latestRun ? `${getMonthName(latestRun.payroll_month)} ${latestRun.payroll_year}` : "No runs yet"}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Latest PAYE</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{latestRun ? formatZMW(Number(latestRun.total_paye || 0)) : "—"}</div>
+              <p className="text-xs text-muted-foreground">Tax deducted</p>
             </CardContent>
           </Card>
           <Card>
@@ -143,63 +334,143 @@ const AdminPayroll = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{periods[0]?.total_employees ?? 0}</div>
-              <p className="text-xs text-muted-foreground">Last period</p>
+              <div className="text-2xl font-bold">{latestRun?.total_employees ?? 0}</div>
+              <p className="text-xs text-muted-foreground">In latest run</p>
             </CardContent>
           </Card>
         </div>
 
+        {/* Generate New Payroll */}
         <Card>
           <CardHeader>
-            <CardTitle>Payroll Periods</CardTitle>
-            <CardDescription>Select a period to view records and run payroll</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Play size={18} className="text-primary" /> Generate New Payroll Run
+            </CardTitle>
+            <CardDescription>
+              Select a month and year to generate payroll for all active employees using current Zambian tax rates (PAYE, NHIMA, NAPSA)
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Month</label>
+                <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                  <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>{getMonthName(i + 1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : periods.length === 0 ? (
-              <p className="text-muted-foreground py-6 text-center">No payroll periods yet. Create one to get started.</p>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Year</label>
+                <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+                  <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending}
+              >
+                {generateMutation.isPending ? (
+                  <Loader2 size={16} className="animate-spin mr-2" />
+                ) : (
+                  <Banknote size={16} className="mr-2" />
+                )}
+                Generate Payroll
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payroll Runs History */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText size={18} className="text-primary" /> Payroll Runs History
+            </CardTitle>
+            <CardDescription>Click a run to view individual employee records</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {runsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-muted-foreground" size={32} /></div>
+            ) : payrollRuns.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No payroll runs yet. Generate your first payroll above.</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Period</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>End</TableHead>
-                    <TableHead>Pay date</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Employees</TableHead>
-                    <TableHead className="text-right">Total net</TableHead>
+                    <TableHead className="text-right">Gross</TableHead>
+                    <TableHead className="text-right">PAYE</TableHead>
+                    <TableHead className="text-right">NHIMA</TableHead>
+                    <TableHead className="text-right">NAPSA</TableHead>
+                    <TableHead className="text-right">Net Pay</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {periods.map((p: Record<string, unknown>) => (
-                    <TableRow
-                      key={p.id as string}
-                      className={selectedPeriodId === p.id ? "bg-muted/50" : ""}
-                    >
-                      <TableCell className="font-medium">{p.period_name as string}</TableCell>
-                      <TableCell>{format(new Date(p.period_start_date as string), "yyyy-MM-dd")}</TableCell>
-                      <TableCell>{format(new Date(p.period_end_date as string), "yyyy-MM-dd")}</TableCell>
-                      <TableCell>{format(new Date(p.pay_date as string), "yyyy-MM-dd")}</TableCell>
-                      <TableCell>
-                        <Badge variant={p.status === "paid" ? "default" : "secondary"}>{p.status as string}</Badge>
-                      </TableCell>
-                      <TableCell>{p.total_employees as number ?? 0}</TableCell>
+                  {payrollRuns.map((run: any) => (
+                    <TableRow key={run.id} className={expandedRunId === run.id ? "bg-muted/50" : ""}>
+                      <TableCell className="font-medium">{getMonthName(run.payroll_month)} {run.payroll_year}</TableCell>
+                      <TableCell>{run.total_employees}</TableCell>
+                      <TableCell className="text-right">{formatZMW(Number(run.total_gross || 0))}</TableCell>
+                      <TableCell className="text-right">{formatZMW(Number(run.total_paye || 0))}</TableCell>
+                      <TableCell className="text-right">{formatZMW(Number(run.total_nhima || 0))}</TableCell>
+                      <TableCell className="text-right">{formatZMW(Number(run.total_napsa || 0))}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatZMW(Number(run.total_net || 0))}</TableCell>
+                      <TableCell>{statusBadge(run.status)}</TableCell>
                       <TableCell className="text-right">
-                        {p.total_net != null ? `K${Number(p.total_net).toLocaleString()}` : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedPeriodId(selectedPeriodId === p.id ? null : (p.id as string))}
-                        >
-                          {selectedPeriodId === p.id ? "Hide" : "View"}
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}>
+                            <Eye size={14} className="mr-1" /> {expandedRunId === run.id ? "Hide" : "View"}
+                          </Button>
+                          {run.status === "draft" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => approveMutation.mutate(run.id)}
+                              disabled={approveMutation.isPending}
+                            >
+                              {approveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
+                              Approve
+                            </Button>
+                          )}
+                          {run.status === "approved" && (
+                            <Button
+                              size="sm"
+                              onClick={() => markPaidMutation.mutate(run.id)}
+                              disabled={markPaidMutation.isPending}
+                            >
+                              {markPaidMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <DollarSign size={14} className="mr-1" />}
+                              Mark Paid
+                            </Button>
+                          )}
+                          {(run.status === "approved" || run.status === "paid") && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (expandedRunId === run.id && runRecords.length > 0) {
+                                  generateAllPayslipsPDF(runRecords, run);
+                                } else {
+                                  toast.info("View run first to download all payslips");
+                                  setExpandedRunId(run.id);
+                                }
+                              }}
+                            >
+                              <Download size={14} className="mr-1" /> All Payslips
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -209,355 +480,93 @@ const AdminPayroll = () => {
           </CardContent>
         </Card>
 
-        {selectedPeriodId && selectedPeriod && (
+        {/* Expanded Run Records */}
+        {expandedRunId && expandedRun && (
           <Card>
             <CardHeader>
-              <CardTitle>{selectedPeriod.period_name} — Records</CardTitle>
-              <CardDescription>Payroll records for this period. Run payroll to generate records from employees and salary structures.</CardDescription>
+              <CardTitle>{getMonthName(expandedRun.payroll_month)} {expandedRun.payroll_year} — Employee Records</CardTitle>
+              <CardDescription>Individual payroll breakdowns. Click an employee to see full details.</CardDescription>
             </CardHeader>
             <CardContent>
-              {canManage && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {selectedPeriod.status === "draft" && (
-                    <RunPayrollButton
-                      periodId={selectedPeriodId}
-                      periodName={selectedPeriod.period_name}
-                      periodStart={selectedPeriod.period_start_date}
-                      periodEnd={selectedPeriod.period_end_date}
-                      onSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", selectedPeriodId] });
-                        toast({ title: "Payroll run completed" });
-                      }}
-                    />
-                  )}
-                  {selectedPeriod.status === "processing" && (
-                    <ApprovePeriodButton
-                      periodId={selectedPeriodId}
-                      onSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-                        toast({ title: "Period approved" });
-                      }}
-                    />
-                  )}
-                  {selectedPeriod.status === "approved" && (
-                    <MarkPaidButton
-                      periodId={selectedPeriodId}
-                      onSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-                        queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", selectedPeriodId] });
-                        toast({ title: "Marked as paid" });
-                      }}
-                    />
-                  )}
-                </div>
-              )}
               {recordsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : periodRecords.length === 0 ? (
-                <p className="text-muted-foreground py-4">No payroll records yet. Run payroll for this period.</p>
+                <div className="flex justify-center py-8"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div>
+              ) : runRecords.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No records for this run.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Basic</TableHead>
-                      <TableHead>Commission</TableHead>
-                      <TableHead>Bonus</TableHead>
-                      <TableHead>Gross</TableHead>
-                      <TableHead>Deductions</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
-                      <TableHead className="text-right">Payslip</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {periodRecords.map((rec: any) => (
-                      <TableRow key={rec.id as string}>
-                        <TableCell className="font-medium">
-                          {rec.employee
-                            ? `${rec.employee?.first_name ?? ""} ${rec.employee?.last_name ?? ""}`
-                            : rec.employee_id}
-                        </TableCell>
-                        <TableCell>K{Number(rec.basic_salary ?? 0).toLocaleString()}</TableCell>
-                        <TableCell>K{Number(rec.commission_amount ?? 0).toLocaleString()}</TableCell>
-                        <TableCell>K{Number(rec.bonus_amount ?? 0).toLocaleString()}</TableCell>
-                        <TableCell>K{Number(rec.gross_salary ?? 0).toLocaleString()}</TableCell>
-                        <TableCell>K{Number((rec as { total_deductions?: number }).total_deductions ?? 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right">K{Number((rec as { net_salary?: number }).net_salary ?? 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => generatePayslipPDF(rec, selectedPeriod)}
-                          >
-                            <Download size={14} />
-                          </Button>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Employee</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead className="text-right">Basic</TableHead>
+                        <TableHead className="text-right">Allowances</TableHead>
+                        <TableHead className="text-right">Commission</TableHead>
+                        <TableHead className="text-right">Gross</TableHead>
+                        <TableHead className="text-right">PAYE</TableHead>
+                        <TableHead className="text-right">NHIMA</TableHead>
+                        <TableHead className="text-right">NAPSA</TableHead>
+                        <TableHead className="text-right">Net Pay</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {runRecords.map((rec: any) => {
+                        const totalAllowances = Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.lunch_allowance || 0) + Number(rec.other_allowances || 0);
+                        return (
+                          <TableRow key={rec.id}>
+                            <TableCell className="font-medium">{rec.employees?.full_name || "—"}</TableCell>
+                            <TableCell className="text-muted-foreground">{rec.employees?.department || "—"}</TableCell>
+                            <TableCell className="text-right">{formatZMW(Number(rec.basic_salary || 0))}</TableCell>
+                            <TableCell className="text-right">{formatZMW(totalAllowances)}</TableCell>
+                            <TableCell className="text-right">{formatZMW(Number(rec.commission_amount || 0))}</TableCell>
+                            <TableCell className="text-right">{formatZMW(Number(rec.gross_pay || 0))}</TableCell>
+                            <TableCell className="text-right">{formatZMW(Number(rec.paye_tax || 0))}</TableCell>
+                            <TableCell className="text-right">{formatZMW(Number(rec.nhima_employee || 0))}</TableCell>
+                            <TableCell className="text-right">{formatZMW(Number(rec.napsa_employee || 0))}</TableCell>
+                            <TableCell className="text-right font-semibold">{formatZMW(Number(rec.net_pay || 0))}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="sm" onClick={() => setSelectedRecord(rec)}>
+                                  <Eye size={14} />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => generatePayslipPDF(rec, expandedRun)}>
+                                  <Download size={14} />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+
+                  {/* Run Totals Summary */}
+                  <Separator className="my-4" />
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div><span className="text-muted-foreground">Total Gross:</span> <span className="font-semibold">{formatZMW(Number(expandedRun.total_gross || 0))}</span></div>
+                    <div><span className="text-muted-foreground">Total PAYE:</span> <span className="font-semibold">{formatZMW(Number(expandedRun.total_paye || 0))}</span></div>
+                    <div><span className="text-muted-foreground">Total Net:</span> <span className="font-semibold">{formatZMW(Number(expandedRun.total_net || 0))}</span></div>
+                    <div><span className="text-muted-foreground">Employer Cost:</span> <span className="font-semibold">{formatZMW(Number(expandedRun.total_employer_cost || 0))}</span></div>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
         )}
       </div>
 
-      {canManage && (
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create Payroll Period</DialogTitle>
-              <DialogDescription>Add a new payroll period. Status will be draft until you run payroll and approve.</DialogDescription>
-            </DialogHeader>
-            <CreatePeriodForm
-              onSuccess={() => {
-                setIsCreateOpen(false);
-                queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-                toast({ title: "Period created" });
-              }}
-              onCancel={() => setIsCreateOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
+      {/* Payslip Detail Modal */}
+      {selectedRecord && (
+        <PayslipDetailModal
+          record={selectedRecord}
+          run={expandedRun}
+          open={!!selectedRecord}
+          onClose={() => setSelectedRecord(null)}
+        />
       )}
     </AdminLayout>
   );
 };
-
-function CreatePeriodForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
-  const [periodName, setPeriodName] = useState("");
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
-  const [payDate, setPayDate] = useState("");
-  const { toast } = useToast();
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await (supabase.from as any)("payroll_periods").insert({
-        period_name: periodName,
-        period_type: "monthly",
-        period_start_date: periodStart,
-        period_end_date: periodEnd,
-        pay_date: payDate,
-        status: "draft",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => onSuccess(),
-    onError: (e) => toast({ title: "Error", description: (e as Error).message, variant: "destructive" }),
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Period name</Label>
-        <Input value={periodName} onChange={(e) => setPeriodName(e.target.value)} placeholder="e.g. January 2026" />
-      </div>
-      <div className="space-y-2">
-        <Label>Start date</Label>
-        <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label>End date</Label>
-        <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label>Pay date</Label>
-        <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button
-          onClick={() => createMutation.mutate()}
-          disabled={!periodName || !periodStart || !periodEnd || !payDate || createMutation.isPending}
-        >
-          {createMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
-          Create
-        </Button>
-      </DialogFooter>
-    </div>
-  );
-}
-
-function RunPayrollButton({
-  periodId,
-  periodName,
-  periodStart,
-  periodEnd,
-  onSuccess,
-}: {
-  periodId: string;
-  periodName: string;
-  periodStart?: string;
-  periodEnd?: string;
-  onSuccess: () => void;
-}) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const runMutation = useMutation({
-    mutationFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: employees } = await (supabase.from as any)("employees").select("id").eq("is_active", true);
-      if (!employees?.length) throw new Error("No active employees");
-
-      const { data: structures } = await (supabase.from as any)("employee_salary_structure")
-        .select("employee_id, basic_salary, effective_date, expiry_date")
-        .lte("effective_date", today);
-
-      const effectiveStructures = (structures ?? []).filter(
-        (s: any) => s.expiry_date == null || s.expiry_date >= today
-      );
-      const byEmployee: Record<string, number> = {};
-      employees.forEach((emp: any) => {
-        const forEmp = effectiveStructures.filter((s: any) => s.employee_id === emp.id);
-        const latest = forEmp.sort((a: any, b: any) => b.effective_date.localeCompare(a.effective_date))[0];
-        byEmployee[emp.id] = latest?.basic_salary ?? 0;
-      });
-
-      const startDate = periodStart ?? today;
-      const endDate = periodEnd ?? today;
-      const commissionByEmployee: Record<string, number> = {};
-      try {
-        const { data: commissionRows } = await (supabase.rpc as any)("compute_commission_for_period", { p_period_start: startDate, p_period_end: endDate });
-        (commissionRows ?? []).forEach((r: { employee_id: string; commission_amount: number }) => {
-          commissionByEmployee[r.employee_id] = Number(r.commission_amount ?? 0);
-        });
-      } catch {
-        /* commission RPC optional */
-      }
-
-      const records = employees.map((emp: any) => {
-        const basic = byEmployee[emp.id] ?? 0;
-        const commission = commissionByEmployee[emp.id] ?? 0;
-        const gross = basic + commission;
-        return {
-          payroll_period_id: periodId,
-          employee_id: emp.id,
-          basic_salary: basic,
-          gross_salary: gross,
-          commission_amount: commission,
-          bonus_amount: 0,
-        };
-      });
-      const { error: upsertError } = await (supabase.from as any)("payroll_records").upsert(records, { onConflict: "payroll_period_id,employee_id" });
-      if (upsertError) throw upsertError;
-      const totalNet = records.reduce((sum: number, r: { gross_salary: number }) => sum + r.gross_salary, 0);
-      await (supabase.from as any)("payroll_periods")
-        .update({
-          status: "processing",
-          total_employees: employees.length,
-          total_net: totalNet,
-          total_gross: totalNet,
-          total_deductions: 0,
-        })
-        .eq("id", periodId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", periodId] });
-      onSuccess();
-    },
-    onError: (e) => toast({ title: "Payroll run failed", description: (e as Error).message, variant: "destructive" }),
-  });
-
-  return (
-    <Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
-      {runMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <CheckCircle size={16} className="mr-2" />}
-      Run Payroll
-    </Button>
-  );
-}
-
-function ApprovePeriodButton({ periodId, onSuccess }: { periodId: string; onSuccess: () => void }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const approveMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await (supabase.from as any)("payroll_periods").update({ status: "approved" }).eq("id", periodId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-      onSuccess();
-    },
-    onError: (e) => toast({ title: "Approve failed", description: (e as Error).message, variant: "destructive" }),
-  });
-  return (
-    <Button variant="outline" onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending}>
-      {approveMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
-      Approve Period
-    </Button>
-  );
-}
-
-function MarkPaidButton({ periodId, onSuccess }: { periodId: string; onSuccess: () => void }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const markPaidMutation = useMutation({
-    mutationFn: async () => {
-      const { error: periodError } = await (supabase.from as any)("payroll_periods").update({ status: "paid" }).eq("id", periodId);
-      if (periodError) throw periodError;
-      const { data: records } = await (supabase.from as any)("payroll_records").select("id").eq("payroll_period_id", periodId);
-      for (const rec of records ?? []) {
-        await (supabase.from as any)("payroll_records").update({ payment_status: "paid", paid_at: new Date().toISOString() }).eq("id", rec.id);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-payroll-periods"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-payroll-records", periodId] });
-      onSuccess();
-    },
-    onError: (e) => toast({ title: "Mark paid failed", description: (e as Error).message, variant: "destructive" }),
-  });
-  return (
-    <Button onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending}>
-      {markPaidMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <DollarSign size={16} className="mr-2" />}
-      Mark as Paid
-    </Button>
-  );
-}
-
-function generatePayslipPDF(
-  rec: Record<string, unknown>,
-  period: { period_name: string; period_start_date: string; period_end_date: string; pay_date: string }
-) {
-  const doc = new jsPDF();
-  const employee = rec.employee as { first_name?: string; last_name?: string; employee_number?: string } | null;
-  const name = employee ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() : "Employee";
-  const empNo = employee?.employee_number ?? "";
-
-  doc.setFontSize(18);
-  doc.text("Payslip", 14, 20);
-  doc.setFontSize(10);
-  doc.text(`Period: ${period.period_name}`, 14, 28);
-  doc.text(`Pay date: ${format(new Date(period.pay_date), "yyyy-MM-dd")}`, 14, 34);
-  doc.text(`Employee: ${name} (${empNo})`, 14, 40);
-
-  const rows = [
-    ["Basic salary", `K${Number(rec.basic_salary ?? 0).toLocaleString()}`],
-    ["Commission", `K${Number(rec.commission_amount ?? 0).toLocaleString()}`],
-    ["Bonus", `K${Number(rec.bonus_amount ?? 0).toLocaleString()}`],
-    ["Gross", `K${Number(rec.gross_salary ?? 0).toLocaleString()}`],
-    ["Deductions", `K${Number((rec as { total_deductions?: number }).total_deductions ?? 0).toLocaleString()}`],
-    ["Net pay", `K${Number((rec as { net_salary?: number }).net_salary ?? 0).toLocaleString()}`],
-  ];
-
-  autoTable(doc, {
-    head: [["Item", "Amount"]],
-    body: rows,
-    startY: 48,
-    styles: { fontSize: 10 },
-    headStyles: { fillColor: [59, 130, 246], textColor: 255 },
-  });
-
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  doc.text("Phindu Finance - Confidential", 14, doc.internal.pageSize.height - 10);
-  doc.save(`payslip-${empNo || rec.employee_id}-${period.period_name.replace(/\s/g, "-")}.pdf`);
-}
 
 export default AdminPayroll;
