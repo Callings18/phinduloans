@@ -1129,22 +1129,31 @@ export type Database = {
       }
       employees: {
         Row: {
+          address: string | null
           bank_account_number: string | null
           bank_branch: string | null
           bank_name: string | null
           branch: string | null
+          city: string | null
           commission_percentage: number | null
           created_at: string | null
+          date_of_birth: string | null
           department: string | null
           email: string | null
+          employee_number: string | null
+          employment_start_date: string | null
+          employment_type: string | null
+          first_name: string | null
           full_name: string
           hire_date: string | null
           housing_allowance: number | null
           id: string
           is_active: boolean | null
+          last_name: string | null
           lunch_allowance: number | null
           napsa_number: string | null
           nhima_number: string | null
+          nrc_number: string | null
           other_allowances: number | null
           payment_method: string | null
           phone: string | null
@@ -1156,22 +1165,31 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          address?: string | null
           bank_account_number?: string | null
           bank_branch?: string | null
           bank_name?: string | null
           branch?: string | null
+          city?: string | null
           commission_percentage?: number | null
           created_at?: string | null
+          date_of_birth?: string | null
           department?: string | null
           email?: string | null
+          employee_number?: string | null
+          employment_start_date?: string | null
+          employment_type?: string | null
+          first_name?: string | null
           full_name: string
           hire_date?: string | null
           housing_allowance?: number | null
           id?: string
           is_active?: boolean | null
+          last_name?: string | null
           lunch_allowance?: number | null
           napsa_number?: string | null
           nhima_number?: string | null
+          nrc_number?: string | null
           other_allowances?: number | null
           payment_method?: string | null
           phone?: string | null
@@ -1183,22 +1201,31 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          address?: string | null
           bank_account_number?: string | null
           bank_branch?: string | null
           bank_name?: string | null
           branch?: string | null
+          city?: string | null
           commission_percentage?: number | null
           created_at?: string | null
+          date_of_birth?: string | null
           department?: string | null
           email?: string | null
+          employee_number?: string | null
+          employment_start_date?: string | null
+          employment_type?: string | null
+          first_name?: string | null
           full_name?: string
           hire_date?: string | null
           housing_allowance?: number | null
           id?: string
           is_active?: boolean | null
+          last_name?: string | null
           lunch_allowance?: number | null
           napsa_number?: string | null
           nhima_number?: string | null
+          nrc_number?: string | null
           other_allowances?: number | null
           payment_method?: string | null
           phone?: string | null
