@@ -67,6 +67,7 @@ interface Disbursement {
 const AdminDisbursements = () => {
   const { can } = usePermissions();
   const canCompleteDisbursement = can("disbursement", "disburse");
+  const canCreateDisbursement = can("disbursement", "create") || can("disbursement", "disburse");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -351,7 +352,8 @@ const AdminDisbursements = () => {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gradient-primary shadow-button">
+              <Button className="gradient-primary shadow-button" disabled={!canCreateDisbursement}
+                title={!canCreateDisbursement ? "You don't have permission to disburse funds" : undefined}>
                 <Plus size={18} className="mr-2" />
                 New Disbursement
               </Button>
