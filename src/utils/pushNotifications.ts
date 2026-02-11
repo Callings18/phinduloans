@@ -60,7 +60,7 @@ class PushNotificationManager {
 
     try {
       // Check if already subscribed
-      const existingSubscription = await this.registration.pushManager.getSubscription();
+      const existingSubscription = await (this.registration as any).pushManager?.getSubscription();
       if (existingSubscription) {
         return existingSubscription;
       }
@@ -81,7 +81,7 @@ class PushNotificationManager {
     }
 
     try {
-      const subscription = await this.registration.pushManager.getSubscription();
+      const subscription = await (this.registration as any).pushManager?.getSubscription();
       if (subscription) {
         await subscription.unsubscribe();
         console.log('Push subscription removed for user:', userId);
