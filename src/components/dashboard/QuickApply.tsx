@@ -212,7 +212,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
       return;
     }
 
-    if (!hasRequiredDocs) {
+    if (!hasRequiredDocs && !kycVerified) {
       setNeedsDocuments(true);
       return;
     }
