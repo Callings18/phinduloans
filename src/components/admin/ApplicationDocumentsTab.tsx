@@ -149,6 +149,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     nrc_front: "NRC_FRONT",
     nrc_back: "NRC_BACK",
     selfie: "SELFIE",
+    selfie_holding_nrc: "SELFIE",
     proof_of_residence: "PROOF_OF_RESIDENCE",
   };
 
