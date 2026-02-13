@@ -29,6 +29,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const queryClient = useQueryClient();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejectDocId, setRejectDocId] = useState<string | null>(null);
+  const [rejectDocLabel, setRejectDocLabel] = useState("");
   const [rejectReason, setRejectReason] = useState("");
 
   // Document vault
@@ -113,7 +114,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async ({ docId, reason }: { docId: string; reason: string }) => {
+    mutationFn: async ({ docId, reason, docLabel }: { docId: string; reason: string; docLabel: string }) => {
       const { data: session } = await supabase.auth.getSession();
       const adminId = session?.session?.user?.id;
       const { error } = await supabase
@@ -121,10 +122,50 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         .update({ is_verified: false, verified_by: adminId, verified_at: new Date().toISOString(), notes: `Rejected: ${reason}` })
         .eq("id", docId);
       if (error) throw error;
+
+      // Notify the borrower about the rejection
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email, phone, full_name")
+          .eq("id", borrowerId)
+          .maybeSingle();
+
+        if (profile) {
+          const name = profile.full_name || "Customer";
+          const emailMsg = `Dear ${name}, your KYC document "${docLabel}" has been rejected. Reason: ${reason}. Please log in to your account and re-upload the document. Your account remains pending until all documents are verified. — Phindu Finance`;
+          const smsMsg = `Dear ${name}, your document "${docLabel}" was rejected: ${reason}. Please re-upload it on your Phindu account. — Phindu Finance`;
+
+          if (profile.email) {
+            await supabase.from("notification_logs").insert({
+              user_id: borrowerId,
+              type: "email",
+              recipient: profile.email,
+              title: "KYC Document Rejected",
+              subject: `Action Required: Re-upload ${docLabel}`,
+              message: emailMsg,
+              status: "pending",
+            });
+          }
+          if (profile.phone) {
+            await supabase.from("notification_logs").insert({
+              user_id: borrowerId,
+              type: "sms",
+              recipient: profile.phone,
+              title: "KYC Document Rejected",
+              message: smsMsg,
+              status: "pending",
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.error("Failed to send rejection notification:", notifErr);
+        // Don't block the rejection if notification fails
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
-      toast({ title: "Document rejected" });
+      toast({ title: "Document rejected", description: "Borrower has been notified to re-upload." });
       setRejectDocId(null);
       setRejectReason("");
     },
@@ -249,7 +290,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1"><Clock size={12} /> Pending</Badge>
                           <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
                           <Button size="sm" className="h-7 text-xs" onClick={() => approveMutation.mutate(doc.id)} disabled={approveMutation.isPending}>Approve</Button>
-                          <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/30" onClick={() => setRejectDocId(doc.id)}>Reject</Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/30" onClick={() => { setRejectDocId(doc.id); setRejectDocLabel(kycType.label); }}>Reject</Button>
                         </>
                       )}
                     </div>
@@ -361,16 +402,17 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
       </Dialog>
 
       {/* Reject Dialog */}
-      <Dialog open={!!rejectDocId} onOpenChange={() => { setRejectDocId(null); setRejectReason(""); }}>
+      <Dialog open={!!rejectDocId} onOpenChange={() => { setRejectDocId(null); setRejectDocLabel(""); setRejectReason(""); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-destructive">Reject Document</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-destructive">Reject Document{rejectDocLabel ? `: ${rejectDocLabel}` : ""}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">The borrower will be notified via email and SMS that this document was rejected and needs to be re-uploaded.</p>
             <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." rows={3} />
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setRejectDocId(null); setRejectReason(""); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setRejectDocId(null); setRejectDocLabel(""); setRejectReason(""); }}>Cancel</Button>
               <Button variant="destructive" onClick={() => {
                 if (!rejectReason.trim()) { toast({ title: "Please provide a reason", variant: "destructive" }); return; }
-                if (rejectDocId) rejectMutation.mutate({ docId: rejectDocId, reason: rejectReason });
+                if (rejectDocId) rejectMutation.mutate({ docId: rejectDocId, reason: rejectReason, docLabel: rejectDocLabel });
               }} disabled={rejectMutation.isPending}>Reject Document</Button>
             </div>
           </div>
