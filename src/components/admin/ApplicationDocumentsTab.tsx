@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getSignedUrl } from "@/utils/storageHelpers";
@@ -6,14 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ExternalLink, FileText, ShieldCheck, Loader2, Upload, CheckCircle,
-  Clock, AlertTriangle, Eye, Package,
+  Clock, AlertTriangle, Eye, Package, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMemo } from "react";
 import { toast as sonnerToast } from "sonner";
-
 interface ApplicationDocumentsTabProps {
   selectedApp: any;
 }
@@ -80,6 +79,9 @@ interface RequiredDocRow {
 const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) => {
   const { toast } = useToast();
   const [uploadingDocType, setUploadingDocType] = useState<string | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [viewerLabel, setViewerLabel] = useState<string>("");
+  const [viewerLoading, setViewerLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -246,16 +248,26 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
   const uploadedMandatory = documentChecklist.filter((d) => d.isMandatory && d.isUploaded).length;
   const progressPercent = totalRequired > 0 ? Math.round((uploadedMandatory / totalRequired) * 100) : 0;
 
-  const handleViewDocument = async (fileUrl: string) => {
-    if (fileUrl.startsWith("http")) {
-      window.open(fileUrl, "_blank");
-      return;
-    }
-    const signedUrl = await getSignedUrl(fileUrl);
-    if (signedUrl) {
-      window.open(signedUrl, "_blank");
-    } else {
+  const handleViewDocument = async (fileUrl: string, label?: string) => {
+    setViewerLabel(label || "Document");
+    setViewerLoading(true);
+    setViewerUrl(null);
+    try {
+      let url = fileUrl;
+      if (!fileUrl.startsWith("http")) {
+        const signed = await getSignedUrl(fileUrl);
+        if (!signed) {
+          toast({ title: "Error", description: "Failed to load document.", variant: "destructive" });
+          setViewerLoading(false);
+          return;
+        }
+        url = signed;
+      }
+      setViewerUrl(url);
+    } catch {
       toast({ title: "Error", description: "Failed to load document.", variant: "destructive" });
+    } finally {
+      setViewerLoading(false);
     }
   };
 
@@ -292,7 +304,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
           file_url: filePath,
           file_size: file.size,
           mime_type: file.type,
-          uploaded_by: user.id,
+          uploaded_by: "admin",
           loan_product_id: selectedApp?.loan_product_id || null,
           status: "uploaded",
         });
@@ -369,7 +381,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {row.uploadedDocs.map((doc, idx) => (
             <Button key={doc.id} variant="ghost" size="sm" className="h-8 px-2"
-              onClick={() => handleViewDocument(doc.fileUrl)} title={`View ${doc.label}`}>
+              onClick={() => handleViewDocument(doc.fileUrl, doc.label)} title={`View ${doc.label}`}>
               <Eye size={14} />
               {row.uploadedDocs.length > 1 && <span className="ml-0.5 text-xs">{idx + 1}</span>}
             </Button>
@@ -549,7 +561,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
                     variant="ghost"
                     size="sm"
                     className="h-8 px-2"
-                    onClick={() => handleViewDocument(doc.fileUrl)}
+                    onClick={() => handleViewDocument(doc.fileUrl, doc.label)}
                   >
                     <Eye size={14} className="mr-1" /> View
                   </Button>
@@ -559,6 +571,35 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
           </CardContent>
         </Card>
       )}
+
+      {/* In-app Document Viewer Dialog */}
+      <Dialog open={!!viewerUrl || viewerLoading} onOpenChange={(open) => { if (!open) { setViewerUrl(null); setViewerLabel(""); } }}>
+        <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle className="flex items-center justify-between">
+              <span className="truncate">{viewerLabel}</span>
+              {viewerUrl && (
+                <Button variant="ghost" size="sm" onClick={() => window.open(viewerUrl, "_blank")} className="ml-2 flex-shrink-0">
+                  <ExternalLink size={14} className="mr-1" /> Open in new tab
+                </Button>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden px-4 pb-4">
+            {viewerLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : viewerUrl ? (
+              viewerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) ? (
+                <img src={viewerUrl} alt={viewerLabel} className="max-w-full max-h-full object-contain mx-auto" />
+              ) : (
+                <iframe src={viewerUrl} className="w-full h-full border-0 rounded-lg" title={viewerLabel} />
+              )
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
