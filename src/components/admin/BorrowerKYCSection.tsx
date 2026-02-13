@@ -168,7 +168,11 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const handlePreview = async (fileUrl: string) => {
     const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
     if (url) setPreviewUrl(url);
-    else toast({ title: "Could not load document", variant: "destructive" });
+    else toast({ 
+      title: "Permission denied", 
+      description: "You do not have permission to view this document. Please contact an admin to grant you access.", 
+      variant: "destructive" 
+    });
   };
 
   // Map vault docs by type
