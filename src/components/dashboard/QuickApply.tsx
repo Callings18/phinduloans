@@ -273,7 +273,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
         selfie_url: previousApplication?.selfie_url,
         payslip_url: previousApplication?.payslip_url,
         status: "pending",
-        source: "dashboard_quick_apply",
+        source: "website",
         crb_consent: dataConsent,
         crb_consent_timestamp: dataConsent ? new Date().toISOString() : null,
       });
