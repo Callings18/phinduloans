@@ -98,6 +98,21 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     enabled: !!selectedApp?.id,
   });
 
+  // Fetch KYC documents from borrower_document_vault
+  const { data: vaultDocs } = useQuery({
+    queryKey: ["borrower-kyc-vault", selectedApp?.user_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("borrower_document_vault")
+        .select("*")
+        .eq("borrower_id", selectedApp?.user_id)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!selectedApp?.user_id,
+  });
+
   // Fetch loan product name and required documents
   const { data: loanProduct } = useQuery({
     queryKey: ["loan-product-info", selectedApp?.loan_product_id],
@@ -127,7 +142,15 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     })).sort((a, b) => a.display_order - b.display_order);
   }, [loanProduct]);
 
-  // Build all uploaded docs (unified + legacy)
+  // Map vault doc_type to product doc_type (uppercase)
+  const vaultToProductType: Record<string, string> = {
+    nrc_front: "NRC_FRONT",
+    nrc_back: "NRC_BACK",
+    selfie: "SELFIE",
+    proof_of_residence: "PROOF_OF_RESIDENCE",
+  };
+
+  // Build all uploaded docs (unified + legacy + vault KYC)
   const { allUploadedDocs, payslipPasswords } = useMemo(() => {
     const docs: UploadedDoc[] = [];
     const seenUrls = new Set<string>();
@@ -148,6 +171,30 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       }
     }
 
+    // Merge KYC docs from borrower_document_vault
+    if (vaultDocs) {
+      const seenVaultTypes = new Set<string>();
+      for (const vDoc of vaultDocs) {
+        const url = vDoc.file_url?.trim();
+        if (!url || seenUrls.has(url)) continue;
+        // Only take most recent per type
+        if (seenVaultTypes.has(vDoc.doc_type)) continue;
+        seenVaultTypes.add(vDoc.doc_type);
+        seenUrls.add(url);
+        const mappedType = vaultToProductType[vDoc.doc_type] || vDoc.doc_type;
+        docs.push({
+          id: vDoc.id,
+          docType: mappedType,
+          label: vDoc.doc_label || vDoc.doc_type,
+          fileUrl: url,
+          source: "application_documents", // treat as uploaded
+          uploadedBy: "borrower",
+          status: vDoc.is_verified ? "verified" : "uploaded",
+          notes: vDoc.notes,
+        });
+      }
+    }
+
     if (selectedApp) {
       for (const col of legacyDocColumns) {
         const url = selectedApp[col.key]?.trim();
@@ -164,7 +211,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     }
 
     return { allUploadedDocs: docs, payslipPasswords: passwords };
-  }, [appDocuments, selectedApp]);
+  }, [appDocuments, vaultDocs, selectedApp]);
 
   // Build the full required document checklist with uploaded status
   const documentChecklist: RequiredDocRow[] = useMemo(() => {
