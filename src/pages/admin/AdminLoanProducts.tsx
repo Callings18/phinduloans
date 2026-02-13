@@ -269,7 +269,7 @@ interface PreviewCalculation {
 
 const AdminLoanProducts = () => {
   const { can } = usePermissions();
-  const canEditProducts = can("products", "edit");
+  const canEditProducts = can("products", "update") || can("products", "edit");
   const canDeleteProducts = can("products", "delete");
 
   const [searchQuery, setSearchQuery] = useState("");
