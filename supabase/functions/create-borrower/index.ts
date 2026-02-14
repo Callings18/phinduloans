@@ -75,28 +75,39 @@ Deno.serve(async (req) => {
     });
 
     if (createError) {
-      // If email already exists, look up the existing user and update their profile
+      // If email already exists, look up the existing user by querying profiles
       if (createError.message?.includes("already been registered") || (createError as any).code === "email_exists") {
         console.log("User already exists, looking up by email:", email);
 
-        // List users and find by email
-        const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-        if (listError) {
-          return new Response(JSON.stringify({ error: "Failed to look up existing user" }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+        // Look up user via profiles table (more reliable than paginated listUsers)
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
 
-        const existingUser = listData.users.find(u => u.email === email);
-        if (!existingUser) {
-          return new Response(JSON.stringify({ error: "User exists in auth but could not be found. Please try a different email." }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+        if (profileError || !profile) {
+          // Fallback: paginated search through auth users
+          let foundId: string | null = null;
+          let page = 1;
+          while (!foundId) {
+            const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
+            if (listError || !listData.users.length) break;
+            const match = listData.users.find(u => u.email === email);
+            if (match) { foundId = match.id; break; }
+            if (listData.users.length < 100) break;
+            page++;
+          }
+          if (!foundId) {
+            return new Response(JSON.stringify({ error: "User exists in auth but profile not found. Please contact support." }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          userId = foundId;
+        } else {
+          userId = profile.id;
         }
-
-        userId = existingUser.id;
       } else {
         console.error("Error creating user:", createError);
         return new Response(JSON.stringify({ error: createError.message }), {
