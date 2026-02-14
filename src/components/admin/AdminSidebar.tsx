@@ -14,6 +14,10 @@ import {
   Banknote,
   Wallet,
   FileSignature,
+  Settings,
+  Shield,
+  UserCog,
+  BookOpen,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo-white.png";
 import { useState } from "react";
@@ -62,9 +66,13 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    label: "Settings",
+    label: "Administration",
     items: [
       { icon: FileSignature, label: "Contract Templates", path: "/admin/contract-templates" },
+      { icon: UserCog, label: "Staff", path: "/admin/staff" },
+      { icon: Shield, label: "Roles & Permissions", path: "/admin/roles-permissions" },
+      { icon: BookOpen, label: "User Guide", path: "/admin/user-guide" },
+      { icon: Settings, label: "Settings", path: "/admin/settings" },
     ],
   },
 ];
