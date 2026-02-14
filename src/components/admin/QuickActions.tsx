@@ -1,12 +1,9 @@
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Plus,
   UserPlus,
   FileText,
-  CreditCard,
   Banknote,
-  AlertTriangle,
   ArrowUpRight,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -27,25 +24,11 @@ const quickActions = [
     color: "from-emerald-500 to-teal-600",
   },
   {
-    icon: CreditCard,
-    label: "Disburse Loan",
-    description: "Process disbursement",
-    path: "/admin/disbursements",
-    color: "from-purple-500 to-pink-600",
-  },
-  {
     icon: Banknote,
     label: "Record Payment",
     description: "Log repayment",
     path: "/admin/repayments?action=new",
     color: "from-warning to-orange-600",
-  },
-  {
-    icon: AlertTriangle,
-    label: "Collections",
-    description: "View overdue loans",
-    path: "/admin/collections",
-    color: "from-destructive to-red-600",
   },
 ];
 
@@ -59,7 +42,7 @@ const QuickActions = () => {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {quickActions.map((action) => (
             <Link
               key={action.label}
