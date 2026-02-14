@@ -1169,8 +1169,7 @@ const AdminApplications = () => {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
-                  <SelectItem value="crb_failed">CRB Failed</SelectItem>
-                  <SelectItem value="pmic_pending">PMIC Pending</SelectItem>
+                  {/* V2.0: CRB Failed, PMIC Pending hidden for V1.0.1 */}
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
