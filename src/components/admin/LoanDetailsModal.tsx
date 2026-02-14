@@ -1000,21 +1000,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-5 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
               <TabsTrigger value="repayments" className="text-xs">
                 <Receipt size={14} className="mr-1 hidden sm:inline" /> Repayments
               </TabsTrigger>
-              <TabsTrigger value="documents" className="text-xs">
-                <FolderCheck size={14} className="mr-1 hidden sm:inline" /> Documents
-              </TabsTrigger>
               <TabsTrigger value="contract" className="text-xs">
                 <FileText size={14} className="mr-1 hidden sm:inline" /> Contract
-              </TabsTrigger>
-              <TabsTrigger value="notes" className="text-xs">
-                <MessageSquare size={14} className="mr-1 hidden sm:inline" /> Notes
               </TabsTrigger>
             </TabsList>
 
@@ -1394,11 +1388,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
               </TabsContent>
 
-              {/* Documents Tab */}
-              <TabsContent value="documents" className="m-0">
-                <DocumentVerificationTab loanId={loan.id} borrowerId={loan.user_id} />
-              </TabsContent>
-
               {/* V1.0.1: Simple Contract Tab */}
               <TabsContent value="contract" className="m-0 space-y-4">
                 <Card>
@@ -1484,11 +1473,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </Button>
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-              {/* Notes Tab (Approval Workflow Notes) */}
-              <TabsContent value="notes" className="m-0">
-                <ApprovalWorkflowTab loan={loan} />
               </TabsContent>
 
               {/* V1.0.1: Actions and History tabs removed - functionality available through Overview quick actions and Contract tab */}

@@ -1816,10 +1816,9 @@ const AdminApplications = () => {
 
           {selectedApp && (
             <Tabs defaultValue="details" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
-                <TabsTrigger value="actions">Actions</TabsTrigger>
                 <TabsTrigger value="notes" className="flex items-center gap-2">
                   <MessageCircle size={14} /> Notes
                 </TabsTrigger>
@@ -1964,26 +1963,13 @@ const AdminApplications = () => {
                     <p className="text-muted-foreground text-sm">{selectedApp.admin_notes}</p>
                   </div>
                 )}
-              </TabsContent>
 
-              <TabsContent value="documents" className="space-y-4 mt-4">
-                <ApplicationDocumentsTab selectedApp={selectedApp} />
-              </TabsContent>
-
-              <TabsContent value="risk" className="space-y-4 mt-4">
-                <RiskAssessmentModule applicationId={selectedApp.id} />
-              </TabsContent>
-
-              <TabsContent value="actions" className="space-y-6 mt-4">
-                {/* V1.0.1: Simple Approve / Reject / Upload Contract / Disburse */}
-                
-                {/* Upload Contract (simple PDF upload) */}
+                {/* Contract Upload */}
                 <Card className="bg-secondary/30 border-border/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileText size={18} /> Contract
                     </CardTitle>
-                    <CardDescription>Upload the signed contract PDF</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {selectedApp.signed_contract_url ? (
@@ -2023,7 +2009,7 @@ const AdminApplications = () => {
                         }}
                       >
                         {uploadSignedContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Upload size={14} className="mr-1" />}
-                        Upload Contract
+                        Upload
                       </Button>
                     </div>
                   </CardContent>
@@ -2052,25 +2038,12 @@ const AdminApplications = () => {
                           <XCircle size={14} className="mr-1" /> Reject
                         </Button>
                       </div>
-                      <div className="space-y-2">
-                        <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Rejection reason (optional)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
-                            <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
-                            <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Textarea
-                          placeholder="Additional notes (optional)"
-                          value={rejectionReason}
-                          onChange={(e) => setRejectionReason(e.target.value)}
-                          rows={2}
-                        />
-                      </div>
+                      <Textarea
+                        placeholder="Rejection reason / notes (optional)"
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        rows={2}
+                      />
                     </CardContent>
                   </Card>
                 )}
@@ -2080,9 +2053,6 @@ const AdminApplications = () => {
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-3">
                       <h4 className="font-semibold text-foreground">Disburse Loan</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Approved for K{Number(selectedApp.loan_amount).toLocaleString()}. Ready for disbursement.
-                      </p>
                       <Button onClick={() => setIsDisburseOpen(true)} className="w-full">
                         <DollarSign size={16} className="mr-1" /> Disburse Now
                       </Button>
@@ -2103,113 +2073,11 @@ const AdminApplications = () => {
                 </div>
               </TabsContent>
 
-              <TabsContent value="notes" className="mt-4 space-y-4">
-                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Loan Notes</h4>
-                <p className="text-sm text-muted-foreground">Internal notes are staff-only; borrower-visible notes can be seen by the borrower.</p>
-                <div className="space-y-4">
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1 space-y-2">
-                      <Label>New note</Label>
-                      <Textarea
-                        placeholder="Add a note..."
-                        value={noteText}
-                        onChange={(e) => setNoteText(e.target.value)}
-                        rows={2}
-                        className="resize-none"
-                      />
-                    </div>
-                    <Select value={noteType} onValueChange={(v: "internal" | "borrower_visible") => setNoteType(v)}>
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="internal">Internal</SelectItem>
-                        <SelectItem value="borrower_visible">Borrower visible</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (!noteText.trim() || !selectedApp) return;
-                        addNoteMutation.mutate({ loanId: selectedApp.id, note: noteText.trim(), type: noteType });
-                      }}
-                      disabled={!noteText.trim() || addNoteMutation.isPending}
-                    >
-                      {addNoteMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} className="mr-1" />}
-                      Add
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {loanNotes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No notes yet.</p>
-                    ) : (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {loanNotes.map((n: { id: string; note: string; type: string; created_at: string; user_id: string }) => (
-                          <Card key={n.id} className="bg-secondary/30 border-border/50 p-3">
-                            <div className="flex justify-between items-start gap-2">
-                              <p className="text-sm text-foreground whitespace-pre-wrap">{n.note}</p>
-                              <Badge variant={n.type === "borrower_visible" ? "default" : "secondary"} className="shrink-0 text-xs">
-                                {n.type === "borrower_visible" ? "Borrower visible" : "Internal"}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {format(new Date(n.created_at), "PPp")}
-                              {staffList?.find((s: any) => s.user_id === n.user_id)?.profile?.full_name && (
-                                <> · {staffList?.find((s: any) => s.user_id === n.user_id)?.profile?.full_name}</>
-                              )}
-                            </p>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <TabsContent value="documents" className="space-y-4 mt-4">
+                <ApplicationDocumentsTab selectedApp={selectedApp} />
               </TabsContent>
 
-              <TabsContent value="history" className="mt-4 space-y-4">
-                <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Workflow Audit Log</h4>
 
-                  {workflowHistory && workflowHistory.length > 0 ? (
-                    <div className="relative space-y-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                      {workflowHistory.map((item: any) => (
-                        <div key={item.id} className="relative flex items-start gap-4 pl-10">
-                          <div className="absolute left-0 flex items-center justify-center w-10 h-10 rounded-full bg-secondary border border-border shadow-sm">
-                            <Activity size={16} className="text-primary" />
-                          </div>
-                          <Card className="flex-1 bg-secondary/30 border-border/50">
-                            <CardContent className="p-4">
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-semibold">
-                                    {item.from_stage?.name || 'Start'} → {item.to_stage?.name}
-                                  </span>
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {format(new Date(item.created_at), 'MMM dd, yyyy HH:mm')}
-                                  </span>
-                                </div>
-                                <Badge variant="outline" className="text-[10px]">
-                                  {item.performed_by_profile?.full_name || 'System'}
-                                </Badge>
-                              </div>
-                              {item.notes && (
-                                <p className="text-xs text-muted-foreground italic bg-background/50 p-2 rounded border border-border/30">
-                                  "{item.notes}"
-                                </p>
-                              )}
-                            </CardContent>
-                          </Card>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                      <Activity size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-                      <p className="text-muted-foreground">No history available for this application.</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
             </Tabs>
           )}
 
