@@ -866,68 +866,19 @@ const AdminApplications = () => {
 
   const handleApprove = async () => {
     if (!selectedApp) return;
-
-    // Final approval requires both document and finance verification; use transition_loan_status RPC
-    const docVerified = !!selectedApp.document_verified_at;
-    const financeVerified = !!selectedApp.finance_verified_at;
-    if (!docVerified || !financeVerified) {
-      toast({
-        title: "Verifications required",
-        description: "Both document verification and finance approval must be completed before final approval.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check minimum credit score requirement from loan product
-    const product = loanProducts?.find(p => p.id === selectedApp.loan_product_id);
-    const minCreditScore = (product as any)?.min_credit_score || 0;
-
-    if (minCreditScore > 0) {
-      const { data: riskAssessment } = await supabase
-        .from('risk_assessments')
-        .select('credit_score')
-        .eq('loan_application_id', selectedApp.id)
-        .maybeSingle();
-
-      if (!riskAssessment) {
-        toast({
-          title: "Risk Assessment Required",
-          description: `This product requires a credit score of at least ${minCreditScore}. Please complete the risk assessment first.`,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if ((riskAssessment.credit_score || 0) < minCreditScore) {
-        toast({
-          title: "Credit Score Below Minimum",
-          description: `Borrower's credit score (${riskAssessment.credit_score}) is below the required ${minCreditScore} for this product.`,
-          variant: "destructive"
-        });
-        return;
-      }
-    }
-
     setIsProcessing(true);
-    await transitionMutation.mutateAsync({ id: selectedApp.id, action: 'approve' });
+    // V1.0.1: Simple direct approval - skip verification gates
+    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'approved' });
     setIsProcessing(false);
   };
 
   const handleReject = async () => {
-    if (!selectedApp || !rejectionCategory) {
-      toast({ title: "Please select a rejection reason", variant: "destructive" });
-      return;
-    }
+    if (!selectedApp) return;
+    const reason = rejectionCategory 
+      ? (rejectionReason ? `${rejectionCategory}: ${rejectionReason}` : rejectionCategory)
+      : rejectionReason || "Rejected";
     setIsProcessing(true);
-    const fullReason = rejectionReason 
-      ? `${rejectionCategory}: ${rejectionReason}`
-      : rejectionCategory;
-    await transitionMutation.mutateAsync({
-      id: selectedApp.id,
-      action: "reject",
-      reason: fullReason,
-    });
+    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'rejected', reason });
     setIsProcessing(false);
     setRejectionCategory("");
     setRejectionReason("");
@@ -947,18 +898,14 @@ const AdminApplications = () => {
 
   const handleDisburse = () => {
     if (!selectedApp) return;
-    const borrowerSigned = selectedApp.borrower_signed || !!selectedApp.signed_contract_url;
-    if (!borrowerSigned || !selectedApp.admin_signed) {
-      toast({ title: "Contract required", description: "Contract must be signed by both parties before disbursement.", variant: "destructive" });
-      return;
-    }
+    // V1.0.1: No dual-signature gate — just validate disbursement form
     if (!disbursement.source_account_id) {
-      toast({ title: "Please select a funding account", description: "Disbursement requires a source account with sufficient balance.", variant: "destructive" });
+      toast({ title: "Please select a funding account", variant: "destructive" });
       return;
     }
     const sourceAccount = fundingAccounts.find((a) => a.id === disbursement.source_account_id);
     if (sourceAccount && selectedApp && sourceAccount.balance < (selectedApp.loan_amount ?? 0)) {
-      toast({ title: "Insufficient funds", description: "Insufficient funds in selected account. Please top up and try again.", variant: "destructive" });
+      toast({ title: "Insufficient funds", variant: "destructive" });
       return;
     }
     if (!disbursement.transaction_reference) {
@@ -1870,16 +1817,12 @@ const AdminApplications = () => {
 
           {selectedApp && (
             <Tabs defaultValue="details" className="w-full">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
-                <TabsTrigger value="risk">Risk Review</TabsTrigger>
                 <TabsTrigger value="actions">Actions</TabsTrigger>
                 <TabsTrigger value="notes" className="flex items-center gap-2">
                   <MessageCircle size={14} /> Notes
-                </TabsTrigger>
-                <TabsTrigger value="history" className="flex items-center gap-2">
-                  <Activity size={14} /> History
                 </TabsTrigger>
               </TabsList>
 
@@ -2033,224 +1976,22 @@ const AdminApplications = () => {
               </TabsContent>
 
               <TabsContent value="actions" className="space-y-6 mt-4">
-                {/* Approval stage and verifiers */}
-                {(selectedApp.approval_stage || selectedApp.document_verified_by || selectedApp.finance_verified_by) && (
-                  <Card className="bg-secondary/30 border-border/50">
-                    <CardContent className="p-4 space-y-2">
-                      <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Approval Stage</h4>
-                      <p className="text-sm font-medium">{selectedApp.approval_stage || '—'}</p>
-                      {selectedApp.document_verified_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Documents verified by {staffList?.find((s: any) => s.user_id === selectedApp.document_verified_by)?.profile?.full_name || 'Staff'} on {format(new Date(selectedApp.document_verified_at), 'PPp')}
-                        </p>
-                      )}
-                      {selectedApp.finance_verified_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Finance approved by {staffList?.find((s: any) => s.user_id === selectedApp.finance_verified_by)?.profile?.full_name || 'Staff'} on {format(new Date(selectedApp.finance_verified_at), 'PPp')}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Contract Management (same flow as Loan Details – same message on Overview and Actions) */}
-                {(selectedApp.status === 'under_review' || selectedApp.status === 'approved' || (selectedApp.status === 'disbursed' && !isFullySigned)) && (
-                  <Card className="bg-secondary/30 border-border/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <FileText size={18} />
-                        Contract Management
-                      </CardTitle>
-                      <CardDescription>Download, share or update loan contract</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Signing status (same message as Loan Details Overview and Actions) */}
-                      <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Signing status</p>
-                        <div className="flex flex-wrap gap-3 text-sm">
-                          <span className={isBorrowerSigned ? "text-success font-medium" : "text-muted-foreground"}>
-                            {isBorrowerSigned ? (
-                              <><CheckCircle size={14} className="inline mr-1" /> Borrower signed</>
-                            ) : (
-                              <><Clock size={14} className="inline mr-1" /> Borrower not signed yet</>
-                            )}
-                          </span>
-                          <span className={selectedApp.admin_signed ? "text-success font-medium" : "text-muted-foreground"}>
-                            {selectedApp.admin_signed ? (
-                              <><CheckCircle size={14} className="inline mr-1" /> Admin signed</>
-                            ) : (
-                              <><Clock size={14} className="inline mr-1" /> Admin not signed yet</>
-                            )}
-                          </span>
-                        </div>
-                        {!isFullySigned && (
-                          <p className="text-xs text-warning">
-                            {contractMessageNotSigned}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            if (!selectedApp) return;
-                            await uploadContractAndSaveUrl(selectedApp as any);
-                            await generateLoanContract({
-                              id: selectedApp.id,
-                              full_name: selectedApp.full_name,
-                              email: selectedApp.email,
-                              phone: selectedApp.phone,
-                              nrc_number: selectedApp.nrc_number,
-                              address: selectedApp.address,
-                              city: selectedApp.city,
-                              date_of_birth: selectedApp.date_of_birth,
-                              employer_name: selectedApp.employer_name,
-                              job_title: selectedApp.job_title,
-                              monthly_income: Number(selectedApp.monthly_income),
-                              loan_amount: Number(selectedApp.loan_amount),
-                              loan_term_months: selectedApp.loan_term_months,
-                              interest_rate: Number(selectedApp.interest_rate),
-                              monthly_payment: Number(selectedApp.monthly_payment),
-                              total_repayment: Number(selectedApp.total_repayment),
-                              loan_purpose: selectedApp.loan_purpose,
-                              created_at: selectedApp.created_at,
-                            });
-                          }}
-                        >
-                          <Printer size={14} className="mr-1" /> Print
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            if (!selectedApp) return;
-                            await uploadContractAndSaveUrl(selectedApp as any);
-                            await downloadLoanContract({
-                              id: selectedApp.id,
-                              full_name: selectedApp.full_name,
-                              email: selectedApp.email,
-                              phone: selectedApp.phone,
-                              nrc_number: selectedApp.nrc_number,
-                              address: selectedApp.address,
-                              city: selectedApp.city,
-                              date_of_birth: selectedApp.date_of_birth,
-                              employer_name: selectedApp.employer_name,
-                              job_title: selectedApp.job_title,
-                              monthly_income: Number(selectedApp.monthly_income),
-                              loan_amount: Number(selectedApp.loan_amount),
-                              loan_term_months: selectedApp.loan_term_months,
-                              interest_rate: Number(selectedApp.interest_rate),
-                              monthly_payment: Number(selectedApp.monthly_payment),
-                              total_repayment: Number(selectedApp.total_repayment),
-                              loan_purpose: selectedApp.loan_purpose,
-                              created_at: selectedApp.created_at,
-                            });
-                          }}
-                        >
-                          <Download size={14} className="mr-1" /> Save PDF
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            if (!selectedApp) return;
-                            await uploadContractAndSaveUrl(selectedApp as any);
-                            await emailContract({
-                              id: selectedApp.id,
-                              full_name: selectedApp.full_name,
-                              email: selectedApp.email,
-                              phone: selectedApp.phone,
-                              nrc_number: selectedApp.nrc_number,
-                              address: selectedApp.address,
-                              city: selectedApp.city,
-                              date_of_birth: selectedApp.date_of_birth,
-                              employer_name: selectedApp.employer_name,
-                              job_title: selectedApp.job_title,
-                              monthly_income: Number(selectedApp.monthly_income),
-                              loan_amount: Number(selectedApp.loan_amount),
-                              loan_term_months: selectedApp.loan_term_months,
-                              interest_rate: Number(selectedApp.interest_rate),
-                              monthly_payment: Number(selectedApp.monthly_payment),
-                              total_repayment: Number(selectedApp.total_repayment),
-                              loan_purpose: selectedApp.loan_purpose,
-                              created_at: selectedApp.created_at,
-                            });
-                          }}
-                        >
-                          <Mail size={14} className="mr-1" /> Email
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            if (!selectedApp) return;
-                            await uploadContractAndSaveUrl(selectedApp as any);
-                            await shareContractViaWhatsApp({
-                              id: selectedApp.id,
-                              full_name: selectedApp.full_name,
-                              email: selectedApp.email,
-                              phone: selectedApp.phone,
-                              nrc_number: selectedApp.nrc_number,
-                              address: selectedApp.address,
-                              city: selectedApp.city,
-                              date_of_birth: selectedApp.date_of_birth,
-                              employer_name: selectedApp.employer_name,
-                              job_title: selectedApp.job_title,
-                              monthly_income: Number(selectedApp.monthly_income),
-                              loan_amount: Number(selectedApp.loan_amount),
-                              loan_term_months: selectedApp.loan_term_months,
-                              interest_rate: Number(selectedApp.interest_rate),
-                              monthly_payment: Number(selectedApp.monthly_payment),
-                              total_repayment: Number(selectedApp.total_repayment),
-                              loan_purpose: selectedApp.loan_purpose,
-                              created_at: selectedApp.created_at,
-                            });
-                          }}
-                        >
-                          <MessageCircle size={14} className="mr-1" /> WhatsApp
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Upload signed contract</Label>
-                        <div className="flex gap-2 items-center flex-wrap">
-                          <Input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            className="max-w-[220px]"
-                            onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!signedContractFile || uploadSignedContractMutation.isPending}
-                            onClick={() => {
-                              if (!selectedApp || !signedContractFile) return;
-                              uploadSignedContractMutation.mutate({ applicationId: selectedApp.id, file: signedContractFile });
-                            }}
-                          >
-                            {uploadSignedContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Upload size={14} className="mr-1" />}
-                            Upload
-                          </Button>
-                        </div>
-                      </div>
-                      {isBorrowerSigned && !selectedApp.admin_signed && (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            if (!selectedApp) return;
-                            adminSignContractMutation.mutate({
-                              applicationId: selectedApp.id,
-                              borrowerSignedAt: selectedApp.borrower_signed_at || selectedApp.signed_contract_uploaded_at,
-                            });
-                          }}
-                          disabled={adminSignContractMutation.isPending}
-                        >
-                          {adminSignContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Shield size={14} className="mr-1" />}
-                          Sign & Verify
-                        </Button>
-                      )}
-                      {selectedApp.signed_contract_url && (
+                {/* V1.0.1: Simple Approve / Reject / Upload Contract / Disburse */}
+                
+                {/* Upload Contract (simple PDF upload) */}
+                <Card className="bg-secondary/30 border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText size={18} /> Contract
+                    </CardTitle>
+                    <CardDescription>Upload the signed contract PDF</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedApp.signed_contract_url ? (
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                          <CheckCircle size={12} className="mr-1" /> Contract uploaded
+                        </Badge>
                         <Button
                           variant="outline"
                           size="sm"
@@ -2258,257 +1999,109 @@ const AdminApplications = () => {
                             const { data } = await supabase.storage
                               .from("loan-documents")
                               .createSignedUrl(selectedApp.signed_contract_url, 3600);
-                            if (data?.signedUrl) {
-                              window.open(data.signedUrl, "_blank");
-                            } else {
-                              toast({ title: "Could not load contract", variant: "destructive" });
-                            }
+                            if (data?.signedUrl) window.open(data.signedUrl, "_blank");
                           }}
                         >
-                          <ExternalLink size={14} className="mr-1" /> View contract
+                          <Eye size={14} className="mr-1" /> View
                         </Button>
-                      )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No contract uploaded yet.</p>
+                    )}
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="max-w-[280px]"
+                        onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
+                      />
+                      <Button
+                        size="sm"
+                        disabled={!signedContractFile || uploadSignedContractMutation.isPending}
+                        onClick={() => {
+                          if (!selectedApp || !signedContractFile) return;
+                          uploadSignedContractMutation.mutate({ applicationId: selectedApp.id, file: signedContractFile });
+                        }}
+                      >
+                        {uploadSignedContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Upload size={14} className="mr-1" />}
+                        Upload Contract
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Approve / Reject */}
+                {(selectedApp.status === 'pending' || selectedApp.status === 'under_review') && (
+                  <Card className="bg-secondary/30 border-border/50">
+                    <CardContent className="p-4 space-y-4">
+                      <h4 className="font-semibold text-foreground">Decision</h4>
+                      <div className="flex gap-3">
+                        <Button
+                          className="flex-1"
+                          onClick={handleApprove}
+                          disabled={isProcessing}
+                        >
+                          {isProcessing ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
+                          Approve
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="flex-1"
+                          onClick={handleReject}
+                          disabled={isProcessing}
+                        >
+                          <XCircle size={14} className="mr-1" /> Reject
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Rejection reason (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
+                            <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
+                            <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Textarea
+                          placeholder="Additional notes (optional)"
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          rows={2}
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Status-based actions */}
+                {/* Disburse */}
+                {selectedApp.status === 'approved' && (
+                  <Card className="bg-secondary/30 border-border/50">
+                    <CardContent className="p-4 space-y-3">
+                      <h4 className="font-semibold text-foreground">Disburse Loan</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Approved for K{Number(selectedApp.loan_amount).toLocaleString()}. Ready for disbursement.
+                      </p>
+                      <Button onClick={() => setIsDisburseOpen(true)} className="w-full">
+                        <DollarSign size={16} className="mr-1" /> Disburse Now
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Delete */}
                 <div className="pt-4 border-t border-border">
-                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Application Context</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Pending: only Move to under review + Reject (no direct Approve) */}
-                    {selectedApp.status === 'pending' && can('loans', 'approve') && (
-                      <Card className="bg-secondary/30 border-border/50">
-                        <CardContent className="p-4 space-y-4">
-                          <h4 className="font-semibold text-foreground">Review Application</h4>
-                          <p className="text-sm text-muted-foreground">Move to under review for document and finance verification, or reject.</p>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              className="flex-1"
-                              onClick={() => updateStatusMutation.mutate({ id: selectedApp.id, status: 'under_review' })}
-                              disabled={isProcessing}
-                            >
-                              Move to Under Review
-                            </Button>
-                            <div className="space-y-2 flex-1">
-                              <Label className="text-xs">Reject</Label>
-                              <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Reason" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
-                                  <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
-                                  <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
-                                  <SelectItem value="Other">Other</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="w-full"
-                                onClick={handleReject}
-                                disabled={isProcessing || !rejectionCategory}
-                              >
-                                <XCircle size={16} className="mr-1" />
-                                Reject
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Under review: Verify documents, Approve finance, then Approve (when both verified) */}
-                    {selectedApp.status === 'under_review' && (
-                      <Card className="bg-secondary/30 border-border/50">
-                        <CardContent className="p-4 space-y-4">
-                          <h4 className="font-semibold text-foreground">Under Review Actions</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Document verification and finance approval are required before final approval.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {!selectedApp.document_verified_at && can('loans', 'verify_documents') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => transitionMutation.mutate({ id: selectedApp.id, action: 'verify_documents' })}
-                                disabled={transitionMutation.isPending}
-                              >
-                                {transitionMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <FileText size={14} className="mr-1" />}
-                                Verify Documents
-                              </Button>
-                            )}
-                            {selectedApp.document_verified_at && !selectedApp.finance_verified_at && can('loans', 'finance_approve') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => transitionMutation.mutate({ id: selectedApp.id, action: 'finance_approve' })}
-                                disabled={transitionMutation.isPending}
-                              >
-                                {transitionMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <ShieldCheck size={14} className="mr-1" />}
-                                Approve Finance
-                              </Button>
-                            )}
-                            {selectedApp.document_verified_at && selectedApp.finance_verified_at && can('loans', 'approve') && (
-                              <Button
-                                size="sm"
-                                onClick={handleApprove}
-                                disabled={isProcessing}
-                              >
-                                {isProcessing ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
-                                Final Approve
-                              </Button>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateStatusMutation.mutate({ id: selectedApp.id, status: 'crb_failed' })}
-                              disabled={isProcessing}
-                            >
-                              Move to CRB Failed
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateStatusMutation.mutate({ id: selectedApp.id, status: 'pmic_pending' })}
-                              disabled={isProcessing}
-                            >
-                              Move to PMIC Pending
-                            </Button>
-                          </div>
-                          <div className="space-y-2 pt-2 border-t border-border">
-                            <Label>Reject</Label>
-                            <Select value={rejectionCategory} onValueChange={setRejectionCategory}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select rejection reason" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Insufficient Income">Insufficient Income</SelectItem>
-                                <SelectItem value="Poor Credit History">Poor Credit History</SelectItem>
-                                <SelectItem value="Incomplete Documentation">Incomplete Documentation</SelectItem>
-                                <SelectItem value="Failed CRB Check">Failed CRB Check</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Textarea
-                              placeholder="Additional details (optional)"
-                              value={rejectionReason}
-                              onChange={(e) => setRejectionReason(e.target.value)}
-                              rows={2}
-                            />
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={handleReject}
-                              disabled={isProcessing || !rejectionCategory}
-                            >
-                              <XCircle size={16} className="mr-1" />
-                              Reject
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Approved but contract not signed: show message, no Disburse (same message as Contract Management) */}
-                    {selectedApp.status === 'approved' && can('disbursement', 'disburse') && !isFullySigned && (
-                      <Card className="bg-warning/10 border-warning/30">
-                        <CardContent className="p-4 space-y-2">
-                          <h4 className="font-semibold text-foreground">{isDisbursed ? "Missing Contract Signatures" : "Contract required"}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {contractMessageNotSigned}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedApp.status === 'approved' && can('disbursement', 'disburse') && isFullySigned && (
-                      <Card className="bg-secondary/30 border-border/50">
-                        <CardContent className="p-4 space-y-4">
-                          <h4 className="font-semibold text-foreground">Disburse Loan</h4>
-                          <p className="text-sm text-muted-foreground">
-                            This loan is approved and the contract is signed. Ready for disbursement.
-                          </p>
-                          <Button onClick={() => setIsDisburseOpen(true)} className="w-full">
-                            <DollarSign size={16} className="mr-1" />
-                            Disburse Now
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Quick Print/Actions */}
-                    <Card className="bg-secondary/30 border-border/50">
-                      <CardContent className="p-4 space-y-4">
-                        <h4 className="font-semibold text-foreground">Communication</h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button variant="outline" size="sm" onClick={() => window.print()}>
-                            <Printer size={14} className="mr-1" /> Print
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Mail size={14} className="mr-1" /> Email
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/5"
+                    onClick={() => setIsDeleteOpen(true)}
+                  >
+                    <Trash2 size={16} className="mr-1" /> Delete Application
+                  </Button>
                 </div>
-
-                {/* Assignment action */}
-                {can('loans', 'assign') && (
-                  <div className="pt-6 border-t border-border">
-                    <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wider">Assignment</h4>
-                    <Card className="bg-secondary/30 border-border/50">
-                      <CardContent className="p-4 space-y-4">
-                        <div className="space-y-2">
-                          <Label>Select Staff Member</Label>
-                          <Select value={assigneeId} onValueChange={setAssigneeId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Unassigned" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="unassigned">Unassigned</SelectItem>
-                              {staffList?.map((staff: any) => (
-                                <SelectItem key={staff.user_id} value={staff.user_id}>
-                                  {staff.profile?.full_name || staff.profile?.email} ({staff.role.replace('_', ' ')})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => assignMutation.mutate({
-                            id: selectedApp.id,
-                            staffId: assigneeId === "unassigned" ? "" : assigneeId
-                          })}
-                          disabled={assignMutation.isPending}
-                        >
-                          {assignMutation.isPending && <Loader2 className="animate-spin mr-2" size={14} />}
-                          Update Assignment
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {/* Delete action */}
-                {can('loans', 'delete') && (
-                  <div className="pt-6 border-t border-border">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:bg-destructive/5"
-                      onClick={() => setIsDeleteOpen(true)}
-                    >
-                      <Trash2 size={16} className="mr-1" />
-                      Delete Application
-                    </Button>
-                  </div>
-                )}
               </TabsContent>
 
               <TabsContent value="notes" className="mt-4 space-y-4">

@@ -1000,7 +1000,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-9 w-full">
+            <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
@@ -1010,23 +1010,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <TabsTrigger value="documents" className="text-xs">
                 <FolderCheck size={14} className="mr-1 hidden sm:inline" /> Documents
               </TabsTrigger>
-              <TabsTrigger value="approval" className="text-xs">
-                <Shield size={14} className="mr-1 hidden sm:inline" /> Approval
+              <TabsTrigger value="contract" className="text-xs">
+                <FileText size={14} className="mr-1 hidden sm:inline" /> Contract
               </TabsTrigger>
-              <TabsTrigger value="guarantors" className="text-xs">
-                <Shield size={14} className="mr-1 hidden sm:inline" /> Guarantors
-              </TabsTrigger>
-              <TabsTrigger value="writeoff" className="text-xs">
-                <XCircleIcon size={14} className="mr-1 hidden sm:inline" /> Write-Off
-              </TabsTrigger>
-              <TabsTrigger value="borrower" className="text-xs">
-                <User size={14} className="mr-1 hidden sm:inline" /> Borrower
-              </TabsTrigger>
-              <TabsTrigger value="actions" className="text-xs">
-                <Settings size={14} className="mr-1 hidden sm:inline" /> Actions
-              </TabsTrigger>
-              <TabsTrigger value="history" className="text-xs">
-                <History size={14} className="mr-1 hidden sm:inline" /> History
+              <TabsTrigger value="notes" className="text-xs">
+                <MessageSquare size={14} className="mr-1 hidden sm:inline" /> Notes
               </TabsTrigger>
             </TabsList>
 
@@ -1609,122 +1597,96 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 <DocumentVerificationTab loanId={loan.id} borrowerId={loan.user_id} />
               </TabsContent>
 
-              {/* Approval & Notes Tab */}
-              <TabsContent value="approval" className="m-0">
+              {/* V1.0.1: Simple Contract Tab */}
+              <TabsContent value="contract" className="m-0 space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText size={16} /> Contract
+                    </CardTitle>
+                    <CardDescription>Upload or view the signed contract PDF</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {loan.signed_contract_url ? (
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                          <CheckCircle size={12} className="mr-1" /> Contract uploaded
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from('loan-documents')
+                              .createSignedUrl(loan.signed_contract_url!, 3600);
+                            if (data?.signedUrl) setSignaturePreviewUrl(data.signedUrl);
+                            else toast.error('Could not load contract');
+                          }}
+                        >
+                          <Download size={14} className="mr-1" /> View
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No contract uploaded yet.</p>
+                    )}
+
+                    {/* Upload */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Upload Signed Contract</Label>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="max-w-[280px]"
+                          onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
+                        />
+                        {signedContractFile && (
+                          <Button
+                            size="sm"
+                            onClick={() => uploadSignedContractMutation.mutate(signedContractFile)}
+                            disabled={uploadSignedContractMutation.isPending}
+                          >
+                            {uploadSignedContractMutation.isPending ? (
+                              <Loader2 size={14} className="animate-spin mr-1" />
+                            ) : (
+                              <Upload size={14} className="mr-1" />
+                            )}
+                            Upload
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Admin Notes */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Admin Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Textarea
+                      value={adminNotes}
+                      onChange={(e) => setAdminNotes(e.target.value)}
+                      placeholder="Add notes about this loan..."
+                      rows={4}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => saveNotesMutation.mutate()}
+                      disabled={saveNotesMutation.isPending}
+                    >
+                      {saveNotesMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                      Save Notes
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Notes Tab (Approval Workflow Notes) */}
+              <TabsContent value="notes" className="m-0">
                 <ApprovalWorkflowTab loan={loan} />
-              </TabsContent>
-
-              {/* Guarantors Tab */}
-              <TabsContent value="guarantors" className="m-0">
-                <GuarantorTab loanId={loan.id} />
-              </TabsContent>
-
-              {/* Write-Off Tab */}
-              <TabsContent value="writeoff" className="m-0">
-                <WriteOffTab
-                  loan={loan}
-                  totalPaid={totalPaid}
-                  totalPending={loan.total_repayment - totalPaid}
-                />
-              </TabsContent>
-
-              {/* Borrower Tab */}
-              <TabsContent value="borrower" className="m-0 space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <User size={16} /> Personal Information
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex items-center gap-3">
-                        <User size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Full Name</p>
-                          <p className="font-medium">{loan.full_name}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Mail size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Email</p>
-                          <p className="font-medium">{loan.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Phone size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Phone</p>
-                          <p className="font-medium">{loan.phone}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <FileText size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">NRC Number</p>
-                          <p className="font-medium">{loan.nrc_number}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <MapPin size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Address</p>
-                          <p className="font-medium">{loan.address || "N/A"}, {loan.city || ""}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Briefcase size={16} /> Employment Information
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex items-center gap-3">
-                        <Briefcase size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Employment Type</p>
-                          <p className="font-medium capitalize">{loan.employment_type?.replace("_", " ")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <DollarSign size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Monthly Income</p>
-                          <p className="font-medium">K{Number(loan.monthly_income || 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      {loan.employer_name && (
-                        <div className="flex items-center gap-3">
-                          <Briefcase size={16} className="text-muted-foreground" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Employer</p>
-                            <p className="font-medium">{loan.employer_name}</p>
-                          </div>
-                        </div>
-                      )}
-                      {loan.job_title && (
-                        <div className="flex items-center gap-3">
-                          <FileText size={16} className="text-muted-foreground" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Job Title</p>
-                            <p className="font-medium">{loan.job_title}</p>
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <FileText size={16} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Loan Purpose</p>
-                          <p className="font-medium capitalize">{loan.loan_purpose?.replace("_", " ")}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
               </TabsContent>
 
               {/* Actions Tab – same sections for all loans; only "Move to" options change by stage */}
