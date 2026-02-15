@@ -259,8 +259,10 @@ const AdminRepayments = () => {
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
       queryClient.invalidateQueries({ queryKey: ["admin-payment-claims"] });
-      queryClient.invalidateQueries({ queryKey: ["active-accounts"] }); // Refresh account balances
-      queryClient.invalidateQueries({ queryKey: ["accounts"] }); // Refresh all accounts
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
 
       setSelectedClaimId(null);
 
@@ -268,6 +270,28 @@ const AdminRepayments = () => {
         toast.success("Full payment recorded and deposited to account");
       } else {
         toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded and deposited`);
+      }
+
+      // Gap 4 fix: Auto-complete loan if all repayments are now paid
+      if (isFullPayment && repayment) {
+        try {
+          const { data: allReps } = await supabase
+            .from("loan_repayments")
+            .select("id, status")
+            .eq("loan_id", repayment.loan_id);
+
+          const allPaid = allReps?.every(r => r.id === repayment.id ? true : r.status === "paid");
+          if (allPaid && allReps && allReps.length > 0) {
+            await supabase
+              .from("loan_applications")
+              .update({ status: "completed" })
+              .eq("id", repayment.loan_id);
+            toast.success("🎉 All repayments complete — loan marked as completed!");
+            queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+          }
+        } catch (err) {
+          console.error("Auto-complete check failed:", err);
+        }
       }
 
       // Send SMS confirmation

@@ -109,7 +109,7 @@ const AdminDisbursements = () => {
       const { data, error } = await supabase
         .from("loan_applications")
         .select("id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url, status")
-        .in("status", ["approved", "awaiting_disbursement"])
+        .in("status", ["approved", "awaiting_disbursement", "contract_signing"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -146,16 +146,10 @@ const AdminDisbursements = () => {
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
 
-      // Check if contract is signed by both parties
-      const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
-      const isAdminSigned = loan.admin_signed;
-      
-      if (!isBorrowerSigned) {
-        throw new Error("Cannot disburse: The borrower has not signed the contract yet. Please have the borrower sign the contract first.");
-      }
-      
-      if (!isAdminSigned) {
-        throw new Error("Cannot disburse: Admin has not verified and counter-signed the contract. Please go to the loan details and click 'Sign & Verify' first.");
+      // V1.0.1: Simplified flow - contract check only requires uploaded PDF or approval signatures
+      const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
+      if (!hasContract) {
+        throw new Error("Cannot disburse: Please upload a signed contract or approve the loan first from the Applications page.");
       }
 
       if (!formData.source_account_id) {
@@ -377,27 +371,23 @@ const AdminDisbursements = () => {
                         <SelectItem value="none" disabled>No approved loans available</SelectItem>
                       ) : (
                         approvedLoans?.map((loan) => {
-                          const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
-                          const isAdminSigned = loan.admin_signed;
-                          const isReady = isBorrowerSigned && isAdminSigned;
+                          const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
                           const isAwaitingDisbursement = loan.status === "awaiting_disbursement";
                           
                           return (
                             <SelectItem key={loan.id} value={loan.id}>
                               <div className="flex items-center gap-2">
-                                {isAwaitingDisbursement ? (
-                                  <CheckCircle size={14} className="text-success" />
-                                ) : isReady ? (
+                                {isAwaitingDisbursement || hasContract ? (
                                   <CheckCircle size={14} className="text-success" />
                                 ) : (
                                   <Clock size={14} className="text-warning" />
                                 )}
                                 <span>{loan.full_name} - K{Number(loan.loan_amount).toLocaleString()}</span>
-                                {isAwaitingDisbursement && (
+                                {(isAwaitingDisbursement || hasContract) && (
                                   <span className="text-xs text-success">(Ready)</span>
                                 )}
-                                {!isReady && !isAwaitingDisbursement && (
-                                  <span className="text-xs text-warning">(Contract pending)</span>
+                                {!hasContract && !isAwaitingDisbursement && (
+                                  <span className="text-xs text-warning">(No contract)</span>
                                 )}
                               </div>
                             </SelectItem>
@@ -411,36 +401,17 @@ const AdminDisbursements = () => {
                   {selectedLoan && (() => {
                     const loan = approvedLoans?.find(l => l.id === selectedLoan);
                     if (!loan) return null;
-                    const isBorrowerSigned = loan.borrower_signed || !!loan.signed_contract_url;
-                    const isAdminSigned = loan.admin_signed;
+                    const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
                     
-                    if (!isBorrowerSigned) {
-                      return (
-                        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                          <div className="flex items-start gap-2">
-                            <XCircle size={16} className="text-destructive mt-0.5" />
-                            <div>
-                              <p className="text-sm font-medium text-destructive">Contract Not Signed</p>
-                              <p className="text-xs text-muted-foreground">
-                                The borrower must sign the contract before disbursement can proceed. 
-                                Send them the contract to sign from the Loan Details page.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-                    
-                    if (!isAdminSigned) {
+                    if (!hasContract) {
                       return (
                         <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
                           <div className="flex items-start gap-2">
                             <Clock size={16} className="text-warning mt-0.5" />
                             <div>
-                              <p className="text-sm font-medium text-warning">Admin Verification Required</p>
+                              <p className="text-sm font-medium text-warning">No Contract Found</p>
                               <p className="text-xs text-muted-foreground">
-                                Borrower has signed. Go to Loan Details → Overview and click "Sign & Verify" 
-                                to counter-sign the contract before disbursement.
+                                Please upload a signed contract or approve the loan from the Applications page first.
                               </p>
                             </div>
                           </div>
@@ -452,7 +423,7 @@ const AdminDisbursements = () => {
                       <div className="p-3 rounded-lg bg-success/10 border border-success/20">
                         <div className="flex items-center gap-2">
                           <CheckCircle size={16} className="text-success" />
-                          <p className="text-sm font-medium text-success">Contract signed by both parties - Ready for disbursement</p>
+                          <p className="text-sm font-medium text-success">Ready for disbursement</p>
                         </div>
                       </div>
                     );
