@@ -417,6 +417,16 @@ const AdminApplications = () => {
       if (status === "under_review") {
         updateData.approval_stage = "under_review";
       }
+      // V1.0.1: Auto-set both signatures on approval (simplified flow)
+      if (status === "approved") {
+        updateData.approved_by = user?.id;
+        updateData.approved_at = new Date().toISOString();
+        updateData.admin_signed = true;
+        updateData.admin_signed_at = new Date().toISOString();
+        updateData.admin_signed_by = user?.id;
+        updateData.borrower_signed = true;
+        updateData.borrower_signed_at = new Date().toISOString();
+      }
       if (reason) {
         updateData.rejection_reason = reason;
       }
@@ -492,9 +502,11 @@ const AdminApplications = () => {
       if (sourceAccount.balance < (selectedApp?.loan_amount ?? 0)) {
         throw new Error("Insufficient funds in selected account. Please top up and try again.");
       }
+      const disbursementAmount = selectedApp.loan_amount;
+
       const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
-        amount: selectedApp.loan_amount,
+        amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
         account_number: data.account_number || null,
         mobile_money_number: data.mobile_money_number || null,
@@ -505,6 +517,26 @@ const AdminApplications = () => {
       });
 
       if (disbError) throw disbError;
+
+      // Gap 5 fix: Deduct from source account balance
+      const newBalance = sourceAccount.balance - disbursementAmount;
+      const { error: accountError } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance })
+        .eq("id", data.source_account_id);
+      if (accountError) throw accountError;
+
+      // Record account transaction
+      await supabase.from("account_transactions").insert({
+        account_id: data.source_account_id,
+        transaction_type: "disbursement",
+        amount: disbursementAmount,
+        balance_before: sourceAccount.balance,
+        balance_after: newBalance,
+        reference_type: "loan_application",
+        reference_id: selectedApp.id,
+        notes: `Loan disbursement to ${selectedApp.full_name}`,
+      });
 
       // Update loan status to disbursed and set disbursed_by
       const { error: loanError } = await supabase
@@ -2077,6 +2109,70 @@ const AdminApplications = () => {
                 <ApplicationDocumentsTab selectedApp={selectedApp} />
               </TabsContent>
 
+              <TabsContent value="notes" className="space-y-4 mt-4">
+                <div className="space-y-4">
+                  {/* Add Note */}
+                  <div className="space-y-2">
+                    <Label>Add Note</Label>
+                    <Textarea
+                      placeholder="Add a note about this application..."
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex items-center gap-3">
+                      <Select value={noteType} onValueChange={(v: any) => setNoteType(v)}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="internal">Internal Note</SelectItem>
+                          <SelectItem value="borrower_visible">Visible to Borrower</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        disabled={!noteText.trim() || addNoteMutation.isPending}
+                        onClick={() => {
+                          if (selectedApp && noteText.trim()) {
+                            addNoteMutation.mutate({
+                              loanId: selectedApp.id,
+                              note: noteText.trim(),
+                              type: noteType,
+                            });
+                          }
+                        }}
+                      >
+                        {addNoteMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
+                        Add Note
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Notes List */}
+                  <div className="space-y-3">
+                    {loanNotes && loanNotes.length > 0 ? (
+                      loanNotes.map((note: any) => (
+                        <Card key={note.id} className="bg-secondary/30 border-border/50">
+                          <CardContent className="p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{note.note}</p>
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {note.note_type === "visible_to_borrower" ? "Borrower" : "Internal"}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {note.created_at ? format(new Date(note.created_at), "MMM dd, yyyy HH:mm") : ""}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">No notes yet</p>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
 
             </Tabs>
           )}
