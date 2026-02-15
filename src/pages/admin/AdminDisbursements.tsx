@@ -57,6 +57,7 @@ interface Disbursement {
   transaction_reference: string | null;
   disbursed_at: string | null;
   created_at: string;
+  source_account_id: string | null;
   loan_applications?: {
     full_name: string;
     email: string;
@@ -221,10 +222,33 @@ const AdminDisbursements = () => {
 
       if (error) throw error;
 
-      // Update loan status and auto-generate repayment schedule if disbursed
+      // Update loan status, deduct account balance, and auto-generate repayment schedule
       if (status === "completed") {
         const disbursement = disbursements?.find((d) => d.id === id);
         if (disbursement) {
+          // Deduct from source account and record transaction
+          if (disbursement.source_account_id) {
+            const sourceAccount = accounts.find(a => a.id === disbursement.source_account_id);
+            if (sourceAccount) {
+              const newBalance = sourceAccount.balance - disbursement.amount;
+              await supabase
+                .from("accounts")
+                .update({ balance: newBalance })
+                .eq("id", disbursement.source_account_id);
+
+              await supabase.from("account_transactions").insert({
+                account_id: disbursement.source_account_id,
+                transaction_type: "disbursement",
+                amount: disbursement.amount,
+                balance_before: sourceAccount.balance,
+                balance_after: newBalance,
+                reference_type: "loan_application",
+                reference_id: disbursement.loan_id,
+                notes: `Loan disbursement - ${disbursement.loan_applications?.full_name || disbursement.loan_id}`,
+              });
+            }
+          }
+
           await supabase
             .from("loan_applications")
             .update({ status: "disbursed" })
