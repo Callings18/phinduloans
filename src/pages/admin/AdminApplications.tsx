@@ -188,7 +188,7 @@ const AdminApplications = () => {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { can } = usePermissions();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -894,6 +894,39 @@ const AdminApplications = () => {
       transaction_reference: "",
       source_account_id: "",
     });
+  };
+
+  const handleRecommend = async () => {
+    if (!selectedApp) return;
+    setIsProcessing(true);
+    try {
+      const { error } = await supabase
+        .from('loan_applications')
+        .update({
+          status: 'under_review' as any,
+          approval_stage: 'recommended',
+          recommended_by: user?.id,
+          recommended_at: new Date().toISOString(),
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', selectedApp.id);
+      if (error) throw error;
+      await logAudit({
+        action: "RECOMMEND",
+        entity_type: "loan_application",
+        entity_id: selectedApp.id,
+        module: "loans",
+        new_values: { status: 'under_review', approval_stage: 'recommended' },
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
+      toast({ title: "Application recommended for approval", description: "An admin can now review and approve this loan." });
+      // Update local state
+      setSelectedApp({ ...selectedApp, status: 'under_review', approval_stage: 'recommended', recommended_by: user?.id });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+    setIsProcessing(false);
   };
 
   const handleApprove = async () => {
@@ -2047,20 +2080,46 @@ const AdminApplications = () => {
                   </CardContent>
                 </Card>
 
-                {/* Approve / Reject */}
+                {/* Recommend / Approve / Reject */}
                 {(selectedApp.status === 'pending' || selectedApp.status === 'under_review') && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-4">
                       <h4 className="font-semibold text-foreground">Decision</h4>
+
+                      {/* Show who recommended */}
+                      {selectedApp.approval_stage === 'recommended' && selectedApp.recommended_by && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/10 rounded-lg px-3 py-2">
+                          <UserCheck size={14} className="text-primary" />
+                          <span>Recommended for approval by staff</span>
+                          {selectedApp.recommended_at && (
+                            <span className="ml-auto text-xs">{format(new Date(selectedApp.recommended_at), "dd MMM yyyy HH:mm")}</span>
+                          )}
+                        </div>
+                      )}
+
                       <div className="flex gap-3">
-                        <Button
-                          className="flex-1"
-                          onClick={handleApprove}
-                          disabled={isProcessing}
-                        >
-                          {isProcessing ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
-                          Approve
-                        </Button>
+                        {/* Loan officers see "Recommend" on pending apps; Admins see "Approve" */}
+                        {!isAdmin && selectedApp.status === 'pending' && (
+                          <Button
+                            className="flex-1"
+                            variant="outline"
+                            onClick={handleRecommend}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? <Loader2 className="animate-spin mr-1" size={14} /> : <UserCheck size={14} className="mr-1" />}
+                            Recommend for Approval
+                          </Button>
+                        )}
+                        {isAdmin && (
+                          <Button
+                            className="flex-1"
+                            onClick={handleApprove}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
+                            Approve
+                          </Button>
+                        )}
                         <Button
                           variant="destructive"
                           className="flex-1"
