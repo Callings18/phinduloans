@@ -136,13 +136,18 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
   const productDocuments = useMemo(() => {
     const raw = loanProduct?.required_documents as { doc_type?: string; document_type?: string; doc_label?: string; document_name?: string; is_mandatory: boolean; category?: string; display_order?: number }[] | null;
     if (!raw || raw.length === 0) return [];
-    return raw.map((d) => ({
-      document_type: d.doc_type || d.document_type || '',
-      document_name: d.doc_label || d.document_name || '',
-      is_mandatory: d.is_mandatory ?? true,
-      category: d.category || 'required',
-      display_order: d.display_order ?? 0,
-    })).sort((a, b) => a.display_order - b.display_order);
+    return raw.map((d) => {
+      const name = d.doc_label || d.document_name || '';
+      // Generate a doc_type from the name if none is provided (e.g. "NRC Front" → "NRC_FRONT")
+      const generatedType = name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+      return {
+        document_type: d.doc_type || d.document_type || generatedType,
+        document_name: name,
+        is_mandatory: d.is_mandatory ?? true,
+        category: d.category || 'required',
+        display_order: d.display_order ?? 0,
+      };
+    }).sort((a, b) => a.display_order - b.display_order);
   }, [loanProduct]);
 
   // Map vault doc_type to product doc_type (uppercase)
@@ -150,8 +155,9 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     nrc_front: "NRC_FRONT",
     nrc_back: "NRC_BACK",
     selfie: "SELFIE",
-    selfie_holding_nrc: "SELFIE",
+    selfie_holding_nrc: "SELFIE_HOLDING_NRC",
     proof_of_residence: "PROOF_OF_RESIDENCE",
+    proof_of_residence_utility_bill: "PROOF_OF_RESIDENCE_UTILITY_BILL",
   };
 
   // Build all uploaded docs (unified + legacy + vault KYC)
