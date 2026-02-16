@@ -68,6 +68,7 @@ interface UploadedDoc {
 }
 
 interface RequiredDocRow {
+  rowId: string; // unique identifier per row (docType + index)
   docType: string;
   docName: string;
   isMandatory: boolean;
@@ -218,17 +219,30 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
 
   // Build the full required document checklist with uploaded status
   const documentChecklist: RequiredDocRow[] = useMemo(() => {
-    return productDocuments.map((reqDoc) => {
+    // Track which uploaded docs have been claimed so each row gets at most one
+    const claimedDocIds = new Set<string>();
+    
+    return productDocuments.map((reqDoc, index) => {
+      // Find matching uploads for this doc type that haven't been claimed yet
       const matchingUploads = allUploadedDocs.filter(
-        (d) => d.docType && reqDoc.document_type && d.docType.toUpperCase() === reqDoc.document_type.toUpperCase()
+        (d) => {
+          if (claimedDocIds.has(d.id)) return false;
+          return d.docType && reqDoc.document_type && d.docType.toUpperCase() === reqDoc.document_type.toUpperCase();
+        }
       );
+      
+      // Claim only the first unclaimed match for this row
+      const claimedDocs = matchingUploads.length > 0 ? [matchingUploads[0]] : [];
+      claimedDocs.forEach(d => claimedDocIds.add(d.id));
+      
       return {
+        rowId: `${reqDoc.document_type}_${index}`,
         docType: reqDoc.document_type,
         docName: reqDoc.document_name,
         isMandatory: reqDoc.is_mandatory,
         category: reqDoc.category || 'required',
-        uploadedDocs: matchingUploads,
-        isUploaded: matchingUploads.length > 0,
+        uploadedDocs: claimedDocs,
+        isUploaded: claimedDocs.length > 0,
       };
     });
   }, [productDocuments, allUploadedDocs]);
@@ -317,26 +331,38 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       sonnerToast.error(err.message || "Upload failed");
     } finally {
       setUploadingDocType(null);
+      setUploadingRowId(null);
     }
   };
 
-  const triggerFileInput = (docType: string) => {
+  // Track by rowId for unique per-row upload state
+  const [uploadingRowId, setUploadingRowId] = useState<string | null>(null);
+  const pendingUploadRef = useRef<{ docType: string; docName: string } | null>(null);
+
+  const triggerFileInput = (rowId: string, docType: string, docName: string) => {
+    setUploadingRowId(rowId);
     setUploadingDocType(docType);
+    pendingUploadRef.current = { docType, docName };
     fileInputRef.current?.click();
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !uploadingDocType) return;
+    if (!file || !pendingUploadRef.current) {
+      setUploadingRowId(null);
+      setUploadingDocType(null);
+      return;
+    }
 
-    const docRow = documentChecklist.find((d) => d.docType === uploadingDocType);
-    handleFileUpload(file, uploadingDocType, docRow?.docName || uploadingDocType);
+    const { docType, docName } = pendingUploadRef.current;
+    handleFileUpload(file, docType, docName);
+    pendingUploadRef.current = null;
     e.target.value = "";
   };
 
   const renderDocRow = (row: RequiredDocRow) => (
     <div
-      key={row.docType}
+      key={row.rowId}
       className={`rounded-lg border p-3 transition-colors ${
         row.isUploaded
           ? "border-success/30 bg-success/5"
@@ -388,8 +414,8 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
             </Button>
           ))}
           <Button variant={row.isUploaded ? "outline" : "default"} size="sm" className="h-8"
-            onClick={() => triggerFileInput(row.docType)} disabled={uploadingDocType === row.docType}>
-            {uploadingDocType === row.docType ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            onClick={() => triggerFileInput(row.rowId, row.docType, row.docName)} disabled={uploadingRowId === row.rowId}>
+            {uploadingRowId === row.rowId ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             <span className="ml-1 hidden sm:inline">Upload</span>
           </Button>
         </div>
