@@ -824,1013 +824,152 @@ const AdminLoanProducts = () => {
                   {editingProduct ? "Edit Loan Product" : "Create Loan Product"}
                 </DialogTitle>
               </DialogHeader>
-              <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-8 h-auto">
-                  <TabsTrigger value="basic" className="text-xs px-2 py-2">
-                    <Package size={12} className="mr-1" />
-                    Basic
-                  </TabsTrigger>
-                  <TabsTrigger value="eligibility" className="text-xs px-2 py-2">
-                    <Users size={12} className="mr-1" />
-                    Eligibility
-                  </TabsTrigger>
-                  <TabsTrigger value="amount" className="text-xs px-2 py-2">
-                    <DollarSign size={12} className="mr-1" />
-                    Amount
-                  </TabsTrigger>
-                  <TabsTrigger value="interest" className="text-xs px-2 py-2">
-                    <Percent size={12} className="mr-1" />
-                    Fees
-                  </TabsTrigger>
-                  <TabsTrigger value="penalties" className="text-xs px-2 py-2">
-                    <AlertTriangle size={12} className="mr-1" />
-                    Penalties
-                  </TabsTrigger>
-                  <TabsTrigger value="repayment" className="text-xs px-2 py-2">
-                    <Wallet size={12} className="mr-1" />
-                    Repayment
-                  </TabsTrigger>
-                  <TabsTrigger value="crb_guarantee" className="text-xs px-2 py-2">
-                    <ShieldAlert size={12} className="mr-1" />
-                    CRB/Guarantee
-                  </TabsTrigger>
-                  <TabsTrigger value="documents" className="text-xs px-2 py-2">
-                    <FileText size={12} className="mr-1" />
-                    Docs
-                  </TabsTrigger>
-                  <TabsTrigger value="preview" className="text-xs px-2 py-2">
-                    <Calculator size={12} className="mr-1" />
-                    Preview
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Tab 1: Basic Info */}
-                <TabsContent value="basic" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Product Name *</Label>
-                      <Input
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="e.g., Salary Advance, Payroll Loan"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Product Code</Label>
-                      <Input
-                        value={formData.product_code}
-                        onChange={(e) => setFormData({ ...formData, product_code: e.target.value })}
-                        placeholder="e.g., SAL-ADV-001"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Loan Category *</Label>
-                      <Select
-                        value={formData.category}
-                        onValueChange={(v) => setFormData({ ...formData, category: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="personal">Personal Loan</SelectItem>
-                          <SelectItem value="salary_advance">Salary Advance</SelectItem>
-                          <SelectItem value="sme">SME / Business Loan</SelectItem>
-                          <SelectItem value="asset_backed">Asset-Backed Loan</SelectItem>
-                          <SelectItem value="emergency">Emergency Loan</SelectItem>
-                          <SelectItem value="group">Group Loan</SelectItem>
-                          <SelectItem value="payroll">Payroll Deduction Loan</SelectItem>
-                          <SelectItem value="bnpl">Buy Now Pay Later</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2 space-y-2">
-                      <Label>Description</Label>
-                      <Textarea
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder="Brief description of the loan product"
-                        rows={2}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <Select
-                        value={formData.status}
-                        onValueChange={(v) => setFormData({ ...formData, status: v, is_active: v === "active" })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                          <SelectItem value="archived">Archived</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Distribution Channels</Label>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {["website", "admin", "ussd", "partner"].map((channel) => (
-                          <Badge
-                            key={channel}
-                            variant={formData.channels.includes(channel) ? "default" : "outline"}
-                            className="cursor-pointer capitalize"
-                            onClick={() => toggleChannel(channel)}
-                          >
-                            {channel}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
+              {/* V1.0.1: Simplified single-page form with essential fields only */}
+              <div className="space-y-6 pt-4">
+                {/* Row 1: Name & Interest Type */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Product Name *</Label>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="e.g., Salary Advance, Payroll Loan"
+                    />
                   </div>
-                </TabsContent>
-
-                {/* Tab 2: Eligibility Rules */}
-                <TabsContent value="eligibility" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Minimum Age</Label>
-                      <Input
-                        type="number"
-                        value={formData.min_age}
-                        onChange={(e) => setFormData({ ...formData, min_age: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Maximum Age</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_age}
-                        onChange={(e) => setFormData({ ...formData, max_age: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Minimum Salary (K)</Label>
-                      <Input
-                        type="number"
-                        value={formData.min_salary}
-                        onChange={(e) => setFormData({ ...formData, min_salary: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Minimum Credit Score</Label>
-                      <Input
-                        type="number"
-                        value={formData.min_credit_score}
-                        onChange={(e) => setFormData({ ...formData, min_credit_score: Number(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground">0 = no minimum</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Maximum DTI Ratio (%)</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_dti_ratio}
-                        onChange={(e) => setFormData({ ...formData, max_dti_ratio: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max Concurrent Loans</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_concurrent_loans}
-                        onChange={(e) => setFormData({ ...formData, max_concurrent_loans: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-2">
-                      <Label>Eligible Employment Types</Label>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {["employed", "self_employed", "contract", "other"].map((type) => (
-                          <Badge
-                            key={type}
-                            variant={formData.employment_types.includes(type) ? "default" : "outline"}
-                            className="cursor-pointer capitalize"
-                            onClick={() => toggleEmploymentType(type)}
-                          >
-                            {type.replace("_", " ")}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {/* NEW: Location Eligibility with Multi-Select */}
-                    <div className="col-span-2 space-y-2">
-                      <Label>Eligible Locations</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className="w-full justify-between h-auto min-h-10"
-                          >
-                            <div className="flex flex-wrap gap-1 flex-1 text-left">
-                              {!formData.eligible_locations || formData.eligible_locations.length === 0 ? (
-                                <span className="text-muted-foreground">Nationwide (All Locations)</span>
-                              ) : (
-                                formData.eligible_locations.map((location) => (
-                                  <Badge key={location} variant="secondary" className="text-xs">
-                                    {location}
-                                  </Badge>
-                                ))
-                              )}
-                            </div>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-full p-0" align="start">
-                          <div className="p-2 border-b">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-start text-success"
-                              onClick={() => setFormData({ ...formData, eligible_locations: null })}
-                            >
-                              <Globe size={14} className="mr-2" />
-                              Nationwide (All Locations)
-                            </Button>
-                          </div>
-                          <ScrollArea className="h-64">
-                            <div className="p-2 space-y-1">
-                              {ZAMBIAN_CITIES_LIST.map((city) => {
-                                const isSelected = formData.eligible_locations?.includes(city) || false;
-                                return (
-                                  <div
-                                    key={city}
-                                    className={cn(
-                                      "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-accent",
-                                      isSelected && "bg-primary/10"
-                                    )}
-                                    onClick={() => {
-                                      const current = formData.eligible_locations || [];
-                                      if (isSelected) {
-                                        const newLocations = current.filter(l => l !== city);
-                                        setFormData({ 
-                                          ...formData, 
-                                          eligible_locations: newLocations.length > 0 ? newLocations : null 
-                                        });
-                                      } else {
-                                        setFormData({ 
-                                          ...formData, 
-                                          eligible_locations: [...current, city] 
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    <div className={cn(
-                                      "w-4 h-4 border rounded flex items-center justify-center",
-                                      isSelected ? "bg-primary border-primary" : "border-input"
-                                    )}>
-                                      {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                                    </div>
-                                    <MapPin size={14} className="text-muted-foreground" />
-                                    <span className="text-sm">{city}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Globe size={12} />
-                        Leave empty/select "Nationwide" for all locations. Select specific cities to restrict.
-                      </p>
-                    </div>
-                    
-                    <div className="col-span-2 grid grid-cols-3 gap-4 pt-2">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.blacklist_check_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, blacklist_check_required: !!checked })}
-                        />
-                        <Label className="text-sm">Blacklist Check Required</Label>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.mou_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, mou_required: !!checked })}
-                        />
-                        <Label className="text-sm">Employer MOU Required</Label>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.employer_whitelist_enabled}
-                          onCheckedChange={(checked) => setFormData({ ...formData, employer_whitelist_enabled: !!checked })}
-                        />
-                        <Label className="text-sm">Employer Whitelist Only</Label>
-                      </div>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Interest Type *</Label>
+                    <Select
+                      value={formData.interest_type}
+                      onValueChange={(v) => setFormData({ ...formData, interest_type: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="flat">Flat Rate</SelectItem>
+                        <SelectItem value="reducing_balance">Reducing Balance</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </TabsContent>
+                </div>
 
-                {/* Tab 3: Amount & Term */}
-                <TabsContent value="amount" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Amount Logic</Label>
-                      <Select
-                        value={formData.amount_logic}
-                        onValueChange={(v) => setFormData({ ...formData, amount_logic: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fixed">Fixed Range</SelectItem>
-                          <SelectItem value="salary_based">Salary Based (%)</SelectItem>
-                          <SelectItem value="vendor_based">Vendor Based (BNPL)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max % of Salary (if salary-based)</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_salary_percent}
-                        onChange={(e) => setFormData({ ...formData, max_salary_percent: Number(e.target.value) })}
-                        disabled={formData.amount_logic !== "salary_based"}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Min Amount (K)</Label>
-                      <Input
-                        type="number"
-                        value={formData.min_amount}
-                        onChange={(e) => setFormData({ ...formData, min_amount: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max Amount (K)</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_amount}
-                        onChange={(e) => setFormData({ ...formData, max_amount: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Min Term (months)</Label>
-                      <Input
-                        type="number"
-                        value={formData.min_term_months}
-                        onChange={(e) => setFormData({ ...formData, min_term_months: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max Term</Label>
-                      <Input
-                        type="number"
-                        value={formData.max_term_months}
-                        onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Term Unit</Label>
-                      <Select
-                        value={formData.term_unit}
-                        onValueChange={(v) => setFormData({ ...formData, term_unit: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="days">Days</SelectItem>
-                          <SelectItem value="weeks">Weeks</SelectItem>
-                          <SelectItem value="months">Months</SelectItem>
-                          <SelectItem value="years">Years</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">Loan duration unit for min/max term</p>
-                    </div>
+                {/* Row 2: Amount & Term */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Min Amount (K) *</Label>
+                    <Input
+                      type="number"
+                      value={formData.min_amount}
+                      onChange={(e) => setFormData({ ...formData, min_amount: Number(e.target.value) })}
+                    />
                   </div>
-                </TabsContent>
-
-                {/* Tab 4: Interest & Fees */}
-                <TabsContent value="interest" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Interest Type</Label>
-                      <Select
-                        value={formData.interest_type}
-                        onValueChange={(v) => {
-                          setFormData({ ...formData, interest_type: v });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="flat">Flat Rate</SelectItem>
-                          <SelectItem value="reducing_balance">Reducing Balance</SelectItem>
-                          <SelectItem value="compound">Compound</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Interest Period</Label>
-                      <Select
-                        value={formData.interest_period}
-                        onValueChange={(v) => {
-                          setFormData({ ...formData, interest_period: v });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Per Day</SelectItem>
-                          <SelectItem value="weekly">Per Week</SelectItem>
-                          <SelectItem value="monthly">Per Month</SelectItem>
-                          <SelectItem value="yearly">Per Year</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Interest Rate (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.interest_rate}
-                        onChange={(e) => {
-                          const newValue = Number(e.target.value);
-                          setFormData({ ...formData, interest_rate: newValue });
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground">Rate per {formData.interest_period}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Processing Fee (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.processing_fee_percent}
-                        onChange={(e) => {
-                          const newValue = Number(e.target.value);
-                          setFormData({ ...formData, processing_fee_percent: newValue });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Enforcement/Legal Fee (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.enforcement_fee_percent}
-                        onChange={(e) => {
-                          const newValue = Number(e.target.value);
-                          setFormData({ ...formData, enforcement_fee_percent: newValue });
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground">Deducted before disbursement</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Insurance Premium (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.insurance_percent}
-                        onChange={(e) => {
-                          const newValue = Number(e.target.value);
-                          setFormData({ ...formData, insurance_percent: newValue });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>VAT (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.vat_percent}
-                        onChange={(e) => {
-                          const newValue = Number(e.target.value);
-                          setFormData({ ...formData, vat_percent: newValue });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Platform Fee (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.platform_fee_percent}
-                        onChange={(e) => {
-                          const newValue = Number(e.target.value);
-                          setFormData({ ...formData, platform_fee_percent: newValue });
-                        }}
-                      />
-                    </div>
-                    <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.insurance_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, insurance_required: !!checked })}
-                        />
-                        <Label className="text-sm">Insurance Required</Label>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.collateral_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, collateral_required: !!checked })}
-                        />
-                        <Label className="text-sm">Collateral Required</Label>
-                      </div>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Max Amount (K) *</Label>
+                    <Input
+                      type="number"
+                      value={formData.max_amount}
+                      onChange={(e) => setFormData({ ...formData, max_amount: Number(e.target.value) })}
+                    />
                   </div>
-                </TabsContent>
-
-                {/* Tab 5: Penalties & Default */}
-                <TabsContent value="penalties" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Grace Period (days)</Label>
-                      <Input
-                        type="number"
-                        value={formData.grace_period_days}
-                        onChange={(e) => setFormData({ ...formData, grace_period_days: Number(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground">Days after due date before late fees apply</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Late Payment Penalty (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.late_payment_penalty_percent}
-                        onChange={(e) => setFormData({ ...formData, late_payment_penalty_percent: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Penalty Frequency</Label>
-                      <Select
-                        value={formData.penalty_frequency}
-                        onValueChange={(v) => setFormData({ ...formData, penalty_frequency: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Early Repayment Fee (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={formData.early_repayment_fee_percent}
-                        onChange={(e) => setFormData({ ...formData, early_repayment_fee_percent: Number(e.target.value) })}
-                        disabled={!formData.early_repayment_allowed}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Default Threshold (days)</Label>
-                      <Input
-                        type="number"
-                        value={formData.default_threshold_days}
-                        onChange={(e) => setFormData({ ...formData, default_threshold_days: Number(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground">Days overdue to mark as defaulted</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Legal Escalation (days)</Label>
-                      <Input
-                        type="number"
-                        value={formData.legal_escalation_days}
-                        onChange={(e) => setFormData({ ...formData, legal_escalation_days: Number(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground">Days overdue for legal action trigger</p>
-                    </div>
-                    <div className="col-span-2 flex items-center gap-3 pt-2">
-                      <Checkbox
-                        checked={formData.early_repayment_allowed}
-                        onCheckedChange={(checked) => setFormData({ ...formData, early_repayment_allowed: !!checked })}
-                      />
-                      <Label className="text-sm">Allow Early Repayment</Label>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Max Term (months) *</Label>
+                    <Input
+                      type="number"
+                      value={formData.max_term_months}
+                      onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
+                    />
                   </div>
-                </TabsContent>
+                </div>
 
-                {/* Tab 6: Repayment Rules */}
-                <TabsContent value="repayment" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Repayment Frequency</Label>
-                      <Select
-                        value={formData.repayment_frequency}
-                        onValueChange={(v) => setFormData({ ...formData, repayment_frequency: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Installment Structure</Label>
-                      <Select
-                        value={formData.installment_structure}
-                        onValueChange={(v) => setFormData({ ...formData, installment_structure: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="equal">Equal Installments</SelectItem>
-                          <SelectItem value="balloon">Balloon Payment</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2 space-y-2">
-                      <Label>Repayment Methods</Label>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {["bank_transfer", "mobile_money", "payroll_deduction", "cash"].map((method) => (
-                          <Badge
-                            key={method}
-                            variant={formData.repayment_methods.includes(method) ? "default" : "outline"}
-                            className="cursor-pointer capitalize"
-                            onClick={() => toggleRepaymentMethod(method)}
-                          >
-                            {method.replace("_", " ")}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.auto_disbursement}
-                          onCheckedChange={(checked) => setFormData({ ...formData, auto_disbursement: !!checked })}
-                        />
-                        <Label className="text-sm">Auto Disbursement</Label>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={formData.partial_disbursement}
-                          onCheckedChange={(checked) => setFormData({ ...formData, partial_disbursement: !!checked })}
-                        />
-                        <Label className="text-sm">Allow Partial Disbursement</Label>
-                      </div>
-                    </div>
+                {/* Row 3: Interest Rate & Processing Fee */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Interest Rate (%) *</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={formData.interest_rate}
+                      onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">Rate per month</p>
                   </div>
-                </TabsContent>
+                  <div className="space-y-2">
+                    <Label>Processing Fee (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={formData.processing_fee_percent}
+                      onChange={(e) => setFormData({ ...formData, processing_fee_percent: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
 
-                {/* Tab 7: Documents & Contracts */}
-                <TabsContent value="documents" className="space-y-4 pt-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Contract Template URL</Label>
-                      <Input
-                        value={formData.contract_template_url}
-                        onChange={(e) => setFormData({ ...formData, contract_template_url: e.target.value })}
-                        placeholder="https://storage.example.com/templates/contract.pdf"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-base font-medium">Required documents (applicants must upload these)</Label>
-                          <p className="text-sm text-muted-foreground">Configure which documents applicants must upload for this product. If empty, applicants cannot complete the document step.</p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setFormData({
-                            ...formData,
-                            required_documents: [
-                              ...(formData.required_documents || []),
-                              {
-                                document_type: REQUIRED_DOC_TYPE_OPTIONS[0].value,
-                                document_name: REQUIRED_DOC_TYPE_OPTIONS[0].label,
-                                is_mandatory: true,
-                                display_order: (formData.required_documents?.length ?? 0) + 1,
-                              },
-                            ],
-                          })}
-                        >
-                          <Plus className="h-4 w-4 mr-1" /> Add document
-                        </Button>
-                      </div>
-                      {(formData.required_documents?.length ?? 0) > 0 && (
-                        <div className="border rounded-md divide-y">
-                          {(formData.required_documents || []).map((doc, idx) => (
-                            <div key={idx} className="p-3 flex flex-wrap items-center gap-3 bg-muted/30">
-                              <Select
-                                value={doc.document_type}
-                                onValueChange={(v) => {
-                                  const opt = REQUIRED_DOC_TYPE_OPTIONS.find(o => o.value === v);
-                                  const next = [...(formData.required_documents || [])];
-                                  next[idx] = { ...next[idx], document_type: v, document_name: opt?.label ?? v };
-                                  setFormData({ ...formData, required_documents: next });
-                                }}
-                              >
-                                <SelectTrigger className="w-[180px]">
-                                  <SelectValue placeholder="Type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {REQUIRED_DOC_TYPE_OPTIONS.map((o) => (
-                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Input
-                                className="flex-1 min-w-[140px]"
-                                value={doc.document_name}
-                                onChange={(e) => {
-                                  const next = [...(formData.required_documents || [])];
-                                  next[idx] = { ...next[idx], document_name: e.target.value };
-                                  setFormData({ ...formData, required_documents: next });
-                                }}
-                                placeholder="Display name"
-                              />
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  id={`req-mandatory-${idx}`}
-                                  checked={doc.is_mandatory}
-                                  onCheckedChange={(c) => {
-                                    const next = [...(formData.required_documents || [])];
-                                    next[idx] = { ...next[idx], is_mandatory: !!c };
-                                    setFormData({ ...formData, required_documents: next });
-                                  }}
-                                />
-                                <Label htmlFor={`req-mandatory-${idx}`} className="text-sm whitespace-nowrap">Mandatory</Label>
-                              </div>
-                              <Input
-                                type="number"
-                                className="w-16"
-                                min={1}
-                                value={doc.display_order}
-                                onChange={(e) => {
-                                  const next = [...(formData.required_documents || [])];
-                                  next[idx] = { ...next[idx], display_order: parseInt(e.target.value, 10) || 1 };
-                                  setFormData({ ...formData, required_documents: next });
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setFormData({
+                {/* Row 4: Required Documents */}
+                <div className="space-y-3">
+                  <Label>Required Documents</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {REQUIRED_DOC_TYPE_OPTIONS.map((doc) => {
+                      const isSelected = formData.required_documents?.some(d => d.document_type === doc.value) || false;
+                      return (
+                        <div key={doc.value} className="flex items-center gap-3">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setFormData({
                                   ...formData,
-                                  required_documents: formData.required_documents?.filter((_, i) => i !== idx) ?? [],
-                                })}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Document Requirements (one per line)</Label>
-                      <Textarea
-                        value={formData.requirements}
-                        onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                        placeholder="Valid NRC (front & back)&#10;Latest payslip&#10;3 months bank statement&#10;Proof of residence"
-                        rows={6}
-                      />
-                    </div>
-                    <div className="flex items-center gap-3 pt-2">
-                      <Checkbox
-                        checked={formData.digital_signature_required}
-                        onCheckedChange={(checked) => setFormData({ ...formData, digital_signature_required: !!checked })}
-                      />
-                      <Label className="text-sm">Digital Signature Required</Label>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Tab 8: CRB & Credit Guarantee */}
-                <TabsContent value="crb_guarantee" className="space-y-4 pt-4">
-                  <div className="space-y-6">
-                    {/* CRB Settings */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold">Credit Reference Bureau (CRB)</h4>
-                          <p className="text-sm text-muted-foreground">Require credit check before loan approval</p>
-                        </div>
-                        <Switch
-                          checked={formData.crb_check_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, crb_check_required: checked })}
-                        />
-                      </div>
-
-                      {formData.crb_check_required && (
-                        <div className="grid grid-cols-3 gap-4 pl-4 border-l-2 border-primary/30">
-                          <div className="space-y-2">
-                            <Label>Auto-Decline Score</Label>
-                            <Input
-                              type="number"
-                              value={formData.crb_auto_decline_score}
-                              onChange={(e) => setFormData({ ...formData, crb_auto_decline_score: Number(e.target.value) })}
-                            />
-                            <p className="text-xs text-muted-foreground">Below this = auto reject</p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Manual Review Score</Label>
-                            <Input
-                              type="number"
-                              value={formData.crb_manual_review_score}
-                              onChange={(e) => setFormData({ ...formData, crb_manual_review_score: Number(e.target.value) })}
-                            />
-                            <p className="text-xs text-muted-foreground">Between decline & approve = manual</p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Auto-Approve Score</Label>
-                            <Input
-                              type="number"
-                              value={formData.crb_auto_approve_score}
-                              onChange={(e) => setFormData({ ...formData, crb_auto_approve_score: Number(e.target.value) })}
-                            />
-                            <p className="text-xs text-muted-foreground">Above this = auto approve</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Guarantee Settings */}
-                    <div className="space-y-4 pt-4 border-t border-border/50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold">Credit Guarantee</h4>
-                          <p className="text-sm text-muted-foreground">Require PMIC/ZCGS guarantee coverage</p>
-                        </div>
-                        <Switch
-                          checked={formData.guarantee_required}
-                          onCheckedChange={(checked) => setFormData({ ...formData, guarantee_required: checked })}
-                        />
-                      </div>
-
-                      {formData.guarantee_required && (
-                        <div className="grid grid-cols-3 gap-4 pl-4 border-l-2 border-primary/30">
-                          <div className="space-y-2">
-                            <Label>Guarantee Provider</Label>
-                            <Select
-                              value={formData.guarantee_provider}
-                              onValueChange={(v) => setFormData({ ...formData, guarantee_provider: v })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select provider" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pmic">PMIC</SelectItem>
-                                <SelectItem value="zcgs">ZCGS</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Max Guarantee %</Label>
-                            <Input
-                              type="number"
-                              value={formData.max_guarantee_percent}
-                              onChange={(e) => setFormData({ ...formData, max_guarantee_percent: Number(e.target.value) })}
-                            />
-                            <p className="text-xs text-muted-foreground">Coverage percentage</p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Guarantee Fee %</Label>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              value={formData.guarantee_fee_percent}
-                              onChange={(e) => setFormData({ ...formData, guarantee_fee_percent: Number(e.target.value) })}
-                            />
-                            <p className="text-xs text-muted-foreground">Fee charged to borrower</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Tab 9: Calculation Preview */}
-                <TabsContent value="preview" className="space-y-4 pt-4">
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
-                      <h4 className="font-semibold mb-3 flex items-center gap-2">
-                        <Calculator size={18} className="text-primary" />
-                        Test Calculation Preview
-                      </h4>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Enter sample values to preview how this product calculates loans.
-                      </p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Sample Principal (K)</Label>
-                          <Input
-                            type="number"
-                            value={previewPrincipal || formData.min_amount}
-                            onChange={(e) => setPreviewPrincipal(Number(e.target.value))}
-                            placeholder="e.g., 5000"
+                                  required_documents: [
+                                    ...(formData.required_documents || []),
+                                    {
+                                      document_type: doc.value,
+                                      document_name: doc.label,
+                                      is_mandatory: true,
+                                      display_order: (formData.required_documents?.length ?? 0) + 1,
+                                    },
+                                  ],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  required_documents: formData.required_documents?.filter(d => d.document_type !== doc.value) ?? [],
+                                });
+                              }
+                            }}
                           />
+                          <Label className="text-sm font-normal">{doc.label}</Label>
                         </div>
-                        <div className="space-y-2">
-                          <Label>Sample Term ({formData.term_unit})</Label>
-                          <Input
-                            type="number"
-                            value={previewTerm || formData.min_term_months}
-                            onChange={(e) => setPreviewTerm(Number(e.target.value))}
-                            placeholder="e.g., 6"
-                          />
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="mt-4"
-                        onClick={() => {
-                          calculationTriggeredRef.current = true;
-                          performCalculation();
-                        }}
-                      >
-                        <Calculator size={16} className="mr-2" />
-                        Calculate Preview
-                      </Button>
-                    </div>
-
-                    {/* React state-based preview result (secure - no innerHTML) */}
-                    <div className="p-4 rounded-lg bg-muted/30 border border-border/50 min-h-[200px]">
-                      {previewResult ? (
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Principal</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.principal)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Interest ({formData.interest_rate}% {getInterestPeriodLabel(formData.interest_period as any)})</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.totalInterest)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Processing Fee</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.processingFee)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Enforcement Fee</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.enforcementFee)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Insurance</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.insuranceFee)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">VAT</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.vatAmount)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Platform Fee</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.platformFee)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border">
-                            <span className="text-muted-foreground">Total Fees (deducted)</span>
-                            <p className="font-semibold text-foreground">{formatCurrency(previewResult.feesDeductedUpfront)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-success/10 border border-success/30">
-                            <span className="text-muted-foreground">Borrower Receives</span>
-                            <p className="font-bold text-success">{formatCurrency(previewResult.disbursementAmount)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
-                            <span className="text-muted-foreground">Total Repayment</span>
-                            <p className="font-bold text-primary">{formatCurrency(previewResult.totalRepayment)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-background border col-span-2">
-                            <span className="text-muted-foreground">Monthly Payment ({previewResult.termMonths.toFixed(1)} months)</span>
-                            <p className="font-semibold text-lg text-foreground">{formatCurrency(previewResult.monthlyPayment)} /month</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-muted/50 border col-span-2 text-xs text-muted-foreground">
-                            Effective Annual Rate: {previewResult.effectiveAnnualRate.toFixed(2)}% | Interest Type: {formData.interest_type}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                          Click "Calculate Preview" to see results
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="p-4 rounded-lg bg-warning/10 border border-warning/30 text-sm">
-                      <p className="font-medium text-warning mb-1">⚠️ Formula Details</p>
-                      <ul className="text-muted-foreground space-y-1">
-                        <li>• <strong>Flat Rate:</strong> Interest = Principal × Rate × Term</li>
-                        <li>• <strong>Reducing Balance:</strong> Uses amortization formula (PMT)</li>
-                        <li>• <strong>Fees:</strong> Deducted from principal before disbursement</li>
-                        <li>• <strong>Repayment:</strong> Principal + Interest (fees already taken)</li>
-                      </ul>
-                    </div>
+                      );
+                    })}
                   </div>
-                </TabsContent>
-              </Tabs>
+                </div>
+
+                {/* Row 5: Description */}
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Brief description of the loan product"
+                    rows={3}
+                  />
+                </div>
+
+                {/* Row 6: Active Status */}
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={formData.is_active}
+                    onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked, status: checked ? "active" : "inactive" })}
+                  />
+                  <Label>Product is Active</Label>
+                </div>
+              </div>
+
+              {/* V2 Advanced Fields - hidden for V1.0.1 */}
+              {false && (
+                <div>
+                  {/* All eligibility, CRB, guarantor, penalty, repayment, preview fields preserved for V2 */}
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
