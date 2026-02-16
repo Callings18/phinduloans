@@ -81,6 +81,7 @@ import {
   Edit,
   Smartphone,
   Upload,
+  Eye,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DocumentVerificationTab from "./DocumentVerificationTab";
@@ -1174,9 +1175,24 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           </div>
                         </div>
                         {loan.signed_contract_url ? (
-                          <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                            <CheckCircle size={12} className="mr-1" /> Uploaded
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                              <CheckCircle size={12} className="mr-1" /> Uploaded
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                const { data } = await supabase.storage
+                                  .from('loan-documents')
+                                  .createSignedUrl(loan.signed_contract_url!, 3600);
+                                if (data?.signedUrl) setSignaturePreviewUrl(data.signedUrl);
+                                else toast.error('Could not load contract');
+                              }}
+                            >
+                              <Eye size={14} className="mr-1" /> View
+                            </Button>
+                          </div>
                         ) : (
                           <Button size="sm" variant="outline" onClick={() => setActiveTab("contract")}>
                             <Upload size={14} className="mr-1" /> Upload
