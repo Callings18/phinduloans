@@ -108,6 +108,35 @@ Deno.serve(async (req) => {
         } else {
           userId = profile.id;
         }
+
+        // Update profile with new info for existing user
+        const { error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            full_name,
+            phone: phone || null,
+            nrc_number: nrc_number || null,
+            address: address || null,
+            city: city || null,
+          })
+          .eq("id", userId);
+
+        if (updateError) {
+          console.error("Error updating profile:", updateError);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            user_id: userId,
+            existing: true,
+            message: `Borrower profile updated. This email (${email}) was already registered.`,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
       } else {
         console.error("Error creating user:", createError);
         return new Response(JSON.stringify({ error: createError.message }), {
@@ -119,7 +148,7 @@ Deno.serve(async (req) => {
       userId = newUser.user.id;
     }
 
-    // Update the profile with additional info
+    // Update the profile with additional info for new user
     const { error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
@@ -139,6 +168,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         user_id: userId,
+        existing: false,
         message: "Borrower created successfully",
       }),
       {
