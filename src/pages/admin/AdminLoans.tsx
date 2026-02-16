@@ -136,6 +136,12 @@ interface LoanProduct {
   term_unit: string;
   processing_fee_percent: number | null;
   enforcement_fee_percent?: number | null;
+  required_documents?: any;
+  interest_period?: string;
+  interest_type?: string;
+  insurance_percent?: number;
+  vat_percent?: number;
+  platform_fee_percent?: number;
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -181,30 +187,8 @@ const AdminLoans = () => {
   const [firstRepaymentDate, setFirstRepaymentDate] = useState<string>(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
   const [createWithDisbursement, setCreateWithDisbursement] = useState<boolean>(false);
 
-  // Document upload state
-  const [documentFiles, setDocumentFiles] = useState<{
-    collateral_image_1: File | null;
-    collateral_image_2: File | null;
-    collateral_image_3: File | null;
-    bank_statement: File | null;
-    payslip_1: File | null;
-    payslip_2: File | null;
-    payslip_3: File | null;
-    nrc_front: File | null;
-    nrc_back: File | null;
-    selfie: File | null;
-  }>({
-    collateral_image_1: null,
-    collateral_image_2: null,
-    collateral_image_3: null,
-    bank_statement: null,
-    payslip_1: null,
-    payslip_2: null,
-    payslip_3: null,
-    nrc_front: null,
-    nrc_back: null,
-    selfie: null,
-  });
+  // Document upload state - dynamic based on selected product
+  const [documentFiles, setDocumentFiles] = useState<Record<string, File | null>>({});
 
   // Edit Loan Form State
   const [editLoanAmount, setEditLoanAmount] = useState<string>("");
@@ -487,64 +471,31 @@ const AdminLoans = () => {
 
       const loanId = loanApp.id;
 
-      // Upload documents if provided
-      const documentUrls: Record<string, string | null> = {
-        collateral_image_url: null,
-        collateral_image_2_url: null,
-        collateral_image_3_url: null,
-        bank_statement_url: null,
-        payslip_url: null,
-        payslip_2_url: null,
-        payslip_3_url: null,
-        nrc_front_url: null,
-        nrc_back_url: null,
-        selfie_url: null,
-      };
-
-      // Upload collateral images
-      if (documentFiles.collateral_image_1) {
-        documentUrls.collateral_image_url = await uploadDocumentFile(documentFiles.collateral_image_1, 'collateral', loanId);
-      }
-      if (documentFiles.collateral_image_2) {
-        documentUrls.collateral_image_2_url = await uploadDocumentFile(documentFiles.collateral_image_2, 'collateral', loanId);
-      }
-      if (documentFiles.collateral_image_3) {
-        documentUrls.collateral_image_3_url = await uploadDocumentFile(documentFiles.collateral_image_3, 'collateral', loanId);
-      }
-
-      // Upload other documents
-      if (documentFiles.bank_statement) {
-        documentUrls.bank_statement_url = await uploadDocumentFile(documentFiles.bank_statement, 'bank_statement', loanId);
-      }
-      if (documentFiles.payslip_1) {
-        documentUrls.payslip_url = await uploadDocumentFile(documentFiles.payslip_1, 'payslips', loanId);
-      }
-      if (documentFiles.payslip_2) {
-        documentUrls.payslip_2_url = await uploadDocumentFile(documentFiles.payslip_2, 'payslips', loanId);
-      }
-      if (documentFiles.payslip_3) {
-        documentUrls.payslip_3_url = await uploadDocumentFile(documentFiles.payslip_3, 'payslips', loanId);
-      }
-      if (documentFiles.nrc_front) {
-        documentUrls.nrc_front_url = await uploadDocumentFile(documentFiles.nrc_front, 'nrc', loanId);
-      }
-      if (documentFiles.nrc_back) {
-        documentUrls.nrc_back_url = await uploadDocumentFile(documentFiles.nrc_back, 'nrc', loanId);
-      }
-      if (documentFiles.selfie) {
-        documentUrls.selfie_url = await uploadDocumentFile(documentFiles.selfie, 'selfie', loanId);
+      // Upload dynamic documents to application_documents table
+      const requiredDocs = (selectedProduct?.required_documents as any[]) || [];
+      for (const [docKey, file] of Object.entries(documentFiles)) {
+        if (!file) continue;
+        const docConfig = requiredDocs.find((d: any) => d.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() === docKey);
+        const folder = docKey.includes('nrc') ? 'nrc' : docKey.includes('payslip') ? 'payslips' : docKey.includes('collateral') ? 'collateral' : 'documents';
+        const fileUrl = await uploadDocumentFile(file, folder, loanId);
+        if (fileUrl) {
+          await supabase.from('application_documents').insert({
+            application_id: loanId,
+            borrower_id: selectedBorrowerId,
+            loan_product_id: selectedProductId,
+            doc_type: docKey,
+            doc_label: docConfig?.document_name || docKey,
+            file_url: fileUrl,
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type,
+            is_required: docConfig?.is_mandatory ?? true,
+            uploaded_by: 'admin',
+          });
+        }
       }
 
-      // Update loan with document URLs if any were uploaded
-      const hasDocuments = Object.values(documentUrls).some(url => url !== null);
-      if (hasDocuments) {
-        const updateData: Record<string, string> = {};
-        Object.entries(documentUrls).forEach(([key, value]) => {
-          if (value) updateData[key] = value;
-        });
-
-        await supabase.from('loan_applications').update(updateData).eq('id', loanId);
-      }
+      // Documents already saved to application_documents above
 
       // If creating with immediate disbursement
       if (createWithDisbursement) {
@@ -882,18 +833,7 @@ const AdminLoans = () => {
     setDisbursementDate(format(new Date(), "yyyy-MM-dd"));
     setFirstRepaymentDate(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
     setCreateWithDisbursement(false);
-    setDocumentFiles({
-      collateral_image_1: null,
-      collateral_image_2: null,
-      collateral_image_3: null,
-      bank_statement: null,
-      payslip_1: null,
-      payslip_2: null,
-      payslip_3: null,
-      nrc_front: null,
-      nrc_back: null,
-      selfie: null,
-    });
+    setDocumentFiles({});
   };
 
   const resetDisbursementForm = () => {
@@ -1503,7 +1443,7 @@ const AdminLoans = () => {
             <TabsContent value="loan" className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label>Loan Product *</Label>
-                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                <Select value={selectedProductId} onValueChange={(val) => { setSelectedProductId(val); setDocumentFiles({}); }}>
                   <SelectTrigger><SelectValue placeholder="Select a loan product" /></SelectTrigger>
                   <SelectContent>
                     {loanProducts?.map((p) => (
@@ -1576,115 +1516,62 @@ const AdminLoans = () => {
             </TabsContent>
 
             <TabsContent value="documents" className="space-y-4 mt-4">
-              <div className="space-y-6">
-                {/* NRC Documents */}
-                <div className="space-y-4">
-                  <Label className="text-base font-semibold">NRC Documents</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm">NRC Front</Label>
-                      <div className="border-2 border-dashed border-border rounded-lg p-3">
-                        <Input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(e) => setDocumentFiles({
-                            ...documentFiles,
-                            nrc_front: e.target.files?.[0] || null
-                          })}
-                          className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                        />
-                        {documentFiles.nrc_front && (
-                          <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.nrc_front.name}</p>
-                        )}
-                      </div>
+              {!selectedProductId ? (
+                <Card className="bg-secondary/30 border-border/50">
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground">Please select a Loan Product in the "Loan Details" tab first to see required documents.</p>
+                  </CardContent>
+                </Card>
+              ) : (() => {
+                const prodDocs = (selectedProduct?.required_documents as any[]) || [];
+                if (prodDocs.length === 0) {
+                  return (
+                    <Card className="bg-secondary/30 border-border/50">
+                      <CardContent className="p-8 text-center">
+                        <p className="text-muted-foreground">No documents configured for this loan product.</p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                return (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Upload the required documents for <span className="font-semibold text-foreground">{selectedProduct?.name}</span>
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {prodDocs
+                        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+                        .map((doc: any) => {
+                          const docKey = doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                          return (
+                            <div key={docKey} className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                {doc.document_name}
+                                {doc.is_mandatory && <span className="text-destructive">*</span>}
+                              </Label>
+                              <div className="border-2 border-dashed border-border rounded-lg p-3">
+                                <Input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  onChange={(e) => setDocumentFiles({
+                                    ...documentFiles,
+                                    [docKey]: e.target.files?.[0] || null
+                                  })}
+                                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                                />
+                                {documentFiles[docKey] && (
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Selected: {documentFiles[docKey]?.name}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm">NRC Back</Label>
-                      <div className="border-2 border-dashed border-border rounded-lg p-3">
-                        <Input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(e) => setDocumentFiles({
-                            ...documentFiles,
-                            nrc_back: e.target.files?.[0] || null
-                          })}
-                          className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                        />
-                        {documentFiles.nrc_back && (
-                          <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.nrc_back.name}</p>
-                        )}
-                      </div>
-                    </div>
                   </div>
-                </div>
-
-                {/* Selfie */}
-                <div className="space-y-2">
-                  <Label>Selfie Photo</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-3">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setDocumentFiles({
-                        ...documentFiles,
-                        selfie: e.target.files?.[0] || null
-                      })}
-                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                    />
-                    {documentFiles.selfie && (
-                      <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.selfie.name}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Bank Statement */}
-                <div className="space-y-2">
-                  <Label>Bank Statement</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-3">
-                    <Input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setDocumentFiles({
-                        ...documentFiles,
-                        bank_statement: e.target.files?.[0] || null
-                      })}
-                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                    />
-                    {documentFiles.bank_statement && (
-                      <p className="text-xs text-muted-foreground mt-2">Selected: {documentFiles.bank_statement.name}</p>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Upload recent bank statement (PDF or image)</p>
-                </div>
-
-                {/* Payslips */}
-                <div className="space-y-4">
-                  <Label className="text-base font-semibold">Payslips (3 months)</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((num) => (
-                      <div key={num} className="space-y-2">
-                        <Label className="text-sm">Payslip {num} {num === 1 ? '(Latest)' : ''}</Label>
-                        <div className="border-2 border-dashed border-border rounded-lg p-3">
-                          <Input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => setDocumentFiles({
-                              ...documentFiles,
-                              [`payslip_${num}` as keyof typeof documentFiles]: e.target.files?.[0] || null
-                            })}
-                            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                          />
-                          {documentFiles[`payslip_${num}` as keyof typeof documentFiles] && (
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Selected: {(documentFiles[`payslip_${num}` as keyof typeof documentFiles] as File)?.name}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="options" className="space-y-4 mt-4">
