@@ -8,11 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
-  CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle,
-  Banknote, Users, UserCheck, Smartphone, Phone, Upload, Briefcase, DollarSign,
+  CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle, Upload,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import EmploymentIncomeForm from "./kyc/EmploymentIncomeForm";
+import FinancialInfoForm from "./kyc/FinancialInfoForm";
+import ReferencesForm from "./kyc/ReferencesForm";
 
 interface BorrowerKYCSectionProps {
   borrowerId: string;
@@ -29,6 +30,8 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const queryClient = useQueryClient();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejectDocId, setRejectDocId] = useState<string | null>(null);
+  const [rejectDocLabel, setRejectDocLabel] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
   const [uploadingType, setUploadingType] = useState<string | null>(null);
 
   // Upload KYC document on behalf of borrower
@@ -44,21 +47,13 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
 
       if (uploadError) throw uploadError;
 
-      // Check if doc already exists (rejected re-upload)
       const existing = vaultDocs.find(d => d.doc_type === docType);
       if (existing) {
         const { error: updateError } = await supabase
           .from("borrower_document_vault")
           .update({
-            file_url: filePath,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type,
-            uploaded_at: new Date().toISOString(),
-            is_verified: false,
-            verified_at: null,
-            verified_by: null,
-            notes: null,
+            file_url: filePath, file_name: file.name, file_size: file.size, mime_type: file.type,
+            uploaded_at: new Date().toISOString(), is_verified: false, verified_at: null, verified_by: null, notes: null,
           })
           .eq("id", existing.id);
         if (updateError) throw updateError;
@@ -66,13 +61,8 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         const { error: insertError } = await supabase
           .from("borrower_document_vault")
           .insert({
-            borrower_id: borrowerId,
-            doc_type: docType,
-            doc_label: docLabel,
-            file_url: filePath,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type,
+            borrower_id: borrowerId, doc_type: docType, doc_label: docLabel,
+            file_url: filePath, file_name: file.name, file_size: file.size, mime_type: file.type,
           });
         if (insertError) throw insertError;
       }
@@ -86,8 +76,6 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
       setUploadingType(null);
     }
   };
-  const [rejectDocLabel, setRejectDocLabel] = useState("");
-  const [rejectReason, setRejectReason] = useState("");
 
   // Document vault
   const { data: vaultDocs = [], isLoading } = useQuery({
@@ -195,44 +183,28 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         .eq("id", docId);
       if (error) throw error;
 
-      // Notify the borrower about the rejection
       try {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("email, phone, full_name")
-          .eq("id", borrowerId)
-          .maybeSingle();
-
-        if (profile) {
-          const name = profile.full_name || "Customer";
-          const emailMsg = `Dear ${name}, your KYC document "${docLabel}" has been rejected. Reason: ${reason}. Please log in to your account and re-upload the document. Your account remains pending until all documents are verified. — Phindu Finance`;
-          const smsMsg = `Dear ${name}, your document "${docLabel}" was rejected: ${reason}. Please re-upload it on your Phindu account. — Phindu Finance`;
-
-          if (profile.email) {
+        const { data: profileData } = await supabase.from("profiles").select("email, phone, full_name").eq("id", borrowerId).maybeSingle();
+        if (profileData) {
+          const name = profileData.full_name || "Customer";
+          if (profileData.email) {
             await supabase.from("notification_logs").insert({
-              user_id: borrowerId,
-              type: "email",
-              recipient: profile.email,
-              title: "KYC Document Rejected",
+              user_id: borrowerId, type: "email", recipient: profileData.email, title: "KYC Document Rejected",
               subject: `Action Required: Re-upload ${docLabel}`,
-              message: emailMsg,
+              message: `Dear ${name}, your KYC document "${docLabel}" has been rejected. Reason: ${reason}. Please re-upload. — Phindu Finance`,
               status: "pending",
             });
           }
-          if (profile.phone) {
+          if (profileData.phone) {
             await supabase.from("notification_logs").insert({
-              user_id: borrowerId,
-              type: "sms",
-              recipient: profile.phone,
-              title: "KYC Document Rejected",
-              message: smsMsg,
+              user_id: borrowerId, type: "sms", recipient: profileData.phone, title: "KYC Document Rejected",
+              message: `Dear ${name}, your document "${docLabel}" was rejected: ${reason}. Please re-upload. — Phindu Finance`,
               status: "pending",
             });
           }
         }
       } catch (notifErr) {
         console.error("Failed to send rejection notification:", notifErr);
-        // Don't block the rejection if notification fails
       }
     },
     onSuccess: () => {
@@ -244,48 +216,10 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const verifyKycInfoMutation = useMutation({
-    mutationFn: async () => {
-      const { data: session } = await supabase.auth.getSession();
-      const adminId = session?.session?.user?.id;
-      const { error } = await supabase
-        .from("borrower_kyc_info")
-        .update({ is_verified: true, verified_by: adminId, verified_at: new Date().toISOString() })
-        .eq("borrower_id", borrowerId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-info", borrowerId] });
-      toast({ title: "Financial info verified" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  const verifyReferenceMutation = useMutation({
-    mutationFn: async (refId: string) => {
-      const { data: session } = await supabase.auth.getSession();
-      const adminId = session?.session?.user?.id;
-      const { error } = await supabase
-        .from("borrower_references")
-        .update({ is_verified: true, verified_by: adminId, verified_at: new Date().toISOString() })
-        .eq("id", refId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["borrower-references", borrowerId] });
-      toast({ title: "Reference verified" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
   const handlePreview = async (fileUrl: string) => {
     const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
     if (url) setPreviewUrl(url);
-    else toast({ 
-      title: "Permission denied", 
-      description: "You do not have permission to view this document. Please contact an admin to grant you access.", 
-      variant: "destructive" 
-    });
+    else toast({ title: "Permission denied", description: "Contact an admin for access.", variant: "destructive" });
   };
 
   // Map vault docs by type
@@ -310,14 +244,8 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                 .map(t => docsByType[t.type])
                 .filter(d => d && !d.is_verified && !(d.verified_at && d.notes?.startsWith("Rejected:")));
               return pendingDocs.length > 1 ? (
-                <Button
-                  size="sm"
-                  className="ml-auto h-7 text-xs"
-                  onClick={() => approveAllMutation.mutate(pendingDocs.map(d => d.id))}
-                  disabled={approveAllMutation.isPending}
-                >
-                  <CheckCircle size={12} className="mr-1" />
-                  Approve All ({pendingDocs.length})
+                <Button size="sm" className="ml-auto h-7 text-xs" onClick={() => approveAllMutation.mutate(pendingDocs.map(d => d.id))} disabled={approveAllMutation.isPending}>
+                  <CheckCircle size={12} className="mr-1" /> Approve All ({pendingDocs.length})
                 </Button>
               ) : null;
             })()}
@@ -349,17 +277,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                         <>
                           <Badge variant="outline" className="text-muted-foreground gap-1"><AlertTriangle size={12} /> Missing</Badge>
                           <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleUploadKYC(file, kycType.type, kycType.label);
-                                e.target.value = "";
-                              }}
-                              disabled={uploadingType === kycType.type}
-                            />
+                            <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUploadKYC(file, kycType.type, kycType.label); e.target.value = ""; }} disabled={uploadingType === kycType.type} />
                             <span className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded-md border border-input bg-background hover:bg-accent cursor-pointer">
                               <Upload size={12} /> {uploadingType === kycType.type ? "Uploading..." : "Upload"}
                             </span>
@@ -375,17 +293,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                           <Badge variant="destructive" className="gap-1"><XCircle size={12} /> Rejected</Badge>
                           <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
                           <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleUploadKYC(file, kycType.type, kycType.label);
-                                e.target.value = "";
-                              }}
-                              disabled={uploadingType === kycType.type}
-                            />
+                            <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUploadKYC(file, kycType.type, kycType.label); e.target.value = ""; }} disabled={uploadingType === kycType.type} />
                             <span className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded-md border border-input bg-background hover:bg-accent cursor-pointer">
                               <Upload size={12} /> Re-upload
                             </span>
@@ -408,140 +316,14 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         </CardContent>
       </Card>
 
-      {/* Employment & Income */}
-      {profile && (profile.employer_name || profile.job_title || profile.employment_type || profile.net_income) && (
-        <Card className="border-border/50 bg-muted/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Briefcase className="text-muted-foreground" size={18} />
-              <h4 className="font-semibold text-foreground">Employment & Income</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {profile.employer_name && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">Employer</p>
-                  <p className="text-sm text-foreground">{profile.employer_name}</p>
-                </div>
-              )}
-              {profile.job_title && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">Job Title</p>
-                  <p className="text-sm text-foreground">{profile.job_title}</p>
-                </div>
-              )}
-              {profile.employment_type && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">Employment Type</p>
-                  <p className="text-sm text-foreground capitalize">{profile.employment_type.replace(/_/g, " ")}</p>
-                </div>
-              )}
-              {profile.years_in_employment != null && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">Years in Employment</p>
-                  <p className="text-sm text-foreground">{profile.years_in_employment} {profile.years_in_employment === 1 ? "year" : "years"}</p>
-                </div>
-              )}
-              {profile.net_income != null && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1"><DollarSign size={12} /> Net Income</p>
-                  <p className="text-sm text-foreground font-medium">K {Number(profile.net_income).toLocaleString()}</p>
-                </div>
-              )}
-              {profile.address && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">Address</p>
-                  <p className="text-sm text-foreground">{profile.address}{profile.city ? `, ${profile.city}` : ""}</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Employment & Income (editable) */}
+      <EmploymentIncomeForm borrowerId={borrowerId} profile={profile} />
 
-      {/* Financial Information */}
-      {kycInfo && (
-        <Card className={`border-border/50 ${kycInfo.is_verified ? "bg-emerald-500/5 border-emerald-500/30" : "bg-yellow-500/5 border-yellow-500/30"}`}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Banknote className={kycInfo.is_verified ? "text-emerald-400" : "text-muted-foreground"} size={18} />
-              <h4 className="font-semibold text-foreground">Financial Information</h4>
-              {kycInfo.is_verified ? (
-                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border ml-auto gap-1"><CheckCircle size={12} /> Verified</Badge>
-              ) : (
-                <Button size="sm" className="ml-auto h-7 text-xs" onClick={() => verifyKycInfoMutation.mutate()} disabled={verifyKycInfoMutation.isPending}>
-                  Verify Financial Info
-                </Button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Mobile Money */}
-              {(kycInfo.airtel_money_number || kycInfo.mtn_mobile_money_number || kycInfo.zamtel_kwacha_number) && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Smartphone size={12} /> Mobile Money</p>
-                  {kycInfo.airtel_money_number && <p className="text-sm text-foreground">Airtel: {kycInfo.airtel_money_number}</p>}
-                  {kycInfo.mtn_mobile_money_number && <p className="text-sm text-foreground">MTN: {kycInfo.mtn_mobile_money_number}</p>}
-                  {kycInfo.zamtel_kwacha_number && <p className="text-sm text-foreground">Zamtel: {kycInfo.zamtel_kwacha_number}</p>}
-                  {kycInfo.mobile_money_account_name && <p className="text-xs text-muted-foreground mt-1">Name: {kycInfo.mobile_money_account_name}</p>}
-                </div>
-              )}
-              {/* Bank Account */}
-              {kycInfo.bank_name && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Banknote size={12} /> Bank Account</p>
-                  <p className="text-sm text-foreground">{kycInfo.bank_name} — {kycInfo.bank_account_number}</p>
-                  <p className="text-xs text-muted-foreground">Holder: {kycInfo.bank_account_holder_name}</p>
-                  {kycInfo.bank_branch && <p className="text-xs text-muted-foreground">Branch: {kycInfo.bank_branch}</p>}
-                  <p className="text-xs text-muted-foreground">Type: {kycInfo.account_type}</p>
-                </div>
-              )}
-              {/* Next of Kin */}
-              {kycInfo.nok_full_name && (
-                <div className="p-3 rounded-lg bg-background/50 border border-border/30 md:col-span-2">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Users size={12} /> Next of Kin</p>
-                  <p className="text-sm text-foreground">{kycInfo.nok_full_name} ({kycInfo.nok_relationship})</p>
-                  <p className="text-xs text-muted-foreground">Phone: {kycInfo.nok_phone}{kycInfo.nok_alt_phone ? ` / ${kycInfo.nok_alt_phone}` : ""}</p>
-                  {kycInfo.nok_nrc_number && <p className="text-xs text-muted-foreground">NRC: {kycInfo.nok_nrc_number}</p>}
-                  {kycInfo.nok_address && <p className="text-xs text-muted-foreground">Address: {kycInfo.nok_address}</p>}
-                  {kycInfo.nok_district && <p className="text-xs text-muted-foreground">District: {kycInfo.nok_district}</p>}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Financial Information & Next of Kin (editable) */}
+      <FinancialInfoForm borrowerId={borrowerId} kycInfo={kycInfo} />
 
-      {/* Personal References */}
-      {references.length > 0 && (
-        <Card className="border-border/50 bg-muted/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <UserCheck className="text-muted-foreground" size={18} />
-              <h4 className="font-semibold text-foreground">Personal References ({references.length})</h4>
-            </div>
-            <div className="space-y-2">
-              {references.map((ref) => (
-                <div key={ref.id} className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/30">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{ref.full_name} ({ref.relationship})</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone size={10} /> {ref.phone}{ref.alt_phone ? ` / ${ref.alt_phone}` : ""}</p>
-                    {ref.occupation && <p className="text-xs text-muted-foreground">{ref.occupation}</p>}
-                    {ref.years_known && <p className="text-xs text-muted-foreground">Known {ref.years_known} years</p>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {ref.is_verified ? (
-                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border gap-1"><CheckCircle size={12} /> Verified</Badge>
-                    ) : (
-                      <Button size="sm" className="h-7 text-xs" onClick={() => verifyReferenceMutation.mutate(ref.id)} disabled={verifyReferenceMutation.isPending}>
-                        Verify
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Personal References (add/verify/delete) */}
+      <ReferencesForm borrowerId={borrowerId} references={references} />
 
       {/* Preview Dialog */}
       <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
@@ -562,7 +344,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="text-destructive">Reject Document{rejectDocLabel ? `: ${rejectDocLabel}` : ""}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The borrower will be notified via email and SMS that this document was rejected and needs to be re-uploaded.</p>
+            <p className="text-sm text-muted-foreground">The borrower will be notified via email and SMS.</p>
             <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." rows={3} />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setRejectDocId(null); setRejectDocLabel(""); setRejectReason(""); }}>Cancel</Button>
