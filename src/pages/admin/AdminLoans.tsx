@@ -205,7 +205,9 @@ const AdminLoans = () => {
     account_number: "",
     mobile_money_number: "",
     transaction_reference: "",
-    source_account_id: "", // Source account to deduct funds from
+    source_account_id: "",
+    disbursement_date: format(new Date(), "yyyy-MM-dd"),
+    first_repayment_date: format(addMonths(new Date(), 1), "yyyy-MM-dd"),
   });
 
   // Quick Payment State
@@ -632,6 +634,7 @@ const AdminLoans = () => {
       }
 
       // Create disbursement record with source account
+      const disbursementDateISO = new Date(data.disbursement_date || new Date()).toISOString();
       const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedLoan!.id,
         amount: disbursementAmount,
@@ -641,7 +644,7 @@ const AdminLoans = () => {
         transaction_reference: data.transaction_reference || null,
         source_account_id: data.source_account_id || null,
         status: 'completed',
-        disbursed_at: new Date().toISOString(),
+        disbursed_at: disbursementDateISO,
       });
 
       if (disbError) throw disbError;
@@ -675,12 +678,35 @@ const AdminLoans = () => {
         .from('loan_applications')
         .update({
           status: 'disbursed',
+          disbursed_by: user?.id,
+          disbursed_at: disbursementDateISO,
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', selectedLoan!.id);
 
       if (loanError) throw loanError;
+
+      // Generate repayment schedule
+      const termMonths = selectedLoan!.loan_term_months;
+      const monthlyPayment = selectedLoan!.monthly_payment;
+      const firstRepayment = parseISO(data.first_repayment_date || format(addMonths(new Date(), 1), "yyyy-MM-dd"));
+      const repayments = [];
+      for (let i = 0; i < termMonths; i++) {
+        repayments.push({
+          loan_id: selectedLoan!.id,
+          user_id: selectedLoan!.user_id,
+          amount: monthlyPayment,
+          due_date: format(addMonths(firstRepayment, i), "yyyy-MM-dd"),
+          installment_number: i + 1,
+          status: "pending",
+        });
+      }
+
+      if (repayments.length > 0) {
+        const { error: repError } = await supabase.from("loan_repayments").insert(repayments);
+        if (repError) console.error("Failed to create repayment schedule:", repError);
+      }
 
       await logAudit({
         action: "DISBURSE",
@@ -847,6 +873,8 @@ const AdminLoans = () => {
       mobile_money_number: "",
       transaction_reference: "",
       source_account_id: "",
+      disbursement_date: format(new Date(), "yyyy-MM-dd"),
+      first_repayment_date: format(addMonths(new Date(), 1), "yyyy-MM-dd"),
     });
   };
 
@@ -1260,7 +1288,7 @@ const AdminLoans = () => {
                                   <Eye size={14} className="mr-2" />
                                   View Details
                                 </DropdownMenuItem>
-                                {["pending", "approved"].includes(loan.status) && can('loans', 'edit') && (
+                                {can('loans', 'edit') && (
                                   <DropdownMenuItem onClick={() => openEditDialog(loan)}>
                                     <Edit size={14} className="mr-2" />
                                     Edit Loan
@@ -1834,14 +1862,27 @@ const AdminLoans = () => {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label>Transaction Reference *</Label>
-              <Input
-                value={disbursement.transaction_reference}
-                onChange={(e) => setDisbursement({ ...disbursement, transaction_reference: e.target.value })}
-                placeholder="Enter transaction reference"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Disbursement Date *</Label>
+                <Input
+                  type="date"
+                  value={disbursement.disbursement_date}
+                  onChange={(e) => setDisbursement({ ...disbursement, disbursement_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>First Repayment Date *</Label>
+                <Input
+                  type="date"
+                  value={disbursement.first_repayment_date}
+                  onChange={(e) => setDisbursement({ ...disbursement, first_repayment_date: e.target.value })}
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              A repayment schedule of {selectedLoan?.loan_term_months} installments will be generated starting from the first repayment date.
+            </p>
           </div>
 
           <DialogFooter>
