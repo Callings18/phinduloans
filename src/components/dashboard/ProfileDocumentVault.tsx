@@ -15,7 +15,6 @@ const KYC_DOC_TYPES = [
   { type: "nrc_front", label: "NRC (Front)", accept: "image/*", capture: true },
   { type: "nrc_back", label: "NRC (Back)", accept: "image/*", capture: true },
   { type: "selfie", label: "Selfie Holding NRC", accept: "image/*", capture: true },
-  { type: "proof_of_residence", label: "Proof of Residence", accept: "image/*,application/pdf", capture: false },
 ];
 
 interface Props {

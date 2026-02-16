@@ -171,16 +171,21 @@ interface LoanProduct {
 }
 
 export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: "nrc_front", label: "NRC Front" },
-  { value: "nrc_back", label: "NRC Back" },
-  { value: "selfie", label: "Selfie" },
+  // Salary Advance docs
+  { value: "bank_statement", label: "3 Months Bank Statement" },
   { value: "payslip", label: "Latest Payslip" },
   { value: "payslip_2", label: "Second Payslip" },
   { value: "payslip_3", label: "Third Payslip" },
-  { value: "bank_statement", label: "Bank Statement" },
+  { value: "proof_of_residence", label: "Proof of Residence (Utility Bill)" },
   { value: "employer_letter", label: "Employment Letter" },
-  { value: "proof_of_residence", label: "Proof of Residence" },
-  { value: "collateral", label: "Collateral Image" },
+  // Business Loan docs
+  { value: "certificate_of_incorporation", label: "Certificate of Incorporation" },
+  { value: "shareholders_details", label: "Shareholders Details" },
+  { value: "proof_of_business", label: "Proof of Place of Business" },
+  { value: "financial_statement", label: "Financial Statement (Year Ended)" },
+  // Collateral-based docs
+  { value: "collateral_details", label: "Collateral Full Details" },
+  { value: "collateral_images", label: "Collateral Pictures" },
 ];
 
 const defaultFormData = {
