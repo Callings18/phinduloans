@@ -221,9 +221,12 @@ const AdminBorrowers = () => {
 
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-borrowers'] });
-      toast({ title: "Borrower created successfully" });
+      toast({ 
+        title: data?.existing ? "Borrower already existed" : "Borrower created successfully",
+        description: data?.message,
+      });
       setIsAddOpen(false);
       setFormData(emptyForm);
     },
