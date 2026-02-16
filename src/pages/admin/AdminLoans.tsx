@@ -157,7 +157,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("applications");
+  const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -1044,12 +1044,8 @@ const AdminLoans = () => {
   const getFilteredLoans = () => {
     let filtered = loans || [];
 
-    // Tab-based filtering
-    if (activeTab === "applications") {
-      // Applications tab shows pending, under_review, approved, contract_signing, rejected
-      filtered = filtered.filter(l => ["pending", "under_review", "approved", "contract_signing", "rejected"].includes(l.status));
-    } else if (activeTab === "active") {
-      // Active tab shows disbursed and active loans
+    // Loans page only shows post-disbursement statuses
+    if (activeTab === "active") {
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
       filtered = filtered.filter(l => l.status === "completed");
@@ -1078,8 +1074,6 @@ const AdminLoans = () => {
 
   const stats = {
     total: loans?.filter(l => ["active", "disbursed", "completed", "defaulted"].includes(l.status)).length || 0,
-    pending: loans?.filter(l => l.status === "pending").length || 0,
-    approved: loans?.filter(l => l.status === "approved").length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
     completed: loans?.filter(l => l.status === "completed").length || 0,
     defaulted: loans?.filter(l => l.status === "defaulted").length || 0,
@@ -1087,16 +1081,7 @@ const AdminLoans = () => {
   };
 
   const getStatusOptions = () => {
-    if (activeTab === "applications") {
-      return [
-        { value: "all", label: "All" },
-        { value: "pending", label: "Pending" },
-        { value: "under_review", label: "Under Review" },
-        { value: "approved", label: "Approved" },
-        { value: "contract_signing", label: "Contract Signing" },
-        { value: "rejected", label: "Rejected" },
-      ];
-    } else if (activeTab === "active") {
+    if (activeTab === "active") {
       return [
         { value: "all", label: "All" },
         { value: "active", label: "Active" },
@@ -1105,6 +1090,28 @@ const AdminLoans = () => {
     }
     return [{ value: "all", label: "All" }];
   };
+
+  // Move to defaulted mutation
+  const moveToDefaultedMutation = useMutation({
+    mutationFn: async (loanId: string) => {
+      const { error } = await supabase
+        .from("loan_applications")
+        .update({ status: "defaulted" as any })
+        .eq("id", loanId);
+      if (error) throw error;
+      await logAudit({
+        action: "MOVE_TO_DEFAULTED",
+        entity_type: "loan_application",
+        entity_id: loanId,
+        module: "loans",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      toast.success("Loan moved to defaulted");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to update status"),
+  });
 
   return (
     <AdminLayout>
@@ -1124,7 +1131,7 @@ const AdminLoans = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
@@ -1132,29 +1139,7 @@ const AdminLoans = () => {
               </div>
               <div>
                 <p className="text-xl font-bold text-foreground">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/50">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
-                <AlertTriangle className="text-warning" size={20} />
-              </div>
-              <div>
-                <p className="text-xl font-bold text-foreground">{stats.pending}</p>
-                <p className="text-xs text-muted-foreground">Pending</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/50">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
-                <CheckCircle className="text-success" size={20} />
-              </div>
-              <div>
-                <p className="text-xl font-bold text-foreground">{stats.approved}</p>
-                <p className="text-xs text-muted-foreground">Approved</p>
+                <p className="text-xs text-muted-foreground">Total Loans</p>
               </div>
             </CardContent>
           </Card>
@@ -1195,8 +1180,7 @@ const AdminLoans = () => {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setStatusFilter("all"); }}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="applications">Applications ({stats.pending + stats.approved + (loans?.filter(l => ["under_review", "contract_signing", "rejected"].includes(l.status)).length || 0)})</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="active">Active Loans ({stats.active})</TabsTrigger>
             <TabsTrigger value="completed">Completed ({stats.completed})</TabsTrigger>
             <TabsTrigger value="defaulted">Defaulted ({stats.defaulted})</TabsTrigger>
@@ -1339,18 +1323,19 @@ const AdminLoans = () => {
                                     View Schedule
                                   </DropdownMenuItem>
                                 )}
-                                {["pending", "rejected", "under_review"].includes(loan.status) && can('loans', 'delete') && (
+                                {["active", "disbursed"].includes(loan.status) && can('loans', 'edit') && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       className="text-destructive focus:text-destructive"
                                       onClick={() => {
-                                        setSelectedLoan(loan);
-                                        setIsDeleteOpen(true);
+                                        if (confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) {
+                                          moveToDefaultedMutation.mutate(loan.id);
+                                        }
                                       }}
                                     >
-                                      <Trash2 size={14} className="mr-2" />
-                                      Delete
+                                      <XCircle size={14} className="mr-2" />
+                                      Move to Defaulted
                                     </DropdownMenuItem>
                                   </>
                                 )}
