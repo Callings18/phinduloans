@@ -171,21 +171,28 @@ interface LoanProduct {
 }
 
 export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string }[] = [
+  // KYC / Identity docs (common across all products)
+  { value: "nrc_front", label: "NRC Front" },
+  { value: "nrc_back", label: "NRC Back" },
+  { value: "selfie_holding_nrc", label: "Selfie Holding NRC" },
   // Salary Advance docs
-  { value: "bank_statement", label: "3 Months Bank Statement" },
-  { value: "payslip", label: "Latest Payslip" },
-  { value: "payslip_2", label: "Second Payslip" },
-  { value: "payslip_3", label: "Third Payslip" },
+  { value: "bank_statement_1", label: "Bank Statement - Month 1" },
+  { value: "bank_statement_2", label: "Bank Statement - Month 2" },
+  { value: "bank_statement_3", label: "Bank Statement - Month 3" },
+  { value: "payslip_1", label: "Payslip 1 (Latest)" },
+  { value: "payslip_2", label: "Payslip 2" },
+  { value: "payslip_3", label: "Payslip 3" },
   { value: "proof_of_residence", label: "Proof of Residence (Utility Bill)" },
   { value: "employer_letter", label: "Employment Letter" },
   // Business Loan docs
   { value: "certificate_of_incorporation", label: "Certificate of Incorporation" },
   { value: "shareholders_details", label: "Shareholders Details" },
   { value: "proof_of_business", label: "Proof of Place of Business" },
-  { value: "financial_statement", label: "Financial Statement (Year Ended)" },
+  { value: "financial_statement", label: "Financial Statement" },
   // Collateral-based docs
   { value: "collateral_details", label: "Collateral Full Details" },
   { value: "collateral_images", label: "Collateral Pictures" },
+  { value: "collateral_estimated_value", label: "Estimated Value of Collateral" },
 ];
 
 const defaultFormData = {
