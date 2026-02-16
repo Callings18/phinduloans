@@ -325,7 +325,9 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         });
       if (insertError) throw insertError;
 
-      queryClient.invalidateQueries({ queryKey: ["application-documents", loanId] });
+      // Await refetch to ensure UI updates before clearing loading state
+      await queryClient.invalidateQueries({ queryKey: ["application-documents", loanId] });
+      await queryClient.refetchQueries({ queryKey: ["application-documents", loanId] });
       sonnerToast.success(`"${docName}" uploaded successfully`);
     } catch (err: any) {
       sonnerToast.error(err.message || "Upload failed");
@@ -346,7 +348,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     fileInputRef.current?.click();
   };
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !pendingUploadRef.current) {
       setUploadingRowId(null);
@@ -355,9 +357,9 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     }
 
     const { docType, docName } = pendingUploadRef.current;
-    handleFileUpload(file, docType, docName);
     pendingUploadRef.current = null;
     e.target.value = "";
+    await handleFileUpload(file, docType, docName);
   };
 
   const renderDocRow = (row: RequiredDocRow) => (
