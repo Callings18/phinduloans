@@ -11,6 +11,7 @@ import {
   CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle, Upload,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import PersonalInfoForm from "./kyc/PersonalInfoForm";
 import EmploymentIncomeForm from "./kyc/EmploymentIncomeForm";
 import FinancialInfoForm from "./kyc/FinancialInfoForm";
 import ReferencesForm from "./kyc/ReferencesForm";
@@ -98,7 +99,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("full_name, phone, nrc_number, address, city, employer_name, job_title, employment_type, years_in_employment, net_income")
+        .select("full_name, phone, nrc_number, address, city, email, employer_name, job_title, employment_type, years_in_employment, net_income")
         .eq("id", borrowerId)
         .maybeSingle();
       if (error) throw error;
@@ -231,6 +232,9 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
 
   return (
     <>
+      {/* Personal Information (editable) */}
+      <PersonalInfoForm borrowerId={borrowerId} profile={profile} />
+
       {/* Identity Documents */}
       <Card className={`border-border/50 ${allDocsVerified ? "bg-emerald-500/5 border-emerald-500/30" : anyUploaded ? "bg-yellow-500/5 border-yellow-500/30" : "bg-muted/30"}`}>
         <CardContent className="p-4">
