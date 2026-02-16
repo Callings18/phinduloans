@@ -1,116 +1,67 @@
 
-# Phindu V1.0.1 -- Simplify to Core LMS
 
-## What We're Doing
-Stripping the current system down to 7 clean navigation sections focused on the core lending workflow. All advanced features (Recovery, Payroll, Reports, PMIC, etc.) are hidden -- not deleted -- for V2.0.
+# Fix Dynamic Document Requirements and Document Storage/Viewing
 
-## Changes Overview
+## Problem Summary
 
-### 1. Simplify Admin Sidebar Navigation
-**File:** `src/components/admin/AdminSidebar.tsx`
+There are two main issues:
 
-Replace the current 8-section, 25-item navigation with a clean 4-section, 10-item layout:
+1. **Dynamic documents not showing for some loan products**: The Documents tab in "Add New Loan" (AdminLoans.tsx) reads `doc.document_name` to render labels, but some loan products in the database store the name under `doc_label` instead. This causes those products to show blank labels or fail to render.
 
-```text
-BEFORE (25+ items, 8 sections)        AFTER (10 items, 4 sections)
-------------------------------        ---------------------------
-Overview                              Overview
-  Dashboard                             Dashboard
-Lending                               Lending
-  Applications                          Applications
-  Borrowers                             Borrowers
-  Employees          <-- HIDE           Loan Products
-  Loan Products                         Loans
-  Loans                               Operations
-  Disbursements                         Disbursements
-Payments                                Repayments
-  Repayments                            Accounts
-  Bulk Repayments    <-- HIDE         Settings
-  PMIC               <-- HIDE          Contract Templates
-Finance
-  Accounts
-  Expenses           <-- HIDE
-Recovery             <-- HIDE ALL
-  Collections
-  Write-Offs
-  Court Cases
-Reports & Logs       <-- HIDE ALL
-  Reports
-  Audit Logs
-HR & Payroll         <-- HIDE ALL
-  HR Management
-  Payroll
-Administration       <-- HIDE MOST
-  Staff
-  Roles & Permissions
-  Contracts          <-- KEEP
-  Email Log
-  User Guide
-  Settings
-```
+2. **Documents must always be stored and viewable**: Any document uploaded anywhere in the system needs to be persisted to storage and viewable later by admins via signed URLs.
 
-- Remove all "New" badges (no longer needed)
-- Remove permission checks (internal team = full access)
-- All sections default open (only 4 sections)
+---
 
-### 2. Hide Borrower-Facing Routes
-**File:** `src/App.tsx`
+## Root Cause Analysis
 
-The borrower portal routes (`/dashboard`, `/profile`, `/apply`, `/pre-qualify`, `/calculator`) stay in the router but are not advertised. The landing page (`/`) and `/auth` remain as the entry points. No route deletion -- just the sidebar drives the experience.
+The `required_documents` JSONB field in the `loan_products` table has **two different formats**:
 
-### 3. Simplify AdminLayout
-**File:** `src/components/admin/AdminLayout.tsx`
+- **Newer products** (Salary Advance, Business Loan, Collateral Based Loan) use: `{ document_name, is_mandatory, display_order }`
+- **Older products** (Emergency Loan, Guarantor Loans, Vehicle Clearance) use: `{ doc_label, doc_type, is_mandatory, display_order, category }`
 
-- Remove PhinduAI chatbot (unnecessary complexity for internal use)
-- Keep AdminRealTimeNotifications (useful for staff)
+The code only reads `document_name`, so it silently fails for older-format products.
 
-### 4. Clean Up Dashboard Quick Actions
-**File:** `src/components/admin/QuickActions.tsx`
+---
 
-Ensure quick actions align with V1 workflow:
-- New Application
-- Add Borrower
-- Record Repayment
-- (Remove any links to hidden modules)
+## Plan
+
+### Step 1: Normalize document name reading in AdminLoans.tsx
+
+Update the Documents tab rendering (around line 1545) to handle both JSONB formats:
+
+- Read `doc.document_name || doc.doc_label` as the display name
+- Read `doc.document_type || doc.doc_type || docKey` as the type key
+- This single fix ensures all products display their documents correctly regardless of format
+
+### Step 2: Fix document upload submission logic
+
+Update the upload mutation (around line 478) to also use the normalized field:
+
+- Match doc config using `d.document_name || d.doc_label` for the label
+- Ensure doc_type uses the normalized key for consistent storage
+
+### Step 3: Standardize all loan products' required_documents format in the database
+
+Run a database migration to update the three older products (Emergency Loan, Guarantor Loans, Vehicle Clearance) to use the same `document_name` format as the newer products, ensuring consistency going forward.
+
+### Step 4: Ensure all document uploads are stored and viewable
+
+Verify that the upload flow in AdminLoans.tsx:
+- Uploads files to the `loan-documents` private storage bucket
+- Saves records to the `application_documents` table with correct metadata
+- Documents can be viewed later via the ApplicationDocumentsTab component using signed URLs
+
+Review the `ApplicationDocumentsTab` component to confirm it handles both legacy column-based documents and the newer `application_documents` table records, and that the in-app document viewer (with signed URL fetching) works for all uploaded document types.
 
 ---
 
 ## Technical Details
 
-### AdminSidebar.tsx -- New Navigation Structure
+### Files to modify:
+- `src/pages/admin/AdminLoans.tsx` -- Fix document name field reading to use `doc.document_name || doc.doc_label`
 
-The `menuGroups` array will be replaced with exactly these 4 groups:
+### Database migration:
+- Update `required_documents` JSONB for Emergency Loan, Guarantor Loans, and Vehicle Clearance to use `document_name` format instead of `doc_label`
 
-| Section | Items | Icons |
-|---------|-------|-------|
-| Overview | Dashboard | LayoutDashboard |
-| Lending | Applications, Borrowers, Loan Products, Loans | FileText, Users, Package, CreditCard |
-| Operations | Disbursements, Repayments, Accounts | CreditCard, Banknote, Wallet |
-| Settings | Contract Templates | FileSignature |
+### No new files needed
 
-- All `adminOnly`, `permission`, and `badge` properties removed
-- All groups set to `defaultOpen: true`
-- Unused icon imports removed
-- NotificationCenter and ThemeToggle kept in sidebar header
-
-### AdminLayout.tsx -- Minor Cleanup
-
-- Remove `PhinduAI` import and component render
-- Keep `AdminSidebar` and `AdminRealTimeNotifications`
-
-### App.tsx -- No Route Changes
-
-Routes stay intact (code preserved for V2). The simplified sidebar simply doesn't link to hidden pages. If someone types `/admin/collections` directly, it still works -- this is intentional for admin flexibility.
-
----
-
-## What Is NOT Changing
-- No database changes
-- No RLS policy changes
-- No page component deletions
-- No route removals
-- All V2 code preserved intact
-- Core workflow logic untouched
-
-## Estimated Time
-~15 minutes -- this is purely a navigation and layout cleanup.
