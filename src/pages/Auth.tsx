@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -19,11 +18,14 @@ const signupSchema = loginSchema.extend({
   fullName: z.string().trim().min(2, "Full name must be at least 2 characters"),
 });
 
-type AuthMethod = 'email' | 'phone';
+type LoginMode = "password" | "email_otp" | "phone_otp";
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [loginMode, setLoginMode] = useState<"password" | "otp">("password");
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get("mode") === "signup" ? false : true;
+  
+  const [isLogin, setIsLogin] = useState(initialMode);
+  const [loginMode, setLoginMode] = useState<LoginMode>("password");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,10 +69,11 @@ const Auth = () => {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (isLogin && loginMode === "otp") {
+    // Email OTP mode - send magic link via Supabase native email
+    if (isLogin && loginMode === "email_otp") {
       const input = email.trim();
       if (!input) {
-        setErrors({ email: "Enter your email or phone number" });
+        setErrors({ email: "Enter your email address" });
         return;
       }
       setIsSubmitting(true);
@@ -86,7 +89,7 @@ const Auth = () => {
         } else {
           setOtpSentTo(input);
           toast({
-            title: "Check your email or phone",
+            title: "Check your email",
             description: "We sent you a sign-in link. Click it to log in.",
           });
         }
@@ -195,35 +198,54 @@ const Auth = () => {
 
           {/* Auth Form */}
           <div className="glass rounded-3xl p-8 shadow-card animate-slide-up">
-            {otpSentTo ? (
+            {/* Login mode selector - only show for login */}
+            {isLogin && (
+              <div className="flex gap-1 p-1 rounded-lg bg-muted/50 mb-6">
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("password"); setErrors({}); setOtpSentTo(null); }}
+                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${loginMode === "password" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Lock size={14} />
+                  Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("email_otp"); setErrors({}); setOtpSentTo(null); }}
+                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${loginMode === "email_otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Mail size={14} />
+                  Email Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("phone_otp"); setErrors({}); setOtpSentTo(null); }}
+                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${loginMode === "phone_otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Phone size={14} />
+                  SMS OTP
+                </button>
+              </div>
+            )}
+
+            {/* Phone OTP mode - uses ExciteSMS via edge functions */}
+            {isLogin && loginMode === "phone_otp" ? (
+              <PhoneAuthForm
+                purpose="login"
+                onSuccess={handlePhoneAuthSuccess}
+                onSwitchToEmail={() => { setLoginMode("password"); setErrors({}); }}
+              />
+            ) : otpSentTo ? (
               <div className="space-y-4 text-center">
                 <p className="text-muted-foreground">
-                  We sent a sign-in link to <strong>{otpSentTo}</strong>. Click the link in your email or message to log in.
+                  We sent a sign-in link to <strong>{otpSentTo}</strong>. Click the link in your email to log in.
                 </p>
                 <Button type="button" variant="outline" className="w-full" onClick={() => { setOtpSentTo(null); setErrors({}); }}>
-                  Use a different email or phone
+                  Use a different email
                 </Button>
               </div>
             ) : (
             <form onSubmit={handleEmailSubmit} className="space-y-5">
-              {isLogin && (
-                <div className="flex gap-2 p-1 rounded-lg bg-muted/50">
-                  <button
-                    type="button"
-                    onClick={() => { setLoginMode("password"); setErrors({}); }}
-                    className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${loginMode === "password" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    Password
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setLoginMode("otp"); setErrors({}); }}
-                    className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${loginMode === "otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    Email / OTP
-                  </button>
-                </div>
-              )}
               {!isLogin && (
                 <div className="space-y-2">
                   <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
@@ -247,14 +269,14 @@ const Auth = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                  {isLogin && loginMode === "otp" ? "Email or phone number" : "Email Address"}
+                  {isLogin && loginMode === "email_otp" ? "Email Address" : "Email Address"}
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                   <Input
                     id="email"
-                    type={isLogin && loginMode === "otp" ? "text" : "email"}
-                    placeholder={isLogin && loginMode === "otp" ? "you@example.com or 09xx xxx xxx" : "you@example.com"}
+                    type="email"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-11"
@@ -265,7 +287,8 @@ const Auth = () => {
                 )}
               </div>
 
-              {isLogin && loginMode === "password" && (
+              {/* Show password field for password login and signup */}
+              {(loginMode === "password" || !isLogin) && (
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
@@ -301,7 +324,7 @@ const Auth = () => {
                 ) : (
                   <span className="flex items-center gap-2">
                     {isLogin
-                      ? (loginMode === "otp" ? "Send sign-in link" : "Sign In")
+                      ? (loginMode === "email_otp" ? "Send sign-in link" : "Sign In")
                       : "Create Account"}
                     <ArrowRight size={18} />
                   </span>
@@ -317,7 +340,9 @@ const Auth = () => {
                   type="button"
                   onClick={() => {
                     setIsLogin(!isLogin);
+                    setLoginMode("password");
                     setErrors({});
+                    setOtpSentTo(null);
                   }}
                   className="ml-2 text-primary hover:text-primary/80 font-medium transition-colors"
                 >
