@@ -501,6 +501,30 @@ const AdminLoans = () => {
         }
       }
 
+      // Auto-link existing KYC documents from borrower_document_vault
+      const { data: vaultDocs } = await supabase
+        .from("borrower_document_vault")
+        .select("*")
+        .eq("borrower_id", selectedBorrowerId);
+
+      if (vaultDocs && vaultDocs.length > 0) {
+        const kycRecords = vaultDocs.map((vDoc: any) => ({
+          application_id: loanId,
+          borrower_id: selectedBorrowerId,
+          loan_product_id: selectedProductId,
+          doc_type: vDoc.doc_type,
+          doc_label: vDoc.doc_label,
+          file_url: vDoc.file_url,
+          file_name: vDoc.file_name,
+          file_size: vDoc.file_size,
+          mime_type: vDoc.mime_type,
+          is_required: true,
+          uploaded_by: "vault_auto",
+          status: vDoc.is_verified ? "verified" : "uploaded",
+        }));
+        await supabase.from("application_documents").insert(kycRecords);
+      }
+
       // Documents already saved to application_documents above
 
       // If creating with immediate disbursement
@@ -677,7 +701,7 @@ const AdminLoans = () => {
       const { error: loanError } = await supabase
         .from('loan_applications')
         .update({
-          status: 'disbursed',
+          status: 'active',
           disbursed_by: user?.id,
           disbursed_at: disbursementDateISO,
           reviewed_by: user?.id,
