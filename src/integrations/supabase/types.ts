@@ -3043,16 +3043,21 @@ export type Database = {
           email: string
           email_reminders: boolean | null
           email_verified_at: string | null
+          employer_name: string | null
+          employment_type: string | null
           full_name: string | null
           id: string
           is_blacklisted: boolean | null
+          job_title: string | null
           marketing: boolean | null
+          net_income: number | null
           nrc_number: string | null
           payment_alerts: boolean | null
           phone: string | null
           phone_verified_at: string | null
           sms_reminders: boolean | null
           updated_at: string
+          years_in_employment: number | null
         }
         Insert: {
           address?: string | null
@@ -3066,16 +3071,21 @@ export type Database = {
           email: string
           email_reminders?: boolean | null
           email_verified_at?: string | null
+          employer_name?: string | null
+          employment_type?: string | null
           full_name?: string | null
           id: string
           is_blacklisted?: boolean | null
+          job_title?: string | null
           marketing?: boolean | null
+          net_income?: number | null
           nrc_number?: string | null
           payment_alerts?: boolean | null
           phone?: string | null
           phone_verified_at?: string | null
           sms_reminders?: boolean | null
           updated_at?: string
+          years_in_employment?: number | null
         }
         Update: {
           address?: string | null
@@ -3089,16 +3099,21 @@ export type Database = {
           email?: string
           email_reminders?: boolean | null
           email_verified_at?: string | null
+          employer_name?: string | null
+          employment_type?: string | null
           full_name?: string | null
           id?: string
           is_blacklisted?: boolean | null
+          job_title?: string | null
           marketing?: boolean | null
+          net_income?: number | null
           nrc_number?: string | null
           payment_alerts?: boolean | null
           phone?: string | null
           phone_verified_at?: string | null
           sms_reminders?: boolean | null
           updated_at?: string
+          years_in_employment?: number | null
         }
         Relationships: []
       }

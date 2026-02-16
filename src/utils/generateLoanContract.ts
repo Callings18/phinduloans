@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 import { logAudit } from '@/utils/auditLog';
+import directorSignatureImg from '@/assets/director-signature.png';
 
 interface LoanData {
   id: string;
@@ -378,21 +379,20 @@ const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): j
   doc.text('FOR PHINDU CREDIT SOLUTIONS LTD:', pageWidth - margin - 80, yPos);
   yPos += 10;
   
-  // If admin signature present, add text indicator
-  if (options?.adminSignedAt) {
-    doc.setFont('helvetica', 'italic');
-    doc.text('[Digitally Signed]', pageWidth - margin - 80, yPos);
-    doc.setFont('helvetica', 'normal');
-    yPos += 5;
-    doc.text(`Name: Authorized Signatory`, pageWidth - margin - 80, yPos);
-    yPos += 5;
-    doc.text(`Date: ${new Date(options.adminSignedAt).toLocaleDateString('en-GB')}`, pageWidth - margin - 80, yPos);
-  } else {
+  // Always embed the Director's signature image
+  try {
+    doc.addImage(directorSignatureImg, 'PNG', pageWidth - margin - 80, yPos - 5, 60, 20);
+    yPos += 20;
+  } catch (e) {
     doc.line(pageWidth - margin - 80, yPos, pageWidth - margin, yPos);
     yPos += 5;
-    doc.text('Name: ____________________', pageWidth - margin - 80, yPos);
-    yPos += 5;
-    doc.text('Date: ____________________', pageWidth - margin - 80, yPos);
+  }
+  doc.text('Name: Director', pageWidth - margin - 80, yPos);
+  yPos += 5;
+  if (options?.adminSignedAt) {
+    doc.text(`Date: ${new Date(options.adminSignedAt).toLocaleDateString('en-GB')}`, pageWidth - margin - 80, yPos);
+  } else {
+    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - margin - 80, yPos);
   }
 
   yPos = 285;

@@ -56,6 +56,11 @@ interface Profile {
     sms_reminders?: boolean | null;
     payment_alerts?: boolean | null;
     marketing?: boolean | null;
+    employer_name?: string | null;
+    job_title?: string | null;
+    employment_type?: string | null;
+    years_in_employment?: number | null;
+    net_income?: number | null;
     created_at: string;
 }
 
@@ -72,6 +77,11 @@ const Profile = () => {
         nrc_number: "",
         address: "",
         city: "",
+        employer_name: "",
+        job_title: "",
+        employment_type: "permanent",
+        years_in_employment: "",
+        net_income: "",
     });
 
     // Notification preferences state
@@ -174,6 +184,11 @@ const Profile = () => {
                 nrc_number: profile.nrc_number || "",
                 address: profile.address || "",
                 city: profile.city || "",
+                employer_name: (profile as any).employer_name || "",
+                job_title: (profile as any).job_title || "",
+                employment_type: (profile as any).employment_type || "permanent",
+                years_in_employment: (profile as any).years_in_employment?.toString() || "",
+                net_income: (profile as any).net_income?.toString() || "",
             });
             // Load notification preferences from profile
             setNotifications({
@@ -186,7 +201,12 @@ const Profile = () => {
     }, [profile]);
 
     const handleSave = () => {
-        updateProfileMutation.mutate(formData);
+        const saveData: any = {
+            ...formData,
+            years_in_employment: formData.years_in_employment ? parseInt(formData.years_in_employment, 10) : null,
+            net_income: formData.net_income ? parseFloat(formData.net_income) : null,
+        };
+        updateProfileMutation.mutate(saveData);
     };
 
     const handleChangePassword = async () => {
@@ -417,6 +437,78 @@ const Profile = () => {
                                                     placeholder="Full address"
                                                 />
                                             </div>
+                                        </div>
+
+                                        {/* Employment & Income Details */}
+                                        <div className="md:col-span-2 pt-4">
+                                            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+                                                <Briefcase size={16} className="text-primary" />
+                                                Employment & Income
+                                            </h4>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="employer_name">Place of Work</Label>
+                                            <Input
+                                                id="employer_name"
+                                                value={formData.employer_name}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, employer_name: e.target.value }))}
+                                                disabled={!isEditing}
+                                                placeholder="Employer name"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="job_title">Position</Label>
+                                            <Input
+                                                id="job_title"
+                                                value={formData.job_title}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, job_title: e.target.value }))}
+                                                disabled={!isEditing}
+                                                placeholder="Job title / position"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="employment_type">Employment Type</Label>
+                                            <select
+                                                id="employment_type"
+                                                value={formData.employment_type}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, employment_type: e.target.value }))}
+                                                disabled={!isEditing}
+                                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <option value="permanent">Permanent</option>
+                                                <option value="contract">Contract</option>
+                                                <option value="casual">Casual</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="years_in_employment">Years in Employment</Label>
+                                            <Input
+                                                id="years_in_employment"
+                                                type="number"
+                                                value={formData.years_in_employment}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, years_in_employment: e.target.value }))}
+                                                disabled={!isEditing}
+                                                placeholder="e.g. 5"
+                                                min={0}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="net_income">Net Income (ZMW)</Label>
+                                            <Input
+                                                id="net_income"
+                                                type="number"
+                                                value={formData.net_income}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, net_income: e.target.value }))}
+                                                disabled={!isEditing}
+                                                placeholder="Monthly net income"
+                                                min={0}
+                                            />
                                         </div>
                                     </div>
 
