@@ -9,8 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
   CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle,
-  Banknote, Users, UserCheck, Smartphone, Phone,
+  Banknote, Users, UserCheck, Smartphone, Phone, Upload,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface BorrowerKYCSectionProps {
@@ -28,6 +29,63 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const queryClient = useQueryClient();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rejectDocId, setRejectDocId] = useState<string | null>(null);
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
+
+  // Upload KYC document on behalf of borrower
+  const handleUploadKYC = async (file: File, docType: string, docLabel: string) => {
+    setUploadingType(docType);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `kyc/${borrowerId}/${docType}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("loan-documents")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Check if doc already exists (rejected re-upload)
+      const existing = vaultDocs.find(d => d.doc_type === docType);
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from("borrower_document_vault")
+          .update({
+            file_url: filePath,
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type,
+            uploaded_at: new Date().toISOString(),
+            is_verified: false,
+            verified_at: null,
+            verified_by: null,
+            notes: null,
+          })
+          .eq("id", existing.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from("borrower_document_vault")
+          .insert({
+            borrower_id: borrowerId,
+            doc_type: docType,
+            doc_label: docLabel,
+            file_url: filePath,
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type,
+          });
+        if (insertError) throw insertError;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+      toast({ title: `${docLabel} uploaded successfully` });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingType(null);
+    }
+  };
   const [rejectDocLabel, setRejectDocLabel] = useState("");
   const [rejectReason, setRejectReason] = useState("");
 
@@ -271,9 +329,27 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                         {isRejected && <p className="text-xs text-destructive mt-0.5">{doc.notes?.replace("Rejected: ", "")}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
                       {!doc ? (
-                        <Badge variant="outline" className="text-muted-foreground gap-1"><AlertTriangle size={12} /> Missing</Badge>
+                        <>
+                          <Badge variant="outline" className="text-muted-foreground gap-1"><AlertTriangle size={12} /> Missing</Badge>
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadKYC(file, kycType.type, kycType.label);
+                                e.target.value = "";
+                              }}
+                              disabled={uploadingType === kycType.type}
+                            />
+                            <span className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded-md border border-input bg-background hover:bg-accent cursor-pointer">
+                              <Upload size={12} /> {uploadingType === kycType.type ? "Uploading..." : "Upload"}
+                            </span>
+                          </label>
+                        </>
                       ) : doc.is_verified ? (
                         <>
                           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border gap-1"><CheckCircle size={12} /> Verified</Badge>
@@ -283,6 +359,22 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                         <>
                           <Badge variant="destructive" className="gap-1"><XCircle size={12} /> Rejected</Badge>
                           <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadKYC(file, kycType.type, kycType.label);
+                                e.target.value = "";
+                              }}
+                              disabled={uploadingType === kycType.type}
+                            />
+                            <span className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded-md border border-input bg-background hover:bg-accent cursor-pointer">
+                              <Upload size={12} /> Re-upload
+                            </span>
+                          </label>
                         </>
                       ) : (
                         <>
