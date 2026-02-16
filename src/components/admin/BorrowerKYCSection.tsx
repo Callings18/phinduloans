@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
   CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle,
-  Banknote, Users, UserCheck, Smartphone, Phone, Upload,
+  Banknote, Users, UserCheck, Smartphone, Phone, Upload, Briefcase, DollarSign,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -100,6 +100,21 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         .order("uploaded_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
+    },
+    enabled: !!borrowerId,
+  });
+
+  // Profile (employment & income)
+  const { data: profile } = useQuery({
+    queryKey: ["borrower-profile-kyc", borrowerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name, phone, nrc_number, address, city, employer_name, job_title, employment_type, years_in_employment, net_income")
+        .eq("id", borrowerId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
     },
     enabled: !!borrowerId,
   });
@@ -392,6 +407,56 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
           )}
         </CardContent>
       </Card>
+
+      {/* Employment & Income */}
+      {profile && (profile.employer_name || profile.job_title || profile.employment_type || profile.net_income) && (
+        <Card className="border-border/50 bg-muted/30">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Briefcase className="text-muted-foreground" size={18} />
+              <h4 className="font-semibold text-foreground">Employment & Income</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {profile.employer_name && (
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Employer</p>
+                  <p className="text-sm text-foreground">{profile.employer_name}</p>
+                </div>
+              )}
+              {profile.job_title && (
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Job Title</p>
+                  <p className="text-sm text-foreground">{profile.job_title}</p>
+                </div>
+              )}
+              {profile.employment_type && (
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Employment Type</p>
+                  <p className="text-sm text-foreground capitalize">{profile.employment_type.replace(/_/g, " ")}</p>
+                </div>
+              )}
+              {profile.years_in_employment != null && (
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Years in Employment</p>
+                  <p className="text-sm text-foreground">{profile.years_in_employment} {profile.years_in_employment === 1 ? "year" : "years"}</p>
+                </div>
+              )}
+              {profile.net_income != null && (
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1"><DollarSign size={12} /> Net Income</p>
+                  <p className="text-sm text-foreground font-medium">K {Number(profile.net_income).toLocaleString()}</p>
+                </div>
+              )}
+              {profile.address && (
+                <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Address</p>
+                  <p className="text-sm text-foreground">{profile.address}{profile.city ? `, ${profile.city}` : ""}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Financial Information */}
       {kycInfo && (
