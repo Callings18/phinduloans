@@ -475,7 +475,11 @@ const AdminLoans = () => {
       const requiredDocs = (selectedProduct?.required_documents as any[]) || [];
       for (const [docKey, file] of Object.entries(documentFiles)) {
         if (!file) continue;
-        const docConfig = requiredDocs.find((d: any) => d.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() === docKey);
+        const docConfig = requiredDocs.find((d: any) => {
+          const name = d.document_name || d.doc_label || '';
+          const key = (d.doc_type || name)?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+          return key === docKey;
+        });
         const folder = docKey.includes('nrc') ? 'nrc' : docKey.includes('payslip') ? 'payslips' : docKey.includes('collateral') ? 'collateral' : 'documents';
         const fileUrl = await uploadDocumentFile(file, folder, loanId);
         if (fileUrl) {
@@ -483,8 +487,8 @@ const AdminLoans = () => {
             application_id: loanId,
             borrower_id: selectedBorrowerId,
             loan_product_id: selectedProductId,
-            doc_type: docKey,
-            doc_label: docConfig?.document_name || docKey,
+            doc_type: docConfig?.doc_type || docKey,
+            doc_label: docConfig?.document_name || docConfig?.doc_label || docKey,
             file_url: fileUrl,
             file_name: file.name,
             file_size: file.size,
@@ -1542,11 +1546,12 @@ const AdminLoans = () => {
                       {prodDocs
                         .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
                         .map((doc: any) => {
-                          const docKey = doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                          const docName = doc.document_name || doc.doc_label || 'Document';
+                          const docKey = (doc.doc_type || docName)?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
                           return (
                             <div key={docKey} className="space-y-2">
                               <Label className="flex items-center gap-1">
-                                {doc.document_name}
+                                {docName}
                                 {doc.is_mandatory && <span className="text-destructive">*</span>}
                               </Label>
                               <div className="border-2 border-dashed border-border rounded-lg p-3">
