@@ -86,6 +86,8 @@ const statusConfig = {
   crb_failed: { label: "CRB Failed", color: "bg-amber-600/20 text-amber-400 border-amber-600/30" },
   pmic_pending: { label: "PMIC Pending", color: "bg-cyan-600/20 text-cyan-400 border-cyan-600/30" },
   approved: { label: "Approved", color: "bg-green-500/20 text-green-400 border-green-500/30" },
+  contract_signing: { label: "Contract Signing", color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
+  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-teal-500/20 text-teal-400 border-teal-500/30" },
   rejected: { label: "Rejected", color: "bg-red-500/20 text-red-400 border-red-500/30" },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
   active: { label: "Active", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
@@ -518,12 +520,13 @@ const AdminApplications = () => {
         notes: `Loan disbursement to ${selectedApp.full_name}`,
       });
 
-      // Update loan status to disbursed and set disbursed_by
+      // Update loan status to disbursed and set disbursed_by/disbursed_at
       const { error: loanError } = await supabase
         .from('loan_applications')
         .update({
           status: 'disbursed',
           disbursed_by: user?.id,
+          disbursed_at: new Date().toISOString(),
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString(),
           approval_stage: 'disbursed',
@@ -704,7 +707,7 @@ const AdminApplications = () => {
     queryFn: async () => {
       if (!selectedApp?.id) return [];
       const { data, error } = await (supabase.from as any)("loan_notes")
-        .select("id, note, type, created_at, user_id")
+        .select("id, note, note_type, created_at, user_id")
         .eq("loan_id", selectedApp.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -720,7 +723,7 @@ const AdminApplications = () => {
         loan_id: loanId,
         user_id: user.id,
         note,
-        type,
+        note_type: type,
       });
       if (error) throw error;
     },

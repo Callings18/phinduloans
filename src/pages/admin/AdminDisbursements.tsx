@@ -251,7 +251,11 @@ const AdminDisbursements = () => {
 
           await supabase
             .from("loan_applications")
-            .update({ status: "disbursed" })
+            .update({
+              status: "disbursed",
+              disbursed_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+              disbursed_at: new Date().toISOString(),
+            })
             .eq("id", disbursement.loan_id);
 
           const { data: loan, error: loanErr } = await supabase
