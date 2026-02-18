@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { notificationService } from "@/utils/notifications";
 import { getSignedUrl } from "@/utils/storageHelpers";
@@ -118,6 +119,7 @@ const AdminApplications = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [runTour, setRunTour] = useState(false);
   const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
+  const [addLoanTab, setAddLoanTab] = useState("borrower");
   const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
 
   const tourSteps: Step[] = [
@@ -822,6 +824,7 @@ const AdminApplications = () => {
       payslip_2: null,
       payslip_3: null,
     });
+    setAddLoanTab("borrower");
   };
 
   const uploadDocumentFile = async (file: File, folder: string, loanId: string): Promise<string | null> => {
@@ -1438,7 +1441,24 @@ const AdminApplications = () => {
             <DialogDescription>Create a new loan application manually</DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="borrower" className="w-full">
+          {/* Progress Bar */}
+          {(() => {
+            const steps = ["borrower", "employment", "loan", "collateral", "documents"];
+            const stepLabels = ["Borrower", "Employment", "Loan Details", "Collateral", "Documents"];
+            const currentIdx = steps.indexOf(addLoanTab);
+            const progress = ((currentIdx + 1) / steps.length) * 100;
+            return (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Step {currentIdx + 1} of {steps.length}: {stepLabels[currentIdx]}</span>
+                  <span>{Math.round(progress)}% complete</span>
+                </div>
+                <Progress value={progress} className="h-2" />
+              </div>
+            );
+          })()}
+
+          <Tabs value={addLoanTab} onValueChange={setAddLoanTab} className="w-full">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="borrower">Borrower</TabsTrigger>
               <TabsTrigger value="employment">Employment</TabsTrigger>
@@ -1804,13 +1824,32 @@ const AdminApplications = () => {
           </Tabs>
 
           <DialogFooter className="gap-2 mt-4">
+            {addLoanTab !== "borrower" && (
+              <Button variant="outline" onClick={() => {
+                const steps = ["borrower", "employment", "loan", "collateral", "documents"];
+                const idx = steps.indexOf(addLoanTab);
+                if (idx > 0) setAddLoanTab(steps[idx - 1]);
+              }}>
+                ← Previous
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setIsAddOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateLoan} disabled={createLoanMutation.isPending}>
-              <Plus size={16} className="mr-1" />
-              Create Loan
-            </Button>
+            {addLoanTab !== "documents" ? (
+              <Button onClick={() => {
+                const steps = ["borrower", "employment", "loan", "collateral", "documents"];
+                const idx = steps.indexOf(addLoanTab);
+                if (idx < steps.length - 1) setAddLoanTab(steps[idx + 1]);
+              }}>
+                Next →
+              </Button>
+            ) : (
+              <Button onClick={handleCreateLoan} disabled={createLoanMutation.isPending}>
+                <Plus size={16} className="mr-1" />
+                Create Loan
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

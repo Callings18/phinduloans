@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -82,6 +83,31 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [dataConsent, setDataConsent] = useState(false);
   const [needsDocuments, setNeedsDocuments] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  const DRAFT_KEY = `phindu_quick_apply_draft_${userId}`;
+
+  // Auto-save draft when values change
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          productId: selectedProduct?.id || null,
+          loanAmount,
+          loanTerm,
+          loanPurpose,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch { /* ignore */ }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [isOpen, selectedProduct, loanAmount, loanTerm, loanPurpose, DRAFT_KEY]);
+
+  // Clear draft on successful submit
+  const clearDraft = useCallback(() => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  }, [DRAFT_KEY]);
 
   // Fetch loan products
   const { data: loanProducts } = useQuery({
@@ -156,13 +182,32 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
   if (!profile?.phone) missingFields.push("Phone");
   if (!profile?.nrc_number) missingFields.push("NRC Number");
 
+  // Load draft or set defaults when products are loaded
   useEffect(() => {
-    if (loanProducts && loanProducts.length > 0 && !selectedProduct) {
-      setSelectedProduct(loanProducts[0]);
-      setLoanAmount(loanProducts[0].min_amount);
-      setLoanTerm(loanProducts[0].min_term_months);
+    if (loanProducts && loanProducts.length > 0 && !draftRestored) {
+      try {
+        const saved = localStorage.getItem(DRAFT_KEY);
+        if (saved) {
+          const draft = JSON.parse(saved);
+          const p = loanProducts.find(lp => lp.id === draft.productId);
+          if (p) {
+            setSelectedProduct(p);
+            if (draft.loanAmount) setLoanAmount(draft.loanAmount);
+            if (draft.loanTerm) setLoanTerm(draft.loanTerm);
+            if (draft.loanPurpose) setLoanPurpose(draft.loanPurpose);
+            setDraftRestored(true);
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+      // No valid draft — use defaults
+      if (!selectedProduct) {
+        setSelectedProduct(loanProducts[0]);
+        setLoanAmount(loanProducts[0].min_amount);
+        setLoanTerm(loanProducts[0].min_term_months);
+      }
     }
-  }, [loanProducts, selectedProduct]);
+  }, [loanProducts, selectedProduct, draftRestored, DRAFT_KEY]);
 
   useEffect(() => {
     if (selectedProduct) {
@@ -285,6 +330,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
         description: "Your quick loan application has been submitted for review.",
       });
 
+      clearDraft();
       setIsOpen(false);
       onSuccess?.();
     } catch (error: any) {
@@ -391,6 +437,44 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
               Apply instantly using your saved profile information
             </DialogDescription>
           </DialogHeader>
+
+          {/* Application Progress */}
+          {(() => {
+            let completedSteps = 0;
+            const totalSteps = 4;
+            if (isProfileComplete) completedSteps++;
+            if (selectedProduct) completedSteps++;
+            if (loanPurpose) completedSteps++;
+            if (termsAccepted && dataConsent) completedSteps++;
+            const progress = (completedSteps / totalSteps) * 100;
+            return (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{completedSteps} of {totalSteps} steps completed</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+                <Progress value={progress} className="h-2" />
+                <div className="flex gap-2 flex-wrap">
+                  <Badge variant={isProfileComplete ? "default" : "outline"} className="text-xs">
+                    {isProfileComplete ? <CheckCircle size={10} className="mr-1" /> : null}
+                    Profile
+                  </Badge>
+                  <Badge variant={selectedProduct ? "default" : "outline"} className="text-xs">
+                    {selectedProduct ? <CheckCircle size={10} className="mr-1" /> : null}
+                    Product
+                  </Badge>
+                  <Badge variant={loanPurpose ? "default" : "outline"} className="text-xs">
+                    {loanPurpose ? <CheckCircle size={10} className="mr-1" /> : null}
+                    Purpose
+                  </Badge>
+                  <Badge variant={termsAccepted && dataConsent ? "default" : "outline"} className="text-xs">
+                    {termsAccepted && dataConsent ? <CheckCircle size={10} className="mr-1" /> : null}
+                    Consent
+                  </Badge>
+                </div>
+              </div>
+            );
+          })()}
 
           {!isProfileComplete && (
             <Alert variant="destructive">
@@ -570,9 +654,12 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
             </div>
           </div>
 
+          <div className="text-xs text-muted-foreground text-center">
+            Draft auto-saved • Your progress is saved automatically
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsOpen(false)}>
-              Cancel
+              Save & Close
             </Button>
             <Button 
               variant="hero" 
