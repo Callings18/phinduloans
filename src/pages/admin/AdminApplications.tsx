@@ -58,6 +58,7 @@ import {
   Shield,
   Upload,
   Clock,
+  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -77,6 +78,7 @@ import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
 import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/components/common/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 
@@ -1741,37 +1743,60 @@ const AdminApplications = () => {
                     <p className="text-sm text-muted-foreground">
                       Upload the required documents for <span className="font-semibold text-foreground">{selectedProduct?.name}</span>
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {requiredDocs
-                        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
-                        .map((doc: any) => {
-                          const docKey = doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-                          return (
-                            <div key={docKey} className="space-y-2">
-                              <Label className="flex items-center gap-1">
-                                {doc.document_name}
-                                {doc.is_mandatory && <span className="text-destructive">*</span>}
-                              </Label>
-                              <div className="border-2 border-dashed border-border rounded-lg p-3">
-                                <Input
-                                  type="file"
-                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                  onChange={(e) => setDocumentFiles({
-                                    ...documentFiles,
-                                    [docKey]: e.target.files?.[0] || null
-                                  })}
-                                  className="file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                                />
-                                {documentFiles[docKey] && (
-                                  <p className="text-xs text-muted-foreground mt-1 truncate">
-                                    {documentFiles[docKey]?.name}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
+                    {(() => {
+                      const sorted = requiredDocs.sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+                      // Group docs by category using REQUIRED_DOC_TYPE_OPTIONS mapping
+                      const categoryMap: Record<string, string> = {};
+                      REQUIRED_DOC_TYPE_OPTIONS.forEach(opt => { categoryMap[opt.value] = opt.category; });
+                      const groups: { category: string; docs: any[] }[] = [];
+                      const seen = new Set<string>();
+                      for (const doc of sorted) {
+                        const cat = categoryMap[doc.document_type] || "Other Documents";
+                        if (!seen.has(cat)) { seen.add(cat); groups.push({ category: cat, docs: [] }); }
+                        groups.find(g => g.category === cat)!.docs.push(doc);
+                      }
+                      return groups.map(group => (
+                        <details key={group.category} open className="group border border-border rounded-lg overflow-hidden">
+                          <summary className="flex items-center justify-between cursor-pointer bg-secondary/40 px-4 py-3 hover:bg-secondary/60 transition-colors">
+                            <span className="font-medium text-sm text-foreground flex items-center gap-2">
+                              <FileText size={16} className="text-primary" />
+                              {group.category}
+                              <Badge variant="outline" className="text-xs ml-1">{group.docs.length}</Badge>
+                            </span>
+                            <ChevronDown size={16} className="text-muted-foreground transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                            {group.docs.map((doc: any) => {
+                              const docKey = doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                              return (
+                                <div key={docKey} className="space-y-2">
+                                  <Label className="flex items-center gap-1 text-sm">
+                                    {doc.document_name}
+                                    {doc.is_mandatory && <span className="text-destructive">*</span>}
+                                  </Label>
+                                  <div className="border-2 border-dashed border-border rounded-lg p-3">
+                                    <Input
+                                      type="file"
+                                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                      onChange={(e) => setDocumentFiles({
+                                        ...documentFiles,
+                                        [docKey]: e.target.files?.[0] || null
+                                      })}
+                                      className="file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                                    />
+                                    {documentFiles[docKey] && (
+                                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                                        {documentFiles[docKey]?.name}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      ));
+                    })()}
                   </div>
                 );
               })()}

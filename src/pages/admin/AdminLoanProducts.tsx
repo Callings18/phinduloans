@@ -170,30 +170,46 @@ interface LoanProduct {
   required_documents?: { document_type: string; document_name: string; is_mandatory: boolean; display_order: number }[] | null;
 }
 
-export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string }[] = [
-  // KYC / Identity docs (common across all products)
-  { value: "nrc_front", label: "NRC Front" },
-  { value: "nrc_back", label: "NRC Back" },
-  { value: "selfie_holding_nrc", label: "Selfie Holding NRC" },
-  // Salary Advance docs
-  { value: "bank_statement_1", label: "Bank Statement - Month 1" },
-  { value: "bank_statement_2", label: "Bank Statement - Month 2" },
-  { value: "bank_statement_3", label: "Bank Statement - Month 3" },
-  { value: "payslip_1", label: "Payslip 1 (Latest)" },
-  { value: "payslip_2", label: "Payslip 2" },
-  { value: "payslip_3", label: "Payslip 3" },
-  { value: "proof_of_residence", label: "Proof of Residence (Utility Bill)" },
-  { value: "employer_letter", label: "Employment Letter" },
-  // Business Loan docs
-  { value: "certificate_of_incorporation", label: "Certificate of Incorporation" },
-  { value: "shareholders_details", label: "Shareholders Details" },
-  { value: "proof_of_business", label: "Proof of Place of Business" },
-  { value: "financial_statement", label: "Financial Statement" },
-  // Collateral-based docs
-  { value: "collateral_details", label: "Collateral Full Details" },
-  { value: "collateral_images", label: "Collateral Pictures" },
-  { value: "collateral_estimated_value", label: "Estimated Value of Collateral" },
+export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string; category: string }[] = [
+  // KYC / Identity docs
+  { value: "nrc_front", label: "NRC Front", category: "Identity (NRC)" },
+  { value: "nrc_back", label: "NRC Back", category: "Identity (NRC)" },
+  { value: "selfie_holding_nrc", label: "Selfie Holding NRC", category: "Identity (NRC)" },
+  // Bank Statements
+  { value: "bank_statement_1", label: "Month 1", category: "Bank Statements" },
+  { value: "bank_statement_2", label: "Month 2", category: "Bank Statements" },
+  { value: "bank_statement_3", label: "Month 3", category: "Bank Statements" },
+  // Payslips
+  { value: "payslip_1", label: "Latest", category: "Payslips" },
+  { value: "payslip_2", label: "Month 2", category: "Payslips" },
+  { value: "payslip_3", label: "Month 3", category: "Payslips" },
+  // Proof & Employment
+  { value: "proof_of_residence", label: "Proof of Residence (Utility Bill)", category: "Proof & Employment" },
+  { value: "employer_letter", label: "Employment Letter", category: "Proof & Employment" },
+  // Business Docs
+  { value: "certificate_of_incorporation", label: "Certificate of Incorporation", category: "Business Documents" },
+  { value: "shareholders_details", label: "Shareholders Details", category: "Business Documents" },
+  { value: "proof_of_business", label: "Proof of Place of Business", category: "Business Documents" },
+  { value: "financial_statement", label: "Financial Statement", category: "Business Documents" },
+  // Collateral
+  { value: "collateral_details", label: "Collateral Full Details", category: "Collateral" },
+  { value: "collateral_images", label: "Collateral Pictures", category: "Collateral" },
+  { value: "collateral_estimated_value", label: "Estimated Value of Collateral", category: "Collateral" },
 ];
+
+/** Group doc options by category */
+export function groupDocsByCategory(docs: typeof REQUIRED_DOC_TYPE_OPTIONS) {
+  const groups: { category: string; docs: typeof REQUIRED_DOC_TYPE_OPTIONS }[] = [];
+  const seen = new Set<string>();
+  for (const d of docs) {
+    if (!seen.has(d.category)) {
+      seen.add(d.category);
+      groups.push({ category: d.category, docs: [] });
+    }
+    groups.find(g => g.category === d.category)!.docs.push(d);
+  }
+  return groups;
+}
 
 const defaultFormData = {
   name: "",
@@ -914,39 +930,46 @@ const AdminLoanProducts = () => {
                 {/* Row 4: Required Documents */}
                 <div className="space-y-3">
                   <Label>Required Documents</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {REQUIRED_DOC_TYPE_OPTIONS.map((doc) => {
-                      const isSelected = formData.required_documents?.some(d => d.document_type === doc.value) || false;
-                      return (
-                        <div key={doc.value} className="flex items-center gap-3">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setFormData({
-                                  ...formData,
-                                  required_documents: [
-                                    ...(formData.required_documents || []),
-                                    {
-                                      document_type: doc.value,
-                                      document_name: doc.label,
-                                      is_mandatory: true,
-                                      display_order: (formData.required_documents?.length ?? 0) + 1,
-                                    },
-                                  ],
-                                });
-                              } else {
-                                setFormData({
-                                  ...formData,
-                                  required_documents: formData.required_documents?.filter(d => d.document_type !== doc.value) ?? [],
-                                });
-                              }
-                            }}
-                          />
-                          <Label className="text-sm font-normal">{doc.label}</Label>
+                  <div className="space-y-4">
+                    {groupDocsByCategory(REQUIRED_DOC_TYPE_OPTIONS).map((group) => (
+                      <div key={group.category} className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.category}</p>
+                        <div className="grid grid-cols-2 gap-2 pl-2 border-l-2 border-border">
+                          {group.docs.map((doc) => {
+                            const isSelected = formData.required_documents?.some(d => d.document_type === doc.value) || false;
+                            return (
+                              <div key={doc.value} className="flex items-center gap-3">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setFormData({
+                                        ...formData,
+                                        required_documents: [
+                                          ...(formData.required_documents || []),
+                                          {
+                                            document_type: doc.value,
+                                            document_name: doc.label,
+                                            is_mandatory: true,
+                                            display_order: (formData.required_documents?.length ?? 0) + 1,
+                                          },
+                                        ],
+                                      });
+                                    } else {
+                                      setFormData({
+                                        ...formData,
+                                        required_documents: formData.required_documents?.filter(d => d.document_type !== doc.value) ?? [],
+                                      });
+                                    }
+                                  }}
+                                />
+                                <Label className="text-sm font-normal">{doc.label}</Label>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
