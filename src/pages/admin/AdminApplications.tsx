@@ -2233,6 +2233,11 @@ const AdminApplications = () => {
                 size="sm"
                 onClick={async () => {
                   if (selectedApp) {
+                    if (!selectedApp.contract_url) {
+                      toast({ title: 'Generating & storing contract...' });
+                      await uploadContractAndSaveUrl(selectedApp as any);
+                      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+                    }
                     await generateLoanContract({
                       id: selectedApp.id,
                       full_name: selectedApp.full_name,
@@ -2255,6 +2260,7 @@ const AdminApplications = () => {
                       collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
                       created_at: selectedApp.created_at,
                       loan_product_id: selectedApp.loan_product_id,
+                      contract_url: selectedApp.contract_url,
                     });
                   }
                 }}
@@ -2267,6 +2273,11 @@ const AdminApplications = () => {
                 size="sm"
                 onClick={async () => {
                   if (selectedApp) {
+                    if (!selectedApp.contract_url) {
+                      toast({ title: 'Generating & storing contract...' });
+                      await uploadContractAndSaveUrl(selectedApp as any);
+                      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+                    }
                     await downloadLoanContract({
                       id: selectedApp.id,
                       full_name: selectedApp.full_name,
@@ -2286,6 +2297,7 @@ const AdminApplications = () => {
                       collateral_value: selectedApp.collateral_value ? Number(selectedApp.collateral_value) : undefined,
                       created_at: selectedApp.created_at,
                       loan_product_id: selectedApp.loan_product_id,
+                      contract_url: selectedApp.contract_url,
                     });
                   }
                 }}

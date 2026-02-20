@@ -453,7 +453,22 @@ export const generateSignedContractPDF = async (
 };
 
 // Open in new window for printing (async version)
-export const generateLoanContract = async (loan: LoanData) => {
+// If the loan has a stored contract_url, open that version instead of regenerating.
+export const generateLoanContract = async (loan: LoanData & { contract_url?: string | null }) => {
+  // Prefer stored contract to ensure consistency
+  if (loan.contract_url) {
+    try {
+      const { data, error } = await supabase.storage
+        .from('loan-documents')
+        .createSignedUrl(loan.contract_url, 300);
+      if (!error && data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to open stored contract, falling back to generation:', e);
+    }
+  }
   const doc = await createContractPDF(loan);
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -461,7 +476,32 @@ export const generateLoanContract = async (loan: LoanData) => {
 };
 
 // Download as PDF file (async version)
-export const downloadLoanContract = async (loan: LoanData) => {
+// If the loan has a stored contract_url, download that version from storage.
+// Otherwise, generate a fresh PDF from the current template.
+export const downloadLoanContract = async (loan: LoanData & { contract_url?: string | null }) => {
+  // Prefer stored contract to ensure all users see the same version
+  if (loan.contract_url) {
+    try {
+      const { data, error } = await supabase.storage
+        .from('loan-documents')
+        .createSignedUrl(loan.contract_url, 300);
+      if (!error && data?.signedUrl) {
+        const response = await fetch(data.signedUrl);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}_${loan.id.slice(0, 8)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to download stored contract, falling back to generation:', e);
+    }
+  }
   const doc = await createContractPDF(loan);
   const fileName = `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}_${loan.id.slice(0, 8)}.pdf`;
   doc.save(fileName);
