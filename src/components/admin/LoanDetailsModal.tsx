@@ -142,6 +142,7 @@ interface Loan {
   settlement_type?: string | null;
   early_settlement_fee?: number;
   loan_product_id?: string | null;
+  contract_url?: string | null;
   // Contract signing fields
   signed_contract_url?: string | null;
   signed_contract_uploaded_at?: string | null;
@@ -641,6 +642,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       setSignedContractFile(null);
       toast.success("Signed contract uploaded");
     },
@@ -1411,13 +1413,60 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileText size={16} /> Contract
                     </CardTitle>
-                    <CardDescription>Upload or view the signed contract PDF</CardDescription>
+                    <CardDescription>Generate, upload, or view the contract PDF</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Generated contract */}
+                    {(loan as any).contract_url && (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                          <FileText size={12} className="mr-1" /> Generated Contract
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from('loan-documents')
+                              .createSignedUrl((loan as any).contract_url!, 3600);
+                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                            else toast.error('Could not load contract');
+                          }}
+                        >
+                          <Eye size={14} className="mr-1" /> View
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleDownloadContract}>
+                          <Download size={14} className="mr-1" /> Download
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Generate & Store button */}
+                    <Button
+                      size="sm"
+                      variant={(loan as any).contract_url ? "outline" : "default"}
+                      onClick={async () => {
+                        toast.info('Generating contract...');
+                        const path = await uploadContractAndSaveUrl(loan as any);
+                        if (path) {
+                          queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+                          queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+                          queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+                          toast.success('Contract generated and stored. All staff will now see this version.');
+                        } else {
+                          toast.error('Failed to generate contract');
+                        }
+                      }}
+                    >
+                      <FileText size={14} className="mr-1" />
+                      {(loan as any).contract_url ? 'Regenerate Contract' : 'Generate & Store Contract'}
+                    </Button>
+
+                    {/* Signed contract */}
                     {loan.signed_contract_url ? (
                       <div className="flex items-center gap-3">
                         <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                          <CheckCircle size={12} className="mr-1" /> Contract uploaded
+                          <CheckCircle size={12} className="mr-1" /> Signed contract uploaded
                         </Badge>
                         <Button
                           size="sm"
@@ -1430,11 +1479,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             else toast.error('Could not load contract');
                           }}
                         >
-                          <Download size={14} className="mr-1" /> View
+                          <Download size={14} className="mr-1" /> View Signed
                         </Button>
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No contract uploaded yet.</p>
+                      <p className="text-sm text-muted-foreground">No signed contract uploaded yet.</p>
                     )}
 
                     {/* Upload */}
