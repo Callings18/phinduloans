@@ -90,6 +90,14 @@ interface Loan {
   admin_notes: string | null;
   loan_product_id: string | null;
   assigned_to: string | null;
+  contract_url: string | null;
+  signed_contract_url: string | null;
+  signed_contract_uploaded_at: string | null;
+  borrower_signed: boolean | null;
+  borrower_signed_at: string | null;
+  admin_signed: boolean | null;
+  admin_signed_at: string | null;
+  contract_fully_signed_at: string | null;
 }
 
 interface LoanProduct {

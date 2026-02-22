@@ -39,6 +39,7 @@ interface MenuItem {
   icon: any;
   label: string;
   path: string;
+  adminOnly?: boolean;
 }
 
 const menuGroups: MenuGroup[] = [
@@ -62,17 +63,17 @@ const menuGroups: MenuGroup[] = [
     items: [
       { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
       { icon: Banknote, label: "Repayments", path: "/admin/repayments" },
-      { icon: Wallet, label: "Accounts", path: "/admin/accounts" },
+      { icon: Wallet, label: "Accounts", path: "/admin/accounts", adminOnly: true },
     ],
   },
   {
     label: "Administration",
     items: [
       { icon: FileSignature, label: "Contract Templates", path: "/admin/contract-templates" },
-      { icon: UserCog, label: "Staff", path: "/admin/staff" },
-      { icon: Shield, label: "Roles & Permissions", path: "/admin/roles-permissions" },
+      { icon: UserCog, label: "Staff", path: "/admin/staff", adminOnly: true },
+      { icon: Shield, label: "Roles & Permissions", path: "/admin/roles-permissions", adminOnly: true },
       { icon: BookOpen, label: "User Guide", path: "/admin/user-guide" },
-      { icon: Settings, label: "Settings", path: "/admin/settings" },
+      { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
     ],
   },
 ];
@@ -83,7 +84,13 @@ const AdminSidebar = () => {
     menuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, isAdmin } = useAuth();
+
+  // Filter menu items based on role
+  const filteredMenuGroups = menuGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => !item.adminOnly || isAdmin),
+  })).filter(group => group.items.length > 0);
 
   const toggleGroup = (label: string) => {
     setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
@@ -139,7 +146,7 @@ const AdminSidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-        {menuGroups.map((group) => {
+        {filteredMenuGroups.map((group) => {
           const isOpen = openGroups[group.label];
           const hasActiveItem = isActiveGroup(group);
 
