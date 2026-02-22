@@ -70,7 +70,7 @@ const menuGroups: MenuGroup[] = [
     label: "Administration",
     items: [
       { icon: FileSignature, label: "Contract Templates", path: "/admin/contract-templates" },
-      { icon: UserCog, label: "Staff", path: "/admin/staff", adminOnly: true },
+      { icon: UserCog, label: "Staff", path: "/admin/staff" },
       { icon: Shield, label: "Roles & Permissions", path: "/admin/roles-permissions", adminOnly: true },
       { icon: BookOpen, label: "User Guide", path: "/admin/user-guide" },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
