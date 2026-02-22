@@ -994,12 +994,109 @@ const AdminLoanProducts = () => {
                 </div>
               </div>
 
-              {/* V2 Advanced Fields - hidden for V1.0.1 */}
-              {false && (
-                <div>
-                  {/* All eligibility, CRB, guarantor, penalty, repayment, preview fields preserved for V2 */}
+              {/* Fees, Penalties & Advanced */}
+              <details className="border border-border rounded-lg">
+                <summary className="px-4 py-3 cursor-pointer font-semibold text-sm text-foreground hover:bg-muted/50 rounded-lg">
+                  Fees, Penalties & Advanced Settings
+                </summary>
+                <div className="px-4 pb-4 pt-2 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Late Payment Penalty (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.late_payment_penalty_percent}
+                        onChange={(e) => setFormData({ ...formData, late_payment_penalty_percent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Penalty Frequency</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={formData.penalty_frequency}
+                        onChange={(e) => setFormData({ ...formData, penalty_frequency: e.target.value })}
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="one_time">One-time</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Grace Period (days)</Label>
+                      <Input
+                        type="number"
+                        value={formData.grace_period_days}
+                        onChange={(e) => setFormData({ ...formData, grace_period_days: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Enforcement Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.enforcement_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, enforcement_fee_percent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Insurance Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.insurance_percent}
+                        onChange={(e) => setFormData({ ...formData, insurance_percent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 pt-6">
+                      <Switch
+                        checked={formData.insurance_required}
+                        onCheckedChange={(checked) => setFormData({ ...formData, insurance_required: checked })}
+                      />
+                      <Label>Insurance Required</Label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>VAT (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.vat_percent}
+                        onChange={(e) => setFormData({ ...formData, vat_percent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Platform Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.platform_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, platform_fee_percent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Early Repayment Fee (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={formData.early_repayment_fee_percent}
+                        onChange={(e) => setFormData({ ...formData, early_repayment_fee_percent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={formData.early_repayment_allowed}
+                      onCheckedChange={(checked) => setFormData({ ...formData, early_repayment_allowed: checked })}
+                    />
+                    <Label>Allow Early Repayment</Label>
+                  </div>
                 </div>
-              )}
+              </details>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
