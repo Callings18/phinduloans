@@ -150,7 +150,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     }).sort((a, b) => a.display_order - b.display_order);
   }, [loanProduct]);
 
-  // Map vault doc_type to product doc_type (uppercase)
+  // Map vault doc_type to product doc_type (uppercase) with aliases
   const vaultToProductType: Record<string, string> = {
     nrc_front: "NRC_FRONT",
     nrc_back: "NRC_BACK",
@@ -158,6 +158,39 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     selfie_holding_nrc: "SELFIE_HOLDING_NRC",
     proof_of_residence: "PROOF_OF_RESIDENCE",
     proof_of_residence_utility_bill: "PROOF_OF_RESIDENCE_UTILITY_BILL",
+    payslip: "PAYSLIP",
+    payslip_1: "PAYSLIP",
+    payslip_latest: "PAYSLIP",
+    bank_statement: "BANK_STATEMENT",
+    employer_letter: "EMPLOYER_LETTER",
+    collateral: "COLLATERAL_DOC",
+    collateral_image: "COLLATERAL_DOC",
+    collateral_photos: "COLLATERAL_PHOTOS",
+    guarantor: "GUARANTOR_DOC",
+    guarantor_nrc: "GUARANTOR_NRC",
+    guarantor_payslip: "GUARANTOR_PAYSLIP",
+    business_registration: "BUSINESS_REGISTRATION",
+    tax_compliance: "TAX_COMPLIANCE",
+  };
+
+  // Normalize a doc type for matching: strip underscores/hyphens, lowercase
+  const normalizeDocType = (type: string): string => 
+    type.toUpperCase().replace(/[-_\s]+/g, '').replace(/[^A-Z0-9]/g, '');
+
+  // Check if two doc types match (including alias matching)
+  const docTypesMatch = (uploadedType: string, requiredType: string): boolean => {
+    const normUploaded = normalizeDocType(uploadedType);
+    const normRequired = normalizeDocType(requiredType);
+    if (normUploaded === normRequired) return true;
+    // Alias matching: SELFIE matches SELFIEHOLDINGNRC, PAYSLIP matches PAYSLIP1/PAYSLIPLATEST etc
+    if (normRequired.startsWith(normUploaded) || normUploaded.startsWith(normRequired)) return true;
+    // Specific aliases
+    if ((normUploaded === 'SELFIE' && normRequired === 'SELFIEHOLDINGNRC') || 
+        (normUploaded === 'SELFIEHOLDINGNRC' && normRequired === 'SELFIE')) return true;
+    if ((normUploaded.startsWith('PAYSLIP') && normRequired.startsWith('PAYSLIP'))) return true;
+    if ((normUploaded.startsWith('COLLATERAL') && normRequired.startsWith('COLLATERAL'))) return true;
+    if ((normUploaded.startsWith('BANKSTATEMENT') && normRequired.startsWith('BANKSTATEMENT'))) return true;
+    return false;
   };
 
   // Build all uploaded docs (unified + legacy + vault KYC)
@@ -233,7 +266,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       const matchingUploads = allUploadedDocs.filter(
         (d) => {
           if (claimedDocIds.has(d.id)) return false;
-          return d.docType && reqDoc.document_type && d.docType.toUpperCase() === reqDoc.document_type.toUpperCase();
+          return d.docType && reqDoc.document_type && docTypesMatch(d.docType, reqDoc.document_type);
         }
       );
       
@@ -260,8 +293,8 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
 
   // Extra uploaded docs not in the required list
   const extraDocs = useMemo(() => {
-    const requiredTypes = new Set(productDocuments.filter((d) => d.document_type).map((d) => d.document_type.toUpperCase()));
-    return allUploadedDocs.filter((d) => d.docType && !requiredTypes.has(d.docType.toUpperCase()));
+    const requiredTypes = productDocuments.filter((d) => d.document_type).map((d) => d.document_type);
+    return allUploadedDocs.filter((d) => d.docType && !requiredTypes.some(rt => docTypesMatch(d.docType, rt)));
   }, [productDocuments, allUploadedDocs]);
 
   // Stats

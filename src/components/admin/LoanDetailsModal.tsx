@@ -201,7 +201,7 @@ interface EarlySettlement {
 }
 
 export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { can } = usePermissions();
   const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
@@ -218,6 +218,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isUndoDisbursementOpen, setIsUndoDisbursementOpen] = useState(false);
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
+  const [isReloanOpen, setIsReloanOpen] = useState(false);
 
   // Phase 1 new states
   const [isReversalOpen, setIsReversalOpen] = useState(false);
@@ -615,6 +616,102 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to generate schedule");
+    },
+  });
+
+  // Reloan mutation - creates a new loan from existing one without disbursement
+  const reloanMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+
+      // Mark current loan as completed
+      const { error: closeError } = await supabase
+        .from("loan_applications")
+        .update({
+          status: "completed" as any,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Loan reloaned — new loan created from this one.`,
+        })
+        .eq("id", loan.id);
+      if (closeError) throw closeError;
+
+      // Mark all pending repayments as paid (interest was paid)
+      await supabase
+        .from("loan_repayments")
+        .update({
+          status: "paid",
+          paid_date: new Date().toISOString().split("T")[0],
+          payment_method: "reloan_settlement",
+        })
+        .eq("loan_id", loan.id)
+        .eq("status", "pending");
+
+      // Create new loan application (approved, no disbursement needed)
+      const { data: newLoan, error: insertError } = await supabase
+        .from("loan_applications")
+        .insert({
+          user_id: loan.user_id,
+          full_name: loan.full_name,
+          email: loan.email,
+          phone: loan.phone,
+          nrc_number: loan.nrc_number,
+          address: loan.address || null,
+          city: loan.city || null,
+          employer_name: loan.employer_name || null,
+          job_title: loan.job_title || null,
+          employment_type: loan.employment_type as any,
+          monthly_income: loan.monthly_income || 0,
+          loan_amount: loan.loan_amount,
+          loan_term_months: loan.loan_term_months,
+          interest_rate: loan.interest_rate,
+          monthly_payment: loan.monthly_payment,
+          total_repayment: loan.total_repayment,
+          loan_purpose: loan.loan_purpose,
+          loan_product_id: loan.loan_product_id || null,
+          status: "disbursed" as any,
+          source: "internal",
+          admin_notes: `Reloan of previous loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement — funds already with borrower.`,
+          disbursed_by: user?.id ?? null,
+          disbursed_at: new Date().toISOString(),
+        })
+        .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id")
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Generate repayment schedule for the new loan
+      await createRepaymentScheduleForLoan(
+        {
+          id: newLoan.id,
+          user_id: newLoan.user_id,
+          loan_term_months: newLoan.loan_term_months,
+          total_repayment: newLoan.total_repayment,
+          monthly_payment: newLoan.monthly_payment,
+          loan_product_id: newLoan.loan_product_id,
+          term_unit: (loan as any).term_unit || 'months',
+        },
+        supabase
+      );
+
+      await logAudit({
+        action: "RELOAN",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { new_loan_id: newLoan.id },
+      });
+
+      return newLoan;
+    },
+    onSuccess: (newLoan) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
+      toast.success(`Reloan created successfully (ID: ${newLoan.id.slice(0, 8)}). No bank deduction applied.`);
+      setIsReloanOpen(false);
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to create reloan");
     },
   });
 
@@ -1154,6 +1251,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
                       <RefreshCw size={14} className="mr-1" /> Restructure
                     </Button>
+                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
+                        <ArrowRight size={14} className="mr-1" /> Reloan
+                      </Button>
+                    )}
                     {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
                       <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
                         <Undo2 size={14} className="mr-1" /> Undo Disbursement
@@ -2015,6 +2117,38 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Reloan Confirmation Dialog */}
+      <AlertDialog open={isReloanOpen} onOpenChange={setIsReloanOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ArrowRight size={20} /> Reloan — {loan.full_name}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>This will:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Mark the current loan as <strong>completed</strong></li>
+                <li>Mark all pending repayments as paid (interest settlement)</li>
+                <li>Create a new loan with the same terms (K{Number(loan.loan_amount).toLocaleString()}, {loan.loan_term_months} months @ {loan.interest_rate}%)</li>
+                <li><strong>No disbursement will be created</strong> — the funds are already with the borrower</li>
+                <li>A new repayment schedule will be generated</li>
+              </ul>
+              <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => reloanMutation.mutate()}
+              disabled={reloanMutation.isPending}
+            >
+              {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Confirm Reloan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
