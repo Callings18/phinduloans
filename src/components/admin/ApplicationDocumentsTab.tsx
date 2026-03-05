@@ -263,10 +263,15 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     
     return productDocuments.map((reqDoc, index) => {
       // Find matching uploads for this doc type that haven't been claimed yet
+      // Primary: match on doc_type. Fallback: match on doc_label vs document_name
       const matchingUploads = allUploadedDocs.filter(
         (d) => {
           if (claimedDocIds.has(d.id)) return false;
-          return d.docType && reqDoc.document_type && docTypesMatch(d.docType, reqDoc.document_type);
+          // Primary match: doc_type matches document_type
+          if (d.docType && reqDoc.document_type && docTypesMatch(d.docType, reqDoc.document_type)) return true;
+          // Fallback: label-based match for docs saved with wrong keys
+          if (d.label && reqDoc.document_name && d.label.toLowerCase().trim() === reqDoc.document_name.toLowerCase().trim()) return true;
+          return false;
         }
       );
       

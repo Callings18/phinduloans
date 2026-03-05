@@ -370,7 +370,7 @@ const AdminApplications = () => {
       const requiredDocs = (productForDocs?.required_documents as any[]) || [];
 
       for (const doc of requiredDocs) {
-        const docKey = doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const docKey = doc.document_type || doc.doc_type || doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
         const file = data.files[docKey];
         if (file) {
           const filePath = await uploadDocumentFile(file, docKey, loanId);
@@ -1799,7 +1799,7 @@ const AdminApplications = () => {
                           </summary>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
                             {group.docs.map((doc: any) => {
-                              const docKey = doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                              const docKey = doc.document_type || doc.doc_type || doc.document_name?.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
                               return (
                                 <div key={docKey} className="space-y-2">
                                   <Label className="flex items-center gap-1 text-sm">
