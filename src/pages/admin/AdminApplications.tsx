@@ -303,6 +303,18 @@ const AdminApplications = () => {
       const borrower = borrowers?.find(b => b.id === data.borrowerId);
       if (!borrower) throw new Error('Borrower not found');
 
+      // Check for existing active loans
+      const { data: existingLoans, error: checkError } = await supabase
+        .from('loan_applications')
+        .select('id, status')
+        .eq('user_id', data.borrowerId)
+        .in('status', ['pending', 'under_review', 'approved', 'contract_signing', 'awaiting_disbursement', 'disbursed', 'active'] as any);
+      
+      if (checkError) throw checkError;
+      if (existingLoans && existingLoans.length > 0) {
+        throw new Error('This borrower already has an active loan. Please close or complete the existing loan first.');
+      }
+
       const monthlyIncome = parseFloat(data.loanData.monthly_income);
       const loanAmount = parseFloat(data.loanData.loan_amount);
       const interestRate = parseFloat(data.loanData.interest_rate);
@@ -2129,8 +2141,8 @@ const AdminApplications = () => {
                   </Card>
                 )}
 
-                {/* Disburse */}
-                {selectedApp.status === 'approved' && (
+                {/* Disburse - Admin only */}
+                {selectedApp.status === 'approved' && isAdmin && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-3">
                       <h4 className="font-semibold text-foreground">Disburse Loan</h4>

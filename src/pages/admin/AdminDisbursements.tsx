@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
-import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -66,9 +66,10 @@ interface Disbursement {
 }
 
 const AdminDisbursements = () => {
+  const { isAdmin } = useAuth();
   const { can } = usePermissions();
-  const canCompleteDisbursement = can("disbursement", "disburse");
-  const canCreateDisbursement = can("disbursement", "create") || can("disbursement", "disburse");
+  const canCompleteDisbursement = isAdmin;
+  const canCreateDisbursement = isAdmin;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
