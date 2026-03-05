@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -104,6 +104,17 @@ const AdminDisbursements = () => {
       return data as Disbursement[];
     },
   });
+
+  // Real-time subscription for disbursements
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-disbursements-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'disbursements' }, () => {
+        queryClient.invalidateQueries({ queryKey: ["disbursements"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   const { data: approvedLoans } = useQuery({
     queryKey: ["approved-loans-for-disbursement"],

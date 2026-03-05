@@ -79,6 +79,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        // Handle expired/invalid sessions cleanly
+        if (event === 'TOKEN_REFRESHED' && !currentSession) {
+          console.warn('[Auth] Token refresh failed — signing out');
+          supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setRoles([]);
+          setIsLoading(false);
+          return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+          setRoles([]);
+          setIsLoading(false);
+          return;
+        }
+
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setIsLoading(false);
@@ -91,7 +110,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    supabase.auth.getSession().then(({ data: { session: currentSession }, error }) => {
+      if (error) {
+        console.warn('[Auth] Session retrieval failed:', error.message);
+        // Clear stale session data
+        supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setRoles([]);
+        setIsLoading(false);
+        return;
+      }
+
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       setIsLoading(false);
