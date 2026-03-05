@@ -1,93 +1,99 @@
 
 
-## Plan: 6 Fixes — Disbursement Access, Reloan, Documents, Duplicate Prevention, Receipt Branding, Signature Removal
+## Current State and Remaining Gaps
 
-### 1. Block Loan Officers from Disbursing
-
-**Problem**: Loan officers can create and complete disbursements via the Disbursements page. The permission check uses `can("disbursement", "disburse")` and `can("disbursement", "create")`, but if these permissions are assigned to the loan_officer role, they can act.
-
-**Fix**:
-- In `AdminDisbursements.tsx`, add an explicit `isAdmin` gate: loan officers see the page (read-only view of disbursement status) but both the "New Disbursement" button and the "Complete/Fail" actions are hidden unless `isAdmin` is true.
-- Also gate the disburse action in `AdminApplications.tsx` the same way — the "Disburse" button in the application detail view should only appear for admin/finance roles.
-
-**Files**: `src/pages/admin/AdminDisbursements.tsx`, `src/pages/admin/AdminApplications.tsx`
+Based on reviewing your codebase, documentation, console logs, and the 6 fixes just implemented, here is a prioritized breakdown of what remains.
 
 ---
 
-### 2. Add "Reloan" Feature (Admin Only)
-
-**Problem**: When a borrower pays off interest and wants to reloan the same principal, the admin currently has to clear the loan, create a new one, and it behaves as a brand new loan (deducting from bank account again).
-
-**Fix**:
-- Add a "Reloan" button in `LoanDetailsModal.tsx` (Overview tab, quick actions area), visible only to admins (`isAdmin` check).
-- Reloan logic:
-  1. Mark the current loan as `completed` (or a new status `reloaned`).
-  2. Create a new `loan_application` record copying key fields (borrower, product, amount, term) from the original loan with status `approved` and a reference note like "Reloan of [original_id]".
-  3. Do NOT create a disbursement or deduct from any account — the money is already with the borrower.
-  4. Auto-generate a new repayment schedule for the new loan.
-  5. Show a confirmation dialog explaining what will happen.
-
-**Files**: `src/components/admin/LoanDetailsModal.tsx`
+### Recently Completed (Just Done)
+1. Loan officer blocked from disbursing
+2. Reloan feature (admin-only)
+3. Document matching fix
+4. Duplicate active loan prevention
+5. Receipt branding (Phindu burgundy)
+6. Director signature removed from contracts
 
 ---
 
-### 3. Fix Document Matching (Uploaded Docs Showing as "Other")
+### Immediate Bugs to Fix
 
-**Problem**: The `ApplicationDocumentsTab` matching logic compares `d.docType.toUpperCase()` against `reqDoc.document_type.toUpperCase()`, but when documents are uploaded via the admin upload form, the `doc_type` is saved as a lowercase key (e.g., `nrc_front`) derived from `document_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()`. Meanwhile, the product's `document_type` may be `NRC_FRONT` (uppercase slug generated from the name). This should match, BUT vault KYC docs use types like `nrc_front` which get mapped via `vaultToProductType` to `NRC_FRONT`. The issue is that admin-uploaded docs use arbitrary keys like `nrc_front` from `docKey` and the product type is `NRC_FRONT` — these should match case-insensitively, which they do.
-
-The real issue: when docs are uploaded during loan creation (line 361-381 in AdminApplications), `doc_type` is set to `docKey` = `document_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()`, e.g. `"nrc_front"`. But the product's `document_type` might be stored differently (e.g. `"NRC_FRONT"` or `"nrc-front"`). The matching at line 236 does `toUpperCase()` comparison which should work. 
-
-Let me look more carefully — the `extraDocs` filter at line 262-265 checks `!requiredTypes.has(d.docType.toUpperCase())`. So if a vault KYC doc is mapped to `NRC_FRONT` but the product doesn't have that exact type, it shows as extra. The vault mapping only covers a few types. If the product has a type like `SELFIE_HOLDING_NRC` but the vault doc type is `selfie` mapped to `SELFIE`, they won't match.
-
-**Fix**: Expand the matching logic in `ApplicationDocumentsTab.tsx`:
-- Add more mappings to `vaultToProductType` for common variations.
-- Normalize both sides more aggressively: strip underscores/hyphens, compare base forms.
-- Add alias matching: `SELFIE` should match `SELFIE_HOLDING_NRC`, `PAYSLIP` should match `PAYSLIP_1`, `PAYSLIP_LATEST`, etc.
-
-**Files**: `src/components/admin/ApplicationDocumentsTab.tsx`
+| Issue | Severity | Details |
+|-------|----------|---------|
+| Expired auth session handling | Medium | Console shows `Refresh Token Not Found` errors -- users see a blank state instead of being redirected to login cleanly |
+| AdminRoute ref warning | Low | `Navigate` component given a ref it can't accept -- cosmetic React warning |
 
 ---
 
-### 4. Prevent Duplicate Active Loans for Same Borrower
+### High-Priority Gaps (Business Impact)
 
-**Problem**: The system allows creating a new loan for a borrower who already has an active (pending/approved/disbursed) loan.
+**1. Pagination and Performance**
+- Several admin pages (Loans, Repayments, Borrowers) fetch all records without server-side pagination
+- Will degrade as loan book grows past 200-300 records
+- Hit the 1000-row Supabase default limit
 
-**Fix**:
-- In `AdminApplications.tsx` `createLoanMutation`, before inserting, query `loan_applications` for the selected borrower where `status IN ('pending', 'under_review', 'approved', 'awaiting_disbursement', 'disbursed')`. If any exist, throw an error: "This borrower already has an active loan. Please close or complete it first."
-- Also check the product's `max_concurrent_loans` setting if available.
+**2. Real-time Updates Inconsistency**
+- `AdminApplications` has real-time subscriptions but other pages (Repayments, Disbursements, Collections) require manual refresh
+- Loan officers and admins see stale data until page reload
 
-**Files**: `src/pages/admin/AdminApplications.tsx`
+**3. Document Management Per Product**
+- Product-level `required_documents` JSONB exists but the matching between uploaded docs and required docs is fragile (just patched with aliases)
+- No admin UI to configure which documents are required per product -- it's manual JSONB editing
+- No document review workflow (approve/reject individual docs with comments)
 
----
-
-### 5. Change Receipt Colors to Phindu Branding
-
-**Problem**: `generateRepaymentReceipt.ts` uses blue (`59, 130, 246`) for headers and amount boxes.
-
-**Fix**: Replace with Phindu burgundy/maroon (`107, 26, 58`) — matching the contract PDF and app theme. Update header, amount box, and footer accent colors.
-
-**Files**: `src/utils/generateRepaymentReceipt.ts`
-
----
-
-### 6. Remove Automatic Director Signature from Contract
-
-**Problem**: The contract generation embeds a director signature image automatically (lines 382-389 of `generateLoanContract.ts`). The user has found a way to sign manually.
-
-**Fix**: Remove the `directorSignatureImg` import and the `doc.addImage(directorSignatureImg, ...)` block. Replace with a signature line for the director to sign manually (same as borrower side).
-
-**Files**: `src/utils/generateLoanContract.ts`
+**4. Notification Reliability**
+- Notifications are sent from the application layer -- if the request fails, they're lost
+- No retry logic or queue processing for failed SMS/email
+- The `process-notification-queue` edge function exists but isn't wired to a cron trigger
 
 ---
 
-### Summary of Files to Modify
+### Medium-Priority Gaps
 
-| File | Changes |
-|------|---------|
-| `AdminDisbursements.tsx` | Gate create/complete actions behind `isAdmin` |
-| `AdminApplications.tsx` | Gate disburse button behind `isAdmin`; add active loan duplicate check |
-| `LoanDetailsModal.tsx` | Add admin-only "Reloan" button and logic |
-| `ApplicationDocumentsTab.tsx` | Improve document type matching/normalization |
-| `generateRepaymentReceipt.ts` | Change blue to burgundy (#6B1A3A) |
-| `generateLoanContract.ts` | Remove auto director signature, add manual signature line |
+**5. Loan Product Engine Enhancements**
+- Fees are percentage-only (no fixed amounts like "K50 CRB fee")
+- No option to deduct fees upfront vs add to repayment (currently hardcoded upfront)
+- No calculation preview when creating/editing products in admin
+- No loan category field (Personal, SME, Salary-Based)
+
+**6. Approval Workflow Configuration**
+- Fixed status pipeline -- no per-product configurable stages
+- No role-based permissions per workflow stage (e.g., "only credit officer can move from CRB check to approved")
+- No automated triggers (auto-move to next stage, auto-send notification)
+
+**7. Collections Module Gaps**
+- Collection assignments exist but no automated escalation rules
+- No "Promise to Pay" tracking with follow-up reminders
+- No integration between collections and court cases workflow
+
+**8. Reporting Enhancements**
+- Dashboard charts use some hardcoded data
+- No scheduled/automated report generation
+- PAR (Portfolio at Risk) metrics could be more granular (PAR 1, 7, 30, 60, 90)
+
+---
+
+### Lower-Priority / Nice-to-Have
+
+| Feature | Status |
+|---------|--------|
+| Formula builder for custom loan calculations | Not started |
+| CRB API live integration | Toggle-ready, no live API |
+| PMIC insurance live integration | UI exists, no live connection |
+| Bulk SMS/email campaigns | Not implemented |
+| Borrower self-service portal improvements | Basic -- no payment initiation |
+| Mobile PWA polish | Service worker exists, UX needs work |
+| Advanced audit trail UI (diff view) | Logs exist, no comparison view |
+
+---
+
+### Recommended Next Steps (Priority Order)
+
+1. **Fix auth session expiry handling** -- users hitting blank screens
+2. **Add server-side pagination** to AdminLoans, AdminRepayments, AdminBorrowers
+3. **Add real-time subscriptions** to Repayments and Disbursements pages
+4. **Build document configuration UI** in loan product form (manage required docs per product)
+5. **Wire notification queue** to a scheduled cron for reliable delivery
+
+These 5 items would take the system from "functional" to "production-robust" and address the most common operational pain points.
 
