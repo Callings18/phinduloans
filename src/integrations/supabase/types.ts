@@ -3030,6 +3030,65 @@ export type Database = {
         }
         Relationships: []
       }
+      product_document_requirements: {
+        Row: {
+          allowed_file_types: string[] | null
+          can_reuse_previous: boolean | null
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          document_name: string
+          document_type: string
+          id: string
+          is_active: boolean | null
+          is_mandatory: boolean
+          loan_product_id: string
+          max_file_size_mb: number | null
+          updated_at: string | null
+          validity_days: number | null
+        }
+        Insert: {
+          allowed_file_types?: string[] | null
+          can_reuse_previous?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          document_name: string
+          document_type: string
+          id?: string
+          is_active?: boolean | null
+          is_mandatory?: boolean
+          loan_product_id: string
+          max_file_size_mb?: number | null
+          updated_at?: string | null
+          validity_days?: number | null
+        }
+        Update: {
+          allowed_file_types?: string[] | null
+          can_reuse_previous?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          document_name?: string
+          document_type?: string
+          id?: string
+          is_active?: boolean | null
+          is_mandatory?: boolean
+          loan_product_id?: string
+          max_file_size_mb?: number | null
+          updated_at?: string | null
+          validity_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_document_requirements_loan_product_id_fkey"
+            columns: ["loan_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address: string | null

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import GuidedTour from "@/components/common/GuidedTour";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
+import PaginationControls from "@/components/common/PaginationControls";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
 
@@ -101,6 +102,8 @@ const AdminBorrowers = () => {
   const [formData, setFormData] = useState<BorrowerForm>(emptyForm);
   const [blacklistData, setBlacklistData] = useState<BlacklistData>({ reason: "", duration: "permanent", blacklist_expires_at: null });
   const [runTour, setRunTour] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const tourSteps: Step[] = [
     {
@@ -381,9 +384,14 @@ const AdminBorrowers = () => {
     borrower.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     borrower.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     borrower.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Reset page on search change
+  useEffect(() => { setCurrentPage(1); }, [searchQuery]);
+
+  // Paginate
+  const paginatedBorrowers = filteredBorrowers?.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -485,9 +493,10 @@ const AdminBorrowers = () => {
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : filteredBorrowers && filteredBorrowers.length > 0 ? (
+        ) : paginatedBorrowers && paginatedBorrowers.length > 0 ? (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 tour-borrowers-list">
-            {filteredBorrowers.map((borrower) => (
+            {paginatedBorrowers.map((borrower) => (
               <Card key={borrower.id} className={`glass border-border/50 hover:border-primary/30 transition-colors ${borrower.is_blacklisted ? 'border-destructive/50 bg-destructive/5' : ''}`}>
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4 mb-4">
@@ -575,6 +584,14 @@ const AdminBorrowers = () => {
               </Card>
             ))}
           </div>
+          <PaginationControls
+            currentPage={currentPage}
+            totalItems={filteredBorrowers?.length || 0}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+          />
+          </>
         ) : (
           <Card className="glass border-border/50">
             <CardContent className="p-12 text-center">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
+import PaginationControls from "@/components/common/PaginationControls";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Loan {
@@ -121,6 +122,8 @@ const AdminLoans = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Edit Loan Form State
   const [isEditLoanOpen, setIsEditLoanOpen] = useState(false);
@@ -364,6 +367,23 @@ const AdminLoans = () => {
 
   const filteredLoans = getFilteredLoans();
 
+  // Paginate filtered loans
+  const paginatedLoans = filteredLoans.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // Reset page on filter change
+  useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm]);
+
+  // Real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-loans-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_applications' }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
+
   const stats = {
     total: loans?.length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
@@ -483,128 +503,137 @@ const AdminLoans = () => {
               <div className="flex justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : filteredLoans.length > 0 ? (
-              <Card className="border-border/50">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Borrower</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Term</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Next Due</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLoans.map((loan) => {
-                      const dueDate = loanDueDates?.[loan.id];
-                      const isOverdue = dueDate && new Date(dueDate) < new Date();
-                      const product = loanProducts?.find(p => p.id === loan.loan_product_id);
-                      const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
-                      const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;
-                      const disbursedAmount = Number(loan.loan_amount) - processingFee - legalFee;
+            ) : paginatedLoans.length > 0 ? (
+              <>
+                <Card className="border-border/50">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Borrower</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Term</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Next Due</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedLoans.map((loan) => {
+                        const dueDate = loanDueDates?.[loan.id];
+                        const isOverdue = dueDate && new Date(dueDate) < new Date();
+                        const product = loanProducts?.find(p => p.id === loan.loan_product_id);
+                        const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
+                        const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;
+                        const disbursedAmount = Number(loan.loan_amount) - processingFee - legalFee;
 
-                      return (
-                        <TableRow key={loan.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                                <User size={18} className="text-muted-foreground" />
+                        return (
+                          <TableRow key={loan.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                                  <User size={18} className="text-muted-foreground" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-foreground">{loan.full_name}</p>
+                                  <p className="text-sm text-muted-foreground">{loan.email}</p>
+                                </div>
                               </div>
+                            </TableCell>
+                            <TableCell>
                               <div>
-                                <p className="font-medium text-foreground">{loan.full_name}</p>
-                                <p className="text-sm text-muted-foreground">{loan.email}</p>
+                                <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
+                                {(processingFee > 0 || legalFee > 0) && (
+                                  <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
+                                )}
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
-                              {(processingFee > 0 || legalFee > 0) && (
-                                <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
+                            </TableCell>
+                            <TableCell>{loan.loan_term_months} {loan.term_unit || 'months'}</TableCell>
+                            <TableCell>{getStatusBadge(loan.status)}</TableCell>
+                            <TableCell>
+                              <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
+                            </TableCell>
+                            <TableCell>
+                              {dueDate ? (
+                                <p className={`text-sm ${isOverdue ? 'text-destructive font-medium' : 'text-foreground'}`}>
+                                  {format(new Date(dueDate), "MMM dd, yyyy")}
+                                  {isOverdue && <span className="text-xs block text-destructive">Overdue</span>}
+                                </p>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">-</p>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{loan.loan_term_months} {loan.term_unit || 'months'}</TableCell>
-                          <TableCell>{getStatusBadge(loan.status)}</TableCell>
-                          <TableCell>
-                            <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
-                          </TableCell>
-                          <TableCell>
-                            {dueDate ? (
-                              <p className={`text-sm ${isOverdue ? 'text-destructive font-medium' : 'text-foreground'}`}>
-                                {format(new Date(dueDate), "MMM dd, yyyy")}
-                                {isOverdue && <span className="text-xs block text-destructive">Overdue</span>}
-                              </p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">-</p>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  Actions
-                                  <MoreHorizontal size={14} className="ml-1" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem onClick={() => {
-                                  setSelectedLoan(loan);
-                                  setIsDetailsOpen(true);
-                                }}>
-                                  <Eye size={14} className="mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                {can('loans', 'edit') && (
-                                  <DropdownMenuItem onClick={() => openEditDialog(loan)}>
-                                    <Edit size={14} className="mr-2" />
-                                    Edit Loan
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm">
+                                    Actions
+                                    <MoreHorizontal size={14} className="ml-1" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedLoan(loan);
+                                    setIsDetailsOpen(true);
+                                  }}>
+                                    <Eye size={14} className="mr-2" />
+                                    View Details
                                   </DropdownMenuItem>
-                                )}
-                                {["active", "disbursed"].includes(loan.status) && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => openQuickPayment(loan)}>
-                                      <Receipt size={14} className="mr-2" />
-                                      Record Payment
+                                  {can('loans', 'edit') && (
+                                    <DropdownMenuItem onClick={() => openEditDialog(loan)}>
+                                      <Edit size={14} className="mr-2" />
+                                      Edit Loan
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => {
-                                      setSelectedLoan(loan);
-                                      setIsDetailsOpen(true);
-                                    }}>
-                                      <Download size={14} className="mr-2" />
-                                      View Schedule
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                                {["active", "disbursed"].includes(loan.status) && can('loans', 'edit') && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={() => {
-                                        if (confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) {
-                                          moveToDefaultedMutation.mutate(loan.id);
-                                        }
-                                      }}
-                                    >
-                                      <XCircle size={14} className="mr-2" />
-                                      Move to Defaulted
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </Card>
+                                  )}
+                                  {["active", "disbursed"].includes(loan.status) && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={() => openQuickPayment(loan)}>
+                                        <Receipt size={14} className="mr-2" />
+                                        Record Payment
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => {
+                                        setSelectedLoan(loan);
+                                        setIsDetailsOpen(true);
+                                      }}>
+                                        <Download size={14} className="mr-2" />
+                                        View Schedule
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  {["active", "disbursed"].includes(loan.status) && can('loans', 'edit') && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => {
+                                          if (confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) {
+                                            moveToDefaultedMutation.mutate(loan.id);
+                                          }
+                                        }}
+                                      >
+                                        <XCircle size={14} className="mr-2" />
+                                        Move to Defaulted
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </Card>
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalItems={filteredLoans.length}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                />
+              </>
             ) : (
               <Card className="border-border/50">
                 <CardContent className="p-12 text-center">

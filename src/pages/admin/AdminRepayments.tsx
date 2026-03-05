@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -60,6 +60,7 @@ import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import BulkActions, { defaultRepaymentActions } from "@/components/common/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
+import PaginationControls from "@/components/common/PaginationControls";
 
 interface Repayment {
   id: string;
@@ -116,6 +117,8 @@ const AdminRepayments = () => {
   ]);
 
   const queryClient = useQueryClient();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [selectedRepayments, setSelectedRepayments] = useState<string[]>([]);
 
   // Fetch active accounts for deposit destination
@@ -604,6 +607,23 @@ const AdminRepayments = () => {
       .reduce((sum, r) => sum + Number(r.amount), 0) || 0,
   };
 
+  // Real-time subscription for repayments
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-repayments-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_repayments' }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
+
+  // Reset page on filter change
+  useEffect(() => { setCurrentPage(1); }, [statusFilter, searchTerm]);
+
+  // Paginate
+  const paginatedRepayments = filteredRepayments?.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -766,7 +786,7 @@ const AdminRepayments = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRepayments?.map((rep) => {
+                  {paginatedRepayments?.map((rep) => {
                     const statusInfo = getStatusInfo(rep);
                     const StatusIcon = statusInfo.icon;
                     return (
@@ -871,6 +891,15 @@ const AdminRepayments = () => {
               </Table>
             )}
           </CardContent>
+          {(filteredRepayments?.length || 0) > 0 && (
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={filteredRepayments?.length || 0}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+            />
+          )}
         </Card>
 
         {/* Record Payment Dialog */}
