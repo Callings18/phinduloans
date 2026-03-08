@@ -169,7 +169,32 @@ const AdminDisbursements = () => {
         throw new Error("Please select a source account for disbursement");
       }
 
-      const disbursementAmount = Number(formData.amount) || loan.loan_amount;
+      // Calculate fees to deduct from disbursement
+      let feesToDeduct = 0;
+      const { data: loanApp } = await supabase
+        .from('loan_applications')
+        .select('loan_product_id, loan_amount')
+        .eq('id', selectedLoan)
+        .single();
+      if (loanApp?.loan_product_id) {
+        const { data: product } = await supabase
+          .from('loan_products')
+          .select('processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
+          .eq('id', loanApp.loan_product_id)
+          .single();
+        if (product) {
+          const principal = loanApp.loan_amount;
+          const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
+          const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
+          const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
+          const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
+          const vatableAmount = processingFee + enforcementFee + platformFee;
+          const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+          feesToDeduct = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+        }
+      }
+
+      const disbursementAmount = (Number(formData.amount) || loan.loan_amount) - feesToDeduct;
       
       // Check account balance
       const sourceAccount = accounts.find(a => a.id === formData.source_account_id);

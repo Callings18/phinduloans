@@ -177,19 +177,23 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
   const normalizeDocType = (type: string): string => 
     type.toUpperCase().replace(/[-_\s]+/g, '').replace(/[^A-Z0-9]/g, '');
 
-  // Check if two doc types match (including alias matching)
+  // Check if two doc types match — EXACT match only to prevent cross-matching
+  // (e.g. bank_statement_1 must NOT match bank_statement_2)
   const docTypesMatch = (uploadedType: string, requiredType: string): boolean => {
     const normUploaded = normalizeDocType(uploadedType);
     const normRequired = normalizeDocType(requiredType);
     if (normUploaded === normRequired) return true;
-    // Alias matching: SELFIE matches SELFIEHOLDINGNRC, PAYSLIP matches PAYSLIP1/PAYSLIPLATEST etc
-    if (normRequired.startsWith(normUploaded) || normUploaded.startsWith(normRequired)) return true;
-    // Specific aliases
-    if ((normUploaded === 'SELFIE' && normRequired === 'SELFIEHOLDINGNRC') || 
-        (normUploaded === 'SELFIEHOLDINGNRC' && normRequired === 'SELFIE')) return true;
-    if ((normUploaded.startsWith('PAYSLIP') && normRequired.startsWith('PAYSLIP'))) return true;
-    if ((normUploaded.startsWith('COLLATERAL') && normRequired.startsWith('COLLATERAL'))) return true;
-    if ((normUploaded.startsWith('BANKSTATEMENT') && normRequired.startsWith('BANKSTATEMENT'))) return true;
+    // Only allow specific known aliases (KYC vault types → product types)
+    const aliasMap: Record<string, string[]> = {
+      'SELFIE': ['SELFIEHOLDINGNRC'],
+      'SELFIEHOLDINGNRC': ['SELFIE'],
+      'NRCFRONT': ['NRC_FRONT', 'NRCFRONT'],
+      'NRCBACK': ['NRC_BACK', 'NRCBACK'],
+    };
+    const aliases = aliasMap[normUploaded];
+    if (aliases && aliases.some(a => normalizeDocType(a) === normRequired)) return true;
+    const reverseAliases = aliasMap[normRequired];
+    if (reverseAliases && reverseAliases.some(a => normalizeDocType(a) === normUploaded)) return true;
     return false;
   };
 

@@ -92,10 +92,33 @@ const fetchActiveTemplate = async (loanProductId?: string | null): Promise<Contr
 };
 
 // Replace placeholders in template content with actual loan data
-const replacePlaceholders = (content: string, loan: LoanData): string => {
+const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
   const firstPaymentDate = new Date();
   firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+
+  // Fetch product fees
+  let processingFeePercent = 0;
+  let latePenalty = 5;
+  let processingFeeAmount = 0;
+  if (loan.loan_product_id) {
+    const { data: product } = await supabase
+      .from('loan_products')
+      .select('processing_fee_percent, late_payment_penalty_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
+      .eq('id', loan.loan_product_id)
+      .single();
+    if (product) {
+      processingFeePercent = product.processing_fee_percent || 0;
+      latePenalty = product.late_payment_penalty_percent || 5;
+      const enforcementFee = loan.loan_amount * ((product.enforcement_fee_percent || 0) / 100);
+      const insuranceFee = loan.loan_amount * ((product.insurance_percent || 0) / 100);
+      const platformFee = loan.loan_amount * ((product.platform_fee_percent || 0) / 100);
+      processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
+      const vatableAmount = processingFeeAmount + enforcementFee + platformFee;
+      const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+      processingFeeAmount = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+    }
+  }
 
   const replacements: Record<string, string> = {
     '{{borrower_name}}': loan.full_name,
@@ -114,8 +137,8 @@ const replacePlaceholders = (content: string, loan: LoanData): string => {
     '{{company_address}}': 'Lusaka, Zambia',
     '{{current_date}}': new Date().toLocaleDateString('en-GB'),
     '{{loan_purpose}}': loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal',
-    '{{processing_fee}}': '0', // Can be enhanced to pull from product settings
-    '{{late_penalty}}': '5', // Can be enhanced to pull from product settings
+    '{{processing_fee}}': `K${Math.round(processingFeeAmount).toLocaleString()} (${processingFeePercent}%)`,
+    '{{late_penalty}}': latePenalty.toString(),
     '{{collateral_description}}': loan.collateral_description || 'N/A',
     '{{collateral_value}}': (loan.collateral_value || 0).toLocaleString(),
     '{{employer_name}}': loan.employer_name || 'N/A',
@@ -224,7 +247,7 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
 };
 
 // Default template fallback (used when no custom template exists)
-const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): jsPDF => {
+const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptions): Promise<jsPDF> => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -237,6 +260,31 @@ const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): j
     const x = (pageWidth - textWidth) / 2;
     doc.text(text, x, y);
   };
+
+  // Fetch product fees for default template
+  let processingFeePercent = 0;
+  let processingFeeAmount = 0;
+  let latePenaltyPercent = 5;
+  let totalFeesDeducted = 0;
+  if (loan.loan_product_id) {
+    const { data: product } = await supabase
+      .from('loan_products')
+      .select('processing_fee_percent, late_payment_penalty_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
+      .eq('id', loan.loan_product_id)
+      .single();
+    if (product) {
+      processingFeePercent = product.processing_fee_percent || 0;
+      latePenaltyPercent = product.late_payment_penalty_percent || 5;
+      processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
+      const enforcementFee = loan.loan_amount * ((product.enforcement_fee_percent || 0) / 100);
+      const insuranceFee = loan.loan_amount * ((product.insurance_percent || 0) / 100);
+      const platformFee = loan.loan_amount * ((product.platform_fee_percent || 0) / 100);
+      const vatableAmount = processingFeeAmount + enforcementFee + platformFee;
+      const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+      totalFeesDeducted = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+    }
+  }
+  const disbursementAmount = loan.loan_amount - totalFeesDeducted;
 
   const addSection = (title: string, content: string[]) => {
     if (yPos > 250) {
@@ -296,47 +344,63 @@ const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): j
     `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
   ]);
 
-  addSection('2. LOAN DETAILS', [
+  let sectionNum = 2;
+
+  addSection(`${sectionNum}. LOAN DETAILS`, [
     `Principal Amount: K${loan.loan_amount.toLocaleString()}`,
-    `Interest Rate: ${loan.interest_rate}% per annum`,
+    `Interest Rate: ${loan.interest_rate}% per month`,
     `Loan Term: ${loan.loan_term_months} months`,
     `Monthly Payment: K${loan.monthly_payment.toLocaleString()}`,
-    `Total Repayment Amount: K${loan.total_repayment.toLocaleString()}`,
-    `Loan Purpose: ${loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal'}`,
+    `Total Repayment: K${loan.total_repayment.toLocaleString()}`,
+    `Purpose: ${loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal'}`,
   ]);
+  sectionNum++;
+
+  addSection(`${sectionNum}. DISBURSEMENT`, [
+    `The Lender agrees to disburse the loan amount on ${new Date().toLocaleDateString('en-GB')}.`,
+  ]);
+  sectionNum++;
+
+  const firstPaymentDate = new Date();
+  firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+  addSection(`${sectionNum}. REPAYMENT`, [
+    `The Borrower agrees to repay the loan in ${loan.loan_term_months} equal monthly installments`,
+    `on ${firstPaymentDate.toLocaleDateString('en-GB')}.`,
+  ]);
+  sectionNum++;
 
   if (loan.employer_name) {
-    addSection('3. BORROWER EMPLOYMENT DETAILS', [
+    addSection(`${sectionNum}. BORROWER EMPLOYMENT DETAILS`, [
       `Employer: ${loan.employer_name}`,
       `Job Title: ${loan.job_title || 'N/A'}`,
       `Monthly Income: K${loan.monthly_income.toLocaleString()}`,
     ]);
+    sectionNum++;
   }
 
+  addSection(`${sectionNum}. LATE PAYMENT`, [
+    `A penalty of ${latePenaltyPercent}% will be charged on any overdue installments.`,
+  ]);
+  sectionNum++;
+
+  addSection(`${sectionNum}. PROCESSING FEE`, [
+    `A processing fee of K${Math.round(totalFeesDeducted).toLocaleString()} (${processingFeePercent}%) has been deducted from the disbursement amount.`,
+    `Amount disbursed to Borrower: K${Math.round(disbursementAmount).toLocaleString()}`,
+  ]);
+  sectionNum++;
+
   if (loan.collateral_description) {
-    addSection('4. COLLATERAL/SECURITY', [
+    addSection(`${sectionNum}. COLLATERAL/SECURITY`, [
       `Description: ${loan.collateral_description}`,
       `Estimated Value: K${(loan.collateral_value || 0).toLocaleString()}`,
       '',
       'The Borrower pledges the above collateral as security for this loan.',
     ]);
+    sectionNum++;
   }
 
-  addSection(`${loan.collateral_description ? '5' : '4'}. TERMS AND CONDITIONS`, [
-    '• The Borrower agrees to repay the loan in monthly installments as specified above.',
-    '• Payments are due on the same date each month, starting one month from the disbursement date.',
-    '• Late payments may incur a penalty of 5% of the overdue amount per month.',
-    '• The Borrower may prepay the loan without penalty.',
-    '• In case of default, the Lender reserves the right to pursue legal remedies.',
-    '• All disputes shall be resolved under the laws of Zambia.',
-  ]);
-
-  addSection(`${loan.collateral_description ? '6' : '5'}. BORROWER REPRESENTATIONS`, [
-    'The Borrower represents and warrants that:',
-    '• All information provided in this application is true and accurate.',
-    '• The Borrower has the legal capacity to enter into this Agreement.',
-    '• The Borrower is not in default of any other loan agreement.',
-    '• The Borrower will notify the Lender of any change in employment or address.',
+  addSection('DECLARATION', [
+    'By signing below, I, the undersigned, hereby acknowledge that I have read and understood all the terms and conditions of this Loan Agreement. I understand the Responsibilities, interest rates, fees, repayment schedule and any other associated costs.',
   ]);
 
   if (yPos > 220) {
@@ -344,16 +408,11 @@ const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): j
     yPos = 20;
   }
 
-  yPos += 10;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('SIGNATURES', margin, yPos);
-  yPos += 15;
-
+  yPos += 5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   
-  doc.text('BORROWER:', margin, yPos);
+  doc.text('Borrower Signature: ......................   Date: ....../......./..........', margin, yPos);
   yPos += 10;
   
   // If borrower signature provided, embed it
@@ -362,34 +421,36 @@ const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): j
       doc.addImage(options.borrowerSignatureDataUrl, 'PNG', margin, yPos - 5, 60, 20);
       yPos += 20;
     } catch (e) {
-      doc.line(margin, yPos, margin + 80, yPos);
       yPos += 5;
     }
-  } else {
-    doc.line(margin, yPos, margin + 80, yPos);
-    yPos += 5;
   }
   
   doc.text(`Name: ${loan.full_name}`, margin, yPos);
-  yPos += 5;
-  doc.text(`Date: ${options?.borrowerSignedAt ? new Date(options.borrowerSignedAt).toLocaleDateString('en-GB') : '____________________'}`, margin, yPos);
-  
-  yPos -= (options?.borrowerSignatureDataUrl ? 30 : 20);
-  doc.text('FOR PHINDU CREDIT SOLUTIONS LTD:', pageWidth - margin - 80, yPos);
   yPos += 10;
-  
-  // Manual signature line for director
-  doc.line(pageWidth - margin - 80, yPos, pageWidth - margin, yPos);
-  yPos += 5;
-  doc.text('Name: ____________________', pageWidth - margin - 80, yPos);
-  yPos += 5;
-  doc.text(`Date: ____________________`, pageWidth - margin - 80, yPos);
 
-  yPos = 285;
-  doc.setFontSize(8);
-  doc.setTextColor(107, 26, 58);
-  centerText('Phindu Credit Solutions Limited - Money When You Need It', yPos, 8);
-  centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', yPos + 4, 8);
+  doc.text('I further surrender the authority to Phindu Credit Solutions to recover the loan amount by all means', margin, yPos);
+  yPos += 5;
+  doc.text('necessary: property grabbing/seizure, DDACC, next of kin, payslip deductions.', margin, yPos);
+  yPos += 15;
+
+  doc.text('FOR PHINDU CREDIT SOLUTIONS LTD:', margin, yPos);
+  yPos += 10;
+  doc.line(margin, yPos, margin + 80, yPos);
+  yPos += 5;
+  doc.text('Name: ____________________', margin, yPos);
+  yPos += 5;
+  doc.text('Date: ____________________', margin, yPos);
+
+  // Footer on all pages
+  const lastPage = doc.internal.pages.length;
+  for (let i = 1; i <= lastPage; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(107, 26, 58);
+    centerText('Phindu Credit Solutions Limited - Money When You Need It', 285, 8);
+    centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', 289, 8);
+    doc.setTextColor(0, 0, 0);
+  }
 
   return doc;
 };
@@ -400,7 +461,7 @@ const createContractPDF = async (loan: LoanData, options?: SignatureOptions): Pr
   
   if (template) {
     console.log(`Using custom template: ${template.name} (ID: ${template.id})`);
-    const processedContent = replacePlaceholders(template.content, loan);
+    const processedContent = await replacePlaceholders(template.content, loan);
     return createContractPDFFromTemplate(processedContent, loan);
   } else {
     console.log('No custom template found, using default template');
