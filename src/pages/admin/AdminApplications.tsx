@@ -497,10 +497,31 @@ const AdminApplications = () => {
     mutationFn: async (data: any) => {
       const sourceAccount = fundingAccounts.find((a) => a.id === data.source_account_id);
       if (!sourceAccount) throw new Error("Source account not found");
-      if (sourceAccount.balance < (selectedApp?.loan_amount ?? 0)) {
+
+      // Calculate fees to deduct from disbursement
+      let feesToDeduct = 0;
+      if (selectedApp?.loan_product_id) {
+        const { data: product } = await supabase
+          .from('loan_products')
+          .select('processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
+          .eq('id', selectedApp.loan_product_id)
+          .single();
+        if (product) {
+          const principal = selectedApp.loan_amount;
+          const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
+          const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
+          const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
+          const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
+          const vatableAmount = processingFee + enforcementFee + platformFee;
+          const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+          feesToDeduct = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+        }
+      }
+      const disbursementAmount = selectedApp.loan_amount - feesToDeduct;
+      
+      if (sourceAccount.balance < disbursementAmount) {
         throw new Error("Insufficient funds in selected account. Please top up and try again.");
       }
-      const disbursementAmount = selectedApp.loan_amount;
 
       const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
