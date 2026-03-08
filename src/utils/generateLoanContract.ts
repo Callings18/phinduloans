@@ -423,7 +423,7 @@ const createContractPDF = async (loan: LoanData, options?: SignatureOptions): Pr
   
   if (template) {
     console.log(`Using custom template: ${template.name} (ID: ${template.id})`);
-    const processedContent = replacePlaceholders(template.content, loan);
+    const processedContent = await replacePlaceholders(template.content, loan);
     return createContractPDFFromTemplate(processedContent, loan);
   } else {
     console.log('No custom template found, using default template');
