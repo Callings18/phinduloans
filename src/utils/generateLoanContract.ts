@@ -92,10 +92,33 @@ const fetchActiveTemplate = async (loanProductId?: string | null): Promise<Contr
 };
 
 // Replace placeholders in template content with actual loan data
-const replacePlaceholders = (content: string, loan: LoanData): string => {
+const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
   const firstPaymentDate = new Date();
   firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+
+  // Fetch product fees
+  let processingFeePercent = 0;
+  let latePenalty = 5;
+  let processingFeeAmount = 0;
+  if (loan.loan_product_id) {
+    const { data: product } = await supabase
+      .from('loan_products')
+      .select('processing_fee_percent, late_payment_penalty_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
+      .eq('id', loan.loan_product_id)
+      .single();
+    if (product) {
+      processingFeePercent = product.processing_fee_percent || 0;
+      latePenalty = product.late_payment_penalty_percent || 5;
+      const enforcementFee = loan.loan_amount * ((product.enforcement_fee_percent || 0) / 100);
+      const insuranceFee = loan.loan_amount * ((product.insurance_percent || 0) / 100);
+      const platformFee = loan.loan_amount * ((product.platform_fee_percent || 0) / 100);
+      processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
+      const vatableAmount = processingFeeAmount + enforcementFee + platformFee;
+      const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+      processingFeeAmount = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+    }
+  }
 
   const replacements: Record<string, string> = {
     '{{borrower_name}}': loan.full_name,
@@ -114,8 +137,8 @@ const replacePlaceholders = (content: string, loan: LoanData): string => {
     '{{company_address}}': 'Lusaka, Zambia',
     '{{current_date}}': new Date().toLocaleDateString('en-GB'),
     '{{loan_purpose}}': loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal',
-    '{{processing_fee}}': '0', // Can be enhanced to pull from product settings
-    '{{late_penalty}}': '5', // Can be enhanced to pull from product settings
+    '{{processing_fee}}': `K${Math.round(processingFeeAmount).toLocaleString()} (${processingFeePercent}%)`,
+    '{{late_penalty}}': latePenalty.toString(),
     '{{collateral_description}}': loan.collateral_description || 'N/A',
     '{{collateral_value}}': (loan.collateral_value || 0).toLocaleString(),
     '{{employer_name}}': loan.employer_name || 'N/A',
