@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
