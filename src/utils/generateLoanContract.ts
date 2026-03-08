@@ -261,7 +261,30 @@ const createDefaultContractPDF = (loan: LoanData, options?: SignatureOptions): j
     doc.text(text, x, y);
   };
 
-  const addSection = (title: string, content: string[]) => {
+// Fetch product fees for default template
+  let processingFeePercent = 0;
+  let processingFeeAmount = 0;
+  let latePenaltyPercent = 5;
+  let totalFeesDeducted = 0;
+  if (loan.loan_product_id) {
+    const { data: product } = await supabase
+      .from('loan_products')
+      .select('processing_fee_percent, late_payment_penalty_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
+      .eq('id', loan.loan_product_id)
+      .single();
+    if (product) {
+      processingFeePercent = product.processing_fee_percent || 0;
+      latePenaltyPercent = product.late_payment_penalty_percent || 5;
+      processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
+      const enforcementFee = loan.loan_amount * ((product.enforcement_fee_percent || 0) / 100);
+      const insuranceFee = loan.loan_amount * ((product.insurance_percent || 0) / 100);
+      const platformFee = loan.loan_amount * ((product.platform_fee_percent || 0) / 100);
+      const vatableAmount = processingFeeAmount + enforcementFee + platformFee;
+      const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+      totalFeesDeducted = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+    }
+  }
+  const disbursementAmount = loan.loan_amount - totalFeesDeducted;
     if (yPos > 250) {
       doc.addPage();
       yPos = 20;
