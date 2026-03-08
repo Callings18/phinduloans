@@ -118,58 +118,60 @@ function App() {
 
   return (
     <ThemeContext.Provider value={themeValue}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <PWAInstallPrompt />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/apply" element={<Apply />} />
-                <Route path="/calculator" element={<Calculator />} />
-                <Route path="/pre-qualify" element={<PreQualification />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/about-us" element={<About />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/login" element={<Auth />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/admin" element={<AdminRoute />}>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="applications" element={<AdminApplications />} />
-                  <Route path="borrowers" element={<AdminBorrowers />} />
-                  <Route path="settings" element={<AdminSettings />} />
-                  <Route path="employers" element={<AdminEmployers />} />
-                  <Route path="disbursements" element={<AdminDisbursements />} />
-                  <Route path="reports" element={<AdminReports />} />
-                  <Route path="loan-products" element={<AdminLoanProducts />} />
-                  <Route path="loans" element={<AdminLoans />} />
-                  <Route path="repayments" element={<AdminRepayments />} />
-                  <Route path="collections" element={<AdminCollections />} />
-                  <Route path="staff" element={<AdminStaff />} />
-                  <Route path="audit-logs" element={<AdminAuditLogs />} />
-                  <Route path="write-offs" element={<AdminWriteOffs />} />
-                  <Route path="bulk-repayments" element={<AdminBulkRepayments />} />
-                  <Route path="contract-templates" element={<AdminContractTemplates />} />
-                  <Route path="pmic" element={<AdminPMIC />} />
-                  <Route path="accounts" element={<AdminAccounts />} />
-                  <Route path="expenses" element={<AdminExpenses />} />
-                  <Route path="court-cases" element={<AdminCourtCases />} />
-                  <Route path="wallets" element={<AdminWallets />} />
-                  <Route path="hr" element={<AdminHR />} />
-                  <Route path="payroll" element={<AdminPayroll />} />
-                  <Route path="email-log" element={<AdminEmailLog />} />
-                  <Route path="user-guide" element={<AdminUserGuide />} />
-                  <Route path="roles-permissions" element={<AdminRolesPermissions />} />
-                </Route>
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <PWAInstallPrompt />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/apply" element={<Apply />} />
+                  <Route path="/calculator" element={<Calculator />} />
+                  <Route path="/pre-qualify" element={<PreQualification />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/about-us" element={<About />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/login" element={<Auth />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/admin" element={<AdminRoute />}>
+                    <Route index element={<AdminDashboard />} />
+                    <Route path="applications" element={<AdminApplications />} />
+                    <Route path="borrowers" element={<AdminBorrowers />} />
+                    <Route path="settings" element={<AdminSettings />} />
+                    <Route path="employers" element={<AdminEmployers />} />
+                    <Route path="disbursements" element={<AdminDisbursements />} />
+                    <Route path="reports" element={<AdminReports />} />
+                    <Route path="loan-products" element={<AdminLoanProducts />} />
+                    <Route path="loans" element={<AdminLoans />} />
+                    <Route path="repayments" element={<AdminRepayments />} />
+                    <Route path="collections" element={<AdminCollections />} />
+                    <Route path="staff" element={<AdminStaff />} />
+                    <Route path="audit-logs" element={<AdminAuditLogs />} />
+                    <Route path="write-offs" element={<AdminWriteOffs />} />
+                    <Route path="bulk-repayments" element={<AdminBulkRepayments />} />
+                    <Route path="contract-templates" element={<AdminContractTemplates />} />
+                    <Route path="pmic" element={<AdminPMIC />} />
+                    <Route path="accounts" element={<AdminAccounts />} />
+                    <Route path="expenses" element={<AdminExpenses />} />
+                    <Route path="court-cases" element={<AdminCourtCases />} />
+                    <Route path="wallets" element={<AdminWallets />} />
+                    <Route path="hr" element={<AdminHR />} />
+                    <Route path="payroll" element={<AdminPayroll />} />
+                    <Route path="email-log" element={<AdminEmailLog />} />
+                    <Route path="user-guide" element={<AdminUserGuide />} />
+                    <Route path="roles-permissions" element={<AdminRolesPermissions />} />
+                  </Route>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
     </ThemeContext.Provider>
   );
 }
