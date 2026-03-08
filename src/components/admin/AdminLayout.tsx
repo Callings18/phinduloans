@@ -1,6 +1,4 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
+// AdminLayout — Auth guard is handled by AdminRoute, so no redundant check here
 import AdminSidebar from "./AdminSidebar";
 import AdminRealTimeNotifications from "./AdminRealTimeNotifications";
 
@@ -9,31 +7,6 @@ interface AdminLayoutProps {
 }
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
-  const { user, isLoading, isStaff } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isLoading) {
-      if (!user) {
-        navigate('/auth');
-      } else if (!isStaff) {
-        navigate('/dashboard');
-      }
-    }
-  }, [user, isLoading, isStaff, navigate]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user || !isStaff) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />

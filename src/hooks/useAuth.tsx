@@ -113,12 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: currentSession }, error }) => {
       if (error) {
         console.warn('[Auth] Session retrieval failed:', error.message);
-        // Clear stale session data
-        supabase.auth.signOut();
+        // Clear stale session data without calling signOut (which can fail/loop)
         setSession(null);
         setUser(null);
         setRoles([]);
         setIsLoading(false);
+        // Attempt signOut silently to clean up localStorage
+        supabase.auth.signOut().catch(() => {});
         return;
       }
 

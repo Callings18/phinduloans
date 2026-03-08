@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -377,6 +376,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <Navbar />
       <GuidedTour
         steps={tourSteps}
         tourKey="borrower-dashboard"
