@@ -9,10 +9,11 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ExternalLink, FileText, ShieldCheck, Loader2, Upload, CheckCircle,
-  Clock, AlertTriangle, Eye, Package, X,
+  Clock, AlertTriangle, Eye, Package, X, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
+
 interface ApplicationDocumentsTabProps {
   selectedApp: any;
 }
@@ -59,6 +60,7 @@ interface UploadedDoc {
   docType: string;
   label: string;
   fileUrl: string;
+  fileName?: string;
   source: "application_documents" | "legacy";
   uploadedBy?: string | null;
   status?: string | null;
@@ -68,7 +70,7 @@ interface UploadedDoc {
 }
 
 interface RequiredDocRow {
-  rowId: string; // unique identifier per row (docType + index)
+  rowId: string;
   docType: string;
   docName: string;
   isMandatory: boolean;
@@ -77,12 +79,26 @@ interface RequiredDocRow {
   isUploaded: boolean;
 }
 
+// Category display configuration
+const CATEGORY_CONFIG: Record<string, { icon: string; title: string; description: string }> = {
+  identity: { icon: "🪪", title: "Identity Documents", description: "KYC and identity verification documents" },
+  kyc: { icon: "🪪", title: "KYC / Identity Documents", description: "Identity verification documents required for all products" },
+  bank_statements: { icon: "🏦", title: "Bank Statements", description: "Monthly bank statements for income verification" },
+  payslips: { icon: "📄", title: "Payslips", description: "Employment payslip documents" },
+  proof_employment: { icon: "✉️", title: "Proof & Employment", description: "Proof of residence and employment documents" },
+  business: { icon: "🏢", title: "Business Documents", description: "Business registration and financial documents" },
+  collateral: { icon: "🖼️", title: "Collateral Documents", description: "Collateral ownership and valuation documents" },
+  required: { icon: "📋", title: "Required Documents", description: "Documents required for this loan product" },
+  optional: { icon: "📎", title: "Optional Documents", description: "Additional supporting documents (not mandatory)" },
+};
+
 const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) => {
   const { toast } = useToast();
   const [uploadingDocType, setUploadingDocType] = useState<string | null>(null);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerLabel, setViewerLabel] = useState<string>("");
   const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerIsImage, setViewerIsImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -138,7 +154,6 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     if (!raw || raw.length === 0) return [];
     return raw.map((d) => {
       const name = d.doc_label || d.document_name || '';
-      // Generate a doc_type from the name if none is provided (e.g. "NRC Front" → "NRC_FRONT")
       const generatedType = name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
       return {
         document_type: d.doc_type || d.document_type || generatedType,
@@ -173,17 +188,15 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     tax_compliance: "TAX_COMPLIANCE",
   };
 
-  // Normalize a doc type for matching: strip underscores/hyphens, lowercase
+  // Normalize a doc type for matching: strip underscores/hyphens, uppercase
   const normalizeDocType = (type: string): string => 
     type.toUpperCase().replace(/[-_\s]+/g, '').replace(/[^A-Z0-9]/g, '');
 
-  // Check if two doc types match — EXACT match only to prevent cross-matching
-  // (e.g. bank_statement_1 must NOT match bank_statement_2)
+  // EXACT match only to prevent cross-matching (bank_statement_1 ≠ bank_statement_2)
   const docTypesMatch = (uploadedType: string, requiredType: string): boolean => {
     const normUploaded = normalizeDocType(uploadedType);
     const normRequired = normalizeDocType(requiredType);
     if (normUploaded === normRequired) return true;
-    // Only allow specific known aliases (KYC vault types → product types)
     const aliasMap: Record<string, string[]> = {
       'SELFIE': ['SELFIEHOLDINGNRC'],
       'SELFIEHOLDINGNRC': ['SELFIE'],
@@ -210,9 +223,9 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         seenUrls.add(url);
         docs.push({
           id: doc.id, docType: doc.doc_type, label: doc.doc_label || doc.doc_type,
-          fileUrl: url, source: "application_documents", uploadedBy: doc.uploaded_by,
-          status: doc.status, payslipPassword: doc.payslip_password,
-          monthTag: doc.month_tag, notes: doc.notes,
+          fileUrl: url, fileName: doc.file_name, source: "application_documents",
+          uploadedBy: doc.uploaded_by, status: doc.status,
+          payslipPassword: doc.payslip_password, monthTag: doc.month_tag, notes: doc.notes,
         });
         if (doc.payslip_password) passwords.push(doc.payslip_password);
       }
@@ -224,20 +237,14 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       for (const vDoc of vaultDocs) {
         const url = vDoc.file_url?.trim();
         if (!url || seenUrls.has(url)) continue;
-        // Only take most recent per type
         if (seenVaultTypes.has(vDoc.doc_type)) continue;
         seenVaultTypes.add(vDoc.doc_type);
         seenUrls.add(url);
         const mappedType = vaultToProductType[vDoc.doc_type] || vDoc.doc_type;
         docs.push({
-          id: vDoc.id,
-          docType: mappedType,
-          label: vDoc.doc_label || vDoc.doc_type,
-          fileUrl: url,
-          source: "application_documents", // treat as uploaded
-          uploadedBy: "borrower",
-          status: vDoc.is_verified ? "verified" : "uploaded",
-          notes: vDoc.notes,
+          id: vDoc.id, docType: mappedType, label: vDoc.doc_label || vDoc.doc_type,
+          fileUrl: url, source: "application_documents", uploadedBy: "borrower",
+          status: vDoc.is_verified ? "verified" : "uploaded", notes: vDoc.notes,
         });
       }
     }
@@ -262,24 +269,18 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
 
   // Build the full required document checklist with uploaded status
   const documentChecklist: RequiredDocRow[] = useMemo(() => {
-    // Track which uploaded docs have been claimed so each row gets at most one
     const claimedDocIds = new Set<string>();
     
     return productDocuments.map((reqDoc, index) => {
-      // Find matching uploads for this doc type that haven't been claimed yet
-      // Primary: match on doc_type. Fallback: match on doc_label vs document_name
       const matchingUploads = allUploadedDocs.filter(
         (d) => {
           if (claimedDocIds.has(d.id)) return false;
-          // Primary match: doc_type matches document_type
           if (d.docType && reqDoc.document_type && docTypesMatch(d.docType, reqDoc.document_type)) return true;
-          // Fallback: label-based match for docs saved with wrong keys
           if (d.label && reqDoc.document_name && d.label.toLowerCase().trim() === reqDoc.document_name.toLowerCase().trim()) return true;
           return false;
         }
       );
       
-      // Claim only the first unclaimed match for this row
       const claimedDocs = matchingUploads.length > 0 ? [matchingUploads[0]] : [];
       claimedDocs.forEach(d => claimedDocIds.add(d.id));
       
@@ -295,28 +296,43 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     });
   }, [productDocuments, allUploadedDocs]);
 
-  // Group by category
-  const kycDocs = documentChecklist.filter(d => d.category === 'kyc');
-  const requiredDocs = documentChecklist.filter(d => d.category === 'required');
-  const optionalDocs = documentChecklist.filter(d => d.category === 'optional');
+  // Group checklist by category (preserving actual categories from product config)
+  const groupedDocs = useMemo(() => {
+    const groups: Record<string, RequiredDocRow[]> = {};
+    for (const row of documentChecklist) {
+      const cat = row.category;
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(row);
+    }
+    return groups;
+  }, [documentChecklist]);
 
   // Extra uploaded docs not in the required list
   const extraDocs = useMemo(() => {
-    const requiredTypes = productDocuments.filter((d) => d.document_type).map((d) => d.document_type);
-    return allUploadedDocs.filter((d) => d.docType && !requiredTypes.some(rt => docTypesMatch(d.docType, rt)));
-  }, [productDocuments, allUploadedDocs]);
+    const claimedIds = new Set(documentChecklist.flatMap(r => r.uploadedDocs.map(d => d.id)));
+    return allUploadedDocs.filter((d) => !claimedIds.has(d.id));
+  }, [documentChecklist, allUploadedDocs]);
 
   // Stats
   const totalRequired = documentChecklist.filter((d) => d.isMandatory).length;
   const uploadedMandatory = documentChecklist.filter((d) => d.isMandatory && d.isUploaded).length;
   const progressPercent = totalRequired > 0 ? Math.round((uploadedMandatory / totalRequired) * 100) : 0;
 
-  const handleViewDocument = async (fileUrl: string, label?: string) => {
+  // Determine if a URL is an image based on file path (before query params)
+  const isImageUrl = (url: string): boolean => {
+    const pathOnly = url.split('?')[0].split('#')[0];
+    return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(pathOnly);
+  };
+
+  const handleViewDocument = async (fileUrl: string, label?: string, fileName?: string) => {
     setViewerLabel(label || "Document");
     setViewerLoading(true);
     setViewerUrl(null);
+    setViewerIsImage(false);
     try {
       let url = fileUrl;
+      // Check original path for file type before signing
+      const isImg = isImageUrl(fileUrl) || (fileName && isImageUrl(fileName));
       if (!fileUrl.startsWith("http")) {
         const signed = await getSignedUrl(fileUrl);
         if (!signed) {
@@ -326,6 +342,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         }
         url = signed;
       }
+      setViewerIsImage(!!isImg);
       setViewerUrl(url);
     } catch {
       toast({ title: "Error", description: "Failed to load document.", variant: "destructive" });
@@ -333,6 +350,29 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       setViewerLoading(false);
     }
   };
+
+  // Verify / Reject document mutations
+  const verifyDocMutation = useMutation({
+    mutationFn: async ({ docId, status }: { docId: string; status: "verified" | "rejected" }) => {
+      const user = (await supabase.auth.getUser()).data.user;
+      const { error } = await supabase
+        .from("application_documents")
+        .update({
+          status,
+          verified_by: user?.id || null,
+          verified_at: new Date().toISOString(),
+        })
+        .eq("id", docId);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["application-documents", selectedApp?.id] });
+      sonnerToast.success(`Document ${variables.status === "verified" ? "verified" : "rejected"}`);
+    },
+    onError: (error: any) => {
+      sonnerToast.error(error.message || "Failed to update document status");
+    },
+  });
 
   // Direct file upload for a specific doc type
   const handleFileUpload = async (file: File, docType: string, docName: string) => {
@@ -373,7 +413,6 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         });
       if (insertError) throw insertError;
 
-      // Await refetch to ensure UI updates before clearing loading state
       await queryClient.invalidateQueries({ queryKey: ["application-documents", loanId] });
       await queryClient.refetchQueries({ queryKey: ["application-documents", loanId] });
       sonnerToast.success(`"${docName}" uploaded successfully`);
@@ -385,7 +424,6 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     }
   };
 
-  // Track by rowId for unique per-row upload state
   const [uploadingRowId, setUploadingRowId] = useState<string | null>(null);
   const pendingUploadRef = useRef<{ docType: string; docName: string } | null>(null);
 
@@ -408,6 +446,20 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
     pendingUploadRef.current = null;
     e.target.value = "";
     await handleFileUpload(file, docType, docName);
+  };
+
+  const getStatusBadge = (status: string | null | undefined) => {
+    if (!status) return null;
+    const config: Record<string, string> = {
+      verified: "bg-success/20 text-success border-success/30",
+      rejected: "bg-destructive/20 text-destructive border-destructive/30",
+      uploaded: "bg-info/20 text-info border-info/30",
+    };
+    return (
+      <Badge variant="outline" className={`text-[9px] px-1 py-0 ${config[status] || config.uploaded}`}>
+        {status}
+      </Badge>
+    );
   };
 
   const renderDocRow = (row: RequiredDocRow) => (
@@ -458,7 +510,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {row.uploadedDocs.map((doc, idx) => (
             <Button key={doc.id} variant="ghost" size="sm" className="h-8 px-2"
-              onClick={() => handleViewDocument(doc.fileUrl, doc.label)} title={`View ${doc.label}`}>
+              onClick={() => handleViewDocument(doc.fileUrl, doc.label, doc.fileName)} title={`View ${doc.label}`}>
               <Eye size={14} />
               {row.uploadedDocs.length > 1 && <span className="ml-0.5 text-xs">{idx + 1}</span>}
             </Button>
@@ -470,22 +522,48 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
           </Button>
         </div>
       </div>
+      {/* Uploaded doc details with verify/reject actions */}
       {row.uploadedDocs.length > 0 && (
-        <div className="mt-2 space-y-1 pl-8">
+        <div className="mt-2 space-y-1.5 pl-8">
           {row.uploadedDocs.map((doc) => (
-            <div key={doc.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <FileText size={10} />
-              <span className="truncate">{doc.label}</span>
-              {doc.monthTag && <span>({doc.monthTag})</span>}
-              {doc.status && (
-                <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
-                  doc.status === "verified" ? "bg-success/20 text-success border-success/30" :
-                  doc.status === "rejected" ? "bg-destructive/20 text-destructive border-destructive/30" :
-                  "bg-info/20 text-info border-info/30"
-                }`}>{doc.status}</Badge>
-              )}
-              {doc.payslipPassword && (
-                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-warning/20 text-warning border-warning/30">🔒 pwd</Badge>
+            <div key={doc.id} className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                <FileText size={10} className="flex-shrink-0" />
+                <span className="truncate">{doc.label}</span>
+                {doc.monthTag && <span>({doc.monthTag})</span>}
+                {getStatusBadge(doc.status)}
+                {doc.payslipPassword && (
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 bg-warning/20 text-warning border-warning/30">🔒 pwd</Badge>
+                )}
+              </div>
+              {/* Verify / Reject buttons for application_documents (not legacy) */}
+              {doc.source === "application_documents" && !doc.id.startsWith("legacy-") && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {doc.status !== "verified" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-success hover:bg-success/10"
+                      onClick={() => verifyDocMutation.mutate({ docId: doc.id, status: "verified" })}
+                      disabled={verifyDocMutation.isPending}
+                      title="Verify document"
+                    >
+                      <ThumbsUp size={12} />
+                    </Button>
+                  )}
+                  {doc.status !== "rejected" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-destructive hover:bg-destructive/10"
+                      onClick={() => verifyDocMutation.mutate({ docId: doc.id, status: "rejected" })}
+                      disabled={verifyDocMutation.isPending}
+                      title="Reject document"
+                    >
+                      <ThumbsDown size={12} />
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           ))}
@@ -568,44 +646,23 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         </Card>
       ) : (
         <>
-          {/* KYC / Identity Documents */}
-          {kycDocs.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">🪪 KYC / Identity Documents</CardTitle>
-                <CardDescription>Identity verification documents required for all products</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {kycDocs.map((row) => renderDocRow(row))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Product-Specific Required Documents */}
-          {requiredDocs.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">📋 Product-Specific Documents</CardTitle>
-                <CardDescription>Documents specifically required for {productName}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {requiredDocs.map((row) => renderDocRow(row))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Optional Documents */}
-          {optionalDocs.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">📎 Optional Documents</CardTitle>
-                <CardDescription>Additional supporting documents (not mandatory)</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {optionalDocs.map((row) => renderDocRow(row))}
-              </CardContent>
-            </Card>
-          )}
+          {/* Render each category group */}
+          {Object.entries(groupedDocs).map(([category, rows]) => {
+            const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.required;
+            return (
+              <Card key={category}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {config.icon} {config.title}
+                  </CardTitle>
+                  <CardDescription>{config.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {rows.map((row) => renderDocRow(row))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </>
       )}
 
@@ -627,21 +684,38 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
                     <span className="text-lg">{getDocIcon(doc.docType)}</span>
                     <div className="min-w-0">
                       <span className="text-sm font-medium truncate block">{doc.label}</span>
-                      {doc.status && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 mt-0.5">
-                          {doc.status}
-                        </Badge>
-                      )}
+                      {getStatusBadge(doc.status)}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2"
-                    onClick={() => handleViewDocument(doc.fileUrl, doc.label)}
-                  >
-                    <Eye size={14} className="mr-1" /> View
-                  </Button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => handleViewDocument(doc.fileUrl, doc.label, doc.fileName)}
+                    >
+                      <Eye size={14} className="mr-1" /> View
+                    </Button>
+                    {/* Verify/Reject for extra docs too */}
+                    {doc.source === "application_documents" && !doc.id.startsWith("legacy-") && (
+                      <>
+                        {doc.status !== "verified" && (
+                          <Button variant="ghost" size="sm" className="h-8 px-1.5 text-success hover:bg-success/10"
+                            onClick={() => verifyDocMutation.mutate({ docId: doc.id, status: "verified" })}
+                            disabled={verifyDocMutation.isPending} title="Verify">
+                            <ThumbsUp size={12} />
+                          </Button>
+                        )}
+                        {doc.status !== "rejected" && (
+                          <Button variant="ghost" size="sm" className="h-8 px-1.5 text-destructive hover:bg-destructive/10"
+                            onClick={() => verifyDocMutation.mutate({ docId: doc.id, status: "rejected" })}
+                            disabled={verifyDocMutation.isPending} title="Reject">
+                            <ThumbsDown size={12} />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -668,7 +742,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : viewerUrl ? (
-              viewerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) ? (
+              viewerIsImage ? (
                 <img src={viewerUrl} alt={viewerLabel} className="max-w-full max-h-full object-contain mx-auto" />
               ) : (
                 <iframe src={viewerUrl} className="w-full h-full border-0 rounded-lg" title={viewerLabel} />
