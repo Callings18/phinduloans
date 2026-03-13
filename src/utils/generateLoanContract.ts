@@ -264,6 +264,14 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   // Fetch product fees for default template
   let processingFeePercent = 0;
   let processingFeeAmount = 0;
+  let enforcementFeePercent = 0;
+  let enforcementFeeAmount = 0;
+  let insurancePercent = 0;
+  let insuranceFeeAmount = 0;
+  let platformFeePercent = 0;
+  let platformFeeAmount = 0;
+  let vatPercent = 0;
+  let vatAmount = 0;
   let latePenaltyPercent = 5;
   let totalFeesDeducted = 0;
   if (loan.loan_product_id) {
@@ -275,13 +283,18 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     if (product) {
       processingFeePercent = product.processing_fee_percent || 0;
       latePenaltyPercent = product.late_payment_penalty_percent || 5;
+      enforcementFeePercent = product.enforcement_fee_percent || 0;
+      insurancePercent = product.insurance_percent || 0;
+      platformFeePercent = product.platform_fee_percent || 0;
+      vatPercent = product.vat_percent || 0;
+
       processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
-      const enforcementFee = loan.loan_amount * ((product.enforcement_fee_percent || 0) / 100);
-      const insuranceFee = loan.loan_amount * ((product.insurance_percent || 0) / 100);
-      const platformFee = loan.loan_amount * ((product.platform_fee_percent || 0) / 100);
-      const vatableAmount = processingFeeAmount + enforcementFee + platformFee;
-      const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
-      totalFeesDeducted = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+      enforcementFeeAmount = loan.loan_amount * (enforcementFeePercent / 100);
+      insuranceFeeAmount = loan.loan_amount * (insurancePercent / 100);
+      platformFeeAmount = loan.loan_amount * (platformFeePercent / 100);
+      const vatableAmount = processingFeeAmount + enforcementFeeAmount + platformFeeAmount;
+      vatAmount = vatableAmount * (vatPercent / 100);
+      totalFeesDeducted = processingFeeAmount + enforcementFeeAmount + insuranceFeeAmount + platformFeeAmount + vatAmount;
     }
   }
   const disbursementAmount = loan.loan_amount - totalFeesDeducted;
