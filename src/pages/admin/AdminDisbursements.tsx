@@ -263,27 +263,50 @@ const AdminDisbursements = () => {
       if (status === "completed") {
         const disbursement = disbursements?.find((d) => d.id === id);
         if (disbursement) {
-          // Deduct from source account and record transaction
+          // Deduct from source account - FRESH DB READ to avoid stale cache
           if (disbursement.source_account_id) {
-            const sourceAccount = accounts.find(a => a.id === disbursement.source_account_id);
-            if (sourceAccount) {
-              const newBalance = sourceAccount.balance - disbursement.amount;
-              await supabase
-                .from("accounts")
-                .update({ balance: newBalance })
-                .eq("id", disbursement.source_account_id);
+            const { data: freshAccount, error: accErr } = await supabase
+              .from("accounts")
+              .select("id, account_name, balance")
+              .eq("id", disbursement.source_account_id)
+              .single();
 
-              await supabase.from("account_transactions").insert({
-                account_id: disbursement.source_account_id,
-                transaction_type: "disbursement",
-                amount: disbursement.amount,
-                balance_before: sourceAccount.balance,
-                balance_after: newBalance,
-                reference_type: "loan_application",
-                reference_id: disbursement.loan_id,
-                notes: `Loan disbursement - ${disbursement.loan_applications?.full_name || disbursement.loan_id}`,
-              });
+            if (accErr || !freshAccount) {
+              throw new Error("Failed to read source account balance. Please try again.");
             }
+
+            if (freshAccount.balance < disbursement.amount) {
+              throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${freshAccount.balance.toLocaleString()}, Required: K${disbursement.amount.toLocaleString()}`);
+            }
+
+            const newBalance = freshAccount.balance - disbursement.amount;
+            const { error: updateErr } = await supabase
+              .from("accounts")
+              .update({ balance: newBalance })
+              .eq("id", disbursement.source_account_id);
+
+            if (updateErr) {
+              throw new Error("Failed to deduct from source account. Please try again.");
+            }
+
+            await supabase.from("account_transactions").insert({
+              account_id: disbursement.source_account_id,
+              transaction_type: "disbursement",
+              amount: disbursement.amount,
+              balance_before: freshAccount.balance,
+              balance_after: newBalance,
+              reference_type: "loan_application",
+              reference_id: disbursement.loan_id,
+              source: freshAccount.account_name,
+              destination: disbursement.disbursement_method === "mobile_money" 
+                ? `Mobile Money: ${disbursement.mobile_money_number}` 
+                : disbursement.disbursement_method === "bank_transfer"
+                ? `Bank: ${disbursement.account_number}`
+                : disbursement.disbursement_method === "cash" ? "Cash" : disbursement.disbursement_method,
+              notes: `Loan disbursement to ${disbursement.loan_applications?.full_name || 'borrower'} via ${disbursement.disbursement_method.replace('_', ' ')}`,
+            });
+          } else {
+            throw new Error("No source account linked to this disbursement. Please create a new disbursement with a source account.");
           }
 
           await supabase
