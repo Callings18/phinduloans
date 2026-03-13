@@ -101,6 +101,8 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
   let processingFeePercent = 0;
   let latePenalty = 5;
   let processingFeeAmount = 0;
+  let totalFeesAmount = 0;
+  let disbursementNetAmount = loan.loan_amount;
   if (loan.loan_product_id) {
     const { data: product } = await supabase
       .from('loan_products')
@@ -110,13 +112,14 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     if (product) {
       processingFeePercent = product.processing_fee_percent || 0;
       latePenalty = product.late_payment_penalty_percent || 5;
+      processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
       const enforcementFee = loan.loan_amount * ((product.enforcement_fee_percent || 0) / 100);
       const insuranceFee = loan.loan_amount * ((product.insurance_percent || 0) / 100);
       const platformFee = loan.loan_amount * ((product.platform_fee_percent || 0) / 100);
-      processingFeeAmount = loan.loan_amount * (processingFeePercent / 100);
       const vatableAmount = processingFeeAmount + enforcementFee + platformFee;
       const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
-      processingFeeAmount = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+      totalFeesAmount = processingFeeAmount + enforcementFee + insuranceFee + platformFee + vatAmount;
+      disbursementNetAmount = loan.loan_amount - totalFeesAmount;
     }
   }
 
