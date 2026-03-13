@@ -137,7 +137,7 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     '{{company_address}}': 'Lusaka, Zambia',
     '{{current_date}}': new Date().toLocaleDateString('en-GB'),
     '{{loan_purpose}}': loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal',
-    '{{processing_fee}}': `K${Math.round(processingFeeAmount).toLocaleString()} (${processingFeePercent}%)`,
+    '{{processing_fee}}': `${Math.round(processingFeeAmount).toLocaleString()} (${processingFeePercent}%)`,
     '{{late_penalty}}': latePenalty.toString(),
     '{{collateral_description}}': loan.collateral_description || 'N/A',
     '{{collateral_value}}': (loan.collateral_value || 0).toLocaleString(),
