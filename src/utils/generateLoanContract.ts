@@ -396,10 +396,31 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   ]);
   sectionNum++;
 
-  addSection(`${sectionNum}. PROCESSING FEE`, [
-    `A processing fee of K${Math.round(totalFeesDeducted).toLocaleString()} (${processingFeePercent}%) has been deducted from the disbursement amount.`,
-    `Amount disbursed to Borrower: K${Math.round(disbursementAmount).toLocaleString()}`,
-  ]);
+  // Build fee breakdown lines
+  const feeLines: string[] = [];
+  if (processingFeePercent > 0) {
+    feeLines.push(`Processing Fee (${processingFeePercent}%): K${Math.round(processingFeeAmount).toLocaleString()}`);
+  }
+  if (enforcementFeePercent > 0) {
+    feeLines.push(`Enforcement Fee (${enforcementFeePercent}%): K${Math.round(enforcementFeeAmount).toLocaleString()}`);
+  }
+  if (insurancePercent > 0) {
+    feeLines.push(`Insurance Fee (${insurancePercent}%): K${Math.round(insuranceFeeAmount).toLocaleString()}`);
+  }
+  if (platformFeePercent > 0) {
+    feeLines.push(`Platform Fee (${platformFeePercent}%): K${Math.round(platformFeeAmount).toLocaleString()}`);
+  }
+  if (vatPercent > 0) {
+    feeLines.push(`VAT (${vatPercent}%): K${Math.round(vatAmount).toLocaleString()}`);
+  }
+  if (feeLines.length === 0) {
+    feeLines.push('No fees applicable.');
+  }
+  feeLines.push('');
+  feeLines.push(`Total Fees Deducted: K${Math.round(totalFeesDeducted).toLocaleString()}`);
+  feeLines.push(`Net Amount Disbursed to Borrower: K${Math.round(disbursementAmount).toLocaleString()}`);
+
+  addSection(`${sectionNum}. FEES & DEDUCTIONS`, feeLines);
   sectionNum++;
 
   if (loan.collateral_description) {
