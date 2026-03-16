@@ -1426,6 +1426,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <ArrowRight size={14} className="mr-1" /> Reloan
                       </Button>
                     )}
+                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
+                        <Plus size={14} className="mr-1" /> Top Up
+                      </Button>
+                    )}
                     {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
                       <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
                         <Undo2 size={14} className="mr-1" /> Undo Disbursement
