@@ -2324,6 +2324,67 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Top-Up Dialog */}
+      <Dialog open={isTopUpOpen} onOpenChange={setIsTopUpOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus size={20} /> Top Up Loan — {loan.full_name}
+            </DialogTitle>
+            <DialogDescription>
+              Add funds to the existing loan. The principal will increase, schedule will be recalculated, and the net amount disbursed from the selected account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Principal</span><span className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Monthly</span><span className="font-medium">K{Number(loan.monthly_payment).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Term</span><span className="font-medium">{loan.loan_term_months} months</span></div>
+            </div>
+
+            <div>
+              <Label>Additional Amount (K)</Label>
+              <Input type="number" placeholder="e.g. 2000" value={topUpAmount} onChange={(e) => setTopUpAmount(e.target.value)} min="1" />
+              {topUpAmount && Number(topUpAmount) > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  New principal will be K{(loan.loan_amount + Number(topUpAmount)).toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label>Source Account</Label>
+              <Select value={topUpSourceAccountId} onValueChange={setTopUpSourceAccountId}>
+                <SelectTrigger><SelectValue placeholder="Select funding account" /></SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts ?? []).map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.account_name} ({acc.account_type}) — K{Number(acc.balance).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Reason for Top-Up</Label>
+              <Textarea placeholder="Why is the borrower requesting additional funds?" value={topUpReason} onChange={(e) => setTopUpReason(e.target.value)} rows={2} />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsTopUpOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => topUpMutation.mutate()}
+                disabled={topUpMutation.isPending || !topUpAmount || !topUpSourceAccountId}
+              >
+                {topUpMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+                Confirm Top-Up
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
