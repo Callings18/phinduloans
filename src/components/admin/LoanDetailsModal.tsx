@@ -759,11 +759,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       let enforcementPercent = 0;
       let vatPercent = 0;
       let platformPercent = 0;
+      let interestPeriod = 'monthly';
+      let interestType = 'flat';
+      let termUnit = (loan as any).term_unit || 'months';
 
       if (loan.loan_product_id) {
         const { data: prod } = await supabase
           .from("loan_products")
-          .select("processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent")
+          .select("processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent, interest_period, interest_type, term_unit")
           .eq("id", loan.loan_product_id)
           .single();
         if (prod) {
@@ -773,6 +776,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           enforcementPercent = Number(prod.enforcement_fee_percent) || 0;
           vatPercent = Number(prod.vat_percent) || 0;
           platformPercent = Number(prod.platform_fee_percent) || 0;
+          interestPeriod = (prod as any).interest_period || 'monthly';
+          interestType = (prod as any).interest_type || 'flat';
+          termUnit = (prod as any).term_unit || termUnit;
         }
       }
 
@@ -780,18 +786,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const processingFee = additionalAmount * (processingFeePercent / 100);
       const insuranceFee = additionalAmount * (insurancePercent / 100);
       const enforcementFee = additionalAmount * (enforcementPercent / 100);
-      const vatFee = additionalAmount * (vatPercent / 100);
       const platformFee = additionalAmount * (platformPercent / 100);
+      // VAT applies to fee amounts, not the full additional amount
+      const vatableAmount = processingFee + enforcementFee + platformFee;
+      const vatFee = vatableAmount * (vatPercent / 100);
       const totalFees = processingFee + insuranceFee + enforcementFee + vatFee + platformFee;
       const netDisbursement = additionalAmount - totalFees;
 
       if (netDisbursement <= 0) throw new Error("Top-up amount is too small to cover fees");
 
-      // New principal & recalculate
+      // New principal & recalculate using unified calculation
       const newPrincipal = loan.loan_amount + additionalAmount;
-      const newInterest = newPrincipal * (interestRate / 100) * loan.loan_term_months;
-      const newTotal = newPrincipal + newInterest;
-      const newMonthly = newTotal / loan.loan_term_months;
+      const loanCalc = calculateLoan(newPrincipal, loan.loan_term_months, {
+        interest_rate: interestRate,
+        interest_period: interestPeriod as any,
+        interest_type: interestType as any,
+      }, termUnit as any);
+
+      const newTotal = loanCalc.totalRepayment;
+      const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan application
       const { error: loanErr } = await supabase
@@ -800,7 +813,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           loan_amount: newPrincipal,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Total repayment: K${newTotal.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
         })
         .eq("id", loan.id);
       if (loanErr) throw loanErr;
