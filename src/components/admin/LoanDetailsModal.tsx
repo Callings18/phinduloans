@@ -219,6 +219,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
   const [isReloanOpen, setIsReloanOpen] = useState(false);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [topUpReason, setTopUpReason] = useState("");
+  const [topUpSourceAccountId, setTopUpSourceAccountId] = useState("");
 
   // Phase 1 new states
   const [isReversalOpen, setIsReversalOpen] = useState(false);
@@ -252,7 +256,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan?.loan_product_id,
   });
 
-  // Fetch repayments with new columns
+  // Fetch accounts for top-up source selection
+  const { data: fundingAccounts } = useQuery({
+    queryKey: ["accounts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance, account_number")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: open && isAdmin,
+  });
+
+
   const { data: repayments, isLoading: repaymentsLoading } = useQuery({
     queryKey: ["loan-repayments", loan?.id],
     queryFn: async () => {
@@ -712,6 +731,157 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create reloan");
+    },
+  });
+
+  // Top-Up mutation - increases principal on existing loan, disburses difference
+  const topUpMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+      const additionalAmount = Number(topUpAmount);
+      if (!additionalAmount || additionalAmount <= 0) throw new Error("Enter a valid top-up amount");
+      if (!topUpSourceAccountId) throw new Error("Select a source account");
+
+      // Fetch fresh account balance
+      const { data: freshAccount, error: accErr } = await supabase
+        .from("accounts")
+        .select("id, account_name, balance")
+        .eq("id", topUpSourceAccountId)
+        .single();
+      if (accErr || !freshAccount) throw new Error("Source account not found");
+      if (freshAccount.balance < additionalAmount) throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}`);
+
+      // Fetch product for fee & interest calculations
+      let processingFeePercent = 0;
+      let interestRate = loan.interest_rate || 15;
+      let insurancePercent = 0;
+      let enforcementPercent = 0;
+      let vatPercent = 0;
+      let platformPercent = 0;
+
+      if (loan.loan_product_id) {
+        const { data: prod } = await supabase
+          .from("loan_products")
+          .select("processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent")
+          .eq("id", loan.loan_product_id)
+          .single();
+        if (prod) {
+          processingFeePercent = Number(prod.processing_fee_percent) || 0;
+          interestRate = Number(prod.interest_rate) || interestRate;
+          insurancePercent = Number(prod.insurance_percent) || 0;
+          enforcementPercent = Number(prod.enforcement_fee_percent) || 0;
+          vatPercent = Number(prod.vat_percent) || 0;
+          platformPercent = Number(prod.platform_fee_percent) || 0;
+        }
+      }
+
+      // Calculate fees on additional amount
+      const processingFee = additionalAmount * (processingFeePercent / 100);
+      const insuranceFee = additionalAmount * (insurancePercent / 100);
+      const enforcementFee = additionalAmount * (enforcementPercent / 100);
+      const vatFee = additionalAmount * (vatPercent / 100);
+      const platformFee = additionalAmount * (platformPercent / 100);
+      const totalFees = processingFee + insuranceFee + enforcementFee + vatFee + platformFee;
+      const netDisbursement = additionalAmount - totalFees;
+
+      if (netDisbursement <= 0) throw new Error("Top-up amount is too small to cover fees");
+
+      // New principal & recalculate
+      const newPrincipal = loan.loan_amount + additionalAmount;
+      const newInterest = newPrincipal * (interestRate / 100) * loan.loan_term_months;
+      const newTotal = newPrincipal + newInterest;
+      const newMonthly = newTotal / loan.loan_term_months;
+
+      // Update loan application
+      const { error: loanErr } = await supabase
+        .from("loan_applications")
+        .update({
+          loan_amount: newPrincipal,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
+        })
+        .eq("id", loan.id);
+      if (loanErr) throw loanErr;
+
+      // Delete pending repayments and regenerate
+      await supabase
+        .from("loan_repayments")
+        .delete()
+        .eq("loan_id", loan.id)
+        .eq("status", "pending");
+
+      const { data: paidReps } = await supabase
+        .from("loan_repayments")
+        .select("installment_number, amount")
+        .eq("loan_id", loan.id)
+        .eq("status", "paid")
+        .order("installment_number", { ascending: false });
+
+      const lastPaidInstallment = paidReps?.[0]?.installment_number || 0;
+      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+      const remainingTotal = newTotal - paidTotal;
+      const remainingInstallments = loan.loan_term_months - lastPaidInstallment;
+      const newInstallmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
+
+      const repaymentRecords = [];
+      const startDate = new Date();
+      for (let i = 1; i <= remainingInstallments; i++) {
+        repaymentRecords.push({
+          loan_id: loan.id,
+          user_id: loan.user_id,
+          amount: newInstallmentAmount,
+          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
+          installment_number: lastPaidInstallment + i,
+          status: "pending",
+        });
+      }
+      if (repaymentRecords.length > 0) {
+        const { error } = await supabase.from("loan_repayments").insert(repaymentRecords);
+        if (error) throw error;
+      }
+
+      // Deduct from source account
+      const newBalance = freshAccount.balance - netDisbursement;
+      await supabase.from("accounts").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", freshAccount.id);
+
+      // Record transaction
+      await supabase.from("account_transactions").insert({
+        account_id: freshAccount.id,
+        transaction_type: "disbursement",
+        amount: netDisbursement,
+        balance_before: freshAccount.balance,
+        balance_after: newBalance,
+        reference_type: "loan_top_up",
+        reference_id: loan.id,
+        source: freshAccount.account_name,
+        destination: `Top-up for ${loan.full_name}`,
+        notes: `Top-up +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()}) — ${topUpReason || "N/A"}`,
+        created_by: user?.id,
+      });
+
+      await logAudit({
+        action: "LOAN_TOP_UP",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { additional_amount: additionalAmount, net_disbursement: netDisbursement, total_fees: totalFees, new_principal: newPrincipal, source_account: freshAccount.account_name },
+      });
+
+      return { additionalAmount, netDisbursement };
+    },
+    onSuccess: ({ additionalAmount, netDisbursement }) => {
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast.success(`Top-up of K${additionalAmount.toLocaleString()} applied. K${netDisbursement.toLocaleString()} disbursed (after fees).`);
+      setIsTopUpOpen(false);
+      setTopUpAmount("");
+      setTopUpReason("");
+      setTopUpSourceAccountId("");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to process top-up");
     },
   });
 
@@ -1254,6 +1424,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
                       <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
                         <ArrowRight size={14} className="mr-1" /> Reloan
+                      </Button>
+                    )}
+                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
+                        <Plus size={14} className="mr-1" /> Top Up
                       </Button>
                     )}
                     {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
@@ -2149,6 +2324,67 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Top-Up Dialog */}
+      <Dialog open={isTopUpOpen} onOpenChange={setIsTopUpOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus size={20} /> Top Up Loan — {loan.full_name}
+            </DialogTitle>
+            <DialogDescription>
+              Add funds to the existing loan. The principal will increase, schedule will be recalculated, and the net amount disbursed from the selected account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Principal</span><span className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Monthly</span><span className="font-medium">K{Number(loan.monthly_payment).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Term</span><span className="font-medium">{loan.loan_term_months} months</span></div>
+            </div>
+
+            <div>
+              <Label>Additional Amount (K)</Label>
+              <Input type="number" placeholder="e.g. 2000" value={topUpAmount} onChange={(e) => setTopUpAmount(e.target.value)} min="1" />
+              {topUpAmount && Number(topUpAmount) > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  New principal will be K{(loan.loan_amount + Number(topUpAmount)).toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label>Source Account</Label>
+              <Select value={topUpSourceAccountId} onValueChange={setTopUpSourceAccountId}>
+                <SelectTrigger><SelectValue placeholder="Select funding account" /></SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts ?? []).map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.account_name} ({acc.account_type}) — K{Number(acc.balance).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Reason for Top-Up</Label>
+              <Textarea placeholder="Why is the borrower requesting additional funds?" value={topUpReason} onChange={(e) => setTopUpReason(e.target.value)} rows={2} />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsTopUpOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => topUpMutation.mutate()}
+                disabled={topUpMutation.isPending || !topUpAmount || !topUpSourceAccountId}
+              >
+                {topUpMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+                Confirm Top-Up
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
