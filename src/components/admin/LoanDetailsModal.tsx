@@ -97,6 +97,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
@@ -758,11 +759,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       let enforcementPercent = 0;
       let vatPercent = 0;
       let platformPercent = 0;
+      let interestPeriod = 'monthly';
+      let interestType = 'flat';
+      let termUnit = (loan as any).term_unit || 'months';
 
       if (loan.loan_product_id) {
         const { data: prod } = await supabase
           .from("loan_products")
-          .select("processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent")
+          .select("processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent, interest_period, interest_type, term_unit")
           .eq("id", loan.loan_product_id)
           .single();
         if (prod) {
@@ -772,6 +776,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           enforcementPercent = Number(prod.enforcement_fee_percent) || 0;
           vatPercent = Number(prod.vat_percent) || 0;
           platformPercent = Number(prod.platform_fee_percent) || 0;
+          interestPeriod = (prod as any).interest_period || 'monthly';
+          interestType = (prod as any).interest_type || 'flat';
+          termUnit = (prod as any).term_unit || termUnit;
         }
       }
 
@@ -779,18 +786,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const processingFee = additionalAmount * (processingFeePercent / 100);
       const insuranceFee = additionalAmount * (insurancePercent / 100);
       const enforcementFee = additionalAmount * (enforcementPercent / 100);
-      const vatFee = additionalAmount * (vatPercent / 100);
       const platformFee = additionalAmount * (platformPercent / 100);
+      // VAT applies to fee amounts, not the full additional amount
+      const vatableAmount = processingFee + enforcementFee + platformFee;
+      const vatFee = vatableAmount * (vatPercent / 100);
       const totalFees = processingFee + insuranceFee + enforcementFee + vatFee + platformFee;
       const netDisbursement = additionalAmount - totalFees;
 
       if (netDisbursement <= 0) throw new Error("Top-up amount is too small to cover fees");
 
-      // New principal & recalculate
+      // New principal & recalculate using unified calculation
       const newPrincipal = loan.loan_amount + additionalAmount;
-      const newInterest = newPrincipal * (interestRate / 100) * loan.loan_term_months;
-      const newTotal = newPrincipal + newInterest;
-      const newMonthly = newTotal / loan.loan_term_months;
+      const loanCalc = calculateLoan(newPrincipal, loan.loan_term_months, {
+        interest_rate: interestRate,
+        interest_period: interestPeriod as any,
+        interest_type: interestType as any,
+      }, termUnit as any);
+
+      const newTotal = loanCalc.totalRepayment;
+      const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan application
       const { error: loanErr } = await supabase
@@ -799,7 +813,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           loan_amount: newPrincipal,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Total repayment: K${newTotal.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
         })
         .eq("id", loan.id);
       if (loanErr) throw loanErr;
@@ -925,12 +939,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
-
-      // Recalculate loan
       const principal = loan.loan_amount;
-      const interest = principal * (newRate / 100) * newTerm;
-      const newTotal = principal + interest;
-      const newMonthly = newTotal / newTerm;
+
+      // Fetch product for proper interest_period/type
+      let interestPeriod = 'monthly';
+      let interestType = 'flat';
+      let termUnit = (loan as any).term_unit || 'months';
+      if (loan.loan_product_id) {
+        const { data: prod } = await supabase
+          .from("loan_products")
+          .select("interest_period, interest_type, term_unit")
+          .eq("id", loan.loan_product_id)
+          .single();
+        if (prod) {
+          interestPeriod = (prod as any).interest_period || 'monthly';
+          interestType = (prod as any).interest_type || 'flat';
+          termUnit = (prod as any).term_unit || termUnit;
+        }
+      }
+
+      // Use unified calculation for correct interest normalization
+      const loanCalc = calculateLoan(principal, newTerm, {
+        interest_rate: newRate,
+        interest_period: interestPeriod as any,
+        interest_type: interestType as any,
+      }, termUnit as any);
+
+      const newTotal = loanCalc.totalRepayment;
+      const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan
       const { error: loanError } = await supabase
@@ -940,7 +976,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           interest_rate: newRate,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nNew terms: ${newTerm} months @ ${newRate}%`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nNew terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Total: K${newTotal.toLocaleString()}`,
         })
         .eq("id", loan.id);
 
@@ -963,17 +999,39 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const lastPaidInstallment = paidRepayments?.[0]?.installment_number || 0;
       const remainingInstallments = newTerm - lastPaidInstallment;
+      
+      // Calculate remaining amount (total - already paid)
+      const { data: paidReps } = await supabase
+        .from("loan_repayments")
+        .select("amount")
+        .eq("loan_id", loan.id)
+        .eq("status", "paid");
+      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+      const remainingTotal = newTotal - paidTotal;
+      const installmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
+
+      // Determine schedule interval
+      const isWeekly = termUnit === 'weeks' || interestPeriod === 'weekly';
+      const isDaily = termUnit === 'days' || interestPeriod === 'daily';
 
       // Generate new schedule
       const repaymentRecords = [];
       const startDate = new Date();
 
       for (let i = 1; i <= remainingInstallments; i++) {
+        const dueDate = new Date(startDate);
+        if (isDaily) {
+          dueDate.setDate(dueDate.getDate() + i);
+        } else if (isWeekly) {
+          dueDate.setDate(dueDate.getDate() + i * 7);
+        } else {
+          dueDate.setMonth(dueDate.getMonth() + i);
+        }
         repaymentRecords.push({
           loan_id: loan.id,
           user_id: loan.user_id,
-          amount: newMonthly,
-          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
+          amount: installmentAmount,
+          due_date: format(dueDate, "yyyy-MM-dd"),
           installment_number: lastPaidInstallment + i,
           status: "pending",
         });
@@ -1418,15 +1476,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <Calculator size={14} className="mr-1" /> Early Settlement
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
-                      <RefreshCw size={14} className="mr-1" /> Restructure
-                    </Button>
-                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                    {(loan.status === "active" || loan.status === "disbursed") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
+                        <RefreshCw size={14} className="mr-1" /> Restructure
+                      </Button>
+                    )}
+                    {(loan.status === "active" || loan.status === "disbursed") && (
                       <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
                         <ArrowRight size={14} className="mr-1" /> Reloan
                       </Button>
                     )}
-                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                    {(loan.status === "active" || loan.status === "disbursed") && (
                       <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
                         <Plus size={14} className="mr-1" /> Top Up
                       </Button>
