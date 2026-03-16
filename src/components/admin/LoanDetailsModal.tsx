@@ -219,6 +219,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
   const [isReloanOpen, setIsReloanOpen] = useState(false);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [topUpReason, setTopUpReason] = useState("");
+  const [topUpSourceAccountId, setTopUpSourceAccountId] = useState("");
 
   // Phase 1 new states
   const [isReversalOpen, setIsReversalOpen] = useState(false);
