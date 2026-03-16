@@ -256,7 +256,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan?.loan_product_id,
   });
 
-  // Fetch repayments with new columns
+  // Fetch accounts for top-up source selection
+  const { data: fundingAccounts } = useQuery({
+    queryKey: ["accounts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance, account_number")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: open && isAdmin,
+  });
+
+
   const { data: repayments, isLoading: repaymentsLoading } = useQuery({
     queryKey: ["loan-repayments", loan?.id],
     queryFn: async () => {
