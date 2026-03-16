@@ -1476,15 +1476,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <Calculator size={14} className="mr-1" /> Early Settlement
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
-                      <RefreshCw size={14} className="mr-1" /> Restructure
-                    </Button>
-                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                    {(loan.status === "active" || loan.status === "disbursed") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
+                        <RefreshCw size={14} className="mr-1" /> Restructure
+                      </Button>
+                    )}
+                    {(loan.status === "active" || loan.status === "disbursed") && (
                       <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
                         <ArrowRight size={14} className="mr-1" /> Reloan
                       </Button>
                     )}
-                    {isAdmin && (loan.status === "active" || loan.status === "disbursed") && (
+                    {(loan.status === "active" || loan.status === "disbursed") && (
                       <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
                         <Plus size={14} className="mr-1" /> Top Up
                       </Button>
