@@ -926,12 +926,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
-
-      // Recalculate loan
       const principal = loan.loan_amount;
-      const interest = principal * (newRate / 100) * newTerm;
-      const newTotal = principal + interest;
-      const newMonthly = newTotal / newTerm;
+
+      // Fetch product for proper interest_period/type
+      let interestPeriod = 'monthly';
+      let interestType = 'flat';
+      let termUnit = (loan as any).term_unit || 'months';
+      if (loan.loan_product_id) {
+        const { data: prod } = await supabase
+          .from("loan_products")
+          .select("interest_period, interest_type, term_unit")
+          .eq("id", loan.loan_product_id)
+          .single();
+        if (prod) {
+          interestPeriod = (prod as any).interest_period || 'monthly';
+          interestType = (prod as any).interest_type || 'flat';
+          termUnit = (prod as any).term_unit || termUnit;
+        }
+      }
+
+      // Use unified calculation for correct interest normalization
+      const loanCalc = calculateLoan(principal, newTerm, {
+        interest_rate: newRate,
+        interest_period: interestPeriod as any,
+        interest_type: interestType as any,
+      }, termUnit as any);
+
+      const newTotal = loanCalc.totalRepayment;
+      const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan
       const { error: loanError } = await supabase
@@ -941,7 +963,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           interest_rate: newRate,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nNew terms: ${newTerm} months @ ${newRate}%`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nNew terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Total: K${newTotal.toLocaleString()}`,
         })
         .eq("id", loan.id);
 
@@ -964,17 +986,39 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const lastPaidInstallment = paidRepayments?.[0]?.installment_number || 0;
       const remainingInstallments = newTerm - lastPaidInstallment;
+      
+      // Calculate remaining amount (total - already paid)
+      const { data: paidReps } = await supabase
+        .from("loan_repayments")
+        .select("amount")
+        .eq("loan_id", loan.id)
+        .eq("status", "paid");
+      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+      const remainingTotal = newTotal - paidTotal;
+      const installmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
+
+      // Determine schedule interval
+      const isWeekly = termUnit === 'weeks' || interestPeriod === 'weekly';
+      const isDaily = termUnit === 'days' || interestPeriod === 'daily';
 
       // Generate new schedule
       const repaymentRecords = [];
       const startDate = new Date();
 
       for (let i = 1; i <= remainingInstallments; i++) {
+        const dueDate = new Date(startDate);
+        if (isDaily) {
+          dueDate.setDate(dueDate.getDate() + i);
+        } else if (isWeekly) {
+          dueDate.setDate(dueDate.getDate() + i * 7);
+        } else {
+          dueDate.setMonth(dueDate.getMonth() + i);
+        }
         repaymentRecords.push({
           loan_id: loan.id,
           user_id: loan.user_id,
-          amount: newMonthly,
-          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
+          amount: installmentAmount,
+          due_date: format(dueDate, "yyyy-MM-dd"),
           installment_number: lastPaidInstallment + i,
           status: "pending",
         });
