@@ -97,6 +97,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
