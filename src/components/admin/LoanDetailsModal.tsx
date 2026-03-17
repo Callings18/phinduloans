@@ -1882,6 +1882,27 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </Card>
               </TabsContent>
 
+              {/* Loan History Tab */}
+              <TabsContent value="history" className="m-0 space-y-4">
+                {/* Loan Chain (for reloans) */}
+                <LoanChain
+                  loanId={loan.id}
+                  parentLoanId={(loan as any).parent_loan_id}
+                  onViewLoan={(id) => {
+                    // Close current and signal parent to open the other loan
+                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                  }}
+                />
+
+                {/* Full event timeline */}
+                <LoanHistoryTimeline
+                  loanId={loan.id}
+                  onViewLoan={(id) => {
+                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                  }}
+                />
+              </TabsContent>
+
               {/* V1.0.1: Actions and History tabs removed - functionality available through Overview quick actions and Contract tab */}
             </div>
           </Tabs>
