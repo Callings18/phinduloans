@@ -1630,6 +1630,42 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Product-Specific Information */}
+                {(() => {
+                  const psd = (loan as any)?.product_specific_data;
+                  if (!psd || typeof psd !== 'object' || Object.keys(psd).length === 0) return null;
+                  const labels: Record<string, string> = {
+                    business_name: "Business Name",
+                    business_tpin: "TPIN",
+                    business_registration_number: "Registration #",
+                    business_type: "Business Type",
+                    employer_name: "Employer",
+                    employer_contact: "Employer Contact",
+                    monthly_salary: "Monthly Salary",
+                  };
+                  return (
+                    <Card className="border-border/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Briefcase size={16} className="text-primary" /> Product-Specific Information
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          {Object.entries(psd).map(([key, value]) => (
+                            <div key={key}>
+                              <span className="text-muted-foreground">{labels[key] || key.replace(/_/g, ' ')}:</span>
+                              <span className="font-medium ml-1">
+                                {key.includes('salary') || key.includes('amount') ? `K${Number(value).toLocaleString()}` : String(value || '—').replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
               </TabsContent>
 
               {/* Repayments Tab */}
