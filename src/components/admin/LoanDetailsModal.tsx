@@ -1102,6 +1102,30 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           .insert(repaymentRecords);
         if (error) throw error;
       }
+
+      // Record loan event for history timeline
+      await supabase.from("loan_events" as any).insert({
+        loan_id: loan.id,
+        event_type: "restructure",
+        performed_by: user?.id,
+        reason: restructureReason || "Loan restructured",
+        previous_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+        },
+        new_values: {
+          principal: principal,
+          interest_rate: newRate,
+          term: newTerm,
+          term_unit: termUnit,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
