@@ -1,48 +1,124 @@
 
 
-## Fix: Documents Breaking After Upload — Root Cause and Solution
+# Revised Borrower Portal Plan (Following Your Document)
 
-### Root Cause
+## Summary of Changes from Previous Plan
 
-The document upload and matching system has a **key mismatch** between what gets saved and what gets looked up.
+Your document correctly identified 6 problems. Here's the revised plan addressing all of them:
 
-**During loan creation** (AdminApplications.tsx), documents are keyed and saved using a mangled version of the `document_name`:
+1. **ONE application flow** (`/apply`) -- not two parallel paths
+2. **JSONB `product_specific_data` column** -- not admin_notes hacks
+3. **Admin UI shows product-specific data** -- end-to-end visibility
+4. **Loan history deferred to Phase 2** -- focus on critical path
+5. **QuickApply becomes a calculator** that redirects to `/apply`
+
+---
+
+## PHASE 1: Critical Path (This Implementation)
+
+### Task 1.1: Enable Contract Signing (5 min)
+
+- Uncomment `<ContractSigningWidget userId={user.id} />` on Dashboard line ~513
+- Import already exists, just needs the JSX render restored
+
+### Task 1.2: Database Migration
+
+```sql
+ALTER TABLE loan_applications
+ADD COLUMN IF NOT EXISTS product_specific_data JSONB DEFAULT '{}'::jsonb;
+
+CREATE INDEX IF NOT EXISTS idx_loan_applications_product_data
+ON loan_applications USING gin (product_specific_data);
 ```
-docKey = doc.document_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+
+One new column. No schema disruption. Admin queries unchanged.
+
+### Task 1.3: Build Complete `/apply` Multi-Step Form (~8 hours)
+
+Convert `src/pages/Apply.tsx` from a "please log in" placeholder into a full multi-step application form for authenticated users. Unauthenticated users still see the current "log in first" page.
+
+**Step 1: Select Product**
+- Fetch active `loan_products` from database
+- Show 3 products as cards with name, description, rate, min/max amounts, requirements summary
+- Borrower selects one to proceed
+
+**Step 2: Loan Details + Product-Specific Fields**
+- Amount slider (bounded by product min/max)
+- Term slider (bounded by product min/max term)
+- Loan purpose selector
+- **Conditional fields by product:**
+  - **Salary Advance**: Employer name, employer contact, monthly salary (stored in `product_specific_data`)
+  - **Collateral Loan**: Collateral description, estimated value, collateral images (uses existing `collateral_description`, `collateral_value`, `collateral_image_url` columns)
+  - **Business Loan**: Business name, TPIN, registration number, business type (stored in `product_specific_data`)
+- Live loan calculation preview using existing `calculateLoan()`
+
+**Step 3: Document Upload**
+- Dynamic checklist driven by `product.required_documents` JSONB
+- Each required doc gets a file upload slot with validation (type, size)
+- Files upload to `loan-documents` storage bucket
+- Rows inserted into `application_documents` table (borrower INSERT RLS exists)
+- Map known doc types to `loan_applications` columns where applicable (e.g., `payslip_url`, `bank_statement_url`, `collateral_image_url`)
+
+**Step 4: Review & Submit**
+- Full summary: personal info (from profile), loan details, product-specific fields, uploaded docs list
+- Loan calculation breakdown (monthly payment, total repayment, fees)
+- CRB consent checkbox + terms consent
+- Submit: INSERT into `loan_applications` with all fields + `product_specific_data` JSONB
+
+**Data flow on submit:**
+```
+loan_applications row:
+  - Standard fields: full_name, email, phone, nrc_number, loan_amount, loan_term_months, etc.
+  - Product columns: collateral_description, collateral_value, collateral_image_url (for collateral loans)
+  - JSONB column: product_specific_data = {"business_name": "...", "business_tpin": "...", ...}
+  - source = 'website'
+
+application_documents rows:
+  - One row per uploaded document (doc_type, file_url, borrower_id, application_id)
 ```
 
-For a product with required docs like:
-| `document_type` | `document_name` | Saved `doc_type` (mangled from name) |
-|---|---|---|
-| `bank_statement_1` | "Month 1" | `month_1` |
-| `bank_statement_2` | "Month 2" | `month_2` |
-| `payslip_1` | "Latest" | `latest` |
-| `proof_of_residence` | "Proof of Residence (Utility Bill)" | `proof_of_residence__utility_bill_` |
+### Task 1.4: Convert QuickApply to Calculator Redirect
 
-**During document review** (ApplicationDocumentsTab.tsx), the checklist compares the uploaded `doc_type` against the product's `document_type`. So it tries to match `month_1` against `bank_statement_1` — they never match. All uploaded docs fall through to "Additional Documents".
+Modify `QuickApply` component on Dashboard:
+- Keep the product selection and amount/term sliders
+- Remove the submission logic
+- Change "Apply" button to navigate to `/apply?product={id}&amount={amount}&term={term}`
+- `/apply` reads query params and pre-fills Step 1 + Step 2
 
-### Fix
+This eliminates the dual-flow problem while keeping the quick interaction on Dashboard.
 
-**1. AdminApplications.tsx — Use `document_type` as the key, not mangled name**
+### Task 1.5: Admin UI for Product-Specific Data (4 hours)
 
-Two locations need fixing:
+In `AdminApplications.tsx` detail view (and `LoanDetailsModal.tsx`), add a **"Product-Specific Information"** card that reads `product_specific_data` JSONB:
 
-- **Line 1802 (upload form)**: Change `docKey` from `doc.document_name?.replace(...)` to `doc.document_type` so the file input state uses the correct identifier.
+- **Business Loan**: Show Business Name, TPIN, Registration Number, Business Type
+- **Salary Advance**: Show Employer Name, Employer Contact, Monthly Salary
+- **Collateral Loan**: Already shown via existing `collateral_description`/`collateral_value` fields -- no change needed
 
-- **Lines 373-382 (mutation)**: Change `docKey` from `doc.document_name?.replace(...)` to `doc.document_type`. Save `doc_type: doc.document_type` and `doc_label: doc.document_name` (label stays for display).
+This is a read-only display section. The admin detail view already shows uploaded `application_documents` via `ApplicationDocumentsTab`, so all borrower-uploaded docs are already visible to admins.
 
-This ensures the saved `doc_type` is `bank_statement_1`, `payslip_1`, `proof_of_residence` — matching exactly what the product defines.
+---
 
-**2. ApplicationDocumentsTab.tsx — Strengthen label-based fallback matching**
+## What Does NOT Change (Admin Side Untouched)
 
-As a safety net for documents already saved with the wrong keys, add a secondary match on `doc_label` vs `document_name` when the type-based match fails.
+- All admin pages, approval workflows, disbursement flows -- zero changes
+- `LoanDetailsModal` internal logic (reloan/top-up/restructure) -- untouched
+- Edge functions, notification system -- untouched
+- Existing RLS policies -- untouched (borrower INSERT/SELECT already exist)
+- `supabase/config.toml`, `client.ts`, `types.ts` -- untouched
 
-### Files to Modify
+## PHASE 2 (Deferred -- After Phase 1 Works)
 
-| File | Change |
-|------|--------|
-| `src/pages/admin/AdminApplications.tsx` | Fix `docKey` to use `document_type` instead of mangled `document_name` (2 locations) |
-| `src/components/admin/ApplicationDocumentsTab.tsx` | Add label-based fallback matching for already-broken docs |
+- Loan history visibility for borrowers (RLS on `loan_events` + timeline UI)
+- Payment portal / online payments
+- Enhanced polish features
 
-This is a targeted 2-file fix that resolves the root cause permanently.
+## Implementation Order
+
+1. Database migration (`product_specific_data` JSONB column)
+2. Enable ContractSigningWidget (1 line uncomment)
+3. Build `/apply` multi-step form (the main work)
+4. Convert QuickApply to calculator redirect
+5. Add product-specific data display in admin detail view
+6. End-to-end testing: all 3 loan products through complete flow
 
