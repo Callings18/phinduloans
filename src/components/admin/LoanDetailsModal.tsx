@@ -714,6 +714,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         supabase
       );
 
+      // Record loan event for history timeline
+      await supabase.from("loan_events" as any).insert({
+        loan_id: loan.id,
+        event_type: "reloan",
+        performed_by: user?.id,
+        reason: `Reloan — new loan ${newLoan.id.slice(0, 8).toUpperCase()} created.`,
+        previous_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+          status: loan.status,
+        },
+        new_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+          status: "completed",
+        },
+        new_loan_id: newLoan.id,
+        amount: loan.loan_amount,
+      });
+
       await logAudit({
         action: "RELOAN",
         entity_type: "loan_application",
