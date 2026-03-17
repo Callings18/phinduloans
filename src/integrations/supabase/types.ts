@@ -1497,6 +1497,7 @@ export type Database = {
           nrc_back_url: string | null
           nrc_front_url: string | null
           nrc_number: string
+          parent_loan_id: string | null
           payslip_2_url: string | null
           payslip_3_url: string | null
           payslip_password: string | null
@@ -1573,6 +1574,7 @@ export type Database = {
           nrc_back_url?: string | null
           nrc_front_url?: string | null
           nrc_number: string
+          parent_loan_id?: string | null
           payslip_2_url?: string | null
           payslip_3_url?: string | null
           payslip_password?: string | null
@@ -1649,6 +1651,7 @@ export type Database = {
           nrc_back_url?: string | null
           nrc_front_url?: string | null
           nrc_number?: string
+          parent_loan_id?: string | null
           payslip_2_url?: string | null
           payslip_3_url?: string | null
           payslip_password?: string | null
@@ -1686,6 +1689,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "loan_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_applications_parent_loan_id_fkey"
+            columns: ["parent_loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_applications_parent_loan_id_fkey"
+            columns: ["parent_loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
           },
         ]
       }
@@ -1731,6 +1748,96 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "overdue_loans_view"
             referencedColumns: ["loan_id"]
+          },
+        ]
+      }
+      loan_events: {
+        Row: {
+          amount: number | null
+          created_at: string
+          document_url: string | null
+          event_type: string
+          fees_charged: number | null
+          id: string
+          loan_id: string
+          net_amount: number | null
+          new_loan_id: string | null
+          new_values: Json | null
+          performed_at: string
+          performed_by: string | null
+          previous_values: Json | null
+          reason: string | null
+          source_account_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          document_url?: string | null
+          event_type: string
+          fees_charged?: number | null
+          id?: string
+          loan_id: string
+          net_amount?: number | null
+          new_loan_id?: string | null
+          new_values?: Json | null
+          performed_at?: string
+          performed_by?: string | null
+          previous_values?: Json | null
+          reason?: string | null
+          source_account_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          document_url?: string | null
+          event_type?: string
+          fees_charged?: number | null
+          id?: string
+          loan_id?: string
+          net_amount?: number | null
+          new_loan_id?: string | null
+          new_values?: Json | null
+          performed_at?: string
+          performed_by?: string | null
+          previous_values?: Json | null
+          reason?: string | null
+          source_account_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_events_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_events_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "loan_events_new_loan_id_fkey"
+            columns: ["new_loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_events_new_loan_id_fkey"
+            columns: ["new_loan_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "loan_events_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
           },
         ]
       }
