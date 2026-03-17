@@ -305,7 +305,7 @@ const Apply = () => {
         employment_type: employmentTypeMap[profile.employment_type || ""] || "employed",
         employer_name: employerName || profile.employer_name || "",
         job_title: profile.job_title || "",
-        monthly_income: Number(monthlySalary) || profile.monthly_income || 0,
+        monthly_income: Number(monthlySalary) || profile.net_income || 0,
         loan_amount: loanAmount,
         loan_purpose: loanPurpose,
         loan_term_months: loanTerm,
