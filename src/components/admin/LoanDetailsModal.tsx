@@ -99,6 +99,8 @@ import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import LoanHistoryTimeline from "./LoanHistoryTimeline";
+import LoanChain from "./LoanChain";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
