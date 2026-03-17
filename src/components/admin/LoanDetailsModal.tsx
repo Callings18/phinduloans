@@ -689,6 +689,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           total_repayment: loan.total_repayment,
           loan_purpose: loan.loan_purpose,
           loan_product_id: loan.loan_product_id || null,
+          parent_loan_id: loan.id,
           status: "disbursed" as any,
           source: "internal",
           admin_notes: `Reloan of previous loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement — funds already with borrower.`,
