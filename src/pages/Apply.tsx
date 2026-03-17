@@ -201,7 +201,7 @@ const Apply = () => {
   useEffect(() => {
     if (profile) {
       if (profile.employer_name) setEmployerName(profile.employer_name);
-      if (profile.monthly_income) setMonthlySalary(String(profile.monthly_income));
+      if (profile.net_income) setMonthlySalary(String(profile.net_income));
     }
   }, [profile]);
 
