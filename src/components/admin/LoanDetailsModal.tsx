@@ -948,6 +948,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
       toast.success(`Top-up of K${additionalAmount.toLocaleString()} applied. K${netDisbursement.toLocaleString()} disbursed (after fees).`);
       setIsTopUpOpen(false);
       setTopUpAmount("");
