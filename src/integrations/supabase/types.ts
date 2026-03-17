@@ -1503,6 +1503,7 @@ export type Database = {
           payslip_password: string | null
           payslip_url: string | null
           phone: string
+          product_specific_data: Json | null
           recommended_at: string | null
           recommended_by: string | null
           rejection_reason: string | null
@@ -1580,6 +1581,7 @@ export type Database = {
           payslip_password?: string | null
           payslip_url?: string | null
           phone: string
+          product_specific_data?: Json | null
           recommended_at?: string | null
           recommended_by?: string | null
           rejection_reason?: string | null
@@ -1657,6 +1659,7 @@ export type Database = {
           payslip_password?: string | null
           payslip_url?: string | null
           phone?: string
+          product_specific_data?: Json | null
           recommended_at?: string | null
           recommended_by?: string | null
           rejection_reason?: string | null

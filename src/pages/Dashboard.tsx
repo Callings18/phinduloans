@@ -12,6 +12,7 @@ import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStat
 import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import QuickApply from "@/components/dashboard/QuickApply";
 import WalletWidget from "@/components/dashboard/WalletWidget";
+import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
 
 import DocumentChecklist from "@/components/dashboard/DocumentChecklist";
 import KYCStatusWidget from "@/components/dashboard/KYCStatusWidget";
@@ -510,7 +511,11 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Contract Signing Widget - Show if any contracts need signing */}
+          {user && (
+            <div className="mb-6">
+              <ContractSigningWidget userId={user.id} />
+            </div>
+          )}
 
           {/* Quick Actions and Wallet - Use QuickApply for logged-in users */}
           <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
