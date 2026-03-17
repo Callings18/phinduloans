@@ -757,6 +757,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
       toast.success(`Reloan created successfully (ID: ${newLoan.id.slice(0, 8)}). No bank deduction applied.`);
       setIsReloanOpen(false);
       onOpenChange(false);
