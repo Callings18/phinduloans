@@ -905,6 +905,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         created_by: user?.id,
       });
 
+      // Record loan event for history timeline
+      await supabase.from("loan_events" as any).insert({
+        loan_id: loan.id,
+        event_type: "top_up",
+        performed_by: user?.id,
+        reason: topUpReason || "Top-up applied",
+        previous_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+        },
+        new_values: {
+          principal: newPrincipal,
+          interest_rate: interestRate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+        },
+        amount: additionalAmount,
+        fees_charged: totalFees,
+        net_amount: netDisbursement,
+        source_account_id: topUpSourceAccountId,
+      });
+
       await logAudit({
         action: "LOAN_TOP_UP",
         entity_type: "loan_application",
