@@ -1132,6 +1132,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
       toast.success("Loan restructured successfully");
       setIsRestructureOpen(false);
       setNewTermMonths("");
