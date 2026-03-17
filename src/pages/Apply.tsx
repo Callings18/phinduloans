@@ -62,6 +62,12 @@ interface Profile {
   city: string | null;
   employer_name: string | null;
   job_title: string | null;
+  net_income: number | null;
+  employment_type: string | null;
+}
+  city: string | null;
+  employer_name: string | null;
+  job_title: string | null;
   monthly_income: number | null;
   employment_type: string | null;
 }
