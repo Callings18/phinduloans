@@ -99,6 +99,8 @@ import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import LoanHistoryTimeline from "./LoanHistoryTimeline";
+import LoanChain from "./LoanChain";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
@@ -687,6 +689,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           total_repayment: loan.total_repayment,
           loan_purpose: loan.loan_purpose,
           loan_product_id: loan.loan_product_id || null,
+          parent_loan_id: loan.id,
           status: "disbursed" as any,
           source: "internal",
           admin_notes: `Reloan of previous loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement — funds already with borrower.`,
@@ -712,6 +715,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         supabase
       );
 
+      // Record loan event for history timeline
+      await supabase.from("loan_events" as any).insert({
+        loan_id: loan.id,
+        event_type: "reloan",
+        performed_by: user?.id,
+        reason: `Reloan — new loan ${newLoan.id.slice(0, 8).toUpperCase()} created.`,
+        previous_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+          status: loan.status,
+        },
+        new_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+          status: "completed",
+        },
+        new_loan_id: newLoan.id,
+        amount: loan.loan_amount,
+      });
+
       await logAudit({
         action: "RELOAN",
         entity_type: "loan_application",
@@ -726,6 +757,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
       toast.success(`Reloan created successfully (ID: ${newLoan.id.slice(0, 8)}). No bank deduction applied.`);
       setIsReloanOpen(false);
       onOpenChange(false);
@@ -874,6 +906,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         created_by: user?.id,
       });
 
+      // Record loan event for history timeline
+      await supabase.from("loan_events" as any).insert({
+        loan_id: loan.id,
+        event_type: "top_up",
+        performed_by: user?.id,
+        reason: topUpReason || "Top-up applied",
+        previous_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+        },
+        new_values: {
+          principal: newPrincipal,
+          interest_rate: interestRate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+        },
+        amount: additionalAmount,
+        fees_charged: totalFees,
+        net_amount: netDisbursement,
+        source_account_id: topUpSourceAccountId,
+      });
+
       await logAudit({
         action: "LOAN_TOP_UP",
         entity_type: "loan_application",
@@ -888,6 +948,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
       toast.success(`Top-up of K${additionalAmount.toLocaleString()} applied. K${netDisbursement.toLocaleString()} disbursed (after fees).`);
       setIsTopUpOpen(false);
       setTopUpAmount("");
@@ -1043,10 +1104,35 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           .insert(repaymentRecords);
         if (error) throw error;
       }
+
+      // Record loan event for history timeline
+      await supabase.from("loan_events" as any).insert({
+        loan_id: loan.id,
+        event_type: "restructure",
+        performed_by: user?.id,
+        reason: restructureReason || "Loan restructured",
+        previous_values: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || 'months',
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+        },
+        new_values: {
+          principal: principal,
+          interest_rate: newRate,
+          term: newTerm,
+          term_unit: termUnit,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
       toast.success("Loan restructured successfully");
       setIsRestructureOpen(false);
       setNewTermMonths("");
@@ -1328,7 +1414,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
@@ -1337,6 +1423,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </TabsTrigger>
               <TabsTrigger value="contract" className="text-xs">
                 <FileText size={14} className="mr-1 hidden sm:inline" /> Contract
+              </TabsTrigger>
+              <TabsTrigger value="history" className="text-xs">
+                <History size={14} className="mr-1 hidden sm:inline" /> History
               </TabsTrigger>
             </TabsList>
 
@@ -1875,6 +1964,27 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </Button>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* Loan History Tab */}
+              <TabsContent value="history" className="m-0 space-y-4">
+                {/* Loan Chain (for reloans) */}
+                <LoanChain
+                  loanId={loan.id}
+                  parentLoanId={(loan as any).parent_loan_id}
+                  onViewLoan={(id) => {
+                    // Close current and signal parent to open the other loan
+                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                  }}
+                />
+
+                {/* Full event timeline */}
+                <LoanHistoryTimeline
+                  loanId={loan.id}
+                  onViewLoan={(id) => {
+                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                  }}
+                />
               </TabsContent>
 
               {/* V1.0.1: Actions and History tabs removed - functionality available through Overview quick actions and Contract tab */}
