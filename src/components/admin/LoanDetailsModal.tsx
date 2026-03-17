@@ -1330,7 +1330,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
               </TabsTrigger>
@@ -1339,6 +1339,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </TabsTrigger>
               <TabsTrigger value="contract" className="text-xs">
                 <FileText size={14} className="mr-1 hidden sm:inline" /> Contract
+              </TabsTrigger>
+              <TabsTrigger value="history" className="text-xs">
+                <History size={14} className="mr-1 hidden sm:inline" /> History
               </TabsTrigger>
             </TabsList>
 
