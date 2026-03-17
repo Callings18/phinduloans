@@ -125,7 +125,7 @@ const Apply = () => {
       if (!user) return null;
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name, phone, nrc_number, address, city, employer_name, job_title, monthly_income, employment_type")
+        .select("id, email, full_name, phone, nrc_number, address, city, employer_name, job_title, net_income, employment_type")
         .eq("id", user.id)
         .single();
       if (error) return null;
