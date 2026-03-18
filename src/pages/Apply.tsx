@@ -564,7 +564,10 @@ const Apply = () => {
                             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                               <span>K{product.min_amount.toLocaleString()} – K{product.max_amount.toLocaleString()}</span>
                               <span>{product.interest_rate}% {getInterestPeriodLabel(product.interest_period as any)}</span>
-                              <span>{product.min_term_months}–{product.max_term_months} months</span>
+                              <span>{product.min_term_months}–{product.max_term_months} {(product.term_unit || 'months')}</span>
+                              <span className="capitalize">{(product.interest_type || 'flat').replace(/_/g, ' ')}</span>
+                              {(product as any).enforcement_fee_percent > 0 && <span>Enforcement: {(product as any).enforcement_fee_percent}%</span>}
+                              {product.processing_fee_percent && product.processing_fee_percent > 0 && <span>Processing: {product.processing_fee_percent}%</span>}
                             </div>
                           </div>
                           {isSelected && <CheckCircle className="text-primary shrink-0" size={20} />}
