@@ -130,7 +130,7 @@ function App() {
                   <Route path="/" element={<Index />} />
                   <Route path="/apply" element={<Apply />} />
                   <Route path="/calculator" element={<Calculator />} />
-                  <Route path="/pre-qualify" element={<PreQualification />} />
+                  <Route path="/pre-qualify" element={<Apply />} />
                   <Route path="/about" element={<About />} />
                   <Route path="/about-us" element={<About />} />
                   <Route path="/auth" element={<Auth />} />

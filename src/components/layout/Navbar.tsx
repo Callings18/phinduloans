@@ -22,8 +22,6 @@ const Navbar = () => {
 
   const navLinks = [
     { href: "/", label: "Home" },
-    { href: "/apply", label: "Apply Now" },
-    { href: "/pre-qualify", label: "Check Eligibility" },
     { href: "/calculator", label: "Calculator" },
     { href: "/about-us", label: "About" },
   ];
@@ -105,7 +103,7 @@ const Navbar = () => {
                     <Link to="/auth">Login</Link>
                   </Button>
                   <Button variant="hero" asChild>
-                    <Link to="/apply">Get Started</Link>
+                    <Link to="/auth?mode=signup&redirect=dashboard">Get Started</Link>
                   </Button>
                 </>
               )}
@@ -161,7 +159,7 @@ const Navbar = () => {
                         <Link to="/auth" onClick={() => setIsOpen(false)}>Login</Link>
                       </Button>
                       <Button variant="hero" asChild>
-                        <Link to="/apply" onClick={() => setIsOpen(false)}>Get Started</Link>
+                        <Link to="/auth?mode=signup&redirect=dashboard" onClick={() => setIsOpen(false)}>Get Started</Link>
                       </Button>
                     </>
                   )}

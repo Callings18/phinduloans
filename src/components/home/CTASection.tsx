@@ -22,8 +22,8 @@ const CTASection = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button variant="hero" size="lg" asChild>
-              <Link to="/apply">
-                Apply Now
+              <Link to="/auth?mode=signup&redirect=dashboard">
+                Get Started
                 <ArrowRight size={20} />
               </Link>
             </Button>

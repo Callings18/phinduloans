@@ -1,59 +1,48 @@
 
 
-# Plan: Fix Collateral Multi-Image Upload + Streamline Borrower Flow
+## Fix: Documents Breaking After Upload — Root Cause and Solution
 
-## Issues Identified
+### Root Cause
 
-### Bug 1: Collateral Images -- Only 1 File Uploads
-The `<Input type="file" multiple>` at Apply.tsx line 672-681 technically allows multi-select, but the HTML file input on some browsers shows only the last file name. More critically, the submit logic likely only uploads a single `collateral_image_url` column. Need to support up to 3 images properly.
+The document upload and matching system has a **key mismatch** between what gets saved and what gets looked up.
 
-### Issue 2: Borrower Flow is Too Open
-Currently, unauthenticated users can navigate to `/apply` and see a full "please log in" page. The user wants:
-- **Website** = marketing + calculator only. "Apply" buttons should redirect to `/auth` (login/signup), not `/apply`.
-- **Borrower journey**: Sign up/Log in → Dashboard → Complete KYC → Apply from Dashboard
-- `/apply` route should redirect authenticated users to `/dashboard` (where QuickApply calculator lives) and unauthenticated users to `/auth`
-- Remove `/apply` as a standalone page -- the multi-step application form should live as a component accessible from the Dashboard
+**During loan creation** (AdminApplications.tsx), documents are keyed and saved using a mangled version of the `document_name`:
+```
+docKey = doc.document_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+```
 
-## Plan
+For a product with required docs like:
+| `document_type` | `document_name` | Saved `doc_type` (mangled from name) |
+|---|---|---|
+| `bank_statement_1` | "Month 1" | `month_1` |
+| `bank_statement_2` | "Month 2" | `month_2` |
+| `payslip_1` | "Latest" | `latest` |
+| `proof_of_residence` | "Proof of Residence (Utility Bill)" | `proof_of_residence__utility_bill_` |
 
-### Task 1: Fix Collateral Multi-Image Upload (Apply.tsx)
+**During document review** (ApplicationDocumentsTab.tsx), the checklist compares the uploaded `doc_type` against the product's `document_type`. So it tries to match `month_1` against `bank_statement_1` — they never match. All uploaded docs fall through to "Additional Documents".
 
-- Replace the single `<Input type="file" multiple>` with a proper multi-file UI showing each selected image with a remove button, capped at 3
-- Update the submit handler to upload all collateral images to storage and store URLs as a JSON array in `product_specific_data.collateral_image_urls`, plus set `collateral_image_url` to the first image
+### Fix
 
-### Task 2: Redirect `/apply` to Auth/Dashboard
+**1. AdminApplications.tsx — Use `document_type` as the key, not mangled name**
 
-- Change `/apply` page to a simple redirect component:
-  - Authenticated user → redirect to `/dashboard`
-  - Unauthenticated user → redirect to `/auth?redirect=dashboard`
-- Move the multi-step application form into a new component `src/components/dashboard/LoanApplicationForm.tsx`
-- Render it from the Dashboard when user clicks "Apply Now" from QuickApply, or via a route like `/dashboard?apply=true&product={id}`
+Two locations need fixing:
 
-### Task 3: Update All "Apply Now" Links on Website
+- **Line 1802 (upload form)**: Change `docKey` from `doc.document_name?.replace(...)` to `doc.document_type` so the file input state uses the correct identifier.
 
-- **HeroSection.tsx**: Change `<Link to="/apply">` → `<Link to="/auth?mode=signup">` with label "Get Started"
-- **CTASection.tsx**: Same change
-- **LoanCalculator.tsx**: Change Apply button to link to `/auth?mode=signup` for unauthenticated, or `/dashboard` for authenticated
-- **Navbar**: Update any "Apply" nav links
+- **Lines 373-382 (mutation)**: Change `docKey` from `doc.document_name?.replace(...)` to `doc.document_type`. Save `doc_type: doc.document_type` and `doc_label: doc.document_name` (label stays for display).
 
-### Task 4: Simplify Public Routes
+This ensures the saved `doc_type` is `bank_statement_1`, `payslip_1`, `proof_of_residence` — matching exactly what the product defines.
 
-- Keep `/` (landing), `/calculator`, `/about`, `/auth` as public pages
-- Remove or redirect `/pre-qualify` → `/auth`
-- `/apply` becomes a redirect (Task 2)
-- The actual application form only lives inside the authenticated Dashboard flow
+**2. ApplicationDocumentsTab.tsx — Strengthen label-based fallback matching**
 
-### Summary of File Changes
+As a safety net for documents already saved with the wrong keys, add a secondary match on `doc_label` vs `document_name` when the type-based match fails.
+
+### Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/pages/Apply.tsx` | Replace with redirect logic (auth or dashboard) |
-| `src/components/dashboard/LoanApplicationForm.tsx` | **NEW** -- extract the multi-step form from Apply.tsx |
-| `src/pages/Dashboard.tsx` | Add state/route param to show LoanApplicationForm |
-| `src/components/home/HeroSection.tsx` | Change "Apply Now" → "Get Started" linking to `/auth` |
-| `src/components/home/CTASection.tsx` | Same |
-| `src/components/home/LoanCalculator.tsx` | Apply button → `/auth` or `/dashboard` |
-| `src/components/dashboard/QuickApply.tsx` | "Apply" triggers in-dashboard application form |
+| `src/pages/admin/AdminApplications.tsx` | Fix `docKey` to use `document_type` instead of mangled `document_name` (2 locations) |
+| `src/components/admin/ApplicationDocumentsTab.tsx` | Add label-based fallback matching for already-broken docs |
 
-This keeps the admin side completely untouched and makes the borrower journey: **Website → Sign Up → Dashboard → KYC → Apply**.
+This is a targeted 2-file fix that resolves the root cause permanently.
 

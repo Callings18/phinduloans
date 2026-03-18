@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import QuickApply from "@/components/dashboard/QuickApply";
 import WalletWidget from "@/components/dashboard/WalletWidget";
 import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
+import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 
 import DocumentChecklist from "@/components/dashboard/DocumentChecklist";
 import KYCStatusWidget from "@/components/dashboard/KYCStatusWidget";
@@ -80,6 +81,7 @@ const statusConfig = {
 const Dashboard = () => {
   const { user, isLoading, isAdmin, isStaff, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [runTour, setRunTour] = useState(false);
@@ -88,6 +90,48 @@ const Dashboard = () => {
   const [claimAmount, setClaimAmount] = useState("");
   const [claimReference, setClaimReference] = useState("");
   const [claimReceiptFile, setClaimReceiptFile] = useState<File | null>(null);
+
+  // Loan application form state
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [applyProductId, setApplyProductId] = useState<string | undefined>();
+  const [applyAmount, setApplyAmount] = useState<number | undefined>();
+  const [applyTerm, setApplyTerm] = useState<number | undefined>();
+
+  // Check URL params for apply mode
+  useEffect(() => {
+    if (searchParams.get("apply") === "true") {
+      setShowApplicationForm(true);
+      const productId = searchParams.get("product") || undefined;
+      const amount = searchParams.get("amount") ? Number(searchParams.get("amount")) : undefined;
+      const term = searchParams.get("term") ? Number(searchParams.get("term")) : undefined;
+      setApplyProductId(productId);
+      setApplyAmount(amount);
+      setApplyTerm(term);
+    }
+  }, [searchParams]);
+
+  const handleStartApplication = (productId?: string, amount?: number, term?: number) => {
+    setApplyProductId(productId);
+    setApplyAmount(amount);
+    setApplyTerm(term);
+    setShowApplicationForm(true);
+  };
+
+  const handleCloseApplication = () => {
+    setShowApplicationForm(false);
+    setApplyProductId(undefined);
+    setApplyAmount(undefined);
+    setApplyTerm(undefined);
+    // Clear URL params
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("apply");
+    newParams.delete("product");
+    newParams.delete("amount");
+    newParams.delete("term");
+    setSearchParams(newParams, { replace: true });
+    // Refresh loans data
+    queryClient.invalidateQueries({ queryKey: ['user-loans', user?.id] });
+  };
 
   const tourSteps: Step[] = [
     {
@@ -387,6 +431,18 @@ const Dashboard = () => {
 
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
+          {/* Show Application Form overlay */}
+          {showApplicationForm ? (
+            <div className="max-w-3xl mx-auto">
+              <LoanApplicationForm
+                initialProductId={applyProductId}
+                initialAmount={applyAmount}
+                initialTerm={applyTerm}
+                onClose={handleCloseApplication}
+              />
+            </div>
+          ) : (
+          <>
           {/* Header */}
           <div className="mb-8 tour-welcome flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -527,6 +583,7 @@ const Dashboard = () => {
                   kycVerified={kycVerified}
                   hasActiveLoan={activeLoans.length > 0}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
+                  onApply={(productId, amount, term) => handleStartApplication(productId, amount, term)}
                 />
               )}
             </div>
@@ -577,8 +634,8 @@ const Dashboard = () => {
                       </div>
                       <h3 className="text-lg font-semibold text-foreground mb-2">No Active Loans</h3>
                       <p className="text-muted-foreground mb-6">You don't have any active loans at the moment</p>
-                      <Button variant="hero" asChild>
-                        <Link to="/apply">Apply for a Loan</Link>
+                      <Button variant="hero" onClick={() => handleStartApplication()}>
+                        Apply for a Loan
                       </Button>
                     </CardContent>
                   </Card>
@@ -855,6 +912,8 @@ const Dashboard = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </>
+          )}
         </div>
       </main>
 
