@@ -142,9 +142,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("[SMS] Africa's Talking response:", JSON.stringify(result));
 
     // Log to database
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const logClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const recipientList = formattedRecipients.split(",");
     for (const recipient of recipientList) {
