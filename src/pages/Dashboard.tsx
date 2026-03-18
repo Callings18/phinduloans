@@ -340,8 +340,8 @@ const Dashboard = () => {
   };
 
   const getRepaymentStatus = (repayment: any) => {
-    const today = new Date();
-    const dueDate = new Date(repayment.due_date);
+    const today = startOfDay(new Date());
+    const dueDate = startOfDay(new Date(repayment.due_date));
     const isOverdue = repayment.status === 'pending' && isAfter(today, dueDate);
     const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
 
