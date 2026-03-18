@@ -37,12 +37,16 @@ interface LoanProduct {
   interest_period: string | null;
   interest_type: string | null;
   processing_fee_percent: number | null;
+  enforcement_fee_percent: number | null;
   insurance_percent: number | null;
   vat_percent: number | null;
   platform_fee_percent: number | null;
   collateral_required: boolean | null;
   required_documents: any;
   term_unit: string | null;
+  late_payment_penalty_percent: number | null;
+  penalty_frequency: string | null;
+  grace_period_days: number | null;
 }
 
 interface RequiredDoc {
@@ -214,6 +218,7 @@ const Apply = () => {
       interest_period: selectedProduct.interest_period as any,
       interest_type: selectedProduct.interest_type as any,
       processing_fee_percent: selectedProduct.processing_fee_percent,
+      enforcement_fee_percent: (selectedProduct as any).enforcement_fee_percent ?? 0,
       insurance_percent: selectedProduct.insurance_percent,
       vat_percent: selectedProduct.vat_percent,
       platform_fee_percent: selectedProduct.platform_fee_percent,
@@ -357,6 +362,10 @@ const Apply = () => {
           payslip_1: "payslip_url",
           payslip_2: "payslip_2_url",
           payslip_3: "payslip_3_url",
+          bank_statement_1: "bank_statement_url",
+          nrc_front: "nrc_front_url",
+          nrc_back: "nrc_back_url",
+          selfie_holding_nrc: "selfie_url",
         };
         if (columnMap[docType]) {
           await supabase.from("loan_applications")
@@ -555,7 +564,10 @@ const Apply = () => {
                             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                               <span>K{product.min_amount.toLocaleString()} – K{product.max_amount.toLocaleString()}</span>
                               <span>{product.interest_rate}% {getInterestPeriodLabel(product.interest_period as any)}</span>
-                              <span>{product.min_term_months}–{product.max_term_months} months</span>
+                              <span>{product.min_term_months}–{product.max_term_months} {(product.term_unit || 'months')}</span>
+                              <span className="capitalize">{(product.interest_type || 'flat').replace(/_/g, ' ')}</span>
+                              {(product as any).enforcement_fee_percent > 0 && <span>Enforcement: {(product as any).enforcement_fee_percent}%</span>}
+                              {product.processing_fee_percent && product.processing_fee_percent > 0 && <span>Processing: {product.processing_fee_percent}%</span>}
                             </div>
                           </div>
                           {isSelected && <CheckCircle className="text-primary shrink-0" size={20} />}
