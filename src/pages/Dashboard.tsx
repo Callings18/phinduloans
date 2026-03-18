@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import PaymentReminder from "@/components/dashboard/PaymentReminder";
 import QuickApply from "@/components/dashboard/QuickApply";
 import WalletWidget from "@/components/dashboard/WalletWidget";
 import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
+import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 
 import DocumentChecklist from "@/components/dashboard/DocumentChecklist";
 import KYCStatusWidget from "@/components/dashboard/KYCStatusWidget";
