@@ -74,6 +74,14 @@ export async function createRepaymentScheduleForLoan(
       loan.monthly_payment ?? loan.total_repayment / loan.loan_term_months;
   }
 
+  const repaymentRecords: Array<{
+    loan_id: string;
+    user_id: string;
+    amount: number;
+    due_date: string;
+    installment_number: number;
+    status: string;
+  }> = [];
   // Use date-only (noon UTC) to prevent timezone-related off-by-one issues
   const startDate = new Date();
   startDate.setHours(12, 0, 0, 0);
