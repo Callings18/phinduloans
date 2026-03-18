@@ -634,8 +634,8 @@ const Dashboard = () => {
                       </div>
                       <h3 className="text-lg font-semibold text-foreground mb-2">No Active Loans</h3>
                       <p className="text-muted-foreground mb-6">You don't have any active loans at the moment</p>
-                      <Button variant="hero" asChild>
-                        <Link to="/apply">Apply for a Loan</Link>
+                      <Button variant="hero" onClick={() => handleStartApplication()}>
+                        Apply for a Loan
                       </Button>
                     </CardContent>
                   </Card>
