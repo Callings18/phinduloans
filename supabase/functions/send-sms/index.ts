@@ -67,9 +67,7 @@ const handler = async (req: Request): Promise<Response> => {
       console.log("[SMS] Message:", message);
 
       // Still log to database for tracking
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const logSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
       const recipients = Array.isArray(to) ? to : [to];
       
