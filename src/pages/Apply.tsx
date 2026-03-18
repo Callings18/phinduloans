@@ -362,6 +362,10 @@ const Apply = () => {
           payslip_1: "payslip_url",
           payslip_2: "payslip_2_url",
           payslip_3: "payslip_3_url",
+          bank_statement_1: "bank_statement_url",
+          nrc_front: "nrc_front_url",
+          nrc_back: "nrc_back_url",
+          selfie_holding_nrc: "selfie_url",
         };
         if (columnMap[docType]) {
           await supabase.from("loan_applications")
