@@ -368,7 +368,7 @@ const Dashboard = () => {
   const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
 
   // Calculate upcoming payment
-  const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= new Date()) || [];
+  const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= startOfDay(new Date())) || [];
   const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 
   // Calculate overdue amount
