@@ -278,7 +278,7 @@ const Dashboard = () => {
     if (kycInfo?.is_verified === true) return true;
 
     // Otherwise check individual document verification in vault
-    const KYC_TYPES = ["nrc_front", "nrc_back", "selfie", "proof_of_residence"];
+    const KYC_TYPES = ["nrc_front", "nrc_back", "selfie"];
     const docsByType: Record<string, boolean> = {};
     kycVaultDocs.forEach((d) => {
       if (!docsByType.hasOwnProperty(d.doc_type)) docsByType[d.doc_type] = !!d.is_verified;
