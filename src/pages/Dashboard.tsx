@@ -431,6 +431,18 @@ const Dashboard = () => {
 
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
+          {/* Show Application Form overlay */}
+          {showApplicationForm ? (
+            <div className="max-w-3xl mx-auto">
+              <LoanApplicationForm
+                initialProductId={applyProductId}
+                initialAmount={applyAmount}
+                initialTerm={applyTerm}
+                onClose={handleCloseApplication}
+              />
+            </div>
+          ) : (
+          <>
           {/* Header */}
           <div className="mb-8 tour-welcome flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
