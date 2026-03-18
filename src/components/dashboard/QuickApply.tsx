@@ -96,6 +96,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
         interest_period: selectedProduct.interest_period as any,
         interest_type: selectedProduct.interest_type as any,
         processing_fee_percent: selectedProduct.processing_fee_percent,
+        enforcement_fee_percent: (selectedProduct as any).enforcement_fee_percent ?? 0,
         insurance_percent: selectedProduct.insurance_percent,
         vat_percent: selectedProduct.vat_percent,
         platform_fee_percent: selectedProduct.platform_fee_percent,

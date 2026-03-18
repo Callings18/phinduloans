@@ -17,7 +17,7 @@ import Apply from "./pages/Apply";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
-import PreQualification from "./pages/PreQualification";
+// PreQualification removed — /pre-qualify redirects via Apply component
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
