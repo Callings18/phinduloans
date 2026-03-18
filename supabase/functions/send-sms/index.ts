@@ -72,7 +72,7 @@ const handler = async (req: Request): Promise<Response> => {
       const recipients = Array.isArray(to) ? to : [to];
       
       for (const recipient of recipients) {
-        await supabase.from("notification_logs").insert({
+        await logSupabase.from("notification_logs").insert({
           user_id: userId || null,
           type: "sms",
           recipient: recipient,
