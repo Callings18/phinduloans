@@ -52,15 +52,15 @@ interface QuickApplyProps {
   kycVerified?: boolean;
   hasActiveLoan?: boolean;
   onSuccess?: () => void;
+  onApply?: (productId: string, amount: number, term: number) => void;
 }
 
-const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = false }: QuickApplyProps) => {
+const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = false, onApply }: QuickApplyProps) => {
   const navigate = useNavigate();
   const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
   const [loanAmount, setLoanAmount] = useState(5000);
   const [loanTerm, setLoanTerm] = useState(1);
 
-  // Fetch loan products
   const { data: loanProducts } = useQuery({
     queryKey: ["loan-products-quick"],
     queryFn: async () => {
@@ -75,7 +75,6 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
     staleTime: 30000,
   });
 
-  // Set default product
   useEffect(() => {
     if (loanProducts?.length && !selectedProduct) {
       setSelectedProduct(loanProducts[0]);
@@ -84,7 +83,6 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
     }
   }, [loanProducts, selectedProduct]);
 
-  // Clamp on product change
   useEffect(() => {
     if (selectedProduct) {
       setLoanAmount(prev => Math.max(selectedProduct.min_amount, Math.min(prev, selectedProduct.max_amount)));
@@ -105,11 +103,9 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
     : null;
 
   const handleApply = () => {
-    const params = new URLSearchParams();
-    if (selectedProduct) params.set("product", selectedProduct.id);
-    params.set("amount", String(loanAmount));
-    params.set("term", String(loanTerm));
-    navigate(`/apply?${params.toString()}`);
+    if (selectedProduct && onApply) {
+      onApply(selectedProduct.id, loanAmount, loanTerm);
+    }
   };
 
   return (
@@ -165,10 +161,8 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
         </div>
       </div>
 
-      {/* Calculator Section */}
       {!hasActiveLoan && (
         <CardContent className="p-6 space-y-5">
-          {/* Product Selection */}
           <div className="space-y-2">
             <Label>Loan Product</Label>
             <Select
@@ -188,20 +182,13 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
             </Select>
           </div>
 
-          {/* Amount Slider */}
           {selectedProduct && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <Label>Loan Amount</Label>
                 <span className="text-2xl font-bold text-primary">{formatCurrency(loanAmount)}</span>
               </div>
-              <Slider
-                value={[loanAmount]}
-                onValueChange={([val]) => setLoanAmount(val)}
-                min={selectedProduct.min_amount}
-                max={selectedProduct.max_amount}
-                step={500}
-              />
+              <Slider value={[loanAmount]} onValueChange={([val]) => setLoanAmount(val)} min={selectedProduct.min_amount} max={selectedProduct.max_amount} step={500} />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>K{selectedProduct.min_amount.toLocaleString()}</span>
                 <span>K{selectedProduct.max_amount.toLocaleString()}</span>
@@ -209,26 +196,18 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
             </div>
           )}
 
-          {/* Term Slider */}
           {selectedProduct && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <Label>Loan Term</Label>
                 <span className="text-xl font-bold text-foreground">{loanTerm} month{loanTerm > 1 ? "s" : ""}</span>
               </div>
-              <Slider
-                value={[loanTerm]}
-                onValueChange={([val]) => setLoanTerm(val)}
-                min={selectedProduct.min_term_months}
-                max={selectedProduct.max_term_months}
-                step={1}
-              />
+              <Slider value={[loanTerm]} onValueChange={([val]) => setLoanTerm(val)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
             </div>
           )}
 
           <Separator />
 
-          {/* Loan Summary */}
           {loanCalc && (
             <div className="bg-primary/5 rounded-lg p-4 space-y-2">
               <h4 className="font-semibold flex items-center gap-2">
@@ -253,7 +232,6 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
             </div>
           )}
 
-          {/* Apply Button */}
           {kycVerified && (
             <Button variant="hero" className="w-full" onClick={handleApply} disabled={hasActiveLoan}>
               <Zap size={16} className="mr-2" /> Apply for This Loan
