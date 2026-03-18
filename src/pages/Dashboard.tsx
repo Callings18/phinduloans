@@ -44,7 +44,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { format, isAfter, differenceInDays } from "date-fns";
+import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import {
   Collapsible,
   CollapsibleContent,
