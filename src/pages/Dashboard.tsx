@@ -583,6 +583,7 @@ const Dashboard = () => {
                   kycVerified={kycVerified}
                   hasActiveLoan={activeLoans.length > 0}
                   onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
+                  onApply={(productId, amount, term) => handleStartApplication(productId, amount, term)}
                 />
               )}
             </div>
