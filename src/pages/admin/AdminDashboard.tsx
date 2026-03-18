@@ -49,7 +49,7 @@ const AdminDashboard = () => {
       const pendingRepayments = allRepayments.filter(r => r.status === 'pending');
       const outstandingBalance = pendingRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
       
-      const today = new Date();
+      const today = startOfDay(new Date());
       const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
       const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
