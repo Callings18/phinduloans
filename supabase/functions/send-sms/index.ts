@@ -150,7 +150,7 @@ const handler = async (req: Request): Promise<Response> => {
         (r: any) => r.number === recipient
       );
       
-      await supabase.from("notification_logs").insert({
+      await logClient.from("notification_logs").insert({
         user_id: userId || null,
         type: "sms",
         recipient: recipient,
