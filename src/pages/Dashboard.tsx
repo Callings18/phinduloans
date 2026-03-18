@@ -81,6 +81,7 @@ const statusConfig = {
 const Dashboard = () => {
   const { user, isLoading, isAdmin, isStaff, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [runTour, setRunTour] = useState(false);
@@ -89,6 +90,48 @@ const Dashboard = () => {
   const [claimAmount, setClaimAmount] = useState("");
   const [claimReference, setClaimReference] = useState("");
   const [claimReceiptFile, setClaimReceiptFile] = useState<File | null>(null);
+
+  // Loan application form state
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [applyProductId, setApplyProductId] = useState<string | undefined>();
+  const [applyAmount, setApplyAmount] = useState<number | undefined>();
+  const [applyTerm, setApplyTerm] = useState<number | undefined>();
+
+  // Check URL params for apply mode
+  useEffect(() => {
+    if (searchParams.get("apply") === "true") {
+      setShowApplicationForm(true);
+      const productId = searchParams.get("product") || undefined;
+      const amount = searchParams.get("amount") ? Number(searchParams.get("amount")) : undefined;
+      const term = searchParams.get("term") ? Number(searchParams.get("term")) : undefined;
+      setApplyProductId(productId);
+      setApplyAmount(amount);
+      setApplyTerm(term);
+    }
+  }, [searchParams]);
+
+  const handleStartApplication = (productId?: string, amount?: number, term?: number) => {
+    setApplyProductId(productId);
+    setApplyAmount(amount);
+    setApplyTerm(term);
+    setShowApplicationForm(true);
+  };
+
+  const handleCloseApplication = () => {
+    setShowApplicationForm(false);
+    setApplyProductId(undefined);
+    setApplyAmount(undefined);
+    setApplyTerm(undefined);
+    // Clear URL params
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("apply");
+    newParams.delete("product");
+    newParams.delete("amount");
+    newParams.delete("term");
+    setSearchParams(newParams, { replace: true });
+    // Refresh loans data
+    queryClient.invalidateQueries({ queryKey: ['user-loans', user?.id] });
+  };
 
   const tourSteps: Step[] = [
     {

@@ -159,7 +159,7 @@ const Navbar = () => {
                         <Link to="/auth" onClick={() => setIsOpen(false)}>Login</Link>
                       </Button>
                       <Button variant="hero" asChild>
-                        <Link to="/apply" onClick={() => setIsOpen(false)}>Get Started</Link>
+                        <Link to="/auth?mode=signup&redirect=dashboard" onClick={() => setIsOpen(false)}>Get Started</Link>
                       </Button>
                     </>
                   )}

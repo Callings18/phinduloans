@@ -333,8 +333,8 @@ const LoanCalculator = () => {
 
                 {/* Apply Button */}
                 <Button variant="hero" size="lg" className="w-full" asChild>
-                  <Link to={`/apply${selectedProduct ? `?product=${selectedProduct.id}` : ''}`}>
-                    Apply
+                  <Link to={`/auth?mode=signup&redirect=dashboard&apply=true${selectedProduct ? `&product=${selectedProduct.id}` : ''}`}>
+                    Get Started
                     <ArrowRight size={20} />
                   </Link>
                 </Button>
