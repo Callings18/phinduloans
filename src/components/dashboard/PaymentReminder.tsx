@@ -36,7 +36,7 @@ const PaymentReminder = ({ repayments, className }: PaymentReminderProps) => {
     const [isDismissed, setIsDismissed] = useState(false);
     const [snoozedUntil, setSnoozedUntil] = useState<Date | null>(null);
 
-    const today = new Date();
+    const today = startOfDay(new Date());
 
     // Check if snoozed
     if (snoozedUntil && isBefore(today, snoozedUntil)) {

@@ -240,7 +240,7 @@ const AdminDashboard = () => {
             {upcomingPayments && upcomingPayments.length > 0 ? (
               <div className="space-y-3">
                 {upcomingPayments.map((payment: any) => {
-                  const daysUntil = differenceInDays(new Date(payment.due_date), new Date());
+                  const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
                   const urgencyClass = daysUntil === 0 ? 'text-destructive bg-destructive/10 border-destructive/30' :
                     daysUntil <= 3 ? 'text-warning bg-warning/10 border-warning/30' :
                     'text-success bg-success/10 border-success/30';
