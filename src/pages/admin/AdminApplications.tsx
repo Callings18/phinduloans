@@ -323,16 +323,19 @@ const AdminApplications = () => {
       // Get the selected product to use its interest period/type
       const selectedProduct = loanProducts?.find(p => p.id === data.loanData.product_id);
 
-      // Use unified calculation utility
-      const loanCalc = calculateLoan(loanAmount, termMonths, {
+      // Use unified calculation utility (include all fee fields so approval and disbursement match)
+      const termUnit = ((selectedProduct as any)?.term_unit as 'days' | 'weeks' | 'months' | 'years') || 'months';
+      const termValue = termUnit === 'weeks' ? termMonths : termMonths; // loan_term_months may store weeks when term_unit is weeks
+      const loanCalc = calculateLoan(loanAmount, termValue, {
         interest_rate: interestRate,
         interest_period: (selectedProduct as any)?.interest_period || 'monthly',
         interest_type: (selectedProduct as any)?.interest_type || 'flat',
-        processing_fee_percent: (selectedProduct as any)?.processing_fee_percent || 0,
-        insurance_percent: (selectedProduct as any)?.insurance_percent || 0,
-        vat_percent: (selectedProduct as any)?.vat_percent || 0,
-        platform_fee_percent: (selectedProduct as any)?.platform_fee_percent || 0,
-      });
+        processing_fee_percent: (selectedProduct as any)?.processing_fee_percent ?? 0,
+        enforcement_fee_percent: (selectedProduct as any)?.enforcement_fee_percent ?? 0,
+        insurance_percent: (selectedProduct as any)?.insurance_percent ?? 0,
+        vat_percent: (selectedProduct as any)?.vat_percent ?? 0,
+        platform_fee_percent: (selectedProduct as any)?.platform_fee_percent ?? 0,
+      }, termUnit);
 
       // First create the loan to get the ID
       const { data: insertedLoan, error: insertError } = await supabase.from('loan_applications').insert({
