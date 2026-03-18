@@ -23,7 +23,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, startOfDay } from "date-fns";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -49,7 +49,7 @@ const AdminDashboard = () => {
       const pendingRepayments = allRepayments.filter(r => r.status === 'pending');
       const outstandingBalance = pendingRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
       
-      const today = new Date();
+      const today = startOfDay(new Date());
       const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
       const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
@@ -240,7 +240,7 @@ const AdminDashboard = () => {
             {upcomingPayments && upcomingPayments.length > 0 ? (
               <div className="space-y-3">
                 {upcomingPayments.map((payment: any) => {
-                  const daysUntil = differenceInDays(new Date(payment.due_date), new Date());
+                  const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
                   const urgencyClass = daysUntil === 0 ? 'text-destructive bg-destructive/10 border-destructive/30' :
                     daysUntil <= 3 ? 'text-warning bg-warning/10 border-warning/30' :
                     'text-success bg-success/10 border-success/30';

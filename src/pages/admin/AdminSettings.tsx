@@ -425,7 +425,7 @@ const AdminSettings = () => {
                         value={lendingRules.late_penalty_percent}
                         onChange={(e) => setLendingRules({ ...lendingRules, late_penalty_percent: parseFloat(e.target.value) })}
                       />
-                      <p className="text-xs text-muted-foreground">Charged on the overdue installment amount</p>
+                      <p className="text-xs text-muted-foreground">Charged on the <strong>principal loan amount</strong> per month overdue</p>
                     </div>
                     <div className="space-y-2">
                       <Label>Grace Period (Days)</Label>

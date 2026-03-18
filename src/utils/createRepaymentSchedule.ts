@@ -82,7 +82,9 @@ export async function createRepaymentScheduleForLoan(
     installment_number: number;
     status: string;
   }> = [];
+  // Use date-only (noon UTC) to prevent timezone-related off-by-one issues
   const startDate = new Date();
+  startDate.setHours(12, 0, 0, 0);
 
   for (let i = 1; i <= numInstallments; i++) {
     let dueDate: Date;

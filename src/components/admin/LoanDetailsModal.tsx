@@ -338,13 +338,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan,
   });
 
-  // Calculate penalty for overdue payments
+  // Calculate penalty on the PRINCIPAL sum (loan_amount), not the installment amount
   const calculatePenalty = (repayment: Repayment, penaltyRate: number = 5): number => {
     if (repayment.status !== "pending") return 0;
     const daysOverdue = differenceInDays(new Date(), new Date(repayment.due_date));
     if (daysOverdue <= 0) return 0;
     const monthsOverdue = Math.ceil(daysOverdue / 30);
-    return repayment.amount * (penaltyRate / 100) * monthsOverdue;
+    // Penalty is calculated on the loan's principal amount, not the installment due
+    const principalAmount = loan?.loan_amount || 0;
+    return principalAmount * (penaltyRate / 100) * monthsOverdue;
   };
 
   // Enhanced record payment mutation with partial/overpayment support

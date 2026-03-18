@@ -14,7 +14,7 @@ import {
     Bell,
     BellOff
 } from 'lucide-react';
-import { format, differenceInDays, isAfter, isBefore, addDays } from 'date-fns';
+import { format, differenceInDays, isAfter, isBefore, addDays, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface Repayment {
@@ -36,7 +36,7 @@ const PaymentReminder = ({ repayments, className }: PaymentReminderProps) => {
     const [isDismissed, setIsDismissed] = useState(false);
     const [snoozedUntil, setSnoozedUntil] = useState<Date | null>(null);
 
-    const today = new Date();
+    const today = startOfDay(new Date());
 
     // Check if snoozed
     if (snoozedUntil && isBefore(today, snoozedUntil)) {

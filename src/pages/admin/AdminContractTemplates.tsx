@@ -117,7 +117,7 @@ The Borrower agrees to repay the loan in {{loan_term}} equal monthly installment
 with the first payment due on {{first_payment_date}}.
 
 4. LATE PAYMENT
-A penalty of {{late_penalty}}% will be charged on any overdue installments.
+A penalty of {{late_penalty}}% will be charged on the principal loan amount for any overdue installments.
 
 5. PROCESSING FEE
 A processing fee of K{{processing_fee}} has been deducted from the disbursement.

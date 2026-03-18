@@ -521,7 +521,7 @@ const AdminLoans = () => {
                     <TableBody>
                       {paginatedLoans.map((loan) => {
                         const dueDate = loanDueDates?.[loan.id];
-                        const isOverdue = dueDate && new Date(dueDate) < new Date();
+                        const isOverdue = dueDate && new Date(dueDate) < new Date(new Date().toDateString());
                         const product = loanProducts?.find(p => p.id === loan.loan_product_id);
                         const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
                         const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;

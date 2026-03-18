@@ -44,7 +44,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { format, isAfter, differenceInDays } from "date-fns";
+import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import {
   Collapsible,
   CollapsibleContent,
@@ -340,8 +340,8 @@ const Dashboard = () => {
   };
 
   const getRepaymentStatus = (repayment: any) => {
-    const today = new Date();
-    const dueDate = new Date(repayment.due_date);
+    const today = startOfDay(new Date());
+    const dueDate = startOfDay(new Date(repayment.due_date));
     const isOverdue = repayment.status === 'pending' && isAfter(today, dueDate);
     const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
 
@@ -368,11 +368,11 @@ const Dashboard = () => {
   const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
 
   // Calculate upcoming payment
-  const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= new Date()) || [];
+  const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= startOfDay(new Date())) || [];
   const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 
   // Calculate overdue amount
-  const overdueRepayments = repayments?.filter(r => r.status === 'pending' && isAfter(new Date(), new Date(r.due_date))) || [];
+  const overdueRepayments = repayments?.filter(r => r.status === 'pending' && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))) || [];
   const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
 
   return (

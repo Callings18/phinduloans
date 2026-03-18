@@ -67,14 +67,12 @@ const handler = async (req: Request): Promise<Response> => {
       console.log("[SMS] Message:", message);
 
       // Still log to database for tracking
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const logSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
       const recipients = Array.isArray(to) ? to : [to];
       
       for (const recipient of recipients) {
-        await supabase.from("notification_logs").insert({
+        await logSupabase.from("notification_logs").insert({
           user_id: userId || null,
           type: "sms",
           recipient: recipient,
@@ -144,9 +142,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("[SMS] Africa's Talking response:", JSON.stringify(result));
 
     // Log to database
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const logClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const recipientList = formattedRecipients.split(",");
     for (const recipient of recipientList) {
@@ -154,7 +150,7 @@ const handler = async (req: Request): Promise<Response> => {
         (r: any) => r.number === recipient
       );
       
-      await supabase.from("notification_logs").insert({
+      await logClient.from("notification_logs").insert({
         user_id: userId || null,
         type: "sms",
         recipient: recipient,

@@ -334,6 +334,7 @@ export function generateRepaymentSchedule(
 
 /**
  * Calculate penalty for overdue payment
+ * NOTE: overdueAmount should be the PRINCIPAL SUM (loan_amount), not the installment due amount
  */
 export function calculatePenalty(
   overdueAmount: number,
