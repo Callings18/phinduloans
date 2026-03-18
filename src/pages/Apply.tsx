@@ -37,12 +37,16 @@ interface LoanProduct {
   interest_period: string | null;
   interest_type: string | null;
   processing_fee_percent: number | null;
+  enforcement_fee_percent: number | null;
   insurance_percent: number | null;
   vat_percent: number | null;
   platform_fee_percent: number | null;
   collateral_required: boolean | null;
   required_documents: any;
   term_unit: string | null;
+  late_payment_penalty_percent: number | null;
+  penalty_frequency: string | null;
+  grace_period_days: number | null;
 }
 
 interface RequiredDoc {
