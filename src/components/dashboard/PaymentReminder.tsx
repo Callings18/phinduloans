@@ -14,7 +14,7 @@ import {
     Bell,
     BellOff
 } from 'lucide-react';
-import { format, differenceInDays, isAfter, isBefore, addDays } from 'date-fns';
+import { format, differenceInDays, isAfter, isBefore, addDays, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface Repayment {
