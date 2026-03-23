@@ -538,9 +538,14 @@ const AdminLoans = () => {
                         const dueDate = loanDueDates?.[loan.id];
                         const isOverdue = dueDate && new Date(dueDate) < new Date(new Date().toDateString());
                         const product = loanProducts?.find(p => p.id === loan.loan_product_id);
-                        const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
-                        const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;
-                        const disbursedAmount = Number(loan.loan_amount) - processingFee - legalFee;
+                        const loanPrincipal = Number(loan.loan_amount);
+                        const processingFee = product?.processing_fee_percent ? (loanPrincipal * product.processing_fee_percent / 100) : 0;
+                        const enforcementFee = product?.enforcement_fee_percent ? (loanPrincipal * product.enforcement_fee_percent / 100) : 0;
+                        const insuranceFee = (product as any)?.insurance_percent ? (loanPrincipal * (product as any).insurance_percent / 100) : 0;
+                        const platformFee = (product as any)?.platform_fee_percent ? (loanPrincipal * (product as any).platform_fee_percent / 100) : 0;
+                        const vatableAmount = processingFee + enforcementFee + platformFee;
+                        const vatAmount = (product as any)?.vat_percent ? (vatableAmount * (product as any).vat_percent / 100) : 0;
+                        const disbursedAmount = loanPrincipal - processingFee - enforcementFee - insuranceFee - platformFee - vatAmount;
 
                         return (
                           <TableRow key={loan.id}>
