@@ -191,7 +191,7 @@ const AdminLoans = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_products")
-        .select("id, name, interest_rate, processing_fee_percent, enforcement_fee_percent")
+        .select("id, name, interest_rate, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent")
         .eq("is_active", true);
       if (error) throw error;
       return data as LoanProduct[];
@@ -226,19 +226,34 @@ const AdminLoans = () => {
       if (!editingLoan) throw new Error("No loan selected");
       const principal = Number(editLoanAmount);
       const rate = Number(editInterestRate);
-      const months = Number(editLoanTermMonths);
-      const interest = principal * (rate / 100) * months;
-      const totalRepayment = principal + interest;
-      const monthlyPayment = totalRepayment / months;
+      const termValue = Number(editLoanTermMonths);
+      const termUnit = (editingLoan.term_unit as any) || 'months';
+
+      // Fetch product settings for accurate calculation
+      let productSettings: any = { interest_rate: rate, interest_period: 'monthly', interest_type: 'flat' };
+      if (editingLoan.loan_product_id) {
+        const { data: product } = await supabase
+          .from("loan_products")
+          .select("interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit")
+          .eq("id", editingLoan.loan_product_id)
+          .single();
+        if (product) {
+          productSettings = { ...product, interest_rate: rate };
+        }
+      }
+
+      // Use the unified calculateLoan function for accurate results
+      const { calculateLoan } = await import("@/utils/loanCalculations");
+      const calc = calculateLoan(principal, termValue, productSettings, termUnit);
 
       const { error } = await supabase
         .from("loan_applications")
         .update({
           loan_amount: principal,
-          loan_term_months: months,
+          loan_term_months: termValue,
           interest_rate: rate,
-          monthly_payment: monthlyPayment,
-          total_repayment: totalRepayment,
+          monthly_payment: calc.monthlyPayment,
+          total_repayment: calc.totalRepayment,
           monthly_income: Number(editMonthlyIncome) || editingLoan.monthly_income,
           loan_purpose: editLoanPurpose,
           employment_type: editEmploymentType as "employed" | "self_employed" | "contract" | "other",
@@ -252,7 +267,7 @@ const AdminLoans = () => {
         entity_type: "loan_application",
         entity_id: editingLoan.id,
         module: "loans",
-        new_values: { loan_amount: principal, interest_rate: rate, loan_term_months: months },
+        new_values: { loan_amount: principal, interest_rate: rate, loan_term_months: termValue },
       });
     },
     onSuccess: () => {
@@ -523,9 +538,14 @@ const AdminLoans = () => {
                         const dueDate = loanDueDates?.[loan.id];
                         const isOverdue = dueDate && new Date(dueDate) < new Date(new Date().toDateString());
                         const product = loanProducts?.find(p => p.id === loan.loan_product_id);
-                        const processingFee = product?.processing_fee_percent ? (Number(loan.loan_amount) * product.processing_fee_percent / 100) : 0;
-                        const legalFee = product?.enforcement_fee_percent ? (Number(loan.loan_amount) * product.enforcement_fee_percent / 100) : 0;
-                        const disbursedAmount = Number(loan.loan_amount) - processingFee - legalFee;
+                        const loanPrincipal = Number(loan.loan_amount);
+                        const processingFee = product?.processing_fee_percent ? (loanPrincipal * product.processing_fee_percent / 100) : 0;
+                        const enforcementFee = product?.enforcement_fee_percent ? (loanPrincipal * product.enforcement_fee_percent / 100) : 0;
+                        const insuranceFee = (product as any)?.insurance_percent ? (loanPrincipal * (product as any).insurance_percent / 100) : 0;
+                        const platformFee = (product as any)?.platform_fee_percent ? (loanPrincipal * (product as any).platform_fee_percent / 100) : 0;
+                        const vatableAmount = processingFee + enforcementFee + platformFee;
+                        const vatAmount = (product as any)?.vat_percent ? (vatableAmount * (product as any).vat_percent / 100) : 0;
+                        const disbursedAmount = loanPrincipal - processingFee - enforcementFee - insuranceFee - platformFee - vatAmount;
 
                         return (
                           <TableRow key={loan.id}>
@@ -543,7 +563,7 @@ const AdminLoans = () => {
                             <TableCell>
                               <div>
                                 <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
-                                {(processingFee > 0 || legalFee > 0) && (
+                                {(processingFee > 0 || enforcementFee > 0 || insuranceFee > 0 || platformFee > 0 || vatAmount > 0) && (
                                   <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
                                 )}
                               </div>

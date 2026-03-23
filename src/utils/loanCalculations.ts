@@ -224,16 +224,16 @@ export function calculateLoan(
   // Total repayment is just principal + interest (fees already deducted from disbursement)
   const totalRepayment = principal + totalInterest;
   
-  // Adjust payment amounts if needed
-  if (isWeekly && weeklyPayment > 0) {
-    // Recalculate weekly payment based on total repayment
-    const termWeeks = termUnit === 'weeks' ? termValue : termValue * 4.33;
-    weeklyPayment = totalRepayment / termWeeks;
-    monthlyPayment = weeklyPayment * 4.33;
-  } else if (monthlyPayment > 0) {
-    // Recalculate monthly payment based on total repayment
-    const termMonths = termUnit === 'weeks' ? termValue / 4.33 : termValue;
-    monthlyPayment = totalRepayment / termMonths;
+  // Adjust payment amounts for flat interest only (reducing balance already has correct amortized payments)
+  if (interestType !== 'reducing') {
+    if (isWeekly && weeklyPayment > 0) {
+      const termWeeks = termUnit === 'weeks' ? termValue : termValue * 4.33;
+      weeklyPayment = totalRepayment / termWeeks;
+      monthlyPayment = weeklyPayment * 4.33;
+    } else if (monthlyPayment > 0) {
+      const termMonths = termUnit === 'weeks' ? termValue / 4.33 : termValue;
+      monthlyPayment = totalRepayment / termMonths;
+    }
   }
   
   return {
