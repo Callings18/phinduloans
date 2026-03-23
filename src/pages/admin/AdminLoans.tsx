@@ -191,7 +191,7 @@ const AdminLoans = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_products")
-        .select("id, name, interest_rate, processing_fee_percent, enforcement_fee_percent")
+        .select("id, name, interest_rate, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent")
         .eq("is_active", true);
       if (error) throw error;
       return data as LoanProduct[];
