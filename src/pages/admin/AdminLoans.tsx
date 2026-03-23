@@ -139,6 +139,7 @@ const AdminLoans = () => {
   // Quick Payment State
   const [isQuickPaymentOpen, setIsQuickPaymentOpen] = useState(false);
   const [quickPaymentLoan, setQuickPaymentLoan] = useState<Loan | null>(null);
+  const [quickPaymentAmount, setQuickPaymentAmount] = useState("");
   const [quickPaymentData, setQuickPaymentData] = useState({
     payment_method: "mobile_money",
     transaction_reference: "",
