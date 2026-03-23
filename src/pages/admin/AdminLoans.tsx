@@ -139,6 +139,7 @@ const AdminLoans = () => {
   // Quick Payment State
   const [isQuickPaymentOpen, setIsQuickPaymentOpen] = useState(false);
   const [quickPaymentLoan, setQuickPaymentLoan] = useState<Loan | null>(null);
+  const [quickPaymentAmount, setQuickPaymentAmount] = useState("");
   const [quickPaymentData, setQuickPaymentData] = useState({
     payment_method: "mobile_money",
     transaction_reference: "",
@@ -279,42 +280,102 @@ const AdminLoans = () => {
     onError: (error: any) => toast.error(error.message || "Failed to update loan"),
   });
 
-  // Quick payment mutation
+  // Quick payment mutation - supports partial payments
   const quickPaymentMutation = useMutation({
     mutationFn: async () => {
       if (!nextRepayment || !quickPaymentLoan) throw new Error("No repayment selected");
-      const { error } = await supabase
-        .from("loan_repayments")
-        .update({
-          status: "paid",
-          paid_date: new Date().toISOString(),
-          payment_method: quickPaymentData.payment_method,
-          transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
-        })
-        .eq("id", nextRepayment.id);
-      if (error) throw error;
 
-      // Check if all repayments are paid
-      const { data: remainingPending } = await supabase
-        .from("loan_repayments")
-        .select("id")
-        .eq("loan_id", quickPaymentLoan.id)
-        .eq("status", "pending");
+      const amountDue = Number(nextRepayment.amount);
+      const paidAmount = quickPaymentAmount ? Number(quickPaymentAmount) : amountDue;
+      if (paidAmount <= 0) throw new Error("Payment amount must be greater than 0");
 
-      if (remainingPending && remainingPending.length === 0) {
-        await supabase
-          .from("loan_applications")
-          .update({ status: "completed" })
-          .eq("id", quickPaymentLoan.id);
+      const isFullPayment = paidAmount >= amountDue;
+
+      if (isFullPayment) {
+        const { error } = await supabase
+          .from("loan_repayments")
+          .update({
+            status: "paid",
+            paid_date: new Date().toISOString().split("T")[0],
+            payment_method: quickPaymentData.payment_method,
+            transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
+            principal_paid: amountDue,
+            original_amount: nextRepayment.original_amount || nextRepayment.amount,
+          })
+          .eq("id", nextRepayment.id);
+        if (error) throw error;
+
+        // Handle overpayment — apply excess to next pending installment
+        if (paidAmount > amountDue) {
+          const excess = paidAmount - amountDue;
+          const { data: nextPending } = await supabase
+            .from("loan_repayments")
+            .select("id, amount, original_amount")
+            .eq("loan_id", quickPaymentLoan.id)
+            .in("status", ["pending", "overdue"])
+            .neq("id", nextRepayment.id)
+            .order("due_date", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (nextPending) {
+            const newAmount = Math.max(0, Number(nextPending.amount) - excess);
+            await supabase
+              .from("loan_repayments")
+              .update({
+                amount: newAmount,
+                original_amount: nextPending.original_amount || nextPending.amount,
+                principal_paid: (Number((nextPending as any).principal_paid) || 0) + excess,
+              })
+              .eq("id", nextPending.id);
+          }
+        }
+      } else {
+        // Partial payment — reduce amount owed, keep status pending
+        const remainingAmount = amountDue - paidAmount;
+        const { error } = await supabase
+          .from("loan_repayments")
+          .update({
+            amount: remainingAmount,
+            payment_method: quickPaymentData.payment_method,
+            transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
+            principal_paid: (Number((nextRepayment as any).principal_paid) || 0) + paidAmount,
+            original_amount: nextRepayment.original_amount || nextRepayment.amount,
+          })
+          .eq("id", nextRepayment.id);
+        if (error) throw error;
       }
+
+      // Check if all repayments are paid (check both pending AND overdue)
+      if (isFullPayment) {
+        const { data: remainingUnpaid } = await supabase
+          .from("loan_repayments")
+          .select("id")
+          .eq("loan_id", quickPaymentLoan.id)
+          .in("status", ["pending", "overdue"]);
+
+        if (remainingUnpaid && remainingUnpaid.length === 0) {
+          await supabase
+            .from("loan_applications")
+            .update({ status: "completed" })
+            .eq("id", quickPaymentLoan.id);
+        }
+      }
+
+      return { paidAmount, isFullPayment };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["loan-due-dates"] });
-      toast.success("Payment recorded successfully");
+      if (result.isFullPayment) {
+        toast.success("Full payment recorded successfully");
+      } else {
+        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+      }
       setIsQuickPaymentOpen(false);
       setQuickPaymentLoan(null);
       setNextRepayment(null);
+      setQuickPaymentAmount("");
     },
     onError: (error: any) => toast.error(error.message || "Failed to record payment"),
   });
@@ -333,12 +394,13 @@ const AdminLoans = () => {
 
   const openQuickPayment = async (loan: Loan) => {
     setQuickPaymentLoan(loan);
+    setQuickPaymentAmount("");
     setQuickPaymentData({ payment_method: "mobile_money", transaction_reference: "" });
     const { data: repayment } = await supabase
       .from("loan_repayments")
       .select("*")
       .eq("loan_id", loan.id)
-      .eq("status", "pending")
+      .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -765,6 +827,19 @@ const AdminLoans = () => {
               </div>
 
               <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Payment Amount</Label>
+                  <Input
+                    type="number"
+                    value={quickPaymentAmount}
+                    onChange={(e) => setQuickPaymentAmount(e.target.value)}
+                    placeholder={`Full amount: K${Number(nextRepayment.amount).toLocaleString()}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to pay full installment (K{Number(nextRepayment.amount).toLocaleString()}).
+                    Enter a smaller amount for partial payment.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label>Payment Method</Label>
                   <Select

@@ -412,28 +412,30 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (error) throw error;
 
-      // Check if all repayments are paid to mark loan as completed
-      const { data: remainingPending } = await supabase
-        .from("loan_repayments")
-        .select("id")
-        .eq("loan_id", loan.id)
-        .eq("status", "pending");
+      // Check if all repayments are paid to mark loan as completed (check pending AND overdue)
+      if (newStatus === "paid") {
+        const { data: remainingUnpaid } = await supabase
+          .from("loan_repayments")
+          .select("id")
+          .eq("loan_id", loan.id)
+          .in("status", ["pending", "overdue"]);
 
-      if (remainingPending && remainingPending.length === 0) {
-        // Only auto-complete if contract is fully signed
-        const { data: loanData } = await supabase
-          .from("loan_applications")
-          .select("borrower_signed, admin_signed")
-          .eq("id", loan.id)
-          .single();
-
-        if (loanData?.borrower_signed && loanData?.admin_signed) {
-          await supabase
+        if (remainingUnpaid && remainingUnpaid.length === 0) {
+          // Only auto-complete if contract is fully signed
+          const { data: loanData } = await supabase
             .from("loan_applications")
-            .update({ status: "completed" as any })
-            .eq("id", loan.id);
-        } else {
-          toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
+            .select("borrower_signed, admin_signed")
+            .eq("id", loan.id)
+            .single();
+
+          if (loanData?.borrower_signed && loanData?.admin_signed) {
+            await supabase
+              .from("loan_applications")
+              .update({ status: "completed" as any })
+              .eq("id", loan.id);
+          } else {
+            toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
+          }
         }
       }
 

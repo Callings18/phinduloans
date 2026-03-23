@@ -275,16 +275,16 @@ const AdminRepayments = () => {
         toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded and deposited`);
       }
 
-      // Gap 4 fix: Auto-complete loan if all repayments are now paid
+      // Auto-complete loan if all repayments are now paid (check pending AND overdue)
       if (isFullPayment && repayment) {
         try {
-          const { data: allReps } = await supabase
+          const { data: remainingUnpaid } = await supabase
             .from("loan_repayments")
-            .select("id, status")
-            .eq("loan_id", repayment.loan_id);
+            .select("id")
+            .eq("loan_id", repayment.loan_id)
+            .in("status", ["pending", "overdue"]);
 
-          const allPaid = allReps?.every(r => r.id === repayment.id ? true : r.status === "paid");
-          if (allPaid && allReps && allReps.length > 0) {
+          if (remainingUnpaid && remainingUnpaid.length === 0) {
             await supabase
               .from("loan_applications")
               .update({ status: "completed" })
