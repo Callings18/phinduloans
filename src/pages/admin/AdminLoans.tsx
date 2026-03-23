@@ -563,7 +563,7 @@ const AdminLoans = () => {
                             <TableCell>
                               <div>
                                 <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
-                                {(processingFee > 0 || legalFee > 0) && (
+                                {(processingFee > 0 || enforcementFee > 0 || insuranceFee > 0 || platformFee > 0 || vatAmount > 0) && (
                                   <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
                                 )}
                               </div>
