@@ -828,6 +828,19 @@ const AdminLoans = () => {
 
               <div className="space-y-3">
                 <div className="space-y-2">
+                  <Label>Payment Amount</Label>
+                  <Input
+                    type="number"
+                    value={quickPaymentAmount}
+                    onChange={(e) => setQuickPaymentAmount(e.target.value)}
+                    placeholder={`Full amount: K${Number(nextRepayment.amount).toLocaleString()}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to pay full installment (K{Number(nextRepayment.amount).toLocaleString()}).
+                    Enter a smaller amount for partial payment.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label>Payment Method</Label>
                   <Select
                     value={quickPaymentData.payment_method}
