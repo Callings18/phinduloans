@@ -364,13 +364,18 @@ const AdminLoans = () => {
 
       return { paidAmount, isFullPayment };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["loan-due-dates"] });
-      toast.success("Payment recorded successfully");
+      if (result.isFullPayment) {
+        toast.success("Full payment recorded successfully");
+      } else {
+        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+      }
       setIsQuickPaymentOpen(false);
       setQuickPaymentLoan(null);
       setNextRepayment(null);
+      setQuickPaymentAmount("");
     },
     onError: (error: any) => toast.error(error.message || "Failed to record payment"),
   });
