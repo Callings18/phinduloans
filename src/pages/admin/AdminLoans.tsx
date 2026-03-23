@@ -226,19 +226,34 @@ const AdminLoans = () => {
       if (!editingLoan) throw new Error("No loan selected");
       const principal = Number(editLoanAmount);
       const rate = Number(editInterestRate);
-      const months = Number(editLoanTermMonths);
-      const interest = principal * (rate / 100) * months;
-      const totalRepayment = principal + interest;
-      const monthlyPayment = totalRepayment / months;
+      const termValue = Number(editLoanTermMonths);
+      const termUnit = (editingLoan.term_unit as any) || 'months';
+
+      // Fetch product settings for accurate calculation
+      let productSettings: any = { interest_rate: rate, interest_period: 'monthly', interest_type: 'flat' };
+      if (editingLoan.loan_product_id) {
+        const { data: product } = await supabase
+          .from("loan_products")
+          .select("interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit")
+          .eq("id", editingLoan.loan_product_id)
+          .single();
+        if (product) {
+          productSettings = { ...product, interest_rate: rate };
+        }
+      }
+
+      // Use the unified calculateLoan function for accurate results
+      const { calculateLoan } = await import("@/utils/loanCalculations");
+      const calc = calculateLoan(principal, termValue, productSettings, termUnit);
 
       const { error } = await supabase
         .from("loan_applications")
         .update({
           loan_amount: principal,
-          loan_term_months: months,
+          loan_term_months: termValue,
           interest_rate: rate,
-          monthly_payment: monthlyPayment,
-          total_repayment: totalRepayment,
+          monthly_payment: calc.monthlyPayment,
+          total_repayment: calc.totalRepayment,
           monthly_income: Number(editMonthlyIncome) || editingLoan.monthly_income,
           loan_purpose: editLoanPurpose,
           employment_type: editEmploymentType as "employed" | "self_employed" | "contract" | "other",
@@ -252,7 +267,7 @@ const AdminLoans = () => {
         entity_type: "loan_application",
         entity_id: editingLoan.id,
         module: "loans",
-        new_values: { loan_amount: principal, interest_rate: rate, loan_term_months: months },
+        new_values: { loan_amount: principal, interest_rate: rate, loan_term_months: termValue },
       });
     },
     onSuccess: () => {
