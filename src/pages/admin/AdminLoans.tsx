@@ -280,34 +280,89 @@ const AdminLoans = () => {
     onError: (error: any) => toast.error(error.message || "Failed to update loan"),
   });
 
-  // Quick payment mutation
+  // Quick payment mutation - supports partial payments
   const quickPaymentMutation = useMutation({
     mutationFn: async () => {
       if (!nextRepayment || !quickPaymentLoan) throw new Error("No repayment selected");
-      const { error } = await supabase
-        .from("loan_repayments")
-        .update({
-          status: "paid",
-          paid_date: new Date().toISOString(),
-          payment_method: quickPaymentData.payment_method,
-          transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
-        })
-        .eq("id", nextRepayment.id);
-      if (error) throw error;
 
-      // Check if all repayments are paid
-      const { data: remainingPending } = await supabase
-        .from("loan_repayments")
-        .select("id")
-        .eq("loan_id", quickPaymentLoan.id)
-        .eq("status", "pending");
+      const amountDue = Number(nextRepayment.amount);
+      const paidAmount = quickPaymentAmount ? Number(quickPaymentAmount) : amountDue;
+      if (paidAmount <= 0) throw new Error("Payment amount must be greater than 0");
 
-      if (remainingPending && remainingPending.length === 0) {
-        await supabase
-          .from("loan_applications")
-          .update({ status: "completed" })
-          .eq("id", quickPaymentLoan.id);
+      const isFullPayment = paidAmount >= amountDue;
+
+      if (isFullPayment) {
+        const { error } = await supabase
+          .from("loan_repayments")
+          .update({
+            status: "paid",
+            paid_date: new Date().toISOString().split("T")[0],
+            payment_method: quickPaymentData.payment_method,
+            transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
+            principal_paid: amountDue,
+            original_amount: nextRepayment.original_amount || nextRepayment.amount,
+          })
+          .eq("id", nextRepayment.id);
+        if (error) throw error;
+
+        // Handle overpayment — apply excess to next pending installment
+        if (paidAmount > amountDue) {
+          const excess = paidAmount - amountDue;
+          const { data: nextPending } = await supabase
+            .from("loan_repayments")
+            .select("id, amount, original_amount")
+            .eq("loan_id", quickPaymentLoan.id)
+            .in("status", ["pending", "overdue"])
+            .neq("id", nextRepayment.id)
+            .order("due_date", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (nextPending) {
+            const newAmount = Math.max(0, Number(nextPending.amount) - excess);
+            await supabase
+              .from("loan_repayments")
+              .update({
+                amount: newAmount,
+                original_amount: nextPending.original_amount || nextPending.amount,
+                principal_paid: (Number((nextPending as any).principal_paid) || 0) + excess,
+              })
+              .eq("id", nextPending.id);
+          }
+        }
+      } else {
+        // Partial payment — reduce amount owed, keep status pending
+        const remainingAmount = amountDue - paidAmount;
+        const { error } = await supabase
+          .from("loan_repayments")
+          .update({
+            amount: remainingAmount,
+            payment_method: quickPaymentData.payment_method,
+            transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
+            principal_paid: (Number((nextRepayment as any).principal_paid) || 0) + paidAmount,
+            original_amount: nextRepayment.original_amount || nextRepayment.amount,
+          })
+          .eq("id", nextRepayment.id);
+        if (error) throw error;
       }
+
+      // Check if all repayments are paid (check both pending AND overdue)
+      if (isFullPayment) {
+        const { data: remainingUnpaid } = await supabase
+          .from("loan_repayments")
+          .select("id")
+          .eq("loan_id", quickPaymentLoan.id)
+          .in("status", ["pending", "overdue"]);
+
+        if (remainingUnpaid && remainingUnpaid.length === 0) {
+          await supabase
+            .from("loan_applications")
+            .update({ status: "completed" })
+            .eq("id", quickPaymentLoan.id);
+        }
+      }
+
+      return { paidAmount, isFullPayment };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
