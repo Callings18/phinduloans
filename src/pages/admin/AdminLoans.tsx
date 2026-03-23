@@ -394,12 +394,13 @@ const AdminLoans = () => {
 
   const openQuickPayment = async (loan: Loan) => {
     setQuickPaymentLoan(loan);
+    setQuickPaymentAmount("");
     setQuickPaymentData({ payment_method: "mobile_money", transaction_reference: "" });
     const { data: repayment } = await supabase
       .from("loan_repayments")
       .select("*")
       .eq("loan_id", loan.id)
-      .eq("status", "pending")
+      .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true })
       .limit(1)
       .maybeSingle();
