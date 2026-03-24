@@ -3,7 +3,8 @@
  * for loans due within 3 days or already overdue.
  * 
  * Schedule: 3x daily (8am, 1pm, 5pm) via pg_cron.
- * Keeps sending until repayment is marked 'paid'.
+ * DEDUP: Only sends ONE reminder per loan per day (checks notification_logs).
+ * Only sends for loans with status = 'active'.
  */
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -12,8 +13,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatPhone(phone: string): string {
   let f = phone.trim().replace(/\s+/g, "").replace(/[^0-9+]/g, "");
@@ -32,8 +31,6 @@ function formatCurrency(amount: number): string {
 function formatDate(d: string): string {
   return new Date(d).toLocaleDateString("en-ZM", { year: "numeric", month: "long", day: "numeric" });
 }
-
-// ── ExciteSMS ────────────────────────────────────────────────────────────────
 
 async function getExciteCredentials(supabase: any) {
   const { data: p } = await supabase.from("system_settings").select("value").eq("key", "notification_providers").maybeSingle();
@@ -63,8 +60,6 @@ async function sendSMS(to: string, message: string, creds: any): Promise<boolean
     return res.ok;
   } catch (e) { console.error(`[Cron SMS] Error sending to ${phone}:`, e); return false; }
 }
-
-// ── SendGrid Email ───────────────────────────────────────────────────────────
 
 async function getSendGridCredentials(supabase: any) {
   const { data: p } = await supabase.from("system_settings").select("value").eq("key", "notification_providers").maybeSingle();
@@ -155,11 +150,11 @@ serve(async (req: Request): Promise<Response> => {
     inThreeDays.setDate(inThreeDays.getDate() + 3);
     const inThreeDaysStr = inThreeDays.toISOString().split("T")[0];
 
-    // Get ALL pending repayments due within 3 days OR already overdue (no upper bound on overdue)
+    // Get pending/overdue repayments due within 3 days
     const { data: repayments, error: fetchError } = await supabase
       .from("loan_repayments")
       .select("id, loan_id, user_id, amount, due_date, installment_number")
-      .eq("status", "pending")
+      .in("status", ["pending", "overdue"])
       .lte("due_date", inThreeDaysStr)
       .order("due_date", { ascending: true });
 
@@ -178,23 +173,42 @@ serve(async (req: Request): Promise<Response> => {
       if (!loanMap.has(r.loan_id)) loanMap.set(r.loan_id, r);
     }
 
-    // Get loan details for all affected loans
+    // ONLY get loans with status = 'active' (not rejected, completed, pending, etc.)
     const loanIds = [...loanMap.keys()];
     const { data: loans } = await supabase
       .from("loan_applications")
       .select("id, full_name, phone, email, user_id, total_repayment, status")
       .in("id", loanIds)
-      .in("status", ["active", "disbursed"]);
+      .eq("status", "active");
 
     if (!loans || loans.length === 0) {
       return new Response(JSON.stringify({ success: true, message: "No active loans found for due repayments", sent: 0 }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // ── DEDUPLICATION: Check which loans already got a reminder today ──
+    const activeLoanIds = loans.map(l => l.id);
+    const todayStart = new Date(todayStr + "T00:00:00Z").toISOString();
+    const todayEnd = new Date(todayStr + "T23:59:59Z").toISOString();
+    
+    const { data: sentToday } = await supabase
+      .from("notification_logs")
+      .select("title, recipient")
+      .in("title", ["Overdue Payment Reminder", "Payment Due Reminder"])
+      .in("status", ["sent", "pending"])
+      .gte("created_at", todayStart)
+      .lte("created_at", todayEnd);
+
+    // Build a set of "phone|title" combos already sent today
+    const alreadySentSet = new Set<string>();
+    for (const n of (sentToday || [])) {
+      alreadySentSet.add(`${n.recipient}|${n.title}`);
     }
 
     // Get total paid per loan for balance calculation
     const { data: paidData } = await supabase
       .from("loan_repayments")
       .select("loan_id, amount")
-      .in("loan_id", loanIds)
+      .in("loan_id", activeLoanIds)
       .eq("status", "paid");
 
     const paidMap = new Map<string, number>();
@@ -206,7 +220,7 @@ serve(async (req: Request): Promise<Response> => {
     const smsCreds = await getExciteCredentials(supabase);
     const emailCreds = await getSendGridCredentials(supabase);
 
-    let smsSent = 0, emailSent = 0, failed = 0;
+    let smsSent = 0, emailSent = 0, failed = 0, skipped = 0;
 
     for (const loan of loans) {
       const repayment = loanMap.get(loan.id);
@@ -216,6 +230,7 @@ serve(async (req: Request): Promise<Response> => {
       const diffDays = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       const isOverdue = diffDays < 0;
       const daysInfo = isOverdue ? `${Math.abs(diffDays)} day(s) overdue` : diffDays === 0 ? "Due TODAY" : `Due in ${diffDays} day(s)`;
+      const reminderTitle = isOverdue ? "Overdue Payment Reminder" : "Payment Due Reminder";
 
       const totalPaid = paidMap.get(loan.id) || 0;
       const remainingBalance = Math.max(0, (loan.total_repayment || 0) - totalPaid);
@@ -224,37 +239,49 @@ serve(async (req: Request): Promise<Response> => {
       const dueDateStr = formatDate(repayment.due_date);
       const borrowerName = loan.full_name || "Valued Customer";
 
+      // ── DEDUP CHECK: Skip if we already sent SMS to this phone today with same title ──
+      const smsKey = `${loan.phone}|${reminderTitle}`;
+      const emailKey = `${loan.email}|${reminderTitle}`;
+      const smsDuplicate = loan.phone && alreadySentSet.has(smsKey);
+      const emailDuplicate = loan.email && alreadySentSet.has(emailKey);
+
+      if (smsDuplicate && emailDuplicate) {
+        skipped++;
+        console.log(`[Cron] Skipping loan ${loan.id} – already notified today`);
+        continue;
+      }
+
       // SMS message
       const smsMsg = isOverdue
-        ? `OVERDUE REMINDER: Dear ${borrowerName}, your payment of ${amountStr} was due on ${dueDateStr} (${Math.abs(diffDays)} days ago). Outstanding balance: ${balanceStr}. Please pay immediately to avoid penalties. - Phindu Finance`
-        : `PAYMENT REMINDER: Dear ${borrowerName}, your payment of ${amountStr} is ${diffDays === 0 ? "due TODAY" : `due on ${dueDateStr}`}. Outstanding balance: ${balanceStr}. Please pay on time. - Phindu Finance`;
+        ? `OVERDUE: Dear ${borrowerName}, your payment of ${amountStr} was due on ${dueDateStr} (${Math.abs(diffDays)} days ago). Balance: ${balanceStr}. Please pay immediately. - Phindu Finance`
+        : `REMINDER: Dear ${borrowerName}, your payment of ${amountStr} is ${diffDays === 0 ? "due TODAY" : `due on ${dueDateStr}`}. Balance: ${balanceStr}. - Phindu Finance`;
 
-      // Send SMS
-      if (loan.phone) {
+      // Send SMS (only if not already sent today)
+      if (loan.phone && !smsDuplicate) {
         try {
           const ok = await sendSMS(loan.phone, smsMsg, smsCreds);
           if (ok) smsSent++;
           else failed++;
 
-          // Log to notification_logs
           await supabase.from("notification_logs").insert({
             user_id: loan.user_id,
             type: "sms",
             recipient: loan.phone,
-            title: isOverdue ? "Overdue Payment Reminder" : "Payment Due Reminder",
+            title: reminderTitle,
             message: smsMsg,
             status: ok ? "sent" : "failed",
             sent_at: ok ? new Date().toISOString() : null,
-          }).then(() => {});
+          });
+          alreadySentSet.add(smsKey);
         } catch (e) {
           console.error(`[Cron] SMS failed for loan ${loan.id}:`, e);
           failed++;
         }
       }
 
-      // Send Email
-      if (loan.email) {
-        const subject = isOverdue ? `⚠️ Overdue Payment Reminder – ${amountStr}` : `Payment Reminder – ${amountStr} due ${dueDateStr}`;
+      // Send Email (only if not already sent today)
+      if (loan.email && !emailDuplicate) {
+        const subject = isOverdue ? `⚠️ Overdue Payment – ${amountStr}` : `Payment Reminder – ${amountStr} due ${dueDateStr}`;
         const textBody = smsMsg;
         const htmlBody = buildReminderHtml(borrowerName, amountStr, dueDateStr, isOverdue, daysInfo);
 
@@ -267,11 +294,12 @@ serve(async (req: Request): Promise<Response> => {
             user_id: loan.user_id,
             type: "email",
             recipient: loan.email,
-            title: subject,
+            title: reminderTitle,
             message: textBody,
             status: ok ? "sent" : "failed",
             sent_at: ok ? new Date().toISOString() : null,
-          }).then(() => {});
+          });
+          alreadySentSet.add(emailKey);
         } catch (e) {
           console.error(`[Cron] Email failed for loan ${loan.id}:`, e);
           failed++;
@@ -282,10 +310,10 @@ serve(async (req: Request): Promise<Response> => {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    console.log(`[Cron] Done: ${smsSent} SMS sent, ${emailSent} emails sent, ${failed} failed out of ${loans.length} loans`);
+    console.log(`[Cron] Done: ${smsSent} SMS, ${emailSent} emails, ${failed} failed, ${skipped} skipped (dedup) out of ${loans.length} loans`);
 
     return new Response(
-      JSON.stringify({ success: true, loansProcessed: loans.length, smsSent, emailSent, failed }),
+      JSON.stringify({ success: true, loansProcessed: loans.length, smsSent, emailSent, failed, skippedDedup: skipped }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
