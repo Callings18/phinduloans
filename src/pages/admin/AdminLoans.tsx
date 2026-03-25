@@ -287,8 +287,10 @@ const AdminLoans = () => {
 
       const amountDue = Number(nextRepayment.amount);
       const paidAmount = quickPaymentAmount ? Number(quickPaymentAmount) : amountDue;
-      if (paidAmount <= 0) throw new Error("Payment amount must be greater than 0");
+      if (isNaN(paidAmount) || paidAmount <= 0) throw new Error("Payment amount must be greater than 0");
 
+      // Preserve the original amount before any partial payments reduced it
+      const savedOriginalAmount = nextRepayment.original_amount || nextRepayment.amount;
       const isFullPayment = paidAmount >= amountDue;
 
       if (isFullPayment) {
@@ -299,35 +301,54 @@ const AdminLoans = () => {
             paid_date: new Date().toISOString().split("T")[0],
             payment_method: quickPaymentData.payment_method,
             transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
-            principal_paid: amountDue,
-            original_amount: nextRepayment.original_amount || nextRepayment.amount,
+            principal_paid: Number(savedOriginalAmount),
+            original_amount: savedOriginalAmount,
+            amount: Number(savedOriginalAmount), // restore to original on full pay
           })
           .eq("id", nextRepayment.id);
         if (error) throw error;
 
         // Handle overpayment — apply excess to next pending installment
         if (paidAmount > amountDue) {
-          const excess = paidAmount - amountDue;
-          const { data: nextPending } = await supabase
+          let excess = paidAmount - amountDue;
+          const { data: nextPendings } = await supabase
             .from("loan_repayments")
-            .select("id, amount, original_amount")
+            .select("id, amount, original_amount, principal_paid")
             .eq("loan_id", quickPaymentLoan.id)
             .in("status", ["pending", "overdue"])
             .neq("id", nextRepayment.id)
-            .order("due_date", { ascending: true })
-            .limit(1)
-            .maybeSingle();
+            .order("due_date", { ascending: true });
 
-          if (nextPending) {
-            const newAmount = Math.max(0, Number(nextPending.amount) - excess);
-            await supabase
-              .from("loan_repayments")
-              .update({
-                amount: newAmount,
-                original_amount: nextPending.original_amount || nextPending.amount,
-                principal_paid: (Number((nextPending as any).principal_paid) || 0) + excess,
-              })
-              .eq("id", nextPending.id);
+          for (const np of (nextPendings || [])) {
+            if (excess <= 0) break;
+            const npAmount = Number(np.amount);
+            const npOriginal = np.original_amount || np.amount;
+            const applied = Math.min(excess, npAmount);
+
+            if (applied >= npAmount) {
+              // Fully pays this installment too
+              await supabase
+                .from("loan_repayments")
+                .update({
+                  status: "paid",
+                  paid_date: new Date().toISOString().split("T")[0],
+                  payment_method: quickPaymentData.payment_method,
+                  principal_paid: Number(npOriginal),
+                  original_amount: npOriginal,
+                  amount: Number(npOriginal),
+                })
+                .eq("id", np.id);
+            } else {
+              await supabase
+                .from("loan_repayments")
+                .update({
+                  amount: npAmount - applied,
+                  original_amount: npOriginal,
+                  principal_paid: (Number(np.principal_paid) || 0) + applied,
+                })
+                .eq("id", np.id);
+            }
+            excess -= applied;
           }
         }
       } else {
@@ -340,26 +361,24 @@ const AdminLoans = () => {
             payment_method: quickPaymentData.payment_method,
             transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
             principal_paid: (Number((nextRepayment as any).principal_paid) || 0) + paidAmount,
-            original_amount: nextRepayment.original_amount || nextRepayment.amount,
+            original_amount: savedOriginalAmount,
           })
           .eq("id", nextRepayment.id);
         if (error) throw error;
       }
 
-      // Check if all repayments are paid (check both pending AND overdue)
-      if (isFullPayment) {
-        const { data: remainingUnpaid } = await supabase
-          .from("loan_repayments")
-          .select("id")
-          .eq("loan_id", quickPaymentLoan.id)
-          .in("status", ["pending", "overdue"]);
+      // Check if all repayments are paid — re-query AFTER updates
+      const { data: remainingUnpaid } = await supabase
+        .from("loan_repayments")
+        .select("id")
+        .eq("loan_id", quickPaymentLoan.id)
+        .in("status", ["pending", "overdue"]);
 
-        if (remainingUnpaid && remainingUnpaid.length === 0) {
-          await supabase
-            .from("loan_applications")
-            .update({ status: "completed" })
-            .eq("id", quickPaymentLoan.id);
-        }
+      if (remainingUnpaid && remainingUnpaid.length === 0) {
+        await supabase
+          .from("loan_applications")
+          .update({ status: "completed" })
+          .eq("id", quickPaymentLoan.id);
       }
 
       return { paidAmount, isFullPayment };

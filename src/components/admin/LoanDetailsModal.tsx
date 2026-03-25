@@ -356,12 +356,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
       const dueAmount = selectedRepayment.amount + (selectedRepayment.penalty_amount || 0);
+      const savedOriginalAmount = selectedRepayment.original_amount || selectedRepayment.amount;
 
       // Calculate allocation (penalty first, then principal/interest)
       const penaltyPaid = Math.min(paidAmount, selectedRepayment.penalty_amount || 0);
       const remainingAfterPenalty = paidAmount - penaltyPaid;
-
-      // Simple allocation: remaining goes to principal (for simplicity)
       const principalPaid = remainingAfterPenalty;
 
       let newStatus = "pending";
@@ -370,30 +369,50 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (paidAmount >= dueAmount) {
         // Full payment or overpayment
         newStatus = "paid";
+        adjustedAmount = Number(savedOriginalAmount); // restore original on full pay
 
-        // Handle overpayment - apply to next pending installment
+        // Handle overpayment - apply to next pending installments
         if (paidAmount > dueAmount) {
-          const excess = paidAmount - dueAmount;
-          const nextPending = repayments?.find(
-            r => r.status === "pending" && r.id !== selectedRepayment.id
-          );
+          let excess = paidAmount - dueAmount;
+          const pendingList = repayments?.filter(
+            r => (r.status === "pending" || r.status === "overdue") && r.id !== selectedRepayment.id
+          ) || [];
 
-          if (nextPending) {
-            // Apply excess to next installment
-            const newNextAmount = Math.max(0, nextPending.amount - excess);
-            await supabase
-              .from("loan_repayments")
-              .update({
-                amount: newNextAmount,
-                original_amount: nextPending.original_amount || nextPending.amount
-              })
-              .eq("id", nextPending.id);
+          for (const np of pendingList) {
+            if (excess <= 0) break;
+            const npAmount = Number(np.amount);
+            const npOriginal = np.original_amount || np.amount;
+            const applied = Math.min(excess, npAmount);
+
+            if (applied >= npAmount) {
+              await supabase
+                .from("loan_repayments")
+                .update({
+                  status: "paid",
+                  paid_date: new Date().toISOString().split("T")[0],
+                  payment_method: paymentMethod,
+                  principal_paid: Number(npOriginal),
+                  original_amount: npOriginal,
+                  amount: Number(npOriginal),
+                })
+                .eq("id", np.id);
+            } else {
+              await supabase
+                .from("loan_repayments")
+                .update({
+                  amount: npAmount - applied,
+                  original_amount: npOriginal,
+                })
+                .eq("id", np.id);
+            }
+            excess -= applied;
           }
         }
       } else {
         // Partial payment - reduce amount owed
         adjustedAmount = selectedRepayment.amount - remainingAfterPenalty;
         newStatus = adjustedAmount > 0 ? "pending" : "paid";
+        if (newStatus === "paid") adjustedAmount = Number(savedOriginalAmount);
       }
 
       const { error } = await supabase
@@ -403,39 +422,36 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           paid_date: newStatus === "paid" ? new Date().toISOString().split("T")[0] : null,
           payment_method: paymentMethod,
           transaction_reference: transactionRef || null,
-          amount: newStatus === "paid" ? selectedRepayment.amount : adjustedAmount,
+          amount: adjustedAmount,
           principal_paid: principalPaid,
           penalty_paid: penaltyPaid,
-          original_amount: selectedRepayment.original_amount || selectedRepayment.amount,
+          original_amount: savedOriginalAmount,
         })
         .eq("id", selectedRepayment.id);
 
       if (error) throw error;
 
-      // Check if all repayments are paid to mark loan as completed (check pending AND overdue)
-      if (newStatus === "paid") {
-        const { data: remainingUnpaid } = await supabase
-          .from("loan_repayments")
-          .select("id")
-          .eq("loan_id", loan.id)
-          .in("status", ["pending", "overdue"]);
+      // Check if all repayments are paid — always check, not just on full payment
+      const { data: remainingUnpaid } = await supabase
+        .from("loan_repayments")
+        .select("id")
+        .eq("loan_id", loan.id)
+        .in("status", ["pending", "overdue"]);
 
-        if (remainingUnpaid && remainingUnpaid.length === 0) {
-          // Only auto-complete if contract is fully signed
-          const { data: loanData } = await supabase
+      if (remainingUnpaid && remainingUnpaid.length === 0) {
+        const { data: loanData } = await supabase
+          .from("loan_applications")
+          .select("borrower_signed, admin_signed")
+          .eq("id", loan.id)
+          .single();
+
+        if (loanData?.borrower_signed && loanData?.admin_signed) {
+          await supabase
             .from("loan_applications")
-            .select("borrower_signed, admin_signed")
-            .eq("id", loan.id)
-            .single();
-
-          if (loanData?.borrower_signed && loanData?.admin_signed) {
-            await supabase
-              .from("loan_applications")
-              .update({ status: "completed" as any })
-              .eq("id", loan.id);
-          } else {
-            toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
-          }
+            .update({ status: "completed" as any })
+            .eq("id", loan.id);
+        } else {
+          toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
         }
       }
 

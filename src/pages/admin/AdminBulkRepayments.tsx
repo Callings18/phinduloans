@@ -237,6 +237,7 @@ const AdminBulkRepayments = () => {
 
           const originalAmount = currentRep?.original_amount || currentRep?.amount || allocation.originalAmount;
           const newAmount = allocation.originalAmount - allocation.allocatedAmount;
+          const existingPrincipalPaid = Number((currentRep as any)?.principal_paid) || 0;
 
           const { error } = await supabase
             .from('loan_repayments')
@@ -244,7 +245,7 @@ const AdminBulkRepayments = () => {
               amount: newAmount,
               original_amount: originalAmount,
               payment_method: paymentMethod,
-              principal_paid: (currentRep as any)?.principal_paid || 0 + allocation.allocatedAmount,
+              principal_paid: existingPrincipalPaid + allocation.allocatedAmount,
             })
             .eq('id', allocation.repaymentId);
 

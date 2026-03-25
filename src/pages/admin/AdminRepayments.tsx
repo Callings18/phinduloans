@@ -190,6 +190,7 @@ const AdminRepayments = () => {
       }
 
       const amountDue = Number(repayment.amount);
+      const savedOriginalAmount = repayment.original_amount || repayment.amount;
       const isFullPayment = paidAmount >= amountDue;
       const remainingAmount = amountDue - paidAmount;
 
@@ -198,7 +199,7 @@ const AdminRepayments = () => {
       if (!destAccount) throw new Error("Destination account not found");
 
       if (isFullPayment) {
-        // Full payment - mark as paid
+        // Full payment - mark as paid, restore original amount
         const { error } = await supabase
           .from("loan_repayments")
           .update({
@@ -206,8 +207,9 @@ const AdminRepayments = () => {
             paid_date: new Date().toISOString().split("T")[0],
             payment_method: paymentMethod,
             transaction_reference: transactionRef || `PAY-${Date.now()}`,
-            principal_paid: paidAmount,
-            original_amount: repayment.amount,
+            principal_paid: Number(savedOriginalAmount),
+            original_amount: savedOriginalAmount,
+            amount: Number(savedOriginalAmount), // restore to original
           })
           .eq("id", repaymentId);
 
@@ -221,7 +223,7 @@ const AdminRepayments = () => {
             payment_method: paymentMethod,
             transaction_reference: transactionRef || `PAY-${Date.now()}`,
             principal_paid: (Number(repayment.principal_paid) || 0) + paidAmount,
-            original_amount: repayment.original_amount || repayment.amount,
+            original_amount: savedOriginalAmount,
           })
           .eq("id", repaymentId);
 
