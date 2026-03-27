@@ -1995,32 +1995,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <p className="text-sm text-muted-foreground">No signed contract uploaded yet.</p>
                     )}
 
-                    {/* Upload */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Upload Signed Contract</Label>
-                      <div className="flex items-center gap-3">
-                        <Input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          className="max-w-[280px]"
-                          onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
-                        />
-                        {signedContractFile && (
-                          <Button
-                            size="sm"
-                            onClick={() => uploadSignedContractMutation.mutate(signedContractFile)}
-                            disabled={uploadSignedContractMutation.isPending}
-                          >
-                            {uploadSignedContractMutation.isPending ? (
-                              <Loader2 size={14} className="animate-spin mr-1" />
-                            ) : (
-                              <Upload size={14} className="mr-1" />
-                            )}
-                            Upload
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+                    {/* Contract upload removed — manual contract workflow */}
                   </CardContent>
                 </Card>
 
