@@ -1032,7 +1032,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
-      setSignedContractFile(null);
+      // signedContractFile state removed - manual contract workflow
       toast.success("Signed contract uploaded");
     },
     onError: (err: any) => {
