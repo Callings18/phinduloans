@@ -236,8 +236,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isApplyPenaltiesOpen, setIsApplyPenaltiesOpen] = useState(false);
   const [isContractEditOpen, setIsContractEditOpen] = useState(false);
   const [contractNotes, setContractNotes] = useState("");
-  const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
   const [signaturePreviewUrl, setSignaturePreviewUrl] = useState<string | null>(null);
+  // Custom messaging state
+  const [customMessage, setCustomMessage] = useState("");
+  const [messageTemplate, setMessageTemplate] = useState("");
 
   const queryClient = useQueryClient();
   const { data: settings } = useSystemSettings();
