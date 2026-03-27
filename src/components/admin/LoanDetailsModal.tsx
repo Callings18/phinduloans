@@ -251,7 +251,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!loan?.loan_product_id) return null;
       const { data, error } = await supabase
         .from("loan_products")
-        .select("term_unit, interest_period, repayment_frequency")
+        .select("term_unit, interest_period, repayment_frequency, interest_type")
         .eq("id", loan.loan_product_id)
         .single();
 
