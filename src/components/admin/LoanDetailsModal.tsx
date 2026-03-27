@@ -1007,38 +1007,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  const uploadSignedContractMutation = useMutation({
-    mutationFn: async (file: File) => {
-      if (!loan) throw new Error("No loan selected");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
-      const fileName = `contracts/signed_${loan.id}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("loan-documents")
-        .upload(fileName, file, { contentType: file.type, upsert: true });
-      if (uploadError) throw uploadError;
-      const now = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from("loan_applications")
-        .update({
-          signed_contract_url: fileName,
-          borrower_signed: true,
-          borrower_signed_at: now,
-          signed_contract_uploaded_at: now,
-        })
-        .eq("id", loan.id);
-      if (updateError) throw updateError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
-      // signedContractFile state removed - manual contract workflow
-      toast.success("Signed contract uploaded");
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Upload failed");
-    },
-  });
+  // Contract upload mutation removed — manual contract workflow
 
   // Restructure loan mutation
   const restructureLoanMutation = useMutation({
