@@ -1808,11 +1808,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="font-medium">K{Number(rep.amount).toLocaleString()}</TableCell>
+                              <TableCell className="font-medium">K{Number(rep.original_amount || rep.amount).toLocaleString()}</TableCell>
+                              <TableCell className={rep.principal_paid ? "text-success font-medium" : "text-muted-foreground"}>
+                                {rep.principal_paid ? `K${Number(rep.principal_paid).toLocaleString()}` : rep.status === "paid" ? `K${Number(rep.amount).toLocaleString()}` : "-"}
+                              </TableCell>
                               <TableCell className={rep.penalty_amount ? "text-destructive font-medium" : "text-muted-foreground"}>
                                 {rep.penalty_amount ? `K${Number(rep.penalty_amount).toLocaleString()}` : "-"}
                               </TableCell>
-                              <TableCell className="font-bold">K{totalDue.toLocaleString()}</TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
                                   {getStatusBadge(displayStatus)}
