@@ -1853,7 +1853,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
-                                  {getStatusBadge(displayStatus)}
+                                  {getStatusBadge(displayStatus, true)}
                                   {rep.status === "paid" && rep.paid_date && (
                                     <span className="text-xs text-muted-foreground">
                                       Paid: {format(new Date(rep.paid_date), "MMM dd, yyyy")}
