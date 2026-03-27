@@ -433,7 +433,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (error) throw error;
 
-      // Check if all repayments are paid — always check, not just on full payment
+      // Check if all repayments are paid — auto-complete loan (no contract signing requirement)
       const { data: remainingUnpaid } = await supabase
         .from("loan_repayments")
         .select("id")
@@ -441,20 +441,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .in("status", ["pending", "overdue"]);
 
       if (remainingUnpaid && remainingUnpaid.length === 0) {
-        const { data: loanData } = await supabase
+        await supabase
           .from("loan_applications")
-          .select("borrower_signed, admin_signed")
-          .eq("id", loan.id)
-          .single();
-
-        if (loanData?.borrower_signed && loanData?.admin_signed) {
-          await supabase
-            .from("loan_applications")
-            .update({ status: "completed" as any })
-            .eq("id", loan.id);
-        } else {
-          toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
-        }
+          .update({ status: "completed" as any })
+          .eq("id", loan.id);
+        toast.success("🎉 All payments complete — loan marked as completed!");
       }
 
       return { paidAmount, isPartial: paidAmount < dueAmount, isOverpayment: paidAmount > dueAmount };
