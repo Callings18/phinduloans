@@ -1738,8 +1738,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           <TableHead className="w-12">#</TableHead>
                           <TableHead>Due Date</TableHead>
                           <TableHead>Amount</TableHead>
+                          <TableHead>Paid</TableHead>
                           <TableHead>Penalty</TableHead>
-                          <TableHead>Total Due</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Paid Date</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
