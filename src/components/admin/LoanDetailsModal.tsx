@@ -1253,7 +1253,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
-  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+  // Use principal_paid where available for accurate totals
+  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0);
   const totalPenalties = pendingRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
   const progressPercentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
