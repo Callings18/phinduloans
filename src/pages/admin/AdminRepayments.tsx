@@ -603,7 +603,7 @@ const AdminRepayments = () => {
     ).length || 0,
     totalCollected: repayments
       ?.filter((r) => r.status === "paid")
-      .reduce((sum, r) => sum + Number(r.amount), 0) || 0,
+      .reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0) || 0,
     totalPending: repayments
       ?.filter((r) => r.status === "pending")
       .reduce((sum, r) => sum + Number(r.amount), 0) || 0,
@@ -780,6 +780,7 @@ const AdminRepayments = () => {
                     <TableHead>#</TableHead>
                     <TableHead>Borrower</TableHead>
                     <TableHead>Amount</TableHead>
+                    <TableHead>Paid</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment Method</TableHead>
@@ -812,7 +813,12 @@ const AdminRepayments = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <p className="font-semibold text-foreground">K{Number(rep.amount).toLocaleString()}</p>
+                          <p className="font-semibold text-foreground">K{Number(rep.original_amount || rep.amount).toLocaleString()}</p>
+                        </TableCell>
+                        <TableCell>
+                          <p className={`font-semibold ${rep.principal_paid ? "text-success" : "text-muted-foreground"}`}>
+                            {rep.principal_paid ? `K${Number(rep.principal_paid).toLocaleString()}` : rep.status === "paid" ? `K${Number(rep.amount).toLocaleString()}` : "-"}
+                          </p>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

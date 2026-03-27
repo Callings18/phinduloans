@@ -110,7 +110,7 @@ const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
   contract_signing: [],
   awaiting_disbursement: [],
   disbursed: ["active"],
-  active: ["defaulted"], // "completed" is removed — auto-set when fully paid with signed contract
+  active: ["defaulted"], // "completed" is auto-set when fully paid
   completed: [],
   defaulted: [],
   rejected: [],
@@ -236,8 +236,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isApplyPenaltiesOpen, setIsApplyPenaltiesOpen] = useState(false);
   const [isContractEditOpen, setIsContractEditOpen] = useState(false);
   const [contractNotes, setContractNotes] = useState("");
-  const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
   const [signaturePreviewUrl, setSignaturePreviewUrl] = useState<string | null>(null);
+  // Custom messaging state
+  const [customMessage, setCustomMessage] = useState("");
+  const [messageTemplate, setMessageTemplate] = useState("");
 
   const queryClient = useQueryClient();
   const { data: settings } = useSystemSettings();
@@ -249,7 +251,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!loan?.loan_product_id) return null;
       const { data, error } = await supabase
         .from("loan_products")
-        .select("term_unit, interest_period, repayment_frequency")
+        .select("term_unit, interest_period, repayment_frequency, interest_type")
         .eq("id", loan.loan_product_id)
         .single();
 
@@ -431,7 +433,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (error) throw error;
 
-      // Check if all repayments are paid — always check, not just on full payment
+      // Check if all repayments are paid — auto-complete loan (no contract signing requirement)
       const { data: remainingUnpaid } = await supabase
         .from("loan_repayments")
         .select("id")
@@ -439,20 +441,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .in("status", ["pending", "overdue"]);
 
       if (remainingUnpaid && remainingUnpaid.length === 0) {
-        const { data: loanData } = await supabase
+        await supabase
           .from("loan_applications")
-          .select("borrower_signed, admin_signed")
-          .eq("id", loan.id)
-          .single();
-
-        if (loanData?.borrower_signed && loanData?.admin_signed) {
-          await supabase
-            .from("loan_applications")
-            .update({ status: "completed" as any })
-            .eq("id", loan.id);
-        } else {
-          toast.info("All payments complete, but loan cannot be closed until the contract is signed by both parties.");
-        }
+          .update({ status: "completed" as any })
+          .eq("id", loan.id);
+        toast.success("🎉 All payments complete — loan marked as completed!");
       }
 
       return { paidAmount, isPartial: paidAmount < dueAmount, isOverpayment: paidAmount > dueAmount };
@@ -661,22 +654,63 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Reloan mutation - creates a new loan from existing one without disbursement
+  // Reloan mutation - only reloans outstanding principal; blocks if interest/penalties unpaid
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+
+      // Fetch all repayments to calculate what's been paid
+      const { data: allReps } = await supabase
+        .from("loan_repayments")
+        .select("*")
+        .eq("loan_id", loan.id);
+
+      const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
+      const pendingReps = (allReps || []).filter(r => r.status === "pending" || r.status === "overdue");
+      
+      // Calculate total principal paid
+      const totalPrincipalPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      
+      // Outstanding principal = original loan amount - principal actually paid back
+      const outstandingPrincipal = Math.max(0, loan.loan_amount - totalPrincipalPaid);
+      
+      // Check for unpaid penalties
+      const totalUnpaidPenalties = pendingReps.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
+      
+      // Calculate unpaid interest (total repayment - principal = total interest; subtract interest paid)
+      const totalInterest = loan.total_repayment - loan.loan_amount;
+      const interestPaid = paidReps.reduce((sum, r) => {
+        const principalPart = Number(r.principal_paid || 0);
+        const totalPaidOnInstallment = Number(r.original_amount || r.amount);
+        return sum + Math.max(0, totalPaidOnInstallment - principalPart);
+      }, 0);
+      const pendingInterestOnPendingInstallments = pendingReps.reduce((sum, r) => sum + Number(r.amount), 0);
+      
+      // Block if penalties are outstanding
+      if (totalUnpaidPenalties > 0) {
+        throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
+      }
+      
+      // Block if there are still pending installments with interest (borrower must clear interest)
+      if (pendingReps.length > 0 && pendingInterestOnPendingInstallments > outstandingPrincipal) {
+        throw new Error(`Cannot reloan: Outstanding interest of K${(pendingInterestOnPendingInstallments - outstandingPrincipal).toLocaleString()} must be cleared first.`);
+      }
+
+      if (outstandingPrincipal <= 0) {
+        throw new Error("No outstanding principal to reloan. The borrower has paid off the full principal.");
+      }
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
         .from("loan_applications")
         .update({
           status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Loan reloaned — new loan created from this one.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Reloaned outstanding principal K${outstandingPrincipal.toLocaleString()}.`,
         })
         .eq("id", loan.id);
       if (closeError) throw closeError;
 
-      // Mark all pending repayments as paid (interest was paid)
+      // Mark all pending repayments as paid (interest was cleared)
       await supabase
         .from("loan_repayments")
         .update({
@@ -687,7 +721,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("loan_id", loan.id)
         .eq("status", "pending");
 
-      // Create new loan application (approved, no disbursement needed)
+      // Recalculate new loan terms with the outstanding principal only
+      const productForCalc: any = { interest_rate: loan.interest_rate, interest_period: loanProduct?.interest_period || 'monthly', interest_type: loanProduct?.interest_type || 'flat' };
+      const newCalc = calculateLoan(
+        outstandingPrincipal,
+        loan.loan_term_months,
+        productForCalc,
+        ((loan as any).term_unit || 'months') as any
+      );
+
+      // Create new loan application with reduced principal
       const { data: newLoan, error: insertError } = await supabase
         .from("loan_applications")
         .insert({
@@ -702,17 +745,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           job_title: loan.job_title || null,
           employment_type: loan.employment_type as any,
           monthly_income: loan.monthly_income || 0,
-          loan_amount: loan.loan_amount,
+          loan_amount: outstandingPrincipal,
           loan_term_months: loan.loan_term_months,
           interest_rate: loan.interest_rate,
-          monthly_payment: loan.monthly_payment,
-          total_repayment: loan.total_repayment,
+          monthly_payment: newCalc.monthlyPayment,
+          total_repayment: newCalc.totalRepayment,
           loan_purpose: loan.loan_purpose,
           loan_product_id: loan.loan_product_id || null,
           parent_loan_id: loan.id,
           status: "disbursed" as any,
           source: "internal",
-          admin_notes: `Reloan of previous loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement — funds already with borrower.`,
+          admin_notes: `Reloan of outstanding principal K${outstandingPrincipal.toLocaleString()} from loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement.`,
           disbursed_by: user?.id ?? null,
           disbursed_at: new Date().toISOString(),
         })
@@ -735,50 +778,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         supabase
       );
 
-      // Record loan event for history timeline
+      // Record loan event
       await supabase.from("loan_events" as any).insert({
         loan_id: loan.id,
         event_type: "reloan",
         performed_by: user?.id,
-        reason: `Reloan — new loan ${newLoan.id.slice(0, 8).toUpperCase()} created.`,
-        previous_values: {
-          principal: loan.loan_amount,
-          interest_rate: loan.interest_rate,
-          term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          status: loan.status,
-        },
-        new_values: {
-          principal: loan.loan_amount,
-          interest_rate: loan.interest_rate,
-          term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          status: "completed",
-        },
+        reason: `Reloan — outstanding principal K${outstandingPrincipal.toLocaleString()}. New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
+        previous_values: { principal: loan.loan_amount, status: loan.status },
+        new_values: { principal: outstandingPrincipal, status: "completed" },
         new_loan_id: newLoan.id,
-        amount: loan.loan_amount,
+        amount: outstandingPrincipal,
       });
 
       await logAudit({
         action: "RELOAN",
         entity_type: "loan_application",
         entity_id: loan.id,
-        details: { new_loan_id: newLoan.id },
+        details: { new_loan_id: newLoan.id, reloan_amount: outstandingPrincipal },
       });
 
-      return newLoan;
+      return { newLoan, outstandingPrincipal };
     },
-    onSuccess: (newLoan) => {
+    onSuccess: ({ newLoan, outstandingPrincipal }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
       queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
-      toast.success(`Reloan created successfully (ID: ${newLoan.id.slice(0, 8)}). No bank deduction applied.`);
+      toast.success(`Reloan created: K${outstandingPrincipal.toLocaleString()} outstanding principal (ID: ${newLoan.id.slice(0, 8)})`);
       setIsReloanOpen(false);
       onOpenChange(false);
     },
@@ -980,38 +1007,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  const uploadSignedContractMutation = useMutation({
-    mutationFn: async (file: File) => {
-      if (!loan) throw new Error("No loan selected");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
-      const fileName = `contracts/signed_${loan.id}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("loan-documents")
-        .upload(fileName, file, { contentType: file.type, upsert: true });
-      if (uploadError) throw uploadError;
-      const now = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from("loan_applications")
-        .update({
-          signed_contract_url: fileName,
-          borrower_signed: true,
-          borrower_signed_at: now,
-          signed_contract_uploaded_at: now,
-        })
-        .eq("id", loan.id);
-      if (updateError) throw updateError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
-      setSignedContractFile(null);
-      toast.success("Signed contract uploaded");
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Upload failed");
-    },
-  });
+  // Contract upload mutation removed — manual contract workflow
 
   // Restructure loan mutation
   const restructureLoanMutation = useMutation({
@@ -1257,7 +1253,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
-  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+  // Use principal_paid where available for accurate totals
+  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0);
   const totalPenalties = pendingRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
   const progressPercentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
@@ -1609,83 +1606,93 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </Card>
 
                 {/* V1.0.1: Simple contract status indicator */}
-                {(loan.status === "approved" || loan.status === "contract_signing" || loan.status === "disbursed" || loan.status === "active" || loan.status === "completed" || loan.signed_contract_url) && (
-                  <Card className={`border ${loan.signed_contract_url ? "border-success/50 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
+                {/* Contract status - view only (upload removed) */}
+                {(loan.status === "approved" || loan.status === "contract_signing" || loan.status === "disbursed" || loan.status === "active" || loan.status === "completed") && (
+                  <Card className="border-border/50">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <FileText size={18} className={loan.signed_contract_url ? "text-success" : "text-warning"} />
+                          <FileText size={18} className="text-primary" />
                           <div>
-                            <p className="font-medium text-sm">Signed Contract</p>
+                            <p className="font-medium text-sm">Contract</p>
                             <p className="text-xs text-muted-foreground">
-                              {loan.signed_contract_url ? "Contract uploaded" : "No contract uploaded yet"}
+                              {(loan as any).contract_url ? "Generated — filed manually" : "Not yet generated"}
                             </p>
                           </div>
                         </div>
-                        {loan.signed_contract_url ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                              <CheckCircle size={12} className="mr-1" /> Uploaded
-                            </Badge>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                const { data } = await supabase.storage
-                                  .from('loan-documents')
-                                  .createSignedUrl(loan.signed_contract_url!, 3600);
-                                if (data?.signedUrl) setSignaturePreviewUrl(data.signedUrl);
-                                else toast.error('Could not load contract');
-                              }}
-                            >
-                              <Eye size={14} className="mr-1" /> View
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => setActiveTab("contract")}>
-                            <Upload size={14} className="mr-1" /> Upload
-                          </Button>
-                        )}
+                        <Button size="sm" variant="outline" onClick={() => setActiveTab("contract")}>
+                          <Eye size={14} className="mr-1" /> View
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Product-Specific Information */}
-                {(() => {
-                  const psd = (loan as any)?.product_specific_data;
-                  if (!psd || typeof psd !== 'object' || Object.keys(psd).length === 0) return null;
-                  const labels: Record<string, string> = {
-                    business_name: "Business Name",
-                    business_tpin: "TPIN",
-                    business_registration_number: "Registration #",
-                    business_type: "Business Type",
-                    employer_name: "Employer",
-                    employer_contact: "Employer Contact",
-                    monthly_salary: "Monthly Salary",
-                  };
-                  return (
-                    <Card className="border-border/50">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Briefcase size={16} className="text-primary" /> Product-Specific Information
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          {Object.entries(psd).map(([key, value]) => (
-                            <div key={key}>
-                              <span className="text-muted-foreground">{labels[key] || key.replace(/_/g, ' ')}:</span>
-                              <span className="font-medium ml-1">
-                                {key.includes('salary') || key.includes('amount') ? `K${Number(value).toLocaleString()}` : String(value || '—').replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })()}
+                {/* Message Borrower Section */}
+                <Card className="border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MessageSquare size={16} className="text-primary" /> Message Borrower
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Select value={messageTemplate} onValueChange={(val) => {
+                      setMessageTemplate(val);
+                      const templates: Record<string, string> = {
+                        payment_reminder: `Dear ${loan.full_name}, your next payment of K${Number(loan.monthly_payment || 0).toLocaleString()} is due${nextDue ? ` on ${format(new Date(nextDue.due_date), "MMM dd, yyyy")}` : " soon"}. Please ensure timely payment. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        payment_overdue: `Dear ${loan.full_name}, your payment of K${Number(loan.monthly_payment || 0).toLocaleString()} is overdue${overdueCount > 0 ? ` (${overdueCount} installment${overdueCount > 1 ? 's' : ''})` : ''}. Please make your payment immediately to avoid penalties. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        payment_received: `Dear ${loan.full_name}, we have received your payment. Thank you for your timely payment. Your remaining balance is K${(loan.total_repayment - totalPaid).toLocaleString()}. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        penalty_applied: `Dear ${loan.full_name}, a penalty has been applied to your overdue loan. Your updated balance includes the penalty. Please settle immediately to avoid further charges. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        defaulted_notice: `Dear ${loan.full_name}, your loan has been marked as DEFAULTED due to non-payment. Please contact us immediately to arrange payment and avoid legal proceedings. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        loan_update: `Dear ${loan.full_name}, there has been an update to your loan (Ref: LOAN-${loan.id.slice(0,8).toUpperCase()}). Please contact us for details. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        settlement_offer: `Dear ${loan.full_name}, we would like to offer you a settlement arrangement for your loan. Please contact us to discuss the available options. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        general: "",
+                      };
+                      setCustomMessage(templates[val] || "");
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Select template..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="payment_reminder">Payment Reminder</SelectItem>
+                        <SelectItem value="payment_overdue">Payment Overdue</SelectItem>
+                        <SelectItem value="payment_received">Payment Received</SelectItem>
+                        <SelectItem value="penalty_applied">Penalty Applied</SelectItem>
+                        <SelectItem value="defaulted_notice">Defaulted Notice</SelectItem>
+                        <SelectItem value="loan_update">Loan Update</SelectItem>
+                        <SelectItem value="settlement_offer">Settlement Offer</SelectItem>
+                        <SelectItem value="general">Custom Message</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      value={customMessage}
+                      onChange={(e) => setCustomMessage(e.target.value)}
+                      placeholder="Type your message or select a template above..."
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
+                        onClick={async () => {
+                          const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
+                          await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                        }}>
+                        <Smartphone size={14} className="mr-1" /> SMS
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.email}
+                        onClick={async () => {
+                          const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+                          await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
+                        }}>
+                        <Mail size={14} className="mr-1" /> Email
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
+                        onClick={async () => {
+                          const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
+                          await sendWhatsAppDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                        }}>
+                        <Send size={14} className="mr-1" /> WhatsApp
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Repayments Tab */}
@@ -1731,8 +1738,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           <TableHead className="w-12">#</TableHead>
                           <TableHead>Due Date</TableHead>
                           <TableHead>Amount</TableHead>
+                          <TableHead>Paid</TableHead>
                           <TableHead>Penalty</TableHead>
-                          <TableHead>Total Due</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Paid Date</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
@@ -1801,11 +1808,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="font-medium">K{Number(rep.amount).toLocaleString()}</TableCell>
+                              <TableCell className="font-medium">K{Number(rep.original_amount || rep.amount).toLocaleString()}</TableCell>
+                              <TableCell className={rep.principal_paid ? "text-success font-medium" : "text-muted-foreground"}>
+                                {rep.principal_paid ? `K${Number(rep.principal_paid).toLocaleString()}` : rep.status === "paid" ? `K${Number(rep.amount).toLocaleString()}` : "-"}
+                              </TableCell>
                               <TableCell className={rep.penalty_amount ? "text-destructive font-medium" : "text-muted-foreground"}>
                                 {rep.penalty_amount ? `K${Number(rep.penalty_amount).toLocaleString()}` : "-"}
                               </TableCell>
-                              <TableCell className="font-bold">K{totalDue.toLocaleString()}</TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
                                   {getStatusBadge(displayStatus)}
@@ -1856,17 +1865,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-muted-foreground hover:text-destructive"
-                                      onClick={() => {
-                                        setSelectedPaidRepayment(rep);
-                                        setIsReversalOpen(true);
-                                      }}
-                                    >
-                                      <RotateCcw size={14} className="mr-1" /> Reverse
-                                    </Button>
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          downloadRepaymentReceipt({
+                                            borrowerName: loan.full_name,
+                                            borrowerPhone: loan.phone,
+                                            borrowerEmail: loan.email,
+                                            loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+                                            loanAmount: loan.loan_amount,
+                                            repaymentAmount: Number(rep.principal_paid || rep.amount),
+                                            paymentDate: rep.paid_date || new Date().toISOString(),
+                                            paymentMethod: rep.payment_method || 'cash',
+                                            transactionReference: rep.transaction_reference || `TXN-${Date.now()}`,
+                                            installmentNumber: rep.installment_number || 1,
+                                            totalInstallments: repayments?.length || 1,
+                                            totalPaid,
+                                            outstandingBalance: Math.max(0, loan.total_repayment - totalPaid),
+                                            companyName: settings?.companyInfo?.name || 'PHINDU Finance',
+                                          });
+                                        }}
+                                      >
+                                        <Download size={14} className="mr-1" /> Receipt
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        onClick={() => {
+                                          setSelectedPaidRepayment(rep);
+                                          setIsReversalOpen(true);
+                                        }}
+                                      >
+                                        <RotateCcw size={14} className="mr-1" /> Reverse
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </TableCell>
@@ -1968,32 +2003,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <p className="text-sm text-muted-foreground">No signed contract uploaded yet.</p>
                     )}
 
-                    {/* Upload */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Upload Signed Contract</Label>
-                      <div className="flex items-center gap-3">
-                        <Input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          className="max-w-[280px]"
-                          onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
-                        />
-                        {signedContractFile && (
-                          <Button
-                            size="sm"
-                            onClick={() => uploadSignedContractMutation.mutate(signedContractFile)}
-                            disabled={uploadSignedContractMutation.isPending}
-                          >
-                            {uploadSignedContractMutation.isPending ? (
-                              <Loader2 size={14} className="animate-spin mr-1" />
-                            ) : (
-                              <Upload size={14} className="mr-1" />
-                            )}
-                            Upload
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+                    {/* Contract upload removed — manual contract workflow */}
                   </CardContent>
                 </Card>
 
