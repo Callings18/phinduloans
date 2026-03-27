@@ -1636,83 +1636,93 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </Card>
 
                 {/* V1.0.1: Simple contract status indicator */}
-                {(loan.status === "approved" || loan.status === "contract_signing" || loan.status === "disbursed" || loan.status === "active" || loan.status === "completed" || loan.signed_contract_url) && (
-                  <Card className={`border ${loan.signed_contract_url ? "border-success/50 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
+                {/* Contract status - view only (upload removed) */}
+                {(loan.status === "approved" || loan.status === "contract_signing" || loan.status === "disbursed" || loan.status === "active" || loan.status === "completed") && (
+                  <Card className="border-border/50">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <FileText size={18} className={loan.signed_contract_url ? "text-success" : "text-warning"} />
+                          <FileText size={18} className="text-primary" />
                           <div>
-                            <p className="font-medium text-sm">Signed Contract</p>
+                            <p className="font-medium text-sm">Contract</p>
                             <p className="text-xs text-muted-foreground">
-                              {loan.signed_contract_url ? "Contract uploaded" : "No contract uploaded yet"}
+                              {(loan as any).contract_url ? "Generated — filed manually" : "Not yet generated"}
                             </p>
                           </div>
                         </div>
-                        {loan.signed_contract_url ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                              <CheckCircle size={12} className="mr-1" /> Uploaded
-                            </Badge>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                const { data } = await supabase.storage
-                                  .from('loan-documents')
-                                  .createSignedUrl(loan.signed_contract_url!, 3600);
-                                if (data?.signedUrl) setSignaturePreviewUrl(data.signedUrl);
-                                else toast.error('Could not load contract');
-                              }}
-                            >
-                              <Eye size={14} className="mr-1" /> View
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => setActiveTab("contract")}>
-                            <Upload size={14} className="mr-1" /> Upload
-                          </Button>
-                        )}
+                        <Button size="sm" variant="outline" onClick={() => setActiveTab("contract")}>
+                          <Eye size={14} className="mr-1" /> View
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Product-Specific Information */}
-                {(() => {
-                  const psd = (loan as any)?.product_specific_data;
-                  if (!psd || typeof psd !== 'object' || Object.keys(psd).length === 0) return null;
-                  const labels: Record<string, string> = {
-                    business_name: "Business Name",
-                    business_tpin: "TPIN",
-                    business_registration_number: "Registration #",
-                    business_type: "Business Type",
-                    employer_name: "Employer",
-                    employer_contact: "Employer Contact",
-                    monthly_salary: "Monthly Salary",
-                  };
-                  return (
-                    <Card className="border-border/50">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Briefcase size={16} className="text-primary" /> Product-Specific Information
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          {Object.entries(psd).map(([key, value]) => (
-                            <div key={key}>
-                              <span className="text-muted-foreground">{labels[key] || key.replace(/_/g, ' ')}:</span>
-                              <span className="font-medium ml-1">
-                                {key.includes('salary') || key.includes('amount') ? `K${Number(value).toLocaleString()}` : String(value || '—').replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })()}
+                {/* Message Borrower Section */}
+                <Card className="border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MessageSquare size={16} className="text-primary" /> Message Borrower
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Select value={messageTemplate} onValueChange={(val) => {
+                      setMessageTemplate(val);
+                      const templates: Record<string, string> = {
+                        payment_reminder: `Dear ${loan.full_name}, your next payment of K${Number(loan.monthly_payment || 0).toLocaleString()} is due${nextDue ? ` on ${format(new Date(nextDue.due_date), "MMM dd, yyyy")}` : " soon"}. Please ensure timely payment. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        payment_overdue: `Dear ${loan.full_name}, your payment of K${Number(loan.monthly_payment || 0).toLocaleString()} is overdue${overdueCount > 0 ? ` (${overdueCount} installment${overdueCount > 1 ? 's' : ''})` : ''}. Please make your payment immediately to avoid penalties. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        payment_received: `Dear ${loan.full_name}, we have received your payment. Thank you for your timely payment. Your remaining balance is K${(loan.total_repayment - totalPaid).toLocaleString()}. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        penalty_applied: `Dear ${loan.full_name}, a penalty has been applied to your overdue loan. Your updated balance includes the penalty. Please settle immediately to avoid further charges. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        defaulted_notice: `Dear ${loan.full_name}, your loan has been marked as DEFAULTED due to non-payment. Please contact us immediately to arrange payment and avoid legal proceedings. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        loan_update: `Dear ${loan.full_name}, there has been an update to your loan (Ref: LOAN-${loan.id.slice(0,8).toUpperCase()}). Please contact us for details. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        settlement_offer: `Dear ${loan.full_name}, we would like to offer you a settlement arrangement for your loan. Please contact us to discuss the available options. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        general: "",
+                      };
+                      setCustomMessage(templates[val] || "");
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Select template..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="payment_reminder">Payment Reminder</SelectItem>
+                        <SelectItem value="payment_overdue">Payment Overdue</SelectItem>
+                        <SelectItem value="payment_received">Payment Received</SelectItem>
+                        <SelectItem value="penalty_applied">Penalty Applied</SelectItem>
+                        <SelectItem value="defaulted_notice">Defaulted Notice</SelectItem>
+                        <SelectItem value="loan_update">Loan Update</SelectItem>
+                        <SelectItem value="settlement_offer">Settlement Offer</SelectItem>
+                        <SelectItem value="general">Custom Message</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      value={customMessage}
+                      onChange={(e) => setCustomMessage(e.target.value)}
+                      placeholder="Type your message or select a template above..."
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
+                        onClick={async () => {
+                          const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
+                          await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                        }}>
+                        <Smartphone size={14} className="mr-1" /> SMS
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.email}
+                        onClick={async () => {
+                          const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+                          await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
+                        }}>
+                        <Mail size={14} className="mr-1" /> Email
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
+                        onClick={async () => {
+                          const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
+                          await sendWhatsAppDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                        }}>
+                        <Send size={14} className="mr-1" /> WhatsApp
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Repayments Tab */}
