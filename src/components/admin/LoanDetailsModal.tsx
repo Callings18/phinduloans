@@ -110,7 +110,7 @@ const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
   contract_signing: [],
   awaiting_disbursement: [],
   disbursed: ["active"],
-  active: ["defaulted"], // "completed" is removed — auto-set when fully paid with signed contract
+  active: ["defaulted"], // "completed" is auto-set when fully paid
   completed: [],
   defaulted: [],
   rejected: [],
