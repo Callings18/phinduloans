@@ -476,6 +476,9 @@ const AdminLoans = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_applications' }, () => {
         queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_repayments' }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
