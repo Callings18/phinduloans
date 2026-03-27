@@ -603,7 +603,7 @@ const AdminRepayments = () => {
     ).length || 0,
     totalCollected: repayments
       ?.filter((r) => r.status === "paid")
-      .reduce((sum, r) => sum + Number(r.amount), 0) || 0,
+      .reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0) || 0,
     totalPending: repayments
       ?.filter((r) => r.status === "pending")
       .reduce((sum, r) => sum + Number(r.amount), 0) || 0,

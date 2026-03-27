@@ -1865,17 +1865,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-muted-foreground hover:text-destructive"
-                                      onClick={() => {
-                                        setSelectedPaidRepayment(rep);
-                                        setIsReversalOpen(true);
-                                      }}
-                                    >
-                                      <RotateCcw size={14} className="mr-1" /> Reverse
-                                    </Button>
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          downloadRepaymentReceipt({
+                                            borrowerName: loan.full_name,
+                                            borrowerPhone: loan.phone,
+                                            borrowerEmail: loan.email,
+                                            loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+                                            loanAmount: loan.loan_amount,
+                                            repaymentAmount: Number(rep.principal_paid || rep.amount),
+                                            paymentDate: rep.paid_date || new Date().toISOString(),
+                                            paymentMethod: rep.payment_method || 'cash',
+                                            transactionReference: rep.transaction_reference || `TXN-${Date.now()}`,
+                                            installmentNumber: rep.installment_number || 1,
+                                            totalInstallments: repayments?.length || 1,
+                                            totalPaid,
+                                            outstandingBalance: Math.max(0, loan.total_repayment - totalPaid),
+                                            companyName: settings?.companyInfo?.name || 'PHINDU Finance',
+                                          });
+                                        }}
+                                      >
+                                        <Download size={14} className="mr-1" /> Receipt
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        onClick={() => {
+                                          setSelectedPaidRepayment(rep);
+                                          setIsReversalOpen(true);
+                                        }}
+                                      >
+                                        <RotateCcw size={14} className="mr-1" /> Reverse
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </TableCell>
