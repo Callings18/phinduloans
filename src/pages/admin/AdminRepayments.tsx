@@ -813,7 +813,12 @@ const AdminRepayments = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <p className="font-semibold text-foreground">K{Number(rep.amount).toLocaleString()}</p>
+                          <p className="font-semibold text-foreground">K{Number(rep.original_amount || rep.amount).toLocaleString()}</p>
+                        </TableCell>
+                        <TableCell>
+                          <p className={`font-semibold ${rep.principal_paid ? "text-success" : "text-muted-foreground"}`}>
+                            {rep.principal_paid ? `K${Number(rep.principal_paid).toLocaleString()}` : rep.status === "paid" ? `K${Number(rep.amount).toLocaleString()}` : "-"}
+                          </p>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
