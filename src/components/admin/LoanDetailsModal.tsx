@@ -293,6 +293,27 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan,
   });
 
+  // Real-time subscription for repayments
+  useEffect(() => {
+    if (!loan?.id || !open) return;
+    const channel = supabase
+      .channel(`loan-repayments-rt-${loan.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'loan_repayments', filter: `loan_id=eq.${loan.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan.id] });
+          queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loan?.id, open, queryClient]);
+
   // Determine payment frequency
   const termUnit = (loan as any)?.term_unit || loanProduct?.term_unit || 'months';
   const interestPeriod = loanProduct?.interest_period || 'monthly';
