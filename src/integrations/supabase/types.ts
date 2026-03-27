@@ -1469,6 +1469,7 @@ export type Database = {
           crb_consent_timestamp: string | null
           created_at: string
           date_of_birth: string | null
+          defaulted_at: string | null
           disbursed_at: string | null
           disbursed_by: string | null
           document_verified_at: string | null
@@ -1488,6 +1489,7 @@ export type Database = {
           interest_rate: number | null
           job_title: string | null
           legal_fees: number | null
+          legal_referred_at: string | null
           loan_amount: number
           loan_product_id: string | null
           loan_purpose: string
@@ -1502,6 +1504,7 @@ export type Database = {
           payslip_3_url: string | null
           payslip_password: string | null
           payslip_url: string | null
+          penalty_count: number | null
           phone: string
           product_specific_data: Json | null
           recommended_at: string | null
@@ -1547,6 +1550,7 @@ export type Database = {
           crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
+          defaulted_at?: string | null
           disbursed_at?: string | null
           disbursed_by?: string | null
           document_verified_at?: string | null
@@ -1566,6 +1570,7 @@ export type Database = {
           interest_rate?: number | null
           job_title?: string | null
           legal_fees?: number | null
+          legal_referred_at?: string | null
           loan_amount: number
           loan_product_id?: string | null
           loan_purpose: string
@@ -1580,6 +1585,7 @@ export type Database = {
           payslip_3_url?: string | null
           payslip_password?: string | null
           payslip_url?: string | null
+          penalty_count?: number | null
           phone: string
           product_specific_data?: Json | null
           recommended_at?: string | null
@@ -1625,6 +1631,7 @@ export type Database = {
           crb_consent_timestamp?: string | null
           created_at?: string
           date_of_birth?: string | null
+          defaulted_at?: string | null
           disbursed_at?: string | null
           disbursed_by?: string | null
           document_verified_at?: string | null
@@ -1644,6 +1651,7 @@ export type Database = {
           interest_rate?: number | null
           job_title?: string | null
           legal_fees?: number | null
+          legal_referred_at?: string | null
           loan_amount?: number
           loan_product_id?: string | null
           loan_purpose?: string
@@ -1658,6 +1666,7 @@ export type Database = {
           payslip_3_url?: string | null
           payslip_password?: string | null
           payslip_url?: string | null
+          penalty_count?: number | null
           phone?: string
           product_specific_data?: Json | null
           recommended_at?: string | null
