@@ -654,22 +654,63 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Reloan mutation - creates a new loan from existing one without disbursement
+  // Reloan mutation - only reloans outstanding principal; blocks if interest/penalties unpaid
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+
+      // Fetch all repayments to calculate what's been paid
+      const { data: allReps } = await supabase
+        .from("loan_repayments")
+        .select("*")
+        .eq("loan_id", loan.id);
+
+      const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
+      const pendingReps = (allReps || []).filter(r => r.status === "pending" || r.status === "overdue");
+      
+      // Calculate total principal paid
+      const totalPrincipalPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      
+      // Outstanding principal = original loan amount - principal actually paid back
+      const outstandingPrincipal = Math.max(0, loan.loan_amount - totalPrincipalPaid);
+      
+      // Check for unpaid penalties
+      const totalUnpaidPenalties = pendingReps.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
+      
+      // Calculate unpaid interest (total repayment - principal = total interest; subtract interest paid)
+      const totalInterest = loan.total_repayment - loan.loan_amount;
+      const interestPaid = paidReps.reduce((sum, r) => {
+        const principalPart = Number(r.principal_paid || 0);
+        const totalPaidOnInstallment = Number(r.original_amount || r.amount);
+        return sum + Math.max(0, totalPaidOnInstallment - principalPart);
+      }, 0);
+      const pendingInterestOnPendingInstallments = pendingReps.reduce((sum, r) => sum + Number(r.amount), 0);
+      
+      // Block if penalties are outstanding
+      if (totalUnpaidPenalties > 0) {
+        throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
+      }
+      
+      // Block if there are still pending installments with interest (borrower must clear interest)
+      if (pendingReps.length > 0 && pendingInterestOnPendingInstallments > outstandingPrincipal) {
+        throw new Error(`Cannot reloan: Outstanding interest of K${(pendingInterestOnPendingInstallments - outstandingPrincipal).toLocaleString()} must be cleared first.`);
+      }
+
+      if (outstandingPrincipal <= 0) {
+        throw new Error("No outstanding principal to reloan. The borrower has paid off the full principal.");
+      }
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
         .from("loan_applications")
         .update({
           status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Loan reloaned — new loan created from this one.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Reloaned outstanding principal K${outstandingPrincipal.toLocaleString()}.`,
         })
         .eq("id", loan.id);
       if (closeError) throw closeError;
 
-      // Mark all pending repayments as paid (interest was paid)
+      // Mark all pending repayments as paid (interest was cleared)
       await supabase
         .from("loan_repayments")
         .update({
@@ -680,7 +721,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("loan_id", loan.id)
         .eq("status", "pending");
 
-      // Create new loan application (approved, no disbursement needed)
+      // Recalculate new loan terms with the outstanding principal only
+      const newCalc = calculateLoan(
+        outstandingPrincipal,
+        loan.interest_rate,
+        loan.loan_term_months,
+        (loan as any).term_unit || 'months'
+      );
+
+      // Create new loan application with reduced principal
       const { data: newLoan, error: insertError } = await supabase
         .from("loan_applications")
         .insert({
@@ -695,17 +744,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           job_title: loan.job_title || null,
           employment_type: loan.employment_type as any,
           monthly_income: loan.monthly_income || 0,
-          loan_amount: loan.loan_amount,
+          loan_amount: outstandingPrincipal,
           loan_term_months: loan.loan_term_months,
           interest_rate: loan.interest_rate,
-          monthly_payment: loan.monthly_payment,
-          total_repayment: loan.total_repayment,
+          monthly_payment: newCalc.monthlyPayment,
+          total_repayment: newCalc.totalRepayment,
           loan_purpose: loan.loan_purpose,
           loan_product_id: loan.loan_product_id || null,
           parent_loan_id: loan.id,
           status: "disbursed" as any,
           source: "internal",
-          admin_notes: `Reloan of previous loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement — funds already with borrower.`,
+          admin_notes: `Reloan of outstanding principal K${outstandingPrincipal.toLocaleString()} from loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement.`,
           disbursed_by: user?.id ?? null,
           disbursed_at: new Date().toISOString(),
         })
@@ -728,50 +777,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         supabase
       );
 
-      // Record loan event for history timeline
+      // Record loan event
       await supabase.from("loan_events" as any).insert({
         loan_id: loan.id,
         event_type: "reloan",
         performed_by: user?.id,
-        reason: `Reloan — new loan ${newLoan.id.slice(0, 8).toUpperCase()} created.`,
-        previous_values: {
-          principal: loan.loan_amount,
-          interest_rate: loan.interest_rate,
-          term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          status: loan.status,
-        },
-        new_values: {
-          principal: loan.loan_amount,
-          interest_rate: loan.interest_rate,
-          term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          status: "completed",
-        },
+        reason: `Reloan — outstanding principal K${outstandingPrincipal.toLocaleString()}. New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
+        previous_values: { principal: loan.loan_amount, status: loan.status },
+        new_values: { principal: outstandingPrincipal, status: "completed" },
         new_loan_id: newLoan.id,
-        amount: loan.loan_amount,
+        amount: outstandingPrincipal,
       });
 
       await logAudit({
         action: "RELOAN",
         entity_type: "loan_application",
         entity_id: loan.id,
-        details: { new_loan_id: newLoan.id },
+        details: { new_loan_id: newLoan.id, reloan_amount: outstandingPrincipal },
       });
 
-      return newLoan;
+      return { newLoan, outstandingPrincipal };
     },
-    onSuccess: (newLoan) => {
+    onSuccess: ({ newLoan, outstandingPrincipal }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
       queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
-      toast.success(`Reloan created successfully (ID: ${newLoan.id.slice(0, 8)}). No bank deduction applied.`);
+      toast.success(`Reloan created: K${outstandingPrincipal.toLocaleString()} outstanding principal (ID: ${newLoan.id.slice(0, 8)})`);
       setIsReloanOpen(false);
       onOpenChange(false);
     },
