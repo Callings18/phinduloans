@@ -1407,7 +1407,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  // Repayment-specific status labels (NOT the loan status labels)
+  const REPAYMENT_STATUS_LABELS: Record<string, string> = {
+    pending: "Pending",
+    paid: "Paid",
+    overdue: "Overdue",
+    due: "Due Today",
+    reversed: "Reversed",
+    cancelled: "Cancelled",
+  };
+
+  const getStatusBadge = (status: string, isRepaymentStatus = false) => {
     const config: Record<string, { color: string; icon: any }> = {
       active: { color: "bg-success/20 text-success border-success/30", icon: Activity },
       disbursed: { color: "bg-info/20 text-info border-info/30", icon: Banknote },
@@ -1417,13 +1427,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       awaiting_disbursement: { color: "bg-info/20 text-info border-info/30", icon: DollarSign },
       paid: { color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
       overdue: { color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle },
+      due: { color: "bg-warning/20 text-warning border-warning/30", icon: AlertCircle },
       reversed: { color: "bg-muted text-muted-foreground border-muted", icon: RotateCcw },
+      cancelled: { color: "bg-muted text-muted-foreground border-muted", icon: XCircle },
     };
     const { color, icon: Icon } = config[status] || config.pending;
+    const label = isRepaymentStatus 
+      ? (REPAYMENT_STATUS_LABELS[status] || status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+      : getCanonicalStatusLabel(status);
     return (
       <Badge variant="outline" className={`${color} capitalize`}>
         <Icon size={12} className="mr-1" />
-        {getCanonicalStatusLabel(status)}
+        {label}
       </Badge>
     );
   };
