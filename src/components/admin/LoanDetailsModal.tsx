@@ -722,11 +722,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("status", "pending");
 
       // Recalculate new loan terms with the outstanding principal only
+      const productForCalc: any = { interest_rate: loan.interest_rate, interest_period: loanProduct?.interest_period || 'monthly', interest_type: loanProduct?.interest_type || 'flat' };
       const newCalc = calculateLoan(
         outstandingPrincipal,
-        loan.interest_rate,
         loan.loan_term_months,
-        (loan as any).term_unit || 'months'
+        productForCalc,
+        ((loan as any).term_unit || 'months') as any
       );
 
       // Create new loan application with reduced principal
