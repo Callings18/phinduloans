@@ -692,37 +692,28 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
       const pendingReps = (allReps || []).filter(r => r.status === "pending" || r.status === "overdue");
       
-      // Calculate total principal paid
-      const totalPrincipalPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      // Calculate total paid (principal_paid from paid installments + partial payments on pending)
+      const totalPaidFromPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+      const totalPartialOnPending = pendingReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
       
-      // Outstanding principal = original loan amount - principal actually paid back
-      const outstandingPrincipal = Math.max(0, loan.loan_amount - totalPrincipalPaid);
+      // Outstanding = Total Repayment - Total Paid (this is the reloan amount)
+      const outstandingBalance = Math.max(0, (loan.total_repayment || 0) - totalAllPaid);
       
       // Check for unpaid penalties
       const totalUnpaidPenalties = pendingReps.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-      
-      // Calculate unpaid interest (total repayment - principal = total interest; subtract interest paid)
-      const totalInterest = loan.total_repayment - loan.loan_amount;
-      const interestPaid = paidReps.reduce((sum, r) => {
-        const principalPart = Number(r.principal_paid || 0);
-        const totalPaidOnInstallment = Number(r.original_amount || r.amount);
-        return sum + Math.max(0, totalPaidOnInstallment - principalPart);
-      }, 0);
-      const pendingInterestOnPendingInstallments = pendingReps.reduce((sum, r) => sum + Number(r.amount), 0);
       
       // Block if penalties are outstanding
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
-      
-      // Block if there are still pending installments with interest (borrower must clear interest)
-      if (pendingReps.length > 0 && pendingInterestOnPendingInstallments > outstandingPrincipal) {
-        throw new Error(`Cannot reloan: Outstanding interest of K${(pendingInterestOnPendingInstallments - outstandingPrincipal).toLocaleString()} must be cleared first.`);
+
+      if (outstandingBalance <= 0) {
+        throw new Error("No outstanding balance to reloan. The borrower has fully paid.");
       }
 
-      if (outstandingPrincipal <= 0) {
-        throw new Error("No outstanding principal to reloan. The borrower has paid off the full principal.");
-      }
+      // Use outstandingBalance as the new loan principal
+      const outstandingPrincipal = outstandingBalance;
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
@@ -1272,8 +1263,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
   // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
   const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+  // Also count partial payments on non-paid installments (overdue with principal_paid > 0)
+  const partialPaymentsOnPending = [...pendingRepayments, ...(repayments?.filter(r => r.status === "overdue" && !r.is_reversed) || [])]
+    .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+  const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
   const totalPenalties = pendingRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-  const progressPercentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
+  const totalOutstanding = Math.max(0, (loan.total_repayment || 0) - totalPaidIncludingPartial);
+  const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
   const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
 
@@ -1764,8 +1760,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     {[
                       { label: "Principal", value: `K${Number(loan.loan_amount).toLocaleString()}`, color: "text-foreground" },
                       { label: "Total Due", value: `K${Number(loan.total_repayment || 0).toLocaleString()}`, color: "text-foreground" },
-                      { label: "Total Paid", value: `K${totalPaid.toLocaleString()}`, color: "text-success" },
-                      { label: "Outstanding", value: `K${Math.max(0, (loan.total_repayment || 0) - totalPaid).toLocaleString()}`, color: Math.max(0, (loan.total_repayment || 0) - totalPaid) > 0 ? "text-destructive" : "text-success" },
+                      { label: "Total Paid", value: `K${totalPaidIncludingPartial.toLocaleString()}`, color: totalPaidIncludingPartial > 0 ? "text-success" : "text-muted-foreground" },
+                      { label: "Outstanding", value: `K${totalOutstanding.toLocaleString()}`, color: totalOutstanding > 0 ? "text-destructive" : "text-success" },
                       { label: "Penalties", value: `K${totalPenalties.toLocaleString()}`, color: totalPenalties > 0 ? "text-destructive" : "text-muted-foreground" },
                       { label: "Interest", value: `K${Math.max(0, (loan.total_repayment || 0) - loan.loan_amount).toLocaleString()}`, color: "text-muted-foreground" },
                     ].map((item) => (
@@ -1782,6 +1778,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <Loader2 className="animate-spin text-primary" size={32} />
                   </div>
                 ) : repayments && repayments.length > 0 ? (
+                  <>
                   <div className="rounded-lg border border-border overflow-hidden">
                     <Table>
                       <TableHeader>
@@ -1943,8 +1940,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                             transactionReference: rep.transaction_reference || `TXN-${Date.now()}`,
                                             installmentNumber: rep.installment_number || 1,
                                             totalInstallments: repayments?.length || 1,
-                                            totalPaid,
-                                            outstandingBalance: Math.max(0, loan.total_repayment - totalPaid),
+                                            totalPaid: totalPaidIncludingPartial,
+                                            outstandingBalance: totalOutstanding,
                                             companyName: settings?.companyInfo?.name || 'PHINDU Finance',
                                           });
                                         }}
@@ -1972,6 +1969,66 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Payment History — All actual transactions */}
+                  {paidRepayments.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="font-semibold mb-3 flex items-center gap-2">
+                        <History size={16} /> Payment History ({paidRepayments.length} transaction{paidRepayments.length !== 1 ? 's' : ''})
+                      </h3>
+                      <div className="rounded-lg border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date Paid</TableHead>
+                              <TableHead>Installment</TableHead>
+                              <TableHead>Amount Paid</TableHead>
+                              <TableHead>Method</TableHead>
+                              <TableHead>Reference</TableHead>
+                              <TableHead>Balance After</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paidRepayments
+                              .sort((a, b) => new Date(a.paid_date || '').getTime() - new Date(b.paid_date || '').getTime())
+                              .map((rep, idx) => {
+                                const amountPaid = Number(rep.principal_paid || rep.original_amount || rep.amount);
+                                // Running balance: sum of all payments up to this point
+                                const runningPaid = paidRepayments
+                                  .sort((a, b) => new Date(a.paid_date || '').getTime() - new Date(b.paid_date || '').getTime())
+                                  .slice(0, idx + 1)
+                                  .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+                                const balanceAfter = Math.max(0, (loan.total_repayment || 0) - runningPaid);
+                                return (
+                                  <TableRow key={rep.id} className="bg-success/5">
+                                    <TableCell className="font-medium text-success">
+                                      {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy HH:mm") : "-"}
+                                    </TableCell>
+                                    <TableCell>#{rep.installment_number || "-"}</TableCell>
+                                    <TableCell className="font-bold text-success">K{amountPaid.toLocaleString()}</TableCell>
+                                    <TableCell className="capitalize">{(rep.payment_method || "cash").replace('_', ' ')}</TableCell>
+                                    <TableCell className="font-mono text-xs">{rep.transaction_reference || "-"}</TableCell>
+                                    <TableCell className={balanceAfter > 0 ? "text-destructive font-medium" : "text-success font-medium"}>
+                                      K{balanceAfter.toLocaleString()}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            {/* Total row */}
+                            <TableRow className="border-t-2 font-bold">
+                              <TableCell colSpan={2}>Total Payments</TableCell>
+                              <TableCell className="text-success">K{totalPaidIncludingPartial.toLocaleString()}</TableCell>
+                              <TableCell colSpan={2}></TableCell>
+                              <TableCell className={totalOutstanding > 0 ? "text-destructive" : "text-success"}>
+                                Balance: K{totalOutstanding.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                </>
                 ) : (
                   <div className="py-12 text-center">
                     <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -2605,10 +2662,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <div className="grid grid-cols-2 gap-y-1">
                     <span className="text-muted-foreground">Original Principal</span>
                     <span className="text-right font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
-                    <span className="text-muted-foreground">Total Paid (Principal)</span>
-                    <span className="text-right font-medium text-success">K{totalPaid.toLocaleString()}</span>
-                    <span className="text-muted-foreground">Outstanding Principal</span>
-                    <span className="text-right font-bold text-destructive">K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Due (incl. interest)</span>
+                    <span className="text-right font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Paid</span>
+                    <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
+                    <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
+                    <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
                   </div>
@@ -2627,25 +2686,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {Math.max(0, loan.loan_amount - totalPaid) <= 0 ? (
+                    {totalOutstanding <= 0 ? (
                       <div className="flex items-center gap-2 text-destructive">
-                        <XCircle size={16} /> No outstanding principal — nothing to reloan
+                        <XCircle size={16} /> No outstanding balance — nothing to reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> Outstanding principal K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()} — will carry forward
+                        <CheckCircle size={16} /> Outstanding balance K{totalOutstanding.toLocaleString()} — will carry forward as new principal
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* New Loan Terms */}
-                {Math.max(0, loan.loan_amount - totalPaid) > 0 && totalPenalties === 0 && (
+                {totalOutstanding > 0 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <div className="grid grid-cols-2 gap-y-1">
-                      <span className="text-muted-foreground">Amount</span>
-                      <span className="text-right font-bold">K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()}</span>
+                      <span className="text-muted-foreground">New Principal (Outstanding)</span>
+                      <span className="text-right font-bold">K{totalOutstanding.toLocaleString()}</span>
                       <span className="text-muted-foreground">Term</span>
                       <span className="text-right font-medium">{loan.loan_term_months} months @ {loan.interest_rate}%</span>
                       <span className="text-muted-foreground">Disbursement</span>
@@ -2662,7 +2721,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
-              disabled={reloanMutation.isPending || totalPenalties > 0 || Math.max(0, loan.loan_amount - totalPaid) <= 0}
+              disabled={reloanMutation.isPending || totalPenalties > 0 || totalOutstanding <= 0}
             >
               {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
               Confirm Reloan
