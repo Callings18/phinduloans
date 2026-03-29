@@ -734,16 +734,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("id", loan.id);
       if (closeError) throw closeError;
 
-      // Mark all pending repayments as paid (interest was cleared)
-      await supabase
-        .from("loan_repayments")
-        .update({
-          status: "paid",
-          paid_date: new Date().toISOString().split("T")[0],
-          payment_method: "reloan_settlement",
-        })
-        .eq("loan_id", loan.id)
-        .eq("status", "pending");
+      // DB trigger `cancel_repayments_on_loan_closure` will automatically
+      // cancel pending/overdue repayments when loan status changes to "completed".
+      // No manual bulk update needed — keeps audit trail intact.
 
       // Recalculate new loan terms with the outstanding principal only
       const productForCalc: any = { interest_rate: loan.interest_rate, interest_period: loanProduct?.interest_period || 'monthly', interest_type: loanProduct?.interest_type || 'flat' };
