@@ -1977,6 +1977,65 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Payment History — All actual transactions */}
+                  {paidRepayments.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="font-semibold mb-3 flex items-center gap-2">
+                        <History size={16} /> Payment History ({paidRepayments.length} transaction{paidRepayments.length !== 1 ? 's' : ''})
+                      </h3>
+                      <div className="rounded-lg border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date Paid</TableHead>
+                              <TableHead>Installment</TableHead>
+                              <TableHead>Amount Paid</TableHead>
+                              <TableHead>Method</TableHead>
+                              <TableHead>Reference</TableHead>
+                              <TableHead>Balance After</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paidRepayments
+                              .sort((a, b) => new Date(a.paid_date || a.updated_at).getTime() - new Date(b.paid_date || b.updated_at).getTime())
+                              .map((rep, idx) => {
+                                const amountPaid = Number(rep.principal_paid || rep.original_amount || rep.amount);
+                                // Running balance: sum of all payments up to this point
+                                const runningPaid = paidRepayments
+                                  .sort((a, b) => new Date(a.paid_date || a.updated_at).getTime() - new Date(b.paid_date || b.updated_at).getTime())
+                                  .slice(0, idx + 1)
+                                  .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+                                const balanceAfter = Math.max(0, (loan.total_repayment || 0) - runningPaid);
+                                return (
+                                  <TableRow key={rep.id} className="bg-success/5">
+                                    <TableCell className="font-medium text-success">
+                                      {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy HH:mm") : "-"}
+                                    </TableCell>
+                                    <TableCell>#{rep.installment_number || "-"}</TableCell>
+                                    <TableCell className="font-bold text-success">K{amountPaid.toLocaleString()}</TableCell>
+                                    <TableCell className="capitalize">{(rep.payment_method || "cash").replace('_', ' ')}</TableCell>
+                                    <TableCell className="font-mono text-xs">{rep.transaction_reference || "-"}</TableCell>
+                                    <TableCell className={balanceAfter > 0 ? "text-destructive font-medium" : "text-success font-medium"}>
+                                      K{balanceAfter.toLocaleString()}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            {/* Total row */}
+                            <TableRow className="border-t-2 font-bold">
+                              <TableCell colSpan={2}>Total Payments</TableCell>
+                              <TableCell className="text-success">K{totalPaidIncludingPartial.toLocaleString()}</TableCell>
+                              <TableCell colSpan={2}></TableCell>
+                              <TableCell className={totalOutstanding > 0 ? "text-destructive" : "text-success"}>
+                                Balance: K{totalOutstanding.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
                 ) : (
                   <div className="py-12 text-center">
                     <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
