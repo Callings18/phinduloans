@@ -603,10 +603,14 @@ const AdminRepayments = () => {
     ).length || 0,
     totalCollected: repayments
       ?.filter((r) => r.status === "paid")
-      .reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0) || 0,
+      .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0,
     totalPending: repayments
       ?.filter((r) => r.status === "pending")
-      .reduce((sum, r) => sum + Number(r.amount), 0) || 0,
+      .reduce((sum, r) => {
+        const original = Number(r.original_amount || r.amount);
+        const paid = Number(r.principal_paid || 0);
+        return sum + Math.max(0, original - paid);
+      }, 0) || 0,
   };
 
   // Real-time subscription for repayments
