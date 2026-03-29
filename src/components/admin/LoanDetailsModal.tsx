@@ -138,7 +138,10 @@ interface Loan {
   employment_type: string;
   monthly_income?: number;
   employer_name?: string | null;
+  employer_id?: string | null;
   job_title?: string | null;
+  date_of_birth?: string | null;
+  employment_duration?: string | null;
   admin_notes?: string | null;
   total_penalties?: number;
   settlement_date?: string | null;
