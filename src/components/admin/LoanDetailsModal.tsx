@@ -720,25 +720,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .from("loan_applications")
         .update({
           status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Reloaned outstanding principal K${outstandingPrincipal.toLocaleString()}.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Reloaned outstanding balance K${outstandingPrincipal.toLocaleString()}. Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.`,
         })
         .eq("id", loan.id);
       if (closeError) throw closeError;
 
       // DB trigger `cancel_repayments_on_loan_closure` will automatically
       // cancel pending/overdue repayments when loan status changes to "completed".
-      // No manual bulk update needed — keeps audit trail intact.
 
-      // Recalculate new loan terms with the outstanding principal only
+      // Recalculate new loan terms with the outstanding balance as new principal
+      const termUnit = (loan as any).term_unit || 'months';
       const productForCalc: any = { interest_rate: loan.interest_rate, interest_period: loanProduct?.interest_period || 'monthly', interest_type: loanProduct?.interest_type || 'flat' };
       const newCalc = calculateLoan(
         outstandingPrincipal,
         loan.loan_term_months,
         productForCalc,
-        ((loan as any).term_unit || 'months') as any
+        termUnit as any
       );
 
-      // Create new loan application with reduced principal
+      // Create new loan application with outstanding balance as principal
       const { data: newLoan, error: insertError } = await supabase
         .from("loan_applications")
         .insert({
@@ -749,23 +749,29 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           nrc_number: loan.nrc_number,
           address: loan.address || null,
           city: loan.city || null,
+          date_of_birth: loan.date_of_birth || null,
           employer_name: loan.employer_name || null,
+          employer_id: loan.employer_id || null,
           job_title: loan.job_title || null,
           employment_type: loan.employment_type as any,
+          employment_duration: loan.employment_duration || null,
           monthly_income: loan.monthly_income || 0,
           loan_amount: outstandingPrincipal,
           loan_term_months: loan.loan_term_months,
+          term_unit: termUnit,
           interest_rate: loan.interest_rate,
           monthly_payment: newCalc.monthlyPayment,
           total_repayment: newCalc.totalRepayment,
           loan_purpose: loan.loan_purpose,
           loan_product_id: loan.loan_product_id || null,
           parent_loan_id: loan.id,
-          status: "disbursed" as any,
+          status: "active" as any,
           source: "internal",
-          admin_notes: `Reloan of outstanding principal K${outstandingPrincipal.toLocaleString()} from loan ${loan.id.slice(0, 8).toUpperCase()}. No new disbursement.`,
+          admin_notes: `Reloan of outstanding balance K${outstandingPrincipal.toLocaleString()} from loan ${loan.id.slice(0, 8).toUpperCase()}. Original: K${loan.loan_amount.toLocaleString()}, Paid: K${totalAllPaid.toLocaleString()}. No new disbursement.`,
           disbursed_by: user?.id ?? null,
           disbursed_at: new Date().toISOString(),
+          approved_by: user?.id ?? null,
+          approved_at: new Date().toISOString(),
         })
         .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id")
         .single();
@@ -781,20 +787,31 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           total_repayment: newLoan.total_repayment,
           monthly_payment: newLoan.monthly_payment,
           loan_product_id: newLoan.loan_product_id,
-          term_unit: (loan as any).term_unit || 'months',
+          term_unit: termUnit,
         },
         supabase
       );
 
-      // Record loan event
+      // Record loan event on original loan
       await supabase.from("loan_events" as any).insert({
         loan_id: loan.id,
         event_type: "reloan",
         performed_by: user?.id,
-        reason: `Reloan — outstanding principal K${outstandingPrincipal.toLocaleString()}. New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
-        previous_values: { principal: loan.loan_amount, status: loan.status },
-        new_values: { principal: outstandingPrincipal, status: "completed" },
+        reason: `Reloan — outstanding balance K${outstandingPrincipal.toLocaleString()} (Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}). New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
+        previous_values: { principal: loan.loan_amount, total_repayment: loan.total_repayment, total_paid: totalAllPaid, status: loan.status },
+        new_values: { principal: outstandingPrincipal, total_repayment: newCalc.totalRepayment, status: "active" },
         new_loan_id: newLoan.id,
+        amount: outstandingPrincipal,
+      });
+
+      // Record loan event on new loan for traceability
+      await supabase.from("loan_events" as any).insert({
+        loan_id: newLoan.id,
+        event_type: "reloan_created",
+        performed_by: user?.id,
+        reason: `Created from reloan of loan ${loan.id.slice(0, 8).toUpperCase()}. Outstanding balance K${outstandingPrincipal.toLocaleString()} carried forward as new principal.`,
+        previous_values: { parent_loan_id: loan.id, original_principal: loan.loan_amount },
+        new_values: { principal: outstandingPrincipal, total_repayment: newCalc.totalRepayment },
         amount: outstandingPrincipal,
       });
 
@@ -802,7 +819,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         action: "RELOAN",
         entity_type: "loan_application",
         entity_id: loan.id,
-        details: { new_loan_id: newLoan.id, reloan_amount: outstandingPrincipal },
+        details: { new_loan_id: newLoan.id, reloan_amount: outstandingPrincipal, original_principal: loan.loan_amount, total_paid: totalAllPaid },
       });
 
       return { newLoan, outstandingPrincipal };
