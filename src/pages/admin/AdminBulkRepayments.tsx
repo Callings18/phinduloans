@@ -223,6 +223,8 @@ const AdminBulkRepayments = () => {
               payment_method: paymentMethod,
               transaction_reference: transactionRef || `BULK-${Date.now()}`,
               principal_paid: allocation.allocatedAmount,
+              original_amount: allocation.originalAmount,
+              amount: allocation.originalAmount,
             })
             .eq('id', allocation.repaymentId);
 
