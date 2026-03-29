@@ -276,6 +276,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: open && isAdmin,
   });
 
+                {/* Financial Summary Strip */}
+                {repayments && repayments.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+                    {[
+                      { label: "Principal", value: `K${Number(loan.loan_amount).toLocaleString()}`, color: "text-foreground" },
+                      { label: "Total Due", value: `K${Number(loan.total_repayment || 0).toLocaleString()}`, color: "text-foreground" },
+                      { label: "Total Paid", value: `K${totalPaid.toLocaleString()}`, color: "text-success" },
+                      { label: "Outstanding", value: `K${Math.max(0, (loan.total_repayment || 0) - totalPaid).toLocaleString()}`, color: Math.max(0, (loan.total_repayment || 0) - totalPaid) > 0 ? "text-destructive" : "text-success" },
+                      { label: "Penalties", value: `K${totalPenalties.toLocaleString()}`, color: totalPenalties > 0 ? "text-destructive" : "text-muted-foreground" },
+                      { label: "Interest", value: `K${Math.max(0, (loan.total_repayment || 0) - loan.loan_amount).toLocaleString()}`, color: "text-muted-foreground" },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-lg border bg-card p-3 text-center">
+                        <p className="text-xs text-muted-foreground">{item.label}</p>
+                        <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
 
   const { data: repayments, isLoading: repaymentsLoading } = useQuery({
     queryKey: ["loan-repayments", loan?.id],
