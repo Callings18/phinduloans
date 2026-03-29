@@ -1769,8 +1769,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     {[
                       { label: "Principal", value: `K${Number(loan.loan_amount).toLocaleString()}`, color: "text-foreground" },
                       { label: "Total Due", value: `K${Number(loan.total_repayment || 0).toLocaleString()}`, color: "text-foreground" },
-                      { label: "Total Paid", value: `K${totalPaid.toLocaleString()}`, color: "text-success" },
-                      { label: "Outstanding", value: `K${Math.max(0, (loan.total_repayment || 0) - totalPaid).toLocaleString()}`, color: Math.max(0, (loan.total_repayment || 0) - totalPaid) > 0 ? "text-destructive" : "text-success" },
+                      { label: "Total Paid", value: `K${totalPaidIncludingPartial.toLocaleString()}`, color: totalPaidIncludingPartial > 0 ? "text-success" : "text-muted-foreground" },
+                      { label: "Outstanding", value: `K${totalOutstanding.toLocaleString()}`, color: totalOutstanding > 0 ? "text-destructive" : "text-success" },
                       { label: "Penalties", value: `K${totalPenalties.toLocaleString()}`, color: totalPenalties > 0 ? "text-destructive" : "text-muted-foreground" },
                       { label: "Interest", value: `K${Math.max(0, (loan.total_repayment || 0) - loan.loan_amount).toLocaleString()}`, color: "text-muted-foreground" },
                     ].map((item) => (
