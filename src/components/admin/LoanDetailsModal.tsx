@@ -2671,10 +2671,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <div className="grid grid-cols-2 gap-y-1">
                     <span className="text-muted-foreground">Original Principal</span>
                     <span className="text-right font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
-                    <span className="text-muted-foreground">Total Paid (Principal)</span>
-                    <span className="text-right font-medium text-success">K{totalPaid.toLocaleString()}</span>
-                    <span className="text-muted-foreground">Outstanding Principal</span>
-                    <span className="text-right font-bold text-destructive">K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Due (incl. interest)</span>
+                    <span className="text-right font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Paid</span>
+                    <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
+                    <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
+                    <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
                   </div>
@@ -2693,25 +2695,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {Math.max(0, loan.loan_amount - totalPaid) <= 0 ? (
+                    {totalOutstanding <= 0 ? (
                       <div className="flex items-center gap-2 text-destructive">
-                        <XCircle size={16} /> No outstanding principal — nothing to reloan
+                        <XCircle size={16} /> No outstanding balance — nothing to reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> Outstanding principal K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()} — will carry forward
+                        <CheckCircle size={16} /> Outstanding balance K{totalOutstanding.toLocaleString()} — will carry forward as new principal
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* New Loan Terms */}
-                {Math.max(0, loan.loan_amount - totalPaid) > 0 && totalPenalties === 0 && (
+                {totalOutstanding > 0 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <div className="grid grid-cols-2 gap-y-1">
-                      <span className="text-muted-foreground">Amount</span>
-                      <span className="text-right font-bold">K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()}</span>
+                      <span className="text-muted-foreground">New Principal (Outstanding)</span>
+                      <span className="text-right font-bold">K{totalOutstanding.toLocaleString()}</span>
                       <span className="text-muted-foreground">Term</span>
                       <span className="text-right font-medium">{loan.loan_term_months} months @ {loan.interest_rate}%</span>
                       <span className="text-muted-foreground">Disbursement</span>
@@ -2728,7 +2730,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
-              disabled={reloanMutation.isPending || totalPenalties > 0 || Math.max(0, loan.loan_amount - totalPaid) <= 0}
+              disabled={reloanMutation.isPending || totalPenalties > 0 || totalOutstanding <= 0}
             >
               {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
               Confirm Reloan
