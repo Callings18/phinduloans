@@ -1999,7 +1999,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           </TableHeader>
                           <TableBody>
                             {paidRepayments
-                              .sort((a, b) => new Date(a.paid_date || a.updated_at).getTime() - new Date(b.paid_date || b.updated_at).getTime())
+                              .sort((a, b) => new Date(a.paid_date || a.created_at).getTime() - new Date(b.paid_date || b.created_at).getTime())
                               .map((rep, idx) => {
                                 const amountPaid = Number(rep.principal_paid || rep.original_amount || rep.amount);
                                 // Running balance: sum of all payments up to this point
