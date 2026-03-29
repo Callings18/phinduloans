@@ -2004,7 +2004,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 const amountPaid = Number(rep.principal_paid || rep.original_amount || rep.amount);
                                 // Running balance: sum of all payments up to this point
                                 const runningPaid = paidRepayments
-                                  .sort((a, b) => new Date(a.paid_date || a.updated_at).getTime() - new Date(b.paid_date || b.updated_at).getTime())
+                                  .sort((a, b) => new Date(a.paid_date || a.created_at).getTime() - new Date(b.paid_date || b.created_at).getTime())
                                   .slice(0, idx + 1)
                                   .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
                                 const balanceAfter = Math.max(0, (loan.total_repayment || 0) - runningPaid);
