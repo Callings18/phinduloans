@@ -781,7 +781,9 @@ const AdminRepayments = () => {
                     <TableHead>Borrower</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Paid</TableHead>
+                    <TableHead>Outstanding</TableHead>
                     <TableHead>Due Date</TableHead>
+                    <TableHead>Paid Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment Method</TableHead>
                     <TableHead>Reference</TableHead>
