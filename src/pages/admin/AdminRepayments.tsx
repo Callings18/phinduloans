@@ -603,10 +603,14 @@ const AdminRepayments = () => {
     ).length || 0,
     totalCollected: repayments
       ?.filter((r) => r.status === "paid")
-      .reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0) || 0,
+      .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0,
     totalPending: repayments
       ?.filter((r) => r.status === "pending")
-      .reduce((sum, r) => sum + Number(r.amount), 0) || 0,
+      .reduce((sum, r) => {
+        const original = Number(r.original_amount || r.amount);
+        const paid = Number(r.principal_paid || 0);
+        return sum + Math.max(0, original - paid);
+      }, 0) || 0,
   };
 
   // Real-time subscription for repayments
@@ -781,7 +785,9 @@ const AdminRepayments = () => {
                     <TableHead>Borrower</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Paid</TableHead>
+                    <TableHead>Outstanding</TableHead>
                     <TableHead>Due Date</TableHead>
+                    <TableHead>Paid Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment Method</TableHead>
                     <TableHead>Reference</TableHead>
@@ -821,10 +827,28 @@ const AdminRepayments = () => {
                           </p>
                         </TableCell>
                         <TableCell>
+                          {(() => {
+                            if (rep.status === "paid") return <span className="text-success font-semibold">K0</span>;
+                            const instOriginal = Number(rep.original_amount || rep.amount);
+                            const instPaid = Number(rep.principal_paid || 0);
+                            const outstanding = Math.max(0, instOriginal - instPaid);
+                            return <span className={outstanding > 0 ? "text-destructive font-semibold" : "text-success font-semibold"}>K{outstanding.toLocaleString()}</span>;
+                          })()}
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             <Calendar size={14} className="text-muted-foreground" />
                             {format(new Date(rep.due_date), "MMM dd, yyyy")}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {rep.paid_date ? (
+                            <span className="font-medium text-success">
+                              {format(new Date(rep.paid_date), "MMM dd, yyyy")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={statusInfo.color}>
