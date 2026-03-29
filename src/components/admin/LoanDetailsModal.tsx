@@ -692,37 +692,28 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
       const pendingReps = (allReps || []).filter(r => r.status === "pending" || r.status === "overdue");
       
-      // Calculate total principal paid
-      const totalPrincipalPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      // Calculate total paid (principal_paid from paid installments + partial payments on pending)
+      const totalPaidFromPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+      const totalPartialOnPending = pendingReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
       
-      // Outstanding principal = original loan amount - principal actually paid back
-      const outstandingPrincipal = Math.max(0, loan.loan_amount - totalPrincipalPaid);
+      // Outstanding = Total Repayment - Total Paid (this is the reloan amount)
+      const outstandingBalance = Math.max(0, (loan.total_repayment || 0) - totalAllPaid);
       
       // Check for unpaid penalties
       const totalUnpaidPenalties = pendingReps.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-      
-      // Calculate unpaid interest (total repayment - principal = total interest; subtract interest paid)
-      const totalInterest = loan.total_repayment - loan.loan_amount;
-      const interestPaid = paidReps.reduce((sum, r) => {
-        const principalPart = Number(r.principal_paid || 0);
-        const totalPaidOnInstallment = Number(r.original_amount || r.amount);
-        return sum + Math.max(0, totalPaidOnInstallment - principalPart);
-      }, 0);
-      const pendingInterestOnPendingInstallments = pendingReps.reduce((sum, r) => sum + Number(r.amount), 0);
       
       // Block if penalties are outstanding
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
-      
-      // Block if there are still pending installments with interest (borrower must clear interest)
-      if (pendingReps.length > 0 && pendingInterestOnPendingInstallments > outstandingPrincipal) {
-        throw new Error(`Cannot reloan: Outstanding interest of K${(pendingInterestOnPendingInstallments - outstandingPrincipal).toLocaleString()} must be cleared first.`);
+
+      if (outstandingBalance <= 0) {
+        throw new Error("No outstanding balance to reloan. The borrower has fully paid.");
       }
 
-      if (outstandingPrincipal <= 0) {
-        throw new Error("No outstanding principal to reloan. The borrower has paid off the full principal.");
-      }
+      // Use outstandingBalance as the new loan principal
+      const outstandingPrincipal = outstandingBalance;
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
