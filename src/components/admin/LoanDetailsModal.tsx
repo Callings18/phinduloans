@@ -2036,6 +2036,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                     </div>
                   )}
+                </>
                 ) : (
                   <div className="py-12 text-center">
                     <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
