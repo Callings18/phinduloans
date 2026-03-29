@@ -425,6 +425,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 .update({
                   amount: npAmount - applied,
                   original_amount: npOriginal,
+                  principal_paid: (Number(np.principal_paid) || 0) + applied,
                 })
                 .eq("id", np.id);
             }
