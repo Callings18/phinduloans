@@ -1940,8 +1940,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                             transactionReference: rep.transaction_reference || `TXN-${Date.now()}`,
                                             installmentNumber: rep.installment_number || 1,
                                             totalInstallments: repayments?.length || 1,
-                                            totalPaid,
-                                            outstandingBalance: Math.max(0, loan.total_repayment - totalPaid),
+                                            totalPaid: totalPaidIncludingPartial,
+                                            outstandingBalance: totalOutstanding,
                                             companyName: settings?.companyInfo?.name || 'PHINDU Finance',
                                           });
                                         }}
