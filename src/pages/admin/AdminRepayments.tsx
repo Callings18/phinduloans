@@ -823,10 +823,28 @@ const AdminRepayments = () => {
                           </p>
                         </TableCell>
                         <TableCell>
+                          {(() => {
+                            if (rep.status === "paid") return <span className="text-success font-semibold">K0</span>;
+                            const instOriginal = Number(rep.original_amount || rep.amount);
+                            const instPaid = Number(rep.principal_paid || 0);
+                            const outstanding = Math.max(0, instOriginal - instPaid);
+                            return <span className={outstanding > 0 ? "text-destructive font-semibold" : "text-success font-semibold"}>K{outstanding.toLocaleString()}</span>;
+                          })()}
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             <Calendar size={14} className="text-muted-foreground" />
                             {format(new Date(rep.due_date), "MMM dd, yyyy")}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {rep.paid_date ? (
+                            <span className="font-medium text-success">
+                              {format(new Date(rep.paid_date), "MMM dd, yyyy")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={statusInfo.color}>
