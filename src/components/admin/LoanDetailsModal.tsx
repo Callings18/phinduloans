@@ -1272,8 +1272,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
   // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
   const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+  // Also count partial payments on non-paid installments (overdue with principal_paid > 0)
+  const partialPaymentsOnPending = [...pendingRepayments, ...(repayments?.filter(r => r.status === "overdue" && !r.is_reversed) || [])]
+    .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+  const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
   const totalPenalties = pendingRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-  const progressPercentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
+  const totalOutstanding = Math.max(0, (loan.total_repayment || 0) - totalPaidIncludingPartial);
+  const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
   const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
 
