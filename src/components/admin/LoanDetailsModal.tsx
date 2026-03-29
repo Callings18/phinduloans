@@ -425,6 +425,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 .update({
                   amount: npAmount - applied,
                   original_amount: npOriginal,
+                  principal_paid: (Number(np.principal_paid) || 0) + applied,
                 })
                 .eq("id", np.id);
             }
@@ -446,7 +447,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           payment_method: paymentMethod,
           transaction_reference: transactionRef || null,
           amount: adjustedAmount,
-          principal_paid: principalPaid,
+          principal_paid: (Number(selectedRepayment.principal_paid) || 0) + principalPaid,
           penalty_paid: penaltyPaid,
           original_amount: savedOriginalAmount,
         })
@@ -474,6 +475,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
 
       if (result.isPartial) {
         toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
@@ -731,16 +734,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("id", loan.id);
       if (closeError) throw closeError;
 
-      // Mark all pending repayments as paid (interest was cleared)
-      await supabase
-        .from("loan_repayments")
-        .update({
-          status: "paid",
-          paid_date: new Date().toISOString().split("T")[0],
-          payment_method: "reloan_settlement",
-        })
-        .eq("loan_id", loan.id)
-        .eq("status", "pending");
+      // DB trigger `cancel_repayments_on_loan_closure` will automatically
+      // cancel pending/overdue repayments when loan status changes to "completed".
+      // No manual bulk update needed — keeps audit trail intact.
 
       // Recalculate new loan terms with the outstanding principal only
       const productForCalc: any = { interest_rate: loan.interest_rate, interest_period: loanProduct?.interest_period || 'monthly', interest_type: loanProduct?.interest_type || 'flat' };
@@ -1274,8 +1270,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
-  // Use principal_paid where available for accurate totals
-  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.amount), 0);
+  // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
+  const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
   const totalPenalties = pendingRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
   const progressPercentage = loan.total_repayment > 0 ? (totalPaid / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;

@@ -304,7 +304,7 @@ const AdminRepayments = () => {
         const loanRepayments = repayments?.filter(r => r.loan_id === repayment.loan_id) || [];
         const totalPaid = loanRepayments
           .filter(r => r.status === 'paid')
-          .reduce((sum, r) => sum + Number(r.amount), 0) + paidAmount;
+          .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) + paidAmount;
         const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.original_amount || r.amount), 0);
         const remainingBalance = totalDue - totalPaid;
 
@@ -359,7 +359,7 @@ const AdminRepayments = () => {
       // Get loan details and calculate totals
       const { data: allRepayments } = await supabase
         .from('loan_repayments')
-        .select('amount, status')
+        .select('amount, status, principal_paid, original_amount')
         .eq('loan_id', repayment.loan_id);
 
       const { data: loan } = await supabase
@@ -370,7 +370,7 @@ const AdminRepayments = () => {
 
       const totalPaid = allRepayments
         ?.filter(r => r.status === 'paid')
-        .reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+        .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0;
 
       const outstandingBalance = (loan?.total_repayment || 0) - totalPaid;
 
@@ -380,7 +380,7 @@ const AdminRepayments = () => {
         borrowerEmail: repayment.loan_applications?.email || '',
         loanReference: `LOAN-${repayment.loan_id.substring(0, 8).toUpperCase()}`,
         loanAmount: loan?.loan_amount || 0,
-        repaymentAmount: Number(repayment.amount),
+        repaymentAmount: Number(repayment.principal_paid || repayment.original_amount || repayment.amount),
         paymentDate: repayment.paid_date || new Date().toISOString(),
         paymentMethod: repayment.payment_method || 'cash',
         transactionReference: repayment.transaction_reference || `TXN-${Date.now()}`,
