@@ -1787,6 +1787,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <Loader2 className="animate-spin text-primary" size={32} />
                   </div>
                 ) : repayments && repayments.length > 0 ? (
+                  <>
                   <div className="rounded-lg border border-border overflow-hidden">
                     <Table>
                       <TableHeader>
