@@ -2592,28 +2592,77 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       {/* Reloan Confirmation Dialog */}
       <AlertDialog open={isReloanOpen} onOpenChange={setIsReloanOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <ArrowRight size={20} /> Reloan — {loan.full_name}
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p>This will:</p>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Mark the current loan as <strong>completed</strong></li>
-                <li>Mark all pending repayments as paid (interest settlement)</li>
-                <li>Create a new loan with the same terms (K{Number(loan.loan_amount).toLocaleString()}, {loan.loan_term_months} months @ {loan.interest_rate}%)</li>
-                <li><strong>No disbursement will be created</strong> — the funds are already with the borrower</li>
-                <li>A new repayment schedule will be generated</li>
-              </ul>
-              <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                {/* Financial Breakdown */}
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
+                  <h4 className="font-semibold text-foreground">Loan Financial Summary</h4>
+                  <div className="grid grid-cols-2 gap-y-1">
+                    <span className="text-muted-foreground">Original Principal</span>
+                    <span className="text-right font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Paid (Principal)</span>
+                    <span className="text-right font-medium text-success">K{totalPaid.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Outstanding Principal</span>
+                    <span className="text-right font-bold text-destructive">K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Outstanding Penalties</span>
+                    <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Eligibility Checks */}
+                <div className="rounded-lg border p-4 space-y-2 text-sm">
+                  <h4 className="font-semibold text-foreground">Eligibility Check</h4>
+                  <div className="space-y-1.5">
+                    {totalPenalties > 0 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Outstanding penalties of K{totalPenalties.toLocaleString()} — must be cleared
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> No outstanding penalties — eligible
+                      </div>
+                    )}
+                    {Math.max(0, loan.loan_amount - totalPaid) <= 0 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> No outstanding principal — nothing to reloan
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> Outstanding principal K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()} — will carry forward
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* New Loan Terms */}
+                {Math.max(0, loan.loan_amount - totalPaid) > 0 && totalPenalties === 0 && (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
+                    <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
+                    <div className="grid grid-cols-2 gap-y-1">
+                      <span className="text-muted-foreground">Amount</span>
+                      <span className="text-right font-bold">K{Math.max(0, loan.loan_amount - totalPaid).toLocaleString()}</span>
+                      <span className="text-muted-foreground">Term</span>
+                      <span className="text-right font-medium">{loan.loan_term_months} months @ {loan.interest_rate}%</span>
+                      <span className="text-muted-foreground">Disbursement</span>
+                      <span className="text-right font-medium">None — funds already with borrower</span>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
-              disabled={reloanMutation.isPending}
+              disabled={reloanMutation.isPending || totalPenalties > 0 || Math.max(0, loan.loan_amount - totalPaid) <= 0}
             >
               {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
               Confirm Reloan
