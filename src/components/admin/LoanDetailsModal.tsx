@@ -447,7 +447,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           payment_method: paymentMethod,
           transaction_reference: transactionRef || null,
           amount: adjustedAmount,
-          principal_paid: principalPaid,
+          principal_paid: (Number(selectedRepayment.principal_paid) || 0) + principalPaid,
           penalty_paid: penaltyPaid,
           original_amount: savedOriginalAmount,
         })
