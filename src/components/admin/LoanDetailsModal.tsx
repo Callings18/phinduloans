@@ -1864,6 +1864,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                               <TableCell className={rep.principal_paid ? "text-success font-medium" : "text-muted-foreground"}>
                                 {rep.principal_paid ? `K${Number(rep.principal_paid).toLocaleString()}` : rep.status === "paid" ? `K${Number(rep.amount).toLocaleString()}` : "-"}
                               </TableCell>
+                              <TableCell>
+                                {(() => {
+                                  if (rep.status === "paid" && !rep.is_reversed) return <span className="text-success font-medium">K0</span>;
+                                  const instOriginal = Number(rep.original_amount || rep.amount);
+                                  const instPaid = Number(rep.principal_paid || 0);
+                                  const outstanding = Math.max(0, instOriginal - instPaid);
+                                  return <span className={outstanding > 0 ? "text-destructive font-medium" : "text-success font-medium"}>K{outstanding.toLocaleString()}</span>;
+                                })()}
+                              </TableCell>
                               <TableCell className={rep.penalty_amount ? "text-destructive font-medium" : "text-muted-foreground"}>
                                 {rep.penalty_amount ? `K${Number(rep.penalty_amount).toLocaleString()}` : "-"}
                               </TableCell>
