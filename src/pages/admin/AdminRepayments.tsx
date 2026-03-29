@@ -304,7 +304,7 @@ const AdminRepayments = () => {
         const loanRepayments = repayments?.filter(r => r.loan_id === repayment.loan_id) || [];
         const totalPaid = loanRepayments
           .filter(r => r.status === 'paid')
-          .reduce((sum, r) => sum + Number(r.amount), 0) + paidAmount;
+          .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) + paidAmount;
         const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.original_amount || r.amount), 0);
         const remainingBalance = totalDue - totalPaid;
 
