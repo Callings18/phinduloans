@@ -475,6 +475,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
 
       if (result.isPartial) {
         toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
