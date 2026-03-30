@@ -972,7 +972,17 @@ const AdminRepayments = () => {
               <form onSubmit={submitPayment} className="space-y-4">
                 <div className="p-4 rounded-lg bg-muted/50 space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Amount Due</span>
+                    <span className="text-muted-foreground">Original Amount</span>
+                    <span className="font-bold text-foreground">K{Number(selectedRepayment.original_amount || selectedRepayment.amount).toLocaleString()}</span>
+                  </div>
+                  {selectedRepayment.principal_paid && Number(selectedRepayment.principal_paid) > 0 && (
+                    <div className="flex justify-between text-success">
+                      <span className="text-muted-foreground">Already Paid</span>
+                      <span className="font-medium">K{Number(selectedRepayment.principal_paid).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Remaining Due</span>
                     <span className="font-bold text-foreground">K{Number(selectedRepayment.amount).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">

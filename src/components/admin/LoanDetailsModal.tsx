@@ -604,12 +604,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan || !earlySettlement) throw new Error("No loan or settlement data");
 
-      // Fetch pending repayments to set principal_paid correctly
+      // Fetch pending AND overdue repayments to set principal_paid correctly
       const { data: pendingRepsForSettle } = await supabase
         .from("loan_repayments")
         .select("id, amount, original_amount")
         .eq("loan_id", loan.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "overdue"]);
 
       // Mark each pending repayment as paid with correct principal_paid
       for (const pr of (pendingRepsForSettle || [])) {
@@ -1206,6 +1206,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
 
+      // Find the disbursement to refund the source account
+      const { data: disbursementRecord } = await supabase
+        .from("disbursements")
+        .select("*, source_account_id, amount")
+        .eq("loan_id", loan.id)
+        .maybeSingle();
+
+      // Refund source account if applicable
+      if (disbursementRecord?.source_account_id) {
+        const { data: sourceAccount } = await supabase
+          .from("accounts")
+          .select("id, balance, account_name")
+          .eq("id", disbursementRecord.source_account_id)
+          .single();
+
+        if (sourceAccount) {
+          const refundAmount = Number(disbursementRecord.amount);
+          const newBalance = sourceAccount.balance + refundAmount;
+          await supabase.from("accounts").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", sourceAccount.id);
+
+          // Record refund transaction
+          await supabase.from("account_transactions").insert({
+            account_id: sourceAccount.id,
+            transaction_type: "refund",
+            amount: refundAmount,
+            balance_before: sourceAccount.balance,
+            balance_after: newBalance,
+            reference_type: "disbursement_reversal",
+            reference_id: loan.id,
+            source: "Disbursement Reversal",
+            destination: sourceAccount.account_name,
+            notes: `Undo disbursement for ${loan.full_name} — K${refundAmount.toLocaleString()} refunded`,
+            created_by: user?.id,
+          });
+        }
+      }
+
       // Delete disbursement record
       await supabase
         .from("disbursements")
@@ -1225,12 +1262,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("id", loan.id);
 
       if (error) throw error;
+
+      await logAudit({
+        action: "UNDO_DISBURSEMENT",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { refunded_amount: disbursementRecord?.amount, source_account_id: disbursementRecord?.source_account_id },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["loan-disbursement", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      toast.success("Disbursement undone - loan reverted to approved status");
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast.success("Disbursement undone - loan reverted to approved status. Source account refunded.");
       setIsUndoDisbursementOpen(false);
       onOpenChange(false);
     },
@@ -1552,9 +1598,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                       <Progress value={progressPercentage} className="h-3" />
                       <div className="flex justify-between text-sm">
-                        <span className="text-success">Paid: K{totalPaid.toLocaleString()}</span>
+                        <span className="text-success">Paid: K{totalPaidIncludingPartial.toLocaleString()}</span>
                         <span className="text-muted-foreground">
-                          Remaining: K{(loan.total_repayment - totalPaid + totalPenalties).toLocaleString()}
+                          Remaining: K{(totalOutstanding + totalPenalties).toLocaleString()}
                         </span>
                       </div>
                     </CardContent>
@@ -1702,7 +1748,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       const templates: Record<string, string> = {
                         payment_reminder: `Dear ${loan.full_name}, your next payment of K${Number(loan.monthly_payment || 0).toLocaleString()} is due${nextDue ? ` on ${format(new Date(nextDue.due_date), "MMM dd, yyyy")}` : " soon"}. Please ensure timely payment. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
                         payment_overdue: `Dear ${loan.full_name}, your payment of K${Number(loan.monthly_payment || 0).toLocaleString()} is overdue${overdueCount > 0 ? ` (${overdueCount} installment${overdueCount > 1 ? 's' : ''})` : ''}. Please make your payment immediately to avoid penalties. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
-                        payment_received: `Dear ${loan.full_name}, we have received your payment. Thank you for your timely payment. Your remaining balance is K${(loan.total_repayment - totalPaid).toLocaleString()}. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
+                        payment_received: `Dear ${loan.full_name}, we have received your payment. Thank you for your timely payment. Your remaining balance is K${totalOutstanding.toLocaleString()}. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
                         penalty_applied: `Dear ${loan.full_name}, a penalty has been applied to your overdue loan. Your updated balance includes the penalty. Please settle immediately to avoid further charges. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
                         defaulted_notice: `Dear ${loan.full_name}, your loan has been marked as DEFAULTED due to non-payment. Please contact us immediately to arrange payment and avoid legal proceedings. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
                         loan_update: `Dear ${loan.full_name}, there has been an update to your loan (Ref: LOAN-${loan.id.slice(0,8).toUpperCase()}). Please contact us for details. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`,
@@ -2224,9 +2270,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-muted/50 space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Principal Amount</span>
-                <span className="font-medium">K{Number(selectedRepayment?.amount || 0).toLocaleString()}</span>
+                <span className="text-sm text-muted-foreground">Original Installment</span>
+                <span className="font-medium">K{Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0).toLocaleString()}</span>
               </div>
+              {selectedRepayment?.principal_paid && Number(selectedRepayment.principal_paid) > 0 && (
+                <div className="flex justify-between text-success">
+                  <span className="text-sm">Already Paid</span>
+                  <span className="font-medium">K{Number(selectedRepayment.principal_paid).toLocaleString()}</span>
+                </div>
+              )}
               {selectedRepayment?.penalty_amount && selectedRepayment.penalty_amount > 0 && (
                 <div className="flex justify-between text-destructive">
                   <span className="text-sm">Penalty</span>

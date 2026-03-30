@@ -646,8 +646,10 @@ const Dashboard = () => {
                     const loanRepayments = repayments?.filter(r => r.loan_id === loan.id) || [];
                     const progress = getLoanProgress(loan.id);
                     const isExpanded = expandedLoan === loan.id;
-                    const paidAmount = loanRepayments.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.amount), 0);
-                    const remainingAmount = Number(loan.total_repayment || 0) - paidAmount;
+                    const paidAmount = loanRepayments.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+                    const partialOnPending = loanRepayments.filter(r => r.status !== 'paid').reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+                    const totalPaidAmount = paidAmount + partialOnPending;
+                    const remainingAmount = Math.max(0, Number(loan.total_repayment || 0) - totalPaidAmount);
 
                     return (
                       <Collapsible key={loan.id} open={isExpanded} onOpenChange={() => setExpandedLoan(isExpanded ? null : loan.id)}>
@@ -714,7 +716,7 @@ const Dashboard = () => {
                                 </div>
                                 <Progress value={progress} className="h-2" />
                                 <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Paid: K{paidAmount.toLocaleString()}</span>
+                                  <span>Paid: K{totalPaidAmount.toLocaleString()}</span>
                                   <span>Remaining: K{remainingAmount.toLocaleString()}</span>
                                 </div>
                               </div>
@@ -737,7 +739,7 @@ const Dashboard = () => {
                                                 #{rep.installment_number}
                                               </div>
                                               <div>
-                                                <p className="font-medium text-foreground">K{Number(rep.amount).toLocaleString()}</p>
+                                                <p className="font-medium text-foreground">K{Number(rep.original_amount || rep.amount).toLocaleString()}</p>
                                                 <p className="text-xs text-muted-foreground">
                                                   Due: {format(new Date(rep.due_date), 'MMM dd, yyyy')}
                                                   {rep.paid_date && ` • Paid: ${format(new Date(rep.paid_date), 'MMM dd, yyyy')}`}
