@@ -934,13 +934,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const { data: paidReps } = await supabase
         .from("loan_repayments")
-        .select("installment_number, amount")
+        .select("installment_number, amount, principal_paid, original_amount")
         .eq("loan_id", loan.id)
         .eq("status", "paid")
         .order("installment_number", { ascending: false });
 
       const lastPaidInstallment = paidReps?.[0]?.installment_number || 0;
-      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
       const remainingTotal = newTotal - paidTotal;
       const remainingInstallments = loan.loan_term_months - lastPaidInstallment;
       const newInstallmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
