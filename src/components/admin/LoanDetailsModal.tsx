@@ -1206,6 +1206,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
 
+      // Find the disbursement to refund the source account
+      const { data: disbursementRecord } = await supabase
+        .from("disbursements")
+        .select("*, source_account_id, amount")
+        .eq("loan_id", loan.id)
+        .maybeSingle();
+
+      // Refund source account if applicable
+      if (disbursementRecord?.source_account_id) {
+        const { data: sourceAccount } = await supabase
+          .from("accounts")
+          .select("id, balance, account_name")
+          .eq("id", disbursementRecord.source_account_id)
+          .single();
+
+        if (sourceAccount) {
+          const refundAmount = Number(disbursementRecord.amount);
+          const newBalance = sourceAccount.balance + refundAmount;
+          await supabase.from("accounts").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", sourceAccount.id);
+
+          // Record refund transaction
+          await supabase.from("account_transactions").insert({
+            account_id: sourceAccount.id,
+            transaction_type: "refund",
+            amount: refundAmount,
+            balance_before: sourceAccount.balance,
+            balance_after: newBalance,
+            reference_type: "disbursement_reversal",
+            reference_id: loan.id,
+            source: "Disbursement Reversal",
+            destination: sourceAccount.account_name,
+            notes: `Undo disbursement for ${loan.full_name} — K${refundAmount.toLocaleString()} refunded`,
+            created_by: user?.id,
+          });
+        }
+      }
+
       // Delete disbursement record
       await supabase
         .from("disbursements")
@@ -1225,12 +1262,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("id", loan.id);
 
       if (error) throw error;
+
+      await logAudit({
+        action: "UNDO_DISBURSEMENT",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { refunded_amount: disbursementRecord?.amount, source_account_id: disbursementRecord?.source_account_id },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["loan-disbursement", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      toast.success("Disbursement undone - loan reverted to approved status");
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast.success("Disbursement undone - loan reverted to approved status. Source account refunded.");
       setIsUndoDisbursementOpen(false);
       onOpenChange(false);
     },

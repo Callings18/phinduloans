@@ -739,7 +739,7 @@ const Dashboard = () => {
                                                 #{rep.installment_number}
                                               </div>
                                               <div>
-                                                <p className="font-medium text-foreground">K{Number(rep.amount).toLocaleString()}</p>
+                                                <p className="font-medium text-foreground">K{Number(rep.original_amount || rep.amount).toLocaleString()}</p>
                                                 <p className="text-xs text-muted-foreground">
                                                   Due: {format(new Date(rep.due_date), 'MMM dd, yyyy')}
                                                   {rep.paid_date && ` • Paid: ${format(new Date(rep.paid_date), 'MMM dd, yyyy')}`}
