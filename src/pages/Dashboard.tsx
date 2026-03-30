@@ -646,8 +646,10 @@ const Dashboard = () => {
                     const loanRepayments = repayments?.filter(r => r.loan_id === loan.id) || [];
                     const progress = getLoanProgress(loan.id);
                     const isExpanded = expandedLoan === loan.id;
-                    const paidAmount = loanRepayments.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.amount), 0);
-                    const remainingAmount = Number(loan.total_repayment || 0) - paidAmount;
+                    const paidAmount = loanRepayments.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+                    const partialOnPending = loanRepayments.filter(r => r.status !== 'paid').reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+                    const totalPaidAmount = paidAmount + partialOnPending;
+                    const remainingAmount = Math.max(0, Number(loan.total_repayment || 0) - totalPaidAmount);
 
                     return (
                       <Collapsible key={loan.id} open={isExpanded} onOpenChange={() => setExpandedLoan(isExpanded ? null : loan.id)}>
