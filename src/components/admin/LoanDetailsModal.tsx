@@ -604,16 +604,29 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan || !earlySettlement) throw new Error("No loan or settlement data");
 
-      // Mark all pending repayments as paid
-      const { error: repaymentError } = await supabase
+      // Fetch pending repayments to set principal_paid correctly
+      const { data: pendingRepsForSettle } = await supabase
         .from("loan_repayments")
-        .update({
-          status: "paid",
-          paid_date: new Date().toISOString().split("T")[0],
-          payment_method: "early_settlement",
-        })
+        .select("id, amount, original_amount")
         .eq("loan_id", loan.id)
         .eq("status", "pending");
+
+      // Mark each pending repayment as paid with correct principal_paid
+      for (const pr of (pendingRepsForSettle || [])) {
+        const origAmt = pr.original_amount || pr.amount;
+        await supabase
+          .from("loan_repayments")
+          .update({
+            status: "paid",
+            paid_date: new Date().toISOString().split("T")[0],
+            payment_method: "early_settlement",
+            principal_paid: Number(origAmt),
+            original_amount: origAmt,
+            amount: Number(origAmt),
+          })
+          .eq("id", pr.id);
+      }
+      const repaymentError = null; // handled per-row above
 
       if (repaymentError) throw repaymentError;
 

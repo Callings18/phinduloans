@@ -368,9 +368,13 @@ const AdminRepayments = () => {
         .eq('id', repayment.loan_id)
         .single();
 
-      const totalPaid = allRepayments
+      const totalPaidFromPaid = allRepayments
         ?.filter(r => r.status === 'paid')
         .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0;
+      const totalPartialOnPending = allRepayments
+        ?.filter(r => r.status !== 'paid')
+        .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0) || 0;
+      const totalPaid = totalPaidFromPaid + totalPartialOnPending;
 
       const outstandingBalance = (loan?.total_repayment || 0) - totalPaid;
 
