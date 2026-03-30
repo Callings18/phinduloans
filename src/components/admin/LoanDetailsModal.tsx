@@ -1121,10 +1121,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // Calculate remaining amount (total - already paid)
       const { data: paidReps } = await supabase
         .from("loan_repayments")
-        .select("amount")
+        .select("amount, principal_paid, original_amount")
         .eq("loan_id", loan.id)
         .eq("status", "paid");
-      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
       const remainingTotal = newTotal - paidTotal;
       const installmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
 
