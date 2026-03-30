@@ -716,7 +716,7 @@ const Dashboard = () => {
                                 </div>
                                 <Progress value={progress} className="h-2" />
                                 <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Paid: K{paidAmount.toLocaleString()}</span>
+                                  <span>Paid: K{totalPaidAmount.toLocaleString()}</span>
                                   <span>Remaining: K{remainingAmount.toLocaleString()}</span>
                                 </div>
                               </div>
