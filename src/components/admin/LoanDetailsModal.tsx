@@ -1552,9 +1552,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                       <Progress value={progressPercentage} className="h-3" />
                       <div className="flex justify-between text-sm">
-                        <span className="text-success">Paid: K{totalPaid.toLocaleString()}</span>
+                        <span className="text-success">Paid: K{totalPaidIncludingPartial.toLocaleString()}</span>
                         <span className="text-muted-foreground">
-                          Remaining: K{(loan.total_repayment - totalPaid + totalPenalties).toLocaleString()}
+                          Remaining: K{(totalOutstanding + totalPenalties).toLocaleString()}
                         </span>
                       </div>
                     </CardContent>
