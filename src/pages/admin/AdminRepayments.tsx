@@ -531,15 +531,36 @@ const AdminRepayments = () => {
 
     switch (actionId) {
       case 'mark_paid':
-        // Bulk mark as paid
+        // Bulk mark as paid with correct principal_paid/original_amount
+        const bulkLoanIds = new Set<string>();
         for (const id of selectedRepayments) {
+          const rep = repayments?.find(r => r.id === id);
+          if (!rep) continue;
+          const origAmt = rep.original_amount || rep.amount;
           await supabase.from('loan_repayments').update({
             status: 'paid',
             paid_date: new Date().toISOString().split('T')[0],
-            transaction_reference: `BULK-${Date.now()}`
+            transaction_reference: `BULK-${Date.now()}`,
+            principal_paid: Number(origAmt),
+            original_amount: origAmt,
+            amount: Number(origAmt),
           }).eq('id', id);
+          bulkLoanIds.add(rep.loan_id);
+        }
+        // Check auto-completion for each affected loan
+        for (const loanId of bulkLoanIds) {
+          const { data: remaining } = await supabase
+            .from("loan_repayments")
+            .select("id")
+            .eq("loan_id", loanId)
+            .in("status", ["pending", "overdue"]);
+          if (remaining && remaining.length === 0) {
+            await supabase.from("loan_applications").update({ status: "completed" }).eq("id", loanId);
+          }
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-repayments'] });
+        await queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
+        await queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
         toast.success(`${selectedRepayments.length} repayments marked as paid`);
         setSelectedRepayments([]);
         break;
