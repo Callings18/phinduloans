@@ -2224,9 +2224,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-muted/50 space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Principal Amount</span>
-                <span className="font-medium">K{Number(selectedRepayment?.amount || 0).toLocaleString()}</span>
+                <span className="text-sm text-muted-foreground">Original Installment</span>
+                <span className="font-medium">K{Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0).toLocaleString()}</span>
               </div>
+              {selectedRepayment?.principal_paid && Number(selectedRepayment.principal_paid) > 0 && (
+                <div className="flex justify-between text-success">
+                  <span className="text-sm">Already Paid</span>
+                  <span className="font-medium">K{Number(selectedRepayment.principal_paid).toLocaleString()}</span>
+                </div>
+              )}
               {selectedRepayment?.penalty_amount && selectedRepayment.penalty_amount > 0 && (
                 <div className="flex justify-between text-destructive">
                   <span className="text-sm">Penalty</span>
