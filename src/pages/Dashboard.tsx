@@ -451,6 +451,20 @@ const Dashboard = () => {
             </div>
           ) : (
           <>
+          {/* Admin viewing as borrower banner */}
+          {isStaff && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Eye size={16} />
+                <span className="font-medium">Admin Preview Mode</span>
+                <span className="text-muted-foreground">— You're viewing the borrower dashboard</span>
+              </div>
+              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10" asChild>
+                <Link to="/admin">← Back to Admin</Link>
+              </Button>
+            </div>
+          )}
+
           {/* Header */}
           <div className="mb-8 tour-welcome flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
