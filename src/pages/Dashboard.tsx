@@ -534,7 +534,7 @@ const Dashboard = () => {
                     <p className="text-muted-foreground text-sm">Next Payment</p>
                     {nextPayment ? (
                       <>
-                        <p className="text-2xl font-bold text-foreground">K{Number(nextPayment.amount).toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-foreground">K{Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0)).toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(nextPayment.due_date), 'MMM dd, yyyy')}</p>
                       </>
                     ) : (
