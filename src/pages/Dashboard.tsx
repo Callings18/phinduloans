@@ -160,10 +160,12 @@ const Dashboard = () => {
     if (!isLoading && !user) {
       navigate('/auth');
     }
-    if (!isLoading && user && isStaff) {
+    // Only auto-redirect staff if they didn't intentionally navigate here
+    // (e.g. via "View as Borrower" button which sets ?view=borrower)
+    if (!isLoading && user && isStaff && !searchParams.has('view')) {
       navigate('/admin');
     }
-  }, [user, isLoading, isStaff, navigate]);
+  }, [user, isLoading, isStaff, navigate, searchParams]);
 
   const { data: loans, isLoading: loansLoading } = useQuery({
     queryKey: ['user-loans', user?.id],
