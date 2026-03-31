@@ -304,7 +304,7 @@ const Dashboard = () => {
         receiptUrl = path;
       }
 
-      const { error } = await (supabase.from as any)("payment_claims").insert({
+      const { error } = await supabase.from("payment_claims").insert({
         loan_id: submitPaymentRepayment.loan_id,
         repayment_id: submitPaymentRepayment.id,
         user_id: user.id,
