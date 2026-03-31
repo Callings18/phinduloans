@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   Shield,
   UserCog,
   BookOpen,
+  Eye,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo-white.png";
 import { useState } from "react";
@@ -84,6 +85,7 @@ const AdminSidebar = () => {
     menuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
   const location = useLocation();
+  const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
 
   // Filter menu items based on role
@@ -212,8 +214,20 @@ const AdminSidebar = () => {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-sidebar-border shrink-0">
+      {/* View as Borrower + Logout */}
+      <div className="p-4 border-t border-sidebar-border shrink-0 space-y-2">
+        <Button
+          variant="outline"
+          onClick={() => navigate('/dashboard')}
+          className={cn(
+            "w-full justify-start text-primary border-primary/30 hover:bg-primary/10",
+            collapsed && "justify-center"
+          )}
+          title="View Borrower Dashboard"
+        >
+          <Eye size={20} />
+          {!collapsed && <span className="ml-3">View as Borrower</span>}
+        </Button>
         <Button
           variant="ghost"
           onClick={signOut}
