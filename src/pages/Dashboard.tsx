@@ -386,13 +386,17 @@ const Dashboard = () => {
   const getRepaymentStatus = (repayment: any) => {
     const today = startOfDay(new Date());
     const dueDate = startOfDay(new Date(repayment.due_date));
-    const isOverdue = repayment.status === 'pending' && isAfter(today, dueDate);
+    const isPendingOrOverdueStatus = ['pending', 'overdue'].includes(repayment.status);
+    const isOverdue = isPendingOrOverdueStatus && isAfter(today, dueDate);
     const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
 
     if (repayment.status === 'paid') {
       return { label: 'Paid', color: 'bg-success/20 text-success border-success/30', icon: CheckCircle };
     }
-    if (isOverdue) {
+    if (repayment.status === 'cancelled') {
+      return { label: 'Cancelled', color: 'bg-muted/20 text-muted-foreground border-muted/30', icon: AlertCircle };
+    }
+    if (isOverdue || repayment.status === 'overdue') {
       return { label: `${daysOverdue}d overdue`, color: 'bg-destructive/20 text-destructive border-destructive/30', icon: AlertTriangle };
     }
     return { label: 'Pending', color: 'bg-warning/20 text-warning border-warning/30', icon: Clock };
