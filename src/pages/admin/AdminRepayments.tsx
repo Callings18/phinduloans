@@ -162,7 +162,7 @@ const AdminRepayments = () => {
   const { data: paymentClaims = [] } = useQuery({
     queryKey: ["admin-payment-claims"],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("payment_claims")
+      const { data, error } = await supabase.from("payment_claims")
         .select("*")
         .eq("status", "pending")
         .order("created_at", { ascending: false });
