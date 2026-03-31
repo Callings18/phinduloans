@@ -755,7 +755,7 @@ const Dashboard = () => {
                                               </div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              {rep.status === 'pending' && (
+                                              {['pending', 'overdue'].includes(rep.status) && (
                                                 <Button
                                                   variant="outline"
                                                   size="sm"
