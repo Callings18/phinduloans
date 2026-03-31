@@ -420,8 +420,12 @@ const Dashboard = () => {
   const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 
   // Calculate overdue amount
-  const overdueRepayments = repayments?.filter(r => r.status === 'pending' && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))) || [];
-  const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+  const overdueRepayments = repayments?.filter(r => ['pending', 'overdue'].includes(r.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))) || [];
+  const totalOverdue = overdueRepayments.reduce((sum, r) => {
+    const originalAmt = Number(r.original_amount || r.amount);
+    const alreadyPaid = Number(r.principal_paid || 0);
+    return sum + Math.max(0, originalAmt - alreadyPaid);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
