@@ -1,56 +1,7 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
-import GuidedTour from "@/components/common/GuidedTour";
-import { ApplicationStatusTracker } from "@/components/dashboard/ApplicationStatusTracker";
-import PaymentReminder from "@/components/dashboard/PaymentReminder";
-import QuickApply from "@/components/dashboard/QuickApply";
-import WalletWidget from "@/components/dashboard/WalletWidget";
-import ContractSigningWidget from "@/components/dashboard/ContractSigningWidget";
-import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
-
-import DocumentChecklist from "@/components/dashboard/DocumentChecklist";
-import KYCStatusWidget from "@/components/dashboard/KYCStatusWidget";
-import { Step } from "react-joyride";
-import {
-  CreditCard,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  TrendingUp,
-  FileText,
-  Plus,
-  ArrowRight,
-  Wallet,
-  Calendar,
-  Loader2,
-  Download,
-  HelpCircle,
-  Receipt,
-  AlertTriangle,
-  Eye,
-  ChevronDown,
-  ChevronUp,
-  Activity,
-  User,
-  LogOut,
-} from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { generateAccountStatement } from "@/utils/generateStatement";
-import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -61,22 +12,24 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { generateAccountStatement } from "@/utils/generateStatement";
+import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { toast } from "sonner";
-import { Banknote, Upload } from "lucide-react";
+import { Banknote, Loader2, Eye } from "lucide-react";
 
-const statusConfig = {
-  pending: { label: "Submitted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
-  under_review: { label: "Under Review", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: FileText },
-  approved: { label: "Approved", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: CheckCircle },
-  contract_signing: { label: "Contract Signing", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: FileText },
-  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30", icon: Banknote },
-  rejected: { label: "Rejected", color: "bg-red-500/20 text-red-400 border-red-500/30", icon: AlertCircle },
-  disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: CreditCard },
-  active: { label: "Active", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: TrendingUp },
-  completed: { label: "Completed", color: "bg-gray-500/20 text-gray-400 border-gray-500/30", icon: CheckCircle },
-  defaulted: { label: "Defaulted", color: "bg-red-600/20 text-red-500 border-red-600/30", icon: AlertCircle },
-};
+import BorrowerBottomNav, { type BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
+import BorrowerHomeTab from "@/components/dashboard/BorrowerHomeTab";
+import BorrowerLoansTab from "@/components/dashboard/BorrowerLoansTab";
+import BorrowerPaymentsTab from "@/components/dashboard/BorrowerPaymentsTab";
+import BorrowerProfileTab from "@/components/dashboard/BorrowerProfileTab";
+import QuickApply from "@/components/dashboard/QuickApply";
+import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
+
+import phinduLogo from "@/assets/phindu-logo-white.png";
+import ThemeToggle from "@/components/common/ThemeToggle";
+import NotificationCenter from "@/components/common/NotificationCenter";
 
 const Dashboard = () => {
   const { user, isLoading, isAdmin, isStaff, signOut } = useAuth();
@@ -84,9 +37,10 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
-  const [runTour, setRunTour] = useState(false);
-  const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
-  const [submitPaymentRepayment, setSubmitPaymentRepayment] = useState<{ id: string; loan_id: string; amount: number; due_date: string; installment_number?: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<BorrowerTab>("home");
+
+  // Payment claim state
+  const [submitPaymentRepayment, setSubmitPaymentRepayment] = useState<any>(null);
   const [claimAmount, setClaimAmount] = useState("");
   const [claimReference, setClaimReference] = useState("");
   const [claimReceiptFile, setClaimReceiptFile] = useState<File | null>(null);
@@ -101,73 +55,28 @@ const Dashboard = () => {
   useEffect(() => {
     if (searchParams.get("apply") === "true") {
       setShowApplicationForm(true);
-      const productId = searchParams.get("product") || undefined;
-      const amount = searchParams.get("amount") ? Number(searchParams.get("amount")) : undefined;
-      const term = searchParams.get("term") ? Number(searchParams.get("term")) : undefined;
-      setApplyProductId(productId);
-      setApplyAmount(amount);
-      setApplyTerm(term);
+      setApplyProductId(searchParams.get("product") || undefined);
+      setApplyAmount(searchParams.get("amount") ? Number(searchParams.get("amount")) : undefined);
+      setApplyTerm(searchParams.get("term") ? Number(searchParams.get("term")) : undefined);
+    }
+    // If navigating to a specific tab
+    const tab = searchParams.get("tab") as BorrowerTab | null;
+    if (tab && ["home", "loans", "apply", "payments", "profile"].includes(tab)) {
+      setActiveTab(tab);
     }
   }, [searchParams]);
-
-  const handleStartApplication = (productId?: string, amount?: number, term?: number) => {
-    setApplyProductId(productId);
-    setApplyAmount(amount);
-    setApplyTerm(term);
-    setShowApplicationForm(true);
-  };
-
-  const handleCloseApplication = () => {
-    setShowApplicationForm(false);
-    setApplyProductId(undefined);
-    setApplyAmount(undefined);
-    setApplyTerm(undefined);
-    // Clear URL params
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete("apply");
-    newParams.delete("product");
-    newParams.delete("amount");
-    newParams.delete("term");
-    setSearchParams(newParams, { replace: true });
-    // Refresh loans data
-    queryClient.invalidateQueries({ queryKey: ['user-loans', user?.id] });
-  };
-
-  const tourSteps: Step[] = [
-    {
-      target: ".tour-welcome",
-      content: "Welcome to your Phindu dashboard! Here you can manage your loans and track your financial progress at a glance.",
-      placement: "bottom",
-    },
-    {
-      target: ".tour-stats",
-      content: "Quickly view your active loans, total amount borrowed, and see how many applications are currently under review.",
-      placement: "bottom",
-    },
-    {
-      target: ".tour-apply",
-      content: "Need quick funds? Use this section to start a new loan application. The process is fast and fully transparent.",
-      placement: "top",
-    },
-    {
-      target: ".tour-applications",
-      content: "Track the real-time status of all your applications here. Expand any loan to see your repayment schedule.",
-      placement: "top",
-    },
-  ];
 
   useEffect(() => {
     if (!isLoading && !user) {
       navigate('/auth');
     }
-    // Only auto-redirect staff if they didn't intentionally navigate here
-    // (e.g. via "View as Borrower" button which sets ?view=borrower)
     if (!isLoading && user && isStaff && !searchParams.has('view')) {
       navigate('/admin');
     }
   }, [user, isLoading, isStaff, navigate, searchParams]);
 
-  const { data: loans, isLoading: loansLoading } = useQuery({
+  // ─── Data Queries ────────────────────────────────────────────
+  const { data: loans = [], isLoading: loansLoading } = useQuery({
     queryKey: ['user-loans', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -176,7 +85,6 @@ const Dashboard = () => {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       return data;
     },
@@ -186,32 +94,17 @@ const Dashboard = () => {
   // Real-time subscription for loan status changes
   useEffect(() => {
     if (!user?.id) return;
-
     const channel = supabase
       .channel('loan-status-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'loan_applications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          console.log('[Dashboard] Real-time update received:', payload);
-          // Invalidate queries to refresh data
-          queryClient.invalidateQueries({ queryKey: ['user-loans', user.id] });
-          queryClient.invalidateQueries({ queryKey: ['user-repayments', user.id] });
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_applications', filter: `user_id=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['user-loans', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['user-repayments', user.id] });
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user?.id, queryClient]);
 
-  const { data: repayments } = useQuery({
+  const { data: repayments = [] } = useQuery({
     queryKey: ['user-repayments', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -220,7 +113,6 @@ const Dashboard = () => {
         .select('*')
         .eq('user_id', user.id)
         .order('due_date', { ascending: true });
-
       if (error) throw error;
       return data;
     },
@@ -231,19 +123,13 @@ const Dashboard = () => {
     queryKey: ['user-profile', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error) throw error;
       return data;
     },
     enabled: !!user?.id,
   });
 
-  // Check if KYC documents are all verified
   const { data: kycVaultDocs = [] } = useQuery({
     queryKey: ["borrower-kyc-vault-status", user?.id],
     queryFn: async () => {
@@ -259,7 +145,6 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
-  // Also check borrower_kyc_info for admin-level KYC approval
   const { data: kycInfo } = useQuery({
     queryKey: ["borrower-kyc-info-status", user?.id],
     queryFn: async () => {
@@ -276,10 +161,7 @@ const Dashboard = () => {
   });
 
   const kycVerified = useMemo(() => {
-    // If admin has approved KYC via borrower_kyc_info, consider it verified
     if (kycInfo?.is_verified === true) return true;
-
-    // Otherwise check individual document verification in vault
     const KYC_TYPES = ["nrc_front", "nrc_back", "selfie"];
     const docsByType: Record<string, boolean> = {};
     kycVaultDocs.forEach((d) => {
@@ -288,9 +170,84 @@ const Dashboard = () => {
     return KYC_TYPES.every((t) => docsByType[t] === true);
   }, [kycVaultDocs, kycInfo]);
 
+  const activeLoans = useMemo(() => loans.filter(l => ['active', 'disbursed'].includes(l.status)), [loans]);
+
+  // ─── Actions ─────────────────────────────────────────────────
+  const handleStartApplication = useCallback((productId?: string, amount?: number, term?: number) => {
+    setApplyProductId(productId);
+    setApplyAmount(amount);
+    setApplyTerm(term);
+    setShowApplicationForm(true);
+  }, []);
+
+  const handleCloseApplication = useCallback(() => {
+    setShowApplicationForm(false);
+    setApplyProductId(undefined);
+    setApplyAmount(undefined);
+    setApplyTerm(undefined);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("apply"); newParams.delete("product"); newParams.delete("amount"); newParams.delete("term");
+    setSearchParams(newParams, { replace: true });
+    queryClient.invalidateQueries({ queryKey: ['user-loans', user?.id] });
+  }, [searchParams, setSearchParams, queryClient, user?.id]);
+
+  const downloadStatement = useCallback(async (loan: any) => {
+    setIsGenerating(loan.id);
+    try {
+      const loanRepayments = repayments.filter(r => r.loan_id === loan.id && r.status === 'paid');
+      generateAccountStatement({ ...loan, repayments: loanRepayments });
+    } catch (error) {
+      const { handleError } = await import('@/utils/errorHandler');
+      handleError(error, { component: 'Dashboard', action: 'generate_statement' });
+    } finally {
+      setIsGenerating(null);
+    }
+  }, [repayments]);
+
+  const downloadSchedule = useCallback(async (loan: any) => {
+    setIsGenerating(`schedule-${loan.id}`);
+    try {
+      const loanRepayments = repayments.filter(r => r.loan_id === loan.id);
+      downloadLoanSchedule({
+        borrowerName: loan.full_name,
+        borrowerPhone: loan.phone || '',
+        borrowerEmail: loan.email || '',
+        loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+        loanAmount: loan.loan_amount,
+        interestRate: loan.interest_rate || 15,
+        interestPeriod: 'monthly',
+        termMonths: loan.loan_term_months,
+        monthlyPayment: loan.monthly_payment || 0,
+        totalRepayment: loan.total_repayment || 0,
+        disbursementDate: loan.created_at,
+        firstRepaymentDate: loanRepayments[0]?.due_date || loan.created_at,
+        repayments: loanRepayments.map((r: any) => ({
+          installmentNumber: r.installment_number || 1,
+          dueDate: r.due_date,
+          amount: Number(r.amount),
+          status: r.status,
+          paidDate: r.paid_date || undefined,
+        })),
+      });
+    } catch (error) {
+      const { handleError } = await import('@/utils/errorHandler');
+      handleError(error, { component: 'Dashboard', action: 'generate_schedule' });
+    } finally {
+      setIsGenerating(null);
+    }
+  }, [repayments]);
+
+  const handleSubmitPayment = useCallback((rep: any) => {
+    const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: remaining, due_date: rep.due_date, installment_number: rep.installment_number });
+    setClaimAmount(String(remaining));
+    setClaimReference("");
+    setClaimReceiptFile(null);
+  }, []);
+
   const submitPaymentClaimMutation = useMutation({
     mutationFn: async () => {
-      if (!user?.id || !submitPaymentRepayment) throw new Error("Missing user or repayment");
+      if (!user?.id || !submitPaymentRepayment) throw new Error("Missing data");
       const amount = parseFloat(claimAmount);
       if (isNaN(amount) || amount <= 0) throw new Error("Enter a valid amount");
       if (!claimReference.trim()) throw new Error("Enter transaction reference");
@@ -319,91 +276,23 @@ const Dashboard = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-repayments", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["payment-claims", user?.id] });
-      toast.success("Payment reference submitted. Admin will verify and record it.");
+      toast.success("Payment reference submitted. Admin will verify it.");
       setSubmitPaymentRepayment(null);
-      setClaimAmount("");
-      setClaimReference("");
-      setClaimReceiptFile(null);
+      setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null);
     },
     onError: (e) => toast.error((e as Error).message || "Failed to submit"),
   });
 
-  const downloadStatement = async (loan: any) => {
-    setIsGenerating(loan.id);
-    try {
-      const loanRepayments = repayments?.filter(r => r.loan_id === loan.id && r.status === 'paid') || [];
-      generateAccountStatement({
-        ...loan,
-        repayments: loanRepayments
-      });
-    } catch (error) {
-      const { handleError } = await import('@/utils/errorHandler');
-      handleError(error, { component: 'Dashboard', action: 'generate_statement' });
-    } finally {
-      setIsGenerating(null);
+  const handleTabChange = useCallback((tab: BorrowerTab) => {
+    if (tab === "apply") {
+      handleStartApplication();
+    } else {
+      setActiveTab(tab);
+      setShowApplicationForm(false);
     }
-  };
+  }, [handleStartApplication]);
 
-  const downloadSchedule = async (loan: any) => {
-    setIsGenerating(`schedule-${loan.id}`);
-    try {
-      const loanRepayments = repayments?.filter(r => r.loan_id === loan.id) || [];
-      downloadLoanSchedule({
-        borrowerName: loan.full_name,
-        borrowerPhone: loan.phone || '',
-        borrowerEmail: loan.email || '',
-        loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
-        loanAmount: loan.loan_amount,
-        interestRate: loan.interest_rate || 15,
-        interestPeriod: 'monthly',
-        termMonths: loan.loan_term_months,
-        monthlyPayment: loan.monthly_payment || 0,
-        totalRepayment: loan.total_repayment || 0,
-        disbursementDate: loan.created_at,
-        firstRepaymentDate: loanRepayments[0]?.due_date || loan.created_at,
-        repayments: loanRepayments.map((r: any) => ({
-          installmentNumber: r.installment_number || 1,
-          dueDate: r.due_date,
-          amount: Number(r.amount),
-          status: r.status,
-          paidDate: r.paid_date || undefined,
-        })),
-      });
-    } catch (error) {
-      const { handleError } = await import('@/utils/errorHandler');
-      handleError(error, { component: 'Dashboard', action: 'generate_schedule' });
-    } finally {
-      setIsGenerating(null);
-    }
-  };
-
-  const getLoanProgress = (loanId: string) => {
-    const loanRepayments = repayments?.filter(r => r.loan_id === loanId) || [];
-    const paid = loanRepayments.filter(r => r.status === 'paid').length;
-    const total = loanRepayments.length;
-    return total > 0 ? (paid / total) * 100 : 0;
-  };
-
-  const getRepaymentStatus = (repayment: any) => {
-    const today = startOfDay(new Date());
-    const dueDate = startOfDay(new Date(repayment.due_date));
-    const isPendingOrOverdueStatus = ['pending', 'overdue'].includes(repayment.status);
-    const isOverdue = isPendingOrOverdueStatus && isAfter(today, dueDate);
-    const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
-
-    if (repayment.status === 'paid') {
-      return { label: 'Paid', color: 'bg-success/20 text-success border-success/30', icon: CheckCircle };
-    }
-    if (repayment.status === 'cancelled') {
-      return { label: 'Cancelled', color: 'bg-muted/20 text-muted-foreground border-muted/30', icon: AlertCircle };
-    }
-    if (isOverdue || repayment.status === 'overdue') {
-      return { label: `${daysOverdue}d overdue`, color: 'bg-destructive/20 text-destructive border-destructive/30', icon: AlertTriangle };
-    }
-    return { label: 'Pending', color: 'bg-warning/20 text-warning border-warning/30', icon: Clock };
-  };
-
+  // ─── Loading / Auth Guard ────────────────────────────────────
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -412,539 +301,141 @@ const Dashboard = () => {
     );
   }
 
-  const activeLoans = loans?.filter(l => ['active', 'disbursed'].includes(l.status)) || [];
-  const completedLoans = loans?.filter(l => l.status === 'completed') || [];
-  const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
-  const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
+  if (!user) return null;
 
-  // Calculate upcoming payment
-  const upcomingRepayments = repayments?.filter(r => ['pending', 'overdue'].includes(r.status) && new Date(r.due_date) >= startOfDay(new Date())) || [];
-  const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
-
-  // Calculate overdue amount
-  const overdueRepayments = repayments?.filter(r => ['pending', 'overdue'].includes(r.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))) || [];
-  const totalOverdue = overdueRepayments.reduce((sum, r) => {
-    const originalAmt = Number(r.original_amount || r.amount);
-    const alreadyPaid = Number(r.principal_paid || 0);
-    return sum + Math.max(0, originalAmt - alreadyPaid);
-  }, 0);
-
+  // ─── Render ──────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Navbar />
-      <GuidedTour
-        steps={tourSteps}
-        tourKey="borrower-dashboard"
-        externalRun={runTour}
-        onFinish={() => setRunTour(false)}
-      />
-
-      <main className="pt-24 pb-16">
-        <div className="container mx-auto px-4">
-          {/* Show Application Form overlay */}
-          {showApplicationForm ? (
-            <div className="max-w-3xl mx-auto">
-              <LoanApplicationForm
-                initialProductId={applyProductId}
-                initialAmount={applyAmount}
-                initialTerm={applyTerm}
-                onClose={handleCloseApplication}
-              />
-            </div>
-          ) : (
-          <>
-          {/* Admin viewing as borrower banner */}
-          {isStaff && (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Eye size={16} />
-                <span className="font-medium">Admin Preview Mode</span>
-                <span className="text-muted-foreground">— You're viewing the borrower dashboard</span>
-              </div>
-              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10" asChild>
-                <Link to="/admin">← Back to Admin</Link>
-              </Button>
-            </div>
-          )}
-
-          {/* Header */}
-          <div className="mb-8 tour-welcome flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-                Welcome back, <span className="text-gradient">{profile?.full_name || 'User'}</span>
-              </h1>
-              <p className="text-muted-foreground">Manage your loans and track your repayments</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="glass border-border/50"
-                asChild
-              >
-                <Link to="/profile">
-                  <User size={18} className="mr-2 text-primary" />
-                  My Profile
-                </Link>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="glass border-border/50"
-                onClick={() => setRunTour(true)}
-              >
-                <HelpCircle size={18} className="mr-2 text-primary" />
-                How it works
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="glass border-destructive/50 text-destructive hover:bg-destructive/10"
-                onClick={async () => { await signOut(); navigate('/auth'); }}
-              >
-                <LogOut size={18} className="mr-2" />
-                Log Out
-              </Button>
-            </div>
+    <div className="min-h-screen bg-background text-foreground pb-20">
+      {/* Compact top header — mobile-friendly */}
+      <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-lg border-b border-border">
+        <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
+          <img src={phinduLogo} alt="Phindu" className="h-8" />
+          <div className="flex items-center gap-1">
+            <ThemeToggle variant="minimal" />
+            <NotificationCenter />
           </div>
-
-          {/* Payment Reminders */}
-          {repayments && repayments.length > 0 && (
-            <PaymentReminder repayments={repayments} className="mb-8" />
-          )}
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 tour-stats">
-            <Card className="glass border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-muted-foreground text-sm">Active Loans</p>
-                    <p className="text-3xl font-bold text-foreground">{activeLoans.length}</p>
-                  </div>
-                  <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                    <CreditCard className="text-primary-foreground" size={24} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="glass border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-muted-foreground text-sm">Total Borrowed</p>
-                    <p className="text-3xl font-bold text-foreground">K{totalBorrowed.toLocaleString()}</p>
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                    <Wallet className="text-emerald-400" size={24} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="glass border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-muted-foreground text-sm">Next Payment</p>
-                    {nextPayment ? (
-                      <>
-                        <p className="text-2xl font-bold text-foreground">K{Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0)).toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(nextPayment.due_date), 'MMM dd, yyyy')}</p>
-                      </>
-                    ) : (
-                      <p className="text-lg font-medium text-muted-foreground">No upcoming</p>
-                    )}
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                    <Calendar className="text-blue-400" size={24} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className={`glass border-border/50 ${totalOverdue > 0 ? 'border-destructive/50' : ''}`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-muted-foreground text-sm">Overdue Amount</p>
-                    <p className={`text-3xl font-bold ${totalOverdue > 0 ? 'text-destructive' : 'text-foreground'}`}>
-                      K{totalOverdue.toLocaleString()}
-                    </p>
-                    {totalOverdue > 0 && (
-                      <p className="text-xs text-destructive">{overdueRepayments.length} payment(s)</p>
-                    )}
-                  </div>
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${totalOverdue > 0 ? 'bg-destructive/20' : 'bg-gray-500/20'}`}>
-                    <AlertTriangle className={totalOverdue > 0 ? 'text-destructive' : 'text-gray-400'} size={24} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* KYC Status Widget */}
-          {user && (
-            <div className="mb-6">
-              <KYCStatusWidget userId={user.id} />
-            </div>
-          )}
-
-          {user && (
-            <div className="mb-6">
-              <ContractSigningWidget userId={user.id} />
-            </div>
-          )}
-
-          {/* Quick Actions and Wallet - Use QuickApply for logged-in users */}
-          <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="tour-apply">
-              {user && profile && (
-                <QuickApply
-                  userId={user.id}
-                  profile={profile}
-                  kycVerified={kycVerified}
-                  hasActiveLoan={activeLoans.length > 0}
-                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user-loans'] })}
-                  onApply={(productId, amount, term) => handleStartApplication(productId, amount, term)}
-                />
-              )}
-            </div>
-            <div className="tour-wallet">
-              {user && <WalletWidget />}
-            </div>
-          </div>
-
-          {/* Loan Tabs */}
-          <div className="tour-applications">
-            <Tabs defaultValue="tracker" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-6">
-                <TabsTrigger value="tracker" className="flex items-center gap-2">
-                  <Activity size={16} />
-                  Status Tracker
-                </TabsTrigger>
-                <TabsTrigger value="active" className="flex items-center gap-2">
-                  <TrendingUp size={16} />
-                  Active ({activeLoans.length})
-                </TabsTrigger>
-                <TabsTrigger value="pending" className="flex items-center gap-2">
-                  <Clock size={16} />
-                  Pending ({pendingApps.length})
-                </TabsTrigger>
-                <TabsTrigger value="completed" className="flex items-center gap-2">
-                  <CheckCircle size={16} />
-                  Completed ({completedLoans.length})
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Real-time Status Tracker Tab */}
-              <TabsContent value="tracker" className="space-y-4">
-                {user?.id && <ApplicationStatusTracker userId={user.id} />}
-                
-                {/* Document Checklist for Under Review loans */}
-                {user?.id && loans?.filter(l => l.status === 'under_review').map(loan => (
-                  <DocumentChecklist key={loan.id} loanId={loan.id} userId={user.id} />
-                ))}
-              </TabsContent>
-
-              {/* Active Loans Tab */}
-              <TabsContent value="active" className="space-y-4">
-                {activeLoans.length === 0 ? (
-                  <Card className="glass border-border/50">
-                    <CardContent className="p-12 text-center">
-                      <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
-                        <CreditCard className="text-muted-foreground" size={32} />
-                      </div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No Active Loans</h3>
-                      <p className="text-muted-foreground mb-6">You don't have any active loans at the moment</p>
-                      <Button variant="hero" onClick={() => handleStartApplication()}>
-                        Apply for a Loan
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  activeLoans.map((loan) => {
-                    const config = statusConfig[loan.status as keyof typeof statusConfig];
-                    const StatusIcon = config?.icon || Clock;
-                    const loanRepayments = repayments?.filter(r => r.loan_id === loan.id) || [];
-                    const progress = getLoanProgress(loan.id);
-                    const isExpanded = expandedLoan === loan.id;
-                    const paidAmount = loanRepayments.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-                    const partialOnPending = loanRepayments.filter(r => r.status !== 'paid').reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
-                    const totalPaidAmount = paidAmount + partialOnPending;
-                    const remainingAmount = Math.max(0, Number(loan.total_repayment || 0) - totalPaidAmount);
-
-                    return (
-                      <Collapsible key={loan.id} open={isExpanded} onOpenChange={() => setExpandedLoan(isExpanded ? null : loan.id)}>
-                        <Card className="glass border-border/50">
-                          <CardContent className="p-6">
-                            <div className="flex flex-col gap-4">
-                              {/* Loan Header */}
-                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="flex items-start gap-4">
-                                  <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                                    <StatusIcon className="text-primary" size={24} />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold text-foreground">K{Number(loan.loan_amount).toLocaleString()}</h4>
-                                    <p className="text-muted-foreground text-sm">{loan.loan_purpose} • {loan.loan_term_months} months</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <Badge className={`${config?.color} border text-xs`}>
-                                        {config?.label}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => downloadSchedule(loan)}
-                                    disabled={isGenerating === `schedule-${loan.id}`}
-                                  >
-                                    {isGenerating === `schedule-${loan.id}` ? (
-                                      <Loader2 size={14} className="animate-spin" />
-                                    ) : (
-                                      <Receipt size={14} className="mr-1" />
-                                    )}
-                                    Schedule
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => downloadStatement(loan)}
-                                    disabled={isGenerating === loan.id}
-                                  >
-                                    {isGenerating === loan.id ? (
-                                      <Loader2 size={14} className="animate-spin" />
-                                    ) : (
-                                      <Download size={14} className="mr-1" />
-                                    )}
-                                    Statement
-                                  </Button>
-                                  <CollapsibleTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                      {isExpanded ? 'Hide' : 'View'} Schedule
-                                    </Button>
-                                  </CollapsibleTrigger>
-                                </div>
-                              </div>
-
-                              {/* Progress Bar */}
-                              <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Repayment Progress</span>
-                                  <span className="text-foreground font-medium">{Math.round(progress)}%</span>
-                                </div>
-                                <Progress value={progress} className="h-2" />
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Paid: K{totalPaidAmount.toLocaleString()}</span>
-                                  <span>Remaining: K{remainingAmount.toLocaleString()}</span>
-                                </div>
-                              </div>
-
-                              {/* Repayment Schedule */}
-                              <CollapsibleContent>
-                                <div className="mt-4 border-t border-border/50 pt-4">
-                                  <h5 className="font-medium text-foreground mb-3">Repayment Schedule</h5>
-                                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                                    {loanRepayments.length === 0 ? (
-                                      <p className="text-muted-foreground text-sm">No repayments scheduled yet</p>
-                                    ) : (
-                                      loanRepayments.map((rep) => {
-                                        const status = getRepaymentStatus(rep);
-                                        const StatusIcon = status.icon;
-                                        return (
-                                          <div key={rep.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
-                                            <div className="flex items-center gap-3">
-                                              <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-medium">
-                                                #{rep.installment_number}
-                                              </div>
-                                              <div>
-                                                <p className="font-medium text-foreground">K{Number(rep.original_amount || rep.amount).toLocaleString()}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                  Due: {format(new Date(rep.due_date), 'MMM dd, yyyy')}
-                                                  {rep.paid_date && ` • Paid: ${format(new Date(rep.paid_date), 'MMM dd, yyyy')}`}
-                                                </p>
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              {['pending', 'overdue'].includes(rep.status) && (
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="text-xs"
-                                                  onClick={() => {
-                                                    const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
-                                                    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: remaining, due_date: rep.due_date, installment_number: rep.installment_number });
-                                                    setClaimAmount(String(remaining));
-                                                    setClaimReference("");
-                                                    setClaimReceiptFile(null);
-                                                  }}
-                                                >
-                                                  <Banknote size={12} className="mr-1" />
-                                                  I've paid
-                                                </Button>
-                                              )}
-                                              <Badge className={`${status.color} border text-xs`}>
-                                                <StatusIcon size={10} className="mr-1" />
-                                                {status.label}
-                                              </Badge>
-                                            </div>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              </CollapsibleContent>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Collapsible>
-                    );
-                  })
-                )}
-              </TabsContent>
-
-              {/* Pending Tab */}
-              <TabsContent value="pending" className="space-y-4">
-                {pendingApps.length === 0 ? (
-                  <Card className="glass border-border/50">
-                    <CardContent className="p-12 text-center">
-                      <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
-                        <Clock className="text-muted-foreground" size={32} />
-                      </div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No Pending Applications</h3>
-                      <p className="text-muted-foreground">All your applications have been processed</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  pendingApps.map((loan) => {
-                    const config = statusConfig[loan.status as keyof typeof statusConfig];
-                    const StatusIcon = config?.icon || Clock;
-
-                    return (
-                      <Card key={loan.id} className="glass border-border/50">
-                        <CardContent className="p-6">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                                <StatusIcon className="text-primary" size={24} />
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-foreground">K{Number(loan.loan_amount).toLocaleString()}</h4>
-                                <p className="text-muted-foreground text-sm">{loan.loan_purpose} • {loan.loan_term_months} months</p>
-                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                  <Calendar size={12} />
-                                  Applied: {format(new Date(loan.created_at), 'MMM dd, yyyy')}
-                                </div>
-                              </div>
-                            </div>
-                            <Badge className={`${config?.color} border`}>
-                              {config?.label}
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
-                )}
-              </TabsContent>
-
-              {/* Completed Tab */}
-              <TabsContent value="completed" className="space-y-4">
-                {completedLoans.length === 0 ? (
-                  <Card className="glass border-border/50">
-                    <CardContent className="p-12 text-center">
-                      <div className="w-16 h-16 rounded-full bg-secondary mx-auto mb-4 flex items-center justify-center">
-                        <CheckCircle className="text-muted-foreground" size={32} />
-                      </div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No Completed Loans</h3>
-                      <p className="text-muted-foreground">Completed loans will appear here</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  completedLoans.map((loan) => (
-                    <Card key={loan.id} className="glass border-border/50">
-                      <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
-                              <CheckCircle className="text-success" size={24} />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-foreground">K{Number(loan.loan_amount).toLocaleString()}</h4>
-                              <p className="text-muted-foreground text-sm">{loan.loan_purpose} • {loan.loan_term_months} months</p>
-                              <p className="text-xs text-success mt-1">Successfully completed</p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => downloadStatement(loan)}
-                            disabled={isGenerating === loan.id}
-                          >
-                            {isGenerating === loan.id ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Download size={14} className="mr-1" />
-                            )}
-                            Statement
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </TabsContent>
-            </Tabs>
-          </div>
-
-          <Dialog open={!!submitPaymentRepayment} onOpenChange={(open) => { if (!open) { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); } }}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Submit payment reference</DialogTitle>
-                <DialogDescription>
-                  Enter the amount you paid and the transaction reference (e.g. mobile money code). Optionally attach a receipt. Admin will verify and record the payment.
-                </DialogDescription>
-              </DialogHeader>
-              {submitPaymentRepayment && (
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="claim-amount">Amount (K)</Label>
-                    <Input id="claim-amount" type="number" min="0" step="0.01" value={claimAmount} onChange={(e) => setClaimAmount(e.target.value)} placeholder="e.g. 50000" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="claim-reference">Transaction reference *</Label>
-                    <Input id="claim-reference" value={claimReference} onChange={(e) => setClaimReference(e.target.value)} placeholder="e.g. MM123456789" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Receipt (optional)</Label>
-                    <div className="flex items-center gap-2">
-                      <Input type="file" accept="image/*,.pdf" onChange={(e) => setClaimReceiptFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
-                      {claimReceiptFile && <span className="text-xs text-muted-foreground truncate">{claimReceiptFile.name}</span>}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); }}>Cancel</Button>
-                <Button onClick={() => submitPaymentClaimMutation.mutate()} disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}>
-                  {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1" />}
-                  Submit
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          </>
-          )}
         </div>
+
+        {/* Admin preview banner */}
+        {isStaff && (
+          <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-primary/10 border-b border-primary/20">
+            <div className="flex items-center gap-1.5 text-xs text-primary">
+              <Eye size={12} />
+              <span className="font-medium">Admin Preview</span>
+            </div>
+            <Button size="sm" variant="ghost" className="h-6 text-xs text-primary" asChild>
+              <Link to="/admin">← Back to Admin</Link>
+            </Button>
+          </div>
+        )}
+      </header>
+
+      {/* Main Content */}
+      <main className="px-4 py-4 max-w-lg mx-auto">
+        {/* Application Form Overlay */}
+        {showApplicationForm ? (
+          <div>
+            <LoanApplicationForm
+              initialProductId={applyProductId}
+              initialAmount={applyAmount}
+              initialTerm={applyTerm}
+              onClose={handleCloseApplication}
+            />
+          </div>
+        ) : (
+          <>
+            {activeTab === "home" && (
+              <BorrowerHomeTab
+                user={user}
+                profile={profile}
+                loans={loans}
+                repayments={repayments}
+                activeLoans={activeLoans}
+                kycVerified={kycVerified}
+                isStaff={isStaff}
+                onTabChange={handleTabChange}
+              />
+            )}
+
+            {activeTab === "loans" && (
+              <BorrowerLoansTab
+                userId={user.id}
+                loans={loans}
+                repayments={repayments}
+                onDownloadStatement={downloadStatement}
+                onDownloadSchedule={downloadSchedule}
+                onSubmitPayment={handleSubmitPayment}
+                isGenerating={isGenerating}
+                onApply={() => handleStartApplication()}
+              />
+            )}
+
+            {activeTab === "payments" && (
+              <BorrowerPaymentsTab
+                repayments={repayments}
+                loans={loans}
+                onSubmitPayment={handleSubmitPayment}
+              />
+            )}
+
+            {activeTab === "profile" && (
+              <BorrowerProfileTab
+                user={user}
+                profile={profile}
+                kycVerified={kycVerified}
+                onSignOut={async () => { await signOut(); navigate('/auth'); }}
+              />
+            )}
+          </>
+        )}
       </main>
 
-      
+      {/* Bottom Navigation */}
+      {!showApplicationForm && (
+        <BorrowerBottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          badgeCounts={{
+            loans: activeLoans.length,
+            payments: repayments.filter(r => ["pending", "overdue"].includes(r.status)).length,
+          }}
+        />
+      )}
+
+      {/* Payment Claim Dialog */}
+      <Dialog open={!!submitPaymentRepayment} onOpenChange={(open) => { if (!open) { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); } }}>
+        <DialogContent className="max-w-[90vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Submit Payment</DialogTitle>
+            <DialogDescription className="text-xs">
+              Enter the amount paid and transaction reference. Admin will verify it.
+            </DialogDescription>
+          </DialogHeader>
+          {submitPaymentRepayment && (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <Label htmlFor="claim-amount" className="text-xs">Amount (K)</Label>
+                <Input id="claim-amount" type="number" min="0" step="0.01" value={claimAmount} onChange={(e) => setClaimAmount(e.target.value)} className="h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="claim-reference" className="text-xs">Transaction Reference *</Label>
+                <Input id="claim-reference" value={claimReference} onChange={(e) => setClaimReference(e.target.value)} placeholder="e.g. MM123456789" className="h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Receipt (optional)</Label>
+                <Input type="file" accept="image/*,.pdf" onChange={(e) => setClaimReceiptFile(e.target.files?.[0] ?? null)} className="h-9 text-xs" />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); }}>Cancel</Button>
+            <Button size="sm" onClick={() => submitPaymentClaimMutation.mutate()} disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}>
+              {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1" />}
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
