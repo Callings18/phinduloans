@@ -18,6 +18,7 @@ import {
   Shield,
   UserCog,
   BookOpen,
+  Eye,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo-white.png";
 import { useState } from "react";
