@@ -85,6 +85,7 @@ const AdminSidebar = () => {
     menuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
   const location = useLocation();
+  const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
 
   // Filter menu items based on role
