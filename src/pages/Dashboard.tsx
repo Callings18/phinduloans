@@ -761,8 +761,9 @@ const Dashboard = () => {
                                                   size="sm"
                                                   className="text-xs"
                                                   onClick={() => {
-                                                    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: rep.amount, due_date: rep.due_date, installment_number: rep.installment_number });
-                                                    setClaimAmount(String(rep.amount));
+                                                    const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+                                                    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: remaining, due_date: rep.due_date, installment_number: rep.installment_number });
+                                                    setClaimAmount(String(remaining));
                                                     setClaimReference("");
                                                     setClaimReceiptFile(null);
                                                   }}
