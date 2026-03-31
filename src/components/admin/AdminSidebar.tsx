@@ -218,7 +218,7 @@ const AdminSidebar = () => {
       <div className="p-4 border-t border-sidebar-border shrink-0 space-y-2">
         <Button
           variant="outline"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/dashboard?view=borrower')}
           className={cn(
             "w-full justify-start text-primary border-primary/30 hover:bg-primary/10",
             collapsed && "justify-center"
