@@ -304,7 +304,7 @@ const Dashboard = () => {
         receiptUrl = path;
       }
 
-      const { error } = await (supabase.from as any)("payment_claims").insert({
+      const { error } = await supabase.from("payment_claims").insert({
         loan_id: submitPaymentRepayment.loan_id,
         repayment_id: submitPaymentRepayment.id,
         user_id: user.id,
@@ -386,13 +386,17 @@ const Dashboard = () => {
   const getRepaymentStatus = (repayment: any) => {
     const today = startOfDay(new Date());
     const dueDate = startOfDay(new Date(repayment.due_date));
-    const isOverdue = repayment.status === 'pending' && isAfter(today, dueDate);
+    const isPendingOrOverdueStatus = ['pending', 'overdue'].includes(repayment.status);
+    const isOverdue = isPendingOrOverdueStatus && isAfter(today, dueDate);
     const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
 
     if (repayment.status === 'paid') {
       return { label: 'Paid', color: 'bg-success/20 text-success border-success/30', icon: CheckCircle };
     }
-    if (isOverdue) {
+    if (repayment.status === 'cancelled') {
+      return { label: 'Cancelled', color: 'bg-muted/20 text-muted-foreground border-muted/30', icon: AlertCircle };
+    }
+    if (isOverdue || repayment.status === 'overdue') {
       return { label: `${daysOverdue}d overdue`, color: 'bg-destructive/20 text-destructive border-destructive/30', icon: AlertTriangle };
     }
     return { label: 'Pending', color: 'bg-warning/20 text-warning border-warning/30', icon: Clock };
@@ -412,12 +416,16 @@ const Dashboard = () => {
   const pendingApps = loans?.filter(l => ['pending', 'under_review'].includes(l.status)) || [];
 
   // Calculate upcoming payment
-  const upcomingRepayments = repayments?.filter(r => r.status === 'pending' && new Date(r.due_date) >= startOfDay(new Date())) || [];
+  const upcomingRepayments = repayments?.filter(r => ['pending', 'overdue'].includes(r.status) && new Date(r.due_date) >= startOfDay(new Date())) || [];
   const nextPayment = upcomingRepayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 
   // Calculate overdue amount
-  const overdueRepayments = repayments?.filter(r => r.status === 'pending' && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))) || [];
-  const totalOverdue = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
+  const overdueRepayments = repayments?.filter(r => ['pending', 'overdue'].includes(r.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))) || [];
+  const totalOverdue = overdueRepayments.reduce((sum, r) => {
+    const originalAmt = Number(r.original_amount || r.amount);
+    const alreadyPaid = Number(r.principal_paid || 0);
+    return sum + Math.max(0, originalAmt - alreadyPaid);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -526,7 +534,7 @@ const Dashboard = () => {
                     <p className="text-muted-foreground text-sm">Next Payment</p>
                     {nextPayment ? (
                       <>
-                        <p className="text-2xl font-bold text-foreground">K{Number(nextPayment.amount).toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-foreground">K{Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0)).toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(nextPayment.due_date), 'MMM dd, yyyy')}</p>
                       </>
                     ) : (
@@ -747,14 +755,15 @@ const Dashboard = () => {
                                               </div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              {rep.status === 'pending' && (
+                                              {['pending', 'overdue'].includes(rep.status) && (
                                                 <Button
                                                   variant="outline"
                                                   size="sm"
                                                   className="text-xs"
                                                   onClick={() => {
-                                                    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: rep.amount, due_date: rep.due_date, installment_number: rep.installment_number });
-                                                    setClaimAmount(String(rep.amount));
+                                                    const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+                                                    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: remaining, due_date: rep.due_date, installment_number: rep.installment_number });
+                                                    setClaimAmount(String(remaining));
                                                     setClaimReference("");
                                                     setClaimReceiptFile(null);
                                                   }}
