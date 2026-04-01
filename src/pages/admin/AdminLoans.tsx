@@ -417,7 +417,7 @@ const AdminLoans = () => {
   const openQuickPayment = async (loan: Loan) => {
     setQuickPaymentLoan(loan);
     setQuickPaymentAmount("");
-    setQuickPaymentData({ payment_method: "mobile_money", transaction_reference: "" });
+    setQuickPaymentData({ payment_method: "mobile_money", transaction_reference: "", destination_account_id: "" });
     const { data: repayment } = await supabase
       .from("loan_repayments")
       .select("*")
