@@ -2880,7 +2880,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
                     <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
                     <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
-                    <span className="text-muted-foreground">Outstanding Penalties</span>
+                    <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
                   </div>
                 </div>
