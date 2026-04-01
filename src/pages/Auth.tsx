@@ -23,6 +23,8 @@ type LoginMode = "password" | "email_otp" | "phone_otp";
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get("mode") === "signup" ? false : true;
+  const nextParam = searchParams.get("next");
+  const safeNextPath = nextParam && nextParam.startsWith("/") ? nextParam : null;
   
   const [isLogin, setIsLogin] = useState(initialMode);
   const [loginMode, setLoginMode] = useState<LoginMode>("password");
@@ -39,9 +41,9 @@ const Auth = () => {
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate(isStaff ? '/admin' : '/dashboard');
+      navigate(safeNextPath || (isStaff ? "/admin" : "/dashboard"));
     }
-  }, [user, isLoading, isStaff, navigate]);
+  }, [user, isLoading, isStaff, navigate, safeNextPath]);
 
   const validateForm = () => {
     try {
@@ -153,7 +155,7 @@ const Auth = () => {
       title: isLogin ? "Welcome back!" : "Account Created!",
       description: isLogin ? "You've successfully logged in." : "Welcome to Phindu Credit Solutions.",
     });
-    navigate('/dashboard');
+    navigate(safeNextPath || "/dashboard");
   };
 
   if (isLoading) {

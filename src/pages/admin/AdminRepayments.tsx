@@ -571,6 +571,7 @@ const AdminRepayments = () => {
   const handleBulkAction = async (actionId: string, inputValue?: string) => {
     if (selectedRepayments.length === 0) return;
 
+    try {
     switch (actionId) {
       case 'mark_paid':
         // Bulk mark as paid with correct principal_paid/original_amount
@@ -579,7 +580,7 @@ const AdminRepayments = () => {
           const rep = repayments?.find(r => r.id === id);
           if (!rep) continue;
           const origAmt = rep.original_amount || rep.amount;
-          await supabase.from('loan_repayments').update({
+          const { error: repErr } = await supabase.from('loan_repayments').update({
             status: 'paid',
             paid_date: new Date().toISOString().split('T')[0],
             transaction_reference: `BULK-${Date.now()}`,
@@ -587,6 +588,7 @@ const AdminRepayments = () => {
             original_amount: origAmt,
             amount: Number(origAmt),
           }).eq('id', id);
+          if (repErr) throw repErr;
           bulkLoanIds.add(rep.loan_id);
         }
         // Check auto-completion for each affected loan
@@ -597,7 +599,11 @@ const AdminRepayments = () => {
             .eq("loan_id", loanId)
             .in("status", ["pending", "overdue"]);
           if (remaining && remaining.length === 0) {
-            await supabase.from("loan_applications").update({ status: "completed" }).eq("id", loanId);
+            const { error: completeErr } = await supabase
+              .from("loan_applications")
+              .update({ status: "completed" })
+              .eq("id", loanId);
+            if (completeErr) throw completeErr;
           }
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-repayments'] });
@@ -652,6 +658,9 @@ const AdminRepayments = () => {
 
       default:
         throw new Error('Unknown action');
+    }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk action failed");
     }
   };
 

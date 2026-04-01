@@ -4,6 +4,7 @@ import type { ErrorInfo, ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { handleError } from "@/utils/errorHandler";
 
 interface Props {
   children: ReactNode;
@@ -54,6 +55,13 @@ class ErrorBoundary extends React.Component<Props, State> {
 
     // Send error to error tracking
     this.logErrorToService(error, errorInfo);
+    handleError(error, {
+      component: "ErrorBoundary",
+      action: "render_crash",
+      metadata: {
+        componentStack: errorInfo.componentStack,
+      },
+    }, false);
   }
 
   logErrorToService = async (error: Error, errorInfo: ErrorInfo) => {

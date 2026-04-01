@@ -81,7 +81,6 @@ import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/compon
 import { Checkbox } from "@/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
-import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -541,26 +540,6 @@ const AdminApplications = () => {
 
       if (disbError) throw disbError;
 
-      // Gap 5 fix: Deduct from source account balance
-      const newBalance = sourceAccount.balance - disbursementAmount;
-      const { error: accountError } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance })
-        .eq("id", data.source_account_id);
-      if (accountError) throw accountError;
-
-      // Record account transaction
-      await supabase.from("account_transactions").insert({
-        account_id: data.source_account_id,
-        transaction_type: "disbursement",
-        amount: disbursementAmount,
-        balance_before: sourceAccount.balance,
-        balance_after: newBalance,
-        reference_type: "loan_application",
-        reference_id: selectedApp.id,
-        notes: `Loan disbursement to ${selectedApp.full_name}`,
-      });
-
       // Update loan status to disbursed and set disbursed_by/disbursed_at
       const { error: loanError } = await supabase
         .from('loan_applications')
@@ -575,20 +554,6 @@ const AdminApplications = () => {
         .eq('id', selectedApp.id);
 
       if (loanError) throw loanError;
-
-      // Auto-generate repayment schedule and set status to active
-      await createRepaymentScheduleForLoan(
-        {
-          id: selectedApp.id,
-          user_id: selectedApp.user_id,
-          loan_term_months: selectedApp.loan_term_months,
-          total_repayment: selectedApp.total_repayment,
-          monthly_payment: selectedApp.monthly_payment,
-          loan_product_id: selectedApp.loan_product_id,
-          term_unit: (selectedApp as any).term_unit,
-        },
-        supabase
-      );
 
       await logAudit({
         action: "DISBURSE",
@@ -1071,18 +1036,33 @@ const AdminApplications = () => {
       : []),
   ].filter(Boolean) as BulkAction[];
 
+  /** Bulk workflow RPC: surfaces PostgREST errors and RPC { ok: false } results. */
+  const assertBulkTransition = async (id: string, action: string, reason?: string) => {
+    const { data, error } = await supabase.rpc("transition_loan_status", {
+      p_loan_id: id,
+      p_action: action,
+      ...(reason !== undefined ? { p_reason: reason } : {}),
+    });
+    if (error) throw error;
+    const res = data as { ok?: boolean; error?: string };
+    if (!res?.ok) throw new Error(res?.error || "Transition failed");
+  };
+
   // Handle bulk action execution
   const handleBulkAction = async (actionId: string, inputValue?: string) => {
     if (selectedApplications.length === 0) return;
 
+    try {
     switch (actionId) {
       case 'approve':
         // Bulk approve (use transition_loan_status for each; only succeeds if both verifications done)
         let approveFailed = 0;
         for (const id of selectedApplications) {
-          const { data } = await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'approve' });
-          const res = data as { ok?: boolean; error?: string };
-          if (!res?.ok) approveFailed++;
+          try {
+            await assertBulkTransition(id, "approve");
+          } catch {
+            approveFailed++;
+          }
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
@@ -1092,7 +1072,7 @@ const AdminApplications = () => {
 
       case 'verify_documents':
         for (const id of selectedApplications) {
-          await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'verify_documents' });
+          await assertBulkTransition(id, "verify_documents");
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
@@ -1101,7 +1081,7 @@ const AdminApplications = () => {
 
       case 'finance_approve':
         for (const id of selectedApplications) {
-          await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'finance_approve' });
+          await assertBulkTransition(id, "finance_approve");
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
@@ -1110,11 +1090,13 @@ const AdminApplications = () => {
 
       case 'reject':
         // Bulk reject via transition_loan_status (audited)
+        const rejectReason = inputValue || "Bulk rejection";
         for (const id of selectedApplications) {
-          await supabase.rpc('transition_loan_status', { p_loan_id: id, p_action: 'reject', p_reason: inputValue || 'Bulk rejection' });
+          await assertBulkTransition(id, "reject", rejectReason);
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
+        toast({ title: "Bulk rejection completed" });
         break;
 
       case 'assign':
@@ -1126,9 +1108,13 @@ const AdminApplications = () => {
             status: 'under_review'
           }).eq('id', id)
         );
-        await Promise.all(assignPromises);
+        const assignResults = await Promise.all(assignPromises);
+        for (const r of assignResults) {
+          if (r.error) throw r.error;
+        }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
+        toast({ title: "Applications assigned" });
         break;
 
       case 'send_email':
@@ -1197,13 +1183,23 @@ const AdminApplications = () => {
         const deletePromises = selectedApplications.map(id =>
           supabase.from('loan_applications').delete().eq('id', id)
         );
-        await Promise.all(deletePromises);
+        const deleteResults = await Promise.all(deletePromises);
+        for (const r of deleteResults) {
+          if (r.error) throw r.error;
+        }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
         break;
 
       default:
         throw new Error('Unknown action');
+    }
+    } catch (e) {
+      toast({
+        title: "Bulk action failed",
+        description: e instanceof Error ? e.message : "Something went wrong",
+        variant: "destructive",
+      });
     }
   };
 

@@ -119,6 +119,21 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
+  const { data: paymentClaims = [] } = useQuery({
+    queryKey: ["user-payment-claims", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from("payment_claims")
+        .select("id, repayment_id, amount, reference, status, created_at, verified_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user?.id,
+  });
+
   const { data: profile } = useQuery({
     queryKey: ['user-profile', user?.id],
     queryFn: async () => {
@@ -251,6 +266,17 @@ const Dashboard = () => {
       const amount = parseFloat(claimAmount);
       if (isNaN(amount) || amount <= 0) throw new Error("Enter a valid amount");
       if (!claimReference.trim()) throw new Error("Enter transaction reference");
+      const { data: existingClaims, error: existingError } = await supabase
+        .from("payment_claims")
+        .select("id")
+        .eq("repayment_id", submitPaymentRepayment.id)
+        .eq("user_id", user.id)
+        .eq("status", "pending")
+        .limit(1);
+      if (existingError) throw existingError;
+      if (existingClaims?.length) {
+        throw new Error("You already have a pending claim for this installment.");
+      }
 
       let receiptUrl: string | null = null;
       if (claimReceiptFile) {
@@ -276,6 +302,7 @@ const Dashboard = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-repayments", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["user-payment-claims", user?.id] });
       toast.success("Payment reference submitted. Admin will verify it.");
       setSubmitPaymentRepayment(null);
       setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null);
@@ -374,6 +401,7 @@ const Dashboard = () => {
               <BorrowerPaymentsTab
                 repayments={repayments}
                 loans={loans}
+                paymentClaims={paymentClaims}
                 onSubmitPayment={handleSubmitPayment}
               />
             )}

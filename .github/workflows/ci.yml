@@ -20,6 +20,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate migration files
+        run: |
+          node -e "const fs=require('fs'); const p='supabase/migrations'; if(!fs.existsSync(p)){process.exit(0)}; const files=fs.readdirSync(p).filter(f=>f.endsWith('.sql')).sort(); for(const f of files){const full=p+'/'+f; const stat=fs.statSync(full); if(!stat.size){throw new Error('Empty migration file: '+f);} if(!/^[0-9]{8,}.*\.sql$/.test(f)){throw new Error('Invalid migration filename: '+f);} } console.log('Migration files OK:', files.length);"
+
       - name: Lint
         run: npm run lint
 

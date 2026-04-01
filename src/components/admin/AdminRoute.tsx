@@ -18,7 +18,7 @@ export default function AdminRoute() {
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/auth?next=/admin" replace />;
   }
 
   if (!isStaff) {

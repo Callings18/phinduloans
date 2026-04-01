@@ -9,10 +9,15 @@ interface ErrorContext {
   component?: string;
   action?: string;
   userId?: string;
+  correlationId?: string;
   metadata?: Record<string, any>;
 }
 
 class ErrorHandler {
+  private buildCorrelationId(): string {
+    return `err_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   private errorLog: Array<{
     error: Error;
     context: ErrorContext;
@@ -32,15 +37,21 @@ class ErrorHandler {
       ? error 
       : new Error(typeof error === 'string' ? error : 'An unexpected error occurred');
 
+    const correlationId = context?.correlationId || this.buildCorrelationId();
+    const normalizedContext: ErrorContext = {
+      ...(context || {}),
+      correlationId,
+    };
+
     // Log to console in development (Vite: import.meta.env.DEV)
     if (import.meta.env.DEV) {
-      console.error('[Error Handler]', errorObj, context);
+      console.error('[Error Handler]', errorObj, normalizedContext);
     }
 
     // Store in error log (keep last 100 errors)
     this.errorLog.push({
       error: errorObj,
-      context: context || {},
+      context: normalizedContext,
       timestamp: new Date(),
     });
     if (this.errorLog.length > 100) {
@@ -48,11 +59,11 @@ class ErrorHandler {
     }
 
     // Send to error tracking service (if configured)
-    this.trackError(errorObj, context);
+    this.trackError(errorObj, normalizedContext);
 
     // Show user-friendly toast notification
     if (showToast) {
-      const userMessage = this.getUserFriendlyMessage(errorObj, context);
+      const userMessage = this.getUserFriendlyMessage(errorObj, normalizedContext);
       
       toast({
         title: "Error",

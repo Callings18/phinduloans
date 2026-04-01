@@ -306,7 +306,11 @@ const AdminBulkRepayments = () => {
           .eq("loan_id", loanId)
           .in("status", ["pending", "overdue"]);
         if (remaining && remaining.length === 0) {
-          await supabase.from("loan_applications").update({ status: "completed" }).eq("id", loanId);
+          const { error: completeErr } = await supabase
+            .from("loan_applications")
+            .update({ status: "completed" })
+            .eq("id", loanId);
+          if (completeErr) throw completeErr;
         }
       }
 

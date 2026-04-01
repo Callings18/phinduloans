@@ -14,10 +14,11 @@ import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 interface Props {
   repayments: any[];
   loans: any[];
+  paymentClaims: any[];
   onSubmitPayment: (rep: any) => void;
 }
 
-export default function BorrowerPaymentsTab({ repayments, loans, onSubmitPayment }: Props) {
+export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, onSubmitPayment }: Props) {
   const getRepaymentStatus = (rep: any) => {
     const today = startOfDay(new Date());
     const dueDate = startOfDay(new Date(rep.due_date));
@@ -46,6 +47,24 @@ export default function BorrowerPaymentsTab({ repayments, loans, onSubmitPayment
   const getLoanRef = (loanId: string) => {
     const loan = loans.find((l) => l.id === loanId);
     return loan ? `K${Number(loan.loan_amount).toLocaleString()}` : "Loan";
+  };
+
+  const claimsByRepaymentId = new Map<string, any>();
+  paymentClaims.forEach((claim) => {
+    if (!claimsByRepaymentId.has(claim.repayment_id)) {
+      claimsByRepaymentId.set(claim.repayment_id, claim);
+    }
+  });
+
+  const getClaimStatus = (claim?: any) => {
+    if (!claim) return null;
+    if (claim.status === "verified" || claim.status === "approved") {
+      return { label: "Claim verified", color: "bg-success/20 text-success border-success/30" };
+    }
+    if (claim.status === "rejected") {
+      return { label: "Claim rejected", color: "bg-destructive/20 text-destructive border-destructive/30" };
+    }
+    return { label: "Claim pending", color: "bg-info/20 text-info border-info/30" };
   };
 
   return (
@@ -88,6 +107,8 @@ export default function BorrowerPaymentsTab({ repayments, loans, onSubmitPayment
             const status = getRepaymentStatus(rep);
             const StatusIcon = status.icon;
             const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+            const claim = claimsByRepaymentId.get(rep.id);
+            const claimStatus = getClaimStatus(claim);
             return (
               <Card key={rep.id} className="glass border-border/50">
                 <CardContent className="p-3">
@@ -120,6 +141,14 @@ export default function BorrowerPaymentsTab({ repayments, loans, onSubmitPayment
                       </Badge>
                     </div>
                   </div>
+                  {claimStatus && (
+                    <div className="mt-2 flex items-center justify-between">
+                      <Badge className={`${claimStatus.color} border text-[10px] px-1.5 py-0`}>
+                        {claimStatus.label}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">Ref: {claim.reference}</span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
