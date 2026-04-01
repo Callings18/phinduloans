@@ -41,6 +41,8 @@ const LoanBookReport = ({ products, officers }: Props) => {
         query,
         supabase.from("loan_repayments").select("loan_id, amount, status, due_date"),
       ]);
+      if (loansRes.error) throw loansRes.error;
+      if (repaymentsRes.error) throw repaymentsRes.error;
 
       const loans = loansRes.data || [];
       const repayments = repaymentsRes.data || [];

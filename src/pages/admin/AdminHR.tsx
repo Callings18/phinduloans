@@ -406,10 +406,12 @@ function AddEditEmployeeForm({
   const { data: profiles } = useQuery({
     queryKey: ["profiles-staff"],
     queryFn: async () => {
-      const { data: roles } = await supabase.from("user_roles").select("user_id").neq("role", "user").neq("role", "employer");
+      const { data: roles, error: rolesErr } = await supabase.from("user_roles").select("user_id").neq("role", "user").neq("role", "employer");
+      if (rolesErr) throw rolesErr;
       if (!roles?.length) return [];
       const ids = roles.map((r: { user_id: string }) => r.user_id);
-      const { data: p } = await supabase.from("profiles").select("id, full_name, email").in("id", ids);
+      const { data: p, error: pErr } = await supabase.from("profiles").select("id, full_name, email").in("id", ids);
+      if (pErr) throw pErr;
       return p ?? [];
     },
   });

@@ -13,7 +13,8 @@ const AdminReports = () => {
   const { data: products = [] } = useQuery({
     queryKey: ["reports-products"],
     queryFn: async () => {
-      const { data } = await supabase.from("loan_products").select("id, name").eq("is_active", true);
+      const { data, error } = await supabase.from("loan_products").select("id, name").eq("is_active", true);
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -21,10 +22,12 @@ const AdminReports = () => {
   const { data: officers = [] } = useQuery({
     queryKey: ["reports-officers"],
     queryFn: async () => {
-      const { data: roles } = await supabase.from("user_roles").select("user_id").neq("role", "user").neq("role", "employer");
+      const { data: roles, error: rolesErr } = await supabase.from("user_roles").select("user_id").neq("role", "user").neq("role", "employer");
+      if (rolesErr) throw rolesErr;
       if (!roles?.length) return [];
       const ids = roles.map((r: { user_id: string }) => r.user_id);
-      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+      const { data: profiles, error: profErr } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+      if (profErr) throw profErr;
       return (profiles ?? []) as { id: string; full_name: string | null }[];
     },
   });

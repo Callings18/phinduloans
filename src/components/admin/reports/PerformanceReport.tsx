@@ -32,6 +32,9 @@ const PerformanceReport = ({ officers }: Props) => {
         supabase.from("loan_repayments").select("loan_id, status, due_date"),
         supabase.from("payroll_records").select("employee_id, commission_amount, payroll_year, payroll_month").order("payroll_year", { ascending: false }).order("payroll_month", { ascending: false }),
       ]);
+      if (loansRes.error) throw loansRes.error;
+      if (repaymentsRes.error) throw repaymentsRes.error;
+      if (payrollRes.error) throw payrollRes.error;
 
       const loans = loansRes.data || [];
       const repayments = repaymentsRes.data || [];
@@ -39,7 +42,8 @@ const PerformanceReport = ({ officers }: Props) => {
       const today = format(new Date(), "yyyy-MM-dd");
 
       // Get employees to map user_id -> employee_id
-      const { data: employees } = await supabase.from("employees").select("id, user_id").eq("is_active", true);
+      const { data: employees, error: empMapErr } = await supabase.from("employees").select("id, user_id").eq("is_active", true);
+      if (empMapErr) throw empMapErr;
       const userToEmpId = new Map((employees || []).filter((e) => e.user_id).map((e) => [e.user_id!, e.id]));
 
       // Overdue loans set

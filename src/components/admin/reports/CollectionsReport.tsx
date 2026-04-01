@@ -42,6 +42,8 @@ const CollectionsReport = ({ products }: Props) => {
         repQuery,
         supabase.from("loan_applications").select("id, full_name, loan_product_id, loan_amount"),
       ]);
+      if (repsRes.error) throw repsRes.error;
+      if (loansRes.error) throw loansRes.error;
 
       const reps = repsRes.data || [];
       const loans = loansRes.data || [];

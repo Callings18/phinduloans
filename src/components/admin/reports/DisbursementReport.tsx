@@ -36,7 +36,8 @@ const DisbursementReport = ({ products, officers }: Props) => {
       if (product !== "all") query = query.eq("loan_product_id", product);
       if (officer !== "all") query = query.eq("disbursed_by", officer);
 
-      const { data: loans } = await query;
+      const { data: loans, error: disbErr } = await query;
+      if (disbErr) throw disbErr;
       const rows = (loans || []).map((l) => ({
         date: l.disbursed_at ? format(new Date(l.disbursed_at), "dd MMM yy") : "—",
         borrower: l.full_name,
