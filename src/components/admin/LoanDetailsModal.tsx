@@ -721,8 +721,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const totalPartialOnPending = pendingReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
       const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
       
-      // Outstanding = Total Repayment - Total Paid (this is the reloan amount)
-      const outstandingBalance = Math.max(0, (loan.total_repayment || 0) - totalAllPaid);
+      // Outstanding carry-forward = remaining installment balances (after any partial payments)
+      const outstandingBalance = pendingReps.reduce((sum, r) => sum + Number(r.amount || 0), 0);
       
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
