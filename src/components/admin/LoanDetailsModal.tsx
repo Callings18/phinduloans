@@ -702,7 +702,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Reloan mutation - only reloans outstanding principal; blocks if interest/penalties unpaid
+  // Reloan mutation - carry-forward outstanding balance; blocks only if unpaid penalties remain
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
