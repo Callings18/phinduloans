@@ -2013,6 +2013,7 @@ export type Database = {
           employer_whitelist_enabled: boolean | null
           employment_types: string[] | null
           enforcement_fee_percent: number | null
+          flat_interest_mode: string | null
           grace_period_days: number | null
           guarantee_fee_percent: number | null
           guarantee_provider: string | null
@@ -2079,6 +2080,7 @@ export type Database = {
           employer_whitelist_enabled?: boolean | null
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
+          flat_interest_mode?: string | null
           grace_period_days?: number | null
           guarantee_fee_percent?: number | null
           guarantee_provider?: string | null
@@ -2145,6 +2147,7 @@ export type Database = {
           employer_whitelist_enabled?: boolean | null
           employment_types?: string[] | null
           enforcement_fee_percent?: number | null
+          flat_interest_mode?: string | null
           grace_period_days?: number | null
           guarantee_fee_percent?: number | null
           guarantee_provider?: string | null
