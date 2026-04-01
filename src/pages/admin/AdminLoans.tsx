@@ -200,6 +200,20 @@ const AdminLoans = () => {
     },
   });
 
+  // Fetch active accounts for payment deposit
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["active-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Move to defaulted mutation
   const moveToDefaultedMutation = useMutation({
     mutationFn: async (loanId: string) => {
