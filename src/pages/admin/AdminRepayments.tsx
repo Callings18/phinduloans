@@ -195,11 +195,8 @@ const AdminRepayments = () => {
 
       const amountDue = Number(repayment.amount);
       const savedOriginalAmount = repayment.original_amount || repayment.amount;
-      if (paidAmount > amountDue) {
-        throw new Error(`Amount exceeds remaining due (K${amountDue.toLocaleString()})`);
-      }
       const isFullPayment = paidAmount >= amountDue;
-      const remainingAmount = amountDue - paidAmount;
+      const remainingAmount = isFullPayment ? 0 : amountDue - paidAmount;
 
       // Get destination account
       const destAccount = accounts.find(a => a.id === destinationAccountId);

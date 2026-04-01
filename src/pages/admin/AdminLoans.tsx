@@ -143,6 +143,7 @@ const AdminLoans = () => {
   const [quickPaymentData, setQuickPaymentData] = useState({
     payment_method: "mobile_money",
     transaction_reference: "",
+    destination_account_id: "",
   });
   const [nextRepayment, setNextRepayment] = useState<any>(null);
 
