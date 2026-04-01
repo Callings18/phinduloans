@@ -2012,7 +2012,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 : rep.status === "paid"
                                   ? "paid"
                                   : "pending";
-                          const totalDue = rep.amount + (rep.penalty_amount || 0);
+                          const totalDue = rep.amount + Math.max(0, (rep.penalty_amount || 0) - (rep.penalty_paid || 0));
 
                           // Format date based on frequency
                           const dateFormat = isDaily ? "MMM dd, yyyy" : isWeekly ? "MMM dd, yyyy" : "MMM dd, yyyy";
