@@ -724,10 +724,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // Outstanding = Total Repayment - Total Paid (this is the reloan amount)
       const outstandingBalance = Math.max(0, (loan.total_repayment || 0) - totalAllPaid);
       
-      // Check for unpaid penalties
-      const totalUnpaidPenalties = pendingReps.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-      
-      // Block if penalties are outstanding
+      // Check for unpaid penalties only (ignore penalties already settled)
+      const totalUnpaidPenalties = pendingReps.reduce(
+        (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+        0
+      );
+
+      // Block if penalties are still outstanding
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
