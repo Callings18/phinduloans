@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export async function logAuditEvent({
   action,
@@ -32,4 +33,17 @@ export async function logAuditEvent({
   } catch (err) {
     console.error("Audit log error:", err);
   }
+}
+
+export async function logAudit(
+  action: string,
+  entityType: string,
+  entityId: string,
+  details?: Record<string, any>
+) {
+  return logAuditEvent({ action, entityType, entityId, details });
+}
+
+export function handleUnauthorized(message?: string) {
+  toast.error(message || "You do not have permission to perform this action");
 }
