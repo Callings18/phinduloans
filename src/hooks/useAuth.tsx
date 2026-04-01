@@ -119,7 +119,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRoles([]);
         setIsLoading(false);
         // Attempt signOut silently to clean up localStorage
-        supabase.auth.signOut().catch(() => {});
+        supabase.auth.signOut().catch((err) => {
+          if (import.meta.env.DEV) console.warn("[Auth] signOut after session error failed:", err);
+        });
         return;
       }
 

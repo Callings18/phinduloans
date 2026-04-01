@@ -96,7 +96,9 @@ export default function ProfileDocumentVault({ userId }: Props) {
               eventType: "kyc_completed",
               notifyAdmins: true,
             },
-          }).catch(() => {});
+          }).catch((err) => {
+            if (import.meta.env.DEV) console.warn("[ProfileDocumentVault] KYC email notify failed:", err);
+          });
           supabase.functions.invoke("send-notification", {
             body: {
               type: "sms",
@@ -106,7 +108,9 @@ export default function ProfileDocumentVault({ userId }: Props) {
               eventType: "kyc_completed",
               notifyAdmins: true,
             },
-          }).catch(() => {});
+          }).catch((err) => {
+            if (import.meta.env.DEV) console.warn("[ProfileDocumentVault] KYC SMS notify failed:", err);
+          });
         }
       } catch {
         // Non-critical, don't block UI

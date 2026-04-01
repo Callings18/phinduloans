@@ -36,8 +36,8 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
+    // Log error to console in development (Vite)
+    if (import.meta.env.DEV) {
       console.error('ErrorBoundary caught an error:', error, errorInfo);
     }
 
@@ -70,7 +70,7 @@ class ErrorBoundary extends React.Component<Props, State> {
 
       // Try to send to error logging endpoint (if exists)
       // This is optional - errors are already logged to console
-      if (process.env.NODE_ENV === 'production') {
+      if (import.meta.env.PROD) {
         // You can implement an error logging endpoint here
         // await fetch('/api/log-error', {
         //   method: 'POST',
@@ -149,7 +149,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
               <p className="text-sm font-medium text-destructive mb-2">Error Details:</p>
               <p className="text-sm text-foreground font-mono">{error.message}</p>
-              {process.env.NODE_ENV === 'development' && errorInfo && (
+              {import.meta.env.DEV && errorInfo && (
                 <details className="mt-4">
                   <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                     Stack Trace
@@ -181,7 +181,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
             </Button>
           </div>
 
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <p className="text-xs text-muted-foreground text-center">
               Error details are shown in development mode only.
             </p>

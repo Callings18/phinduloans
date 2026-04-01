@@ -32,8 +32,8 @@ class ErrorHandler {
       ? error 
       : new Error(typeof error === 'string' ? error : 'An unexpected error occurred');
 
-    // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    // Log to console in development (Vite: import.meta.env.DEV)
+    if (import.meta.env.DEV) {
       console.error('[Error Handler]', errorObj, context);
     }
 
@@ -136,7 +136,7 @@ class ErrorHandler {
     // }
 
     // For now, log to console with structured data
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       // In production, you could send to your logging endpoint
       // fetch('/api/log-error', {
       //   method: 'POST',

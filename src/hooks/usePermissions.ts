@@ -32,7 +32,7 @@ export function usePermissions() {
         const { data, error } = await (supabase.rpc as any)("get_my_permissions");
         if (cancelled) return;
         if (error) {
-          console.warn("get_my_permissions failed", error);
+          console.warn("get_my_permissions failed — UI permission checks may deny actions until this succeeds. Backend RLS still applies.", error);
           setPermissionSet(new Set());
           return;
         }

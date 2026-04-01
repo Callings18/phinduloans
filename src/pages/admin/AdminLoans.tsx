@@ -327,7 +327,7 @@ const AdminLoans = () => {
 
             if (applied >= npAmount) {
               // Fully pays this installment too
-              await supabase
+              const { error: autoSettleErr } = await supabase
                 .from("loan_repayments")
                 .update({
                   status: "paid",
@@ -338,8 +338,9 @@ const AdminLoans = () => {
                   amount: Number(npOriginal),
                 })
                 .eq("id", np.id);
+              if (autoSettleErr) throw autoSettleErr;
             } else {
-              await supabase
+              const { error: partialApplyErr } = await supabase
                 .from("loan_repayments")
                 .update({
                   amount: npAmount - applied,
@@ -347,6 +348,7 @@ const AdminLoans = () => {
                   principal_paid: (Number(np.principal_paid) || 0) + applied,
                 })
                 .eq("id", np.id);
+              if (partialApplyErr) throw partialApplyErr;
             }
             excess -= applied;
           }

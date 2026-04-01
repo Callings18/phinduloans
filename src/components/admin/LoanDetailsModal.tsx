@@ -225,6 +225,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
   const [isReloanOpen, setIsReloanOpen] = useState(false);
+  const [reloanTopUpAmount, setReloanTopUpAmount] = useState("");
+  const [reloanReason, setReloanReason] = useState("");
+  const [reloanSourceAccountId, setReloanSourceAccountId] = useState("");
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState("");
   const [topUpReason, setTopUpReason] = useState("");
@@ -728,15 +731,78 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error("No outstanding balance to reloan. The borrower has fully paid.");
       }
 
-      // Use outstandingBalance as the new loan principal
+      const optionalTopUpAmount = Number(reloanTopUpAmount || 0);
+      if (!Number.isFinite(optionalTopUpAmount) || optionalTopUpAmount < 0) {
+        throw new Error("Invalid optional top-up amount");
+      }
+
+      // Load latest product settings so fee/disbursement math is deterministic.
+      let processingFeePercent = 0;
+      let insurancePercent = 0;
+      let enforcementPercent = 0;
+      let vatPercent = 0;
+      let platformPercent = 0;
+      let interestRate = loan.interest_rate;
+      let interestPeriod = loanProduct?.interest_period || "monthly";
+      let interestType = loanProduct?.interest_type || "flat";
+      let termUnit = (loan as any).term_unit || "months";
+      if (loan.loan_product_id) {
+        const { data: product } = await supabase
+          .from("loan_products")
+          .select("processing_fee_percent, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent, interest_rate, interest_period, interest_type, term_unit")
+          .eq("id", loan.loan_product_id)
+          .single();
+        if (product) {
+          processingFeePercent = Number(product.processing_fee_percent) || 0;
+          insurancePercent = Number(product.insurance_percent) || 0;
+          enforcementPercent = Number(product.enforcement_fee_percent) || 0;
+          vatPercent = Number(product.vat_percent) || 0;
+          platformPercent = Number(product.platform_fee_percent) || 0;
+          interestRate = Number(product.interest_rate) || interestRate;
+          interestPeriod = (product as any).interest_period || interestPeriod;
+          interestType = (product as any).interest_type || interestType;
+          termUnit = (product as any).term_unit || termUnit;
+        }
+      }
+
+      let sourceAccount: { id: string; account_name: string; balance: number } | null = null;
+      let topUpFees = 0;
+      let topUpNetDisbursement = 0;
+      if (optionalTopUpAmount > 0) {
+        if (!reloanSourceAccountId) throw new Error("Select a source account for the optional top-up");
+        const { data: freshAccount, error: sourceErr } = await supabase
+          .from("accounts")
+          .select("id, account_name, balance")
+          .eq("id", reloanSourceAccountId)
+          .single();
+        if (sourceErr || !freshAccount) throw new Error("Source account not found");
+        sourceAccount = freshAccount;
+
+        const processingFee = optionalTopUpAmount * (processingFeePercent / 100);
+        const insuranceFee = optionalTopUpAmount * (insurancePercent / 100);
+        const enforcementFee = optionalTopUpAmount * (enforcementPercent / 100);
+        const platformFee = optionalTopUpAmount * (platformPercent / 100);
+        const vatFee = (processingFee + enforcementFee + platformFee) * (vatPercent / 100);
+        topUpFees = processingFee + insuranceFee + enforcementFee + platformFee + vatFee;
+        topUpNetDisbursement = optionalTopUpAmount - topUpFees;
+        if (topUpNetDisbursement <= 0) {
+          throw new Error("Optional top-up is too small after fees. Increase amount.");
+        }
+        if (Number(freshAccount.balance) < topUpNetDisbursement) {
+          throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}`);
+        }
+      }
+
+      // New principal is carry-forward outstanding + optional extra cash top-up.
       const outstandingPrincipal = outstandingBalance;
+      const newPrincipal = outstandingPrincipal + optionalTopUpAmount;
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
         .from("loan_applications")
         .update({
           status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Reloaned outstanding balance K${outstandingPrincipal.toLocaleString()}. Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
         })
         .eq("id", loan.id);
       if (closeError) throw closeError;
@@ -744,17 +810,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // DB trigger `cancel_repayments_on_loan_closure` will automatically
       // cancel pending/overdue repayments when loan status changes to "completed".
 
-      // Recalculate new loan terms with the outstanding balance as new principal
-      const termUnit = (loan as any).term_unit || 'months';
-      const productForCalc: any = { interest_rate: loan.interest_rate, interest_period: loanProduct?.interest_period || 'monthly', interest_type: loanProduct?.interest_type || 'flat' };
+      // Recalculate new loan terms with carry-forward outstanding plus optional top-up.
+      const productForCalc: any = { interest_rate: interestRate, interest_period: interestPeriod, interest_type: interestType };
       const newCalc = calculateLoan(
-        outstandingPrincipal,
+        newPrincipal,
         loan.loan_term_months,
         productForCalc,
         termUnit as any
       );
 
-      // Create new loan application with outstanding balance as principal
+      // Create new loan application with carry-forward outstanding plus optional top-up as principal.
       const { data: newLoan, error: insertError } = await supabase
         .from("loan_applications")
         .insert({
@@ -772,10 +837,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           employment_type: loan.employment_type as any,
           employment_duration: loan.employment_duration || null,
           monthly_income: loan.monthly_income || 0,
-          loan_amount: outstandingPrincipal,
+          loan_amount: newPrincipal,
           loan_term_months: loan.loan_term_months,
           term_unit: termUnit,
-          interest_rate: loan.interest_rate,
+          interest_rate: interestRate,
           monthly_payment: newCalc.monthlyPayment,
           total_repayment: newCalc.totalRepayment,
           loan_purpose: loan.loan_purpose,
@@ -783,7 +848,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           parent_loan_id: loan.id,
           status: "active" as any,
           source: "internal",
-          admin_notes: `Reloan of outstanding balance K${outstandingPrincipal.toLocaleString()} from loan ${loan.id.slice(0, 8).toUpperCase()}. Original: K${loan.loan_amount.toLocaleString()}, Paid: K${totalAllPaid.toLocaleString()}. No new disbursement.`,
+          admin_notes: `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()}: carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}. Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
           disbursed_by: user?.id ?? null,
           disbursed_at: new Date().toISOString(),
           approved_by: user?.id ?? null,
@@ -808,16 +873,40 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         supabase
       );
 
+      if (optionalTopUpAmount > 0 && sourceAccount) {
+        const sourceBalanceAfter = Number(sourceAccount.balance) - topUpNetDisbursement;
+        const { error: sourceUpdateError } = await supabase
+          .from("accounts")
+          .update({ balance: sourceBalanceAfter, updated_at: new Date().toISOString() })
+          .eq("id", sourceAccount.id);
+        if (sourceUpdateError) throw sourceUpdateError;
+
+        const { error: txError } = await supabase.from("account_transactions").insert({
+          account_id: sourceAccount.id,
+          transaction_type: "disbursement",
+          amount: topUpNetDisbursement,
+          balance_before: Number(sourceAccount.balance),
+          balance_after: sourceBalanceAfter,
+          reference_type: "loan_reloan_topup",
+          reference_id: newLoan.id,
+          source: sourceAccount.account_name,
+          destination: `${loan.full_name} (reloan top-up)`,
+          notes: `Reloan top-up gross K${optionalTopUpAmount.toLocaleString()}, fees K${topUpFees.toLocaleString()}, net K${topUpNetDisbursement.toLocaleString()}.`,
+          created_by: user?.id,
+        });
+        if (txError) throw txError;
+      }
+
       // Record loan event on original loan
       await supabase.from("loan_events" as any).insert({
         loan_id: loan.id,
         event_type: "reloan",
         performed_by: user?.id,
-        reason: `Reloan — outstanding balance K${outstandingPrincipal.toLocaleString()} (Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}). New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
+        reason: `Reloan — carried K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + top-up K${optionalTopUpAmount.toLocaleString()} (net K${topUpNetDisbursement.toLocaleString()})` : ""} (Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}).${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""} New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
         previous_values: { principal: loan.loan_amount, total_repayment: loan.total_repayment, total_paid: totalAllPaid, status: loan.status },
-        new_values: { principal: outstandingPrincipal, total_repayment: newCalc.totalRepayment, status: "active" },
+        new_values: { principal: newPrincipal, total_repayment: newCalc.totalRepayment, status: "active" },
         new_loan_id: newLoan.id,
-        amount: outstandingPrincipal,
+        amount: newPrincipal,
       });
 
       // Record loan event on new loan for traceability
@@ -825,28 +914,45 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         loan_id: newLoan.id,
         event_type: "reloan_created",
         performed_by: user?.id,
-        reason: `Created from reloan of loan ${loan.id.slice(0, 8).toUpperCase()}. Outstanding balance K${outstandingPrincipal.toLocaleString()} carried forward as new principal.`,
+        reason: `Created from loan ${loan.id.slice(0, 8).toUpperCase()}. Carry-forward K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + top-up K${optionalTopUpAmount.toLocaleString()}` : ""}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
         previous_values: { parent_loan_id: loan.id, original_principal: loan.loan_amount },
-        new_values: { principal: outstandingPrincipal, total_repayment: newCalc.totalRepayment },
-        amount: outstandingPrincipal,
+        new_values: { principal: newPrincipal, total_repayment: newCalc.totalRepayment },
+        amount: newPrincipal,
       });
 
       await logAudit({
         action: "RELOAN",
         entity_type: "loan_application",
         entity_id: loan.id,
-        details: { new_loan_id: newLoan.id, reloan_amount: outstandingPrincipal, original_principal: loan.loan_amount, total_paid: totalAllPaid },
+        details: {
+          new_loan_id: newLoan.id,
+          carry_forward_amount: outstandingPrincipal,
+          optional_top_up_amount: optionalTopUpAmount,
+          optional_top_up_net_disbursement: topUpNetDisbursement,
+          optional_top_up_fees: topUpFees,
+          resulting_principal: newPrincipal,
+          original_principal: loan.loan_amount,
+          total_paid: totalAllPaid,
+        },
       });
 
-      return { newLoan, outstandingPrincipal };
+      return { newLoan, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement };
     },
-    onSuccess: ({ newLoan, outstandingPrincipal }) => {
+    onSuccess: ({ newLoan, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
       queryClient.invalidateQueries({ queryKey: ["loan-events", loan?.id] });
-      toast.success(`Reloan created: K${outstandingPrincipal.toLocaleString()} outstanding principal (ID: ${newLoan.id.slice(0, 8)})`);
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast.success(
+        optionalTopUpAmount > 0
+          ? `Reloan created: carry-forward K${outstandingPrincipal.toLocaleString()} + top-up K${optionalTopUpAmount.toLocaleString()} (net K${topUpNetDisbursement.toLocaleString()})`
+          : `Reloan created: K${outstandingPrincipal.toLocaleString()} carry-forward principal (ID: ${newLoan.id.slice(0, 8)})`
+      );
+      setReloanTopUpAmount("");
+      setReloanReason("");
+      setReloanSourceAccountId("");
       setIsReloanOpen(false);
       onOpenChange(false);
     },
@@ -1339,15 +1445,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   // Calculate progress and stats
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
+  const unpaidRepayments = repayments?.filter(r => (r.status === "pending" || r.status === "overdue") && !r.is_reversed) || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
   // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
   const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
   // Also count partial payments on non-paid installments (overdue with principal_paid > 0)
-  const partialPaymentsOnPending = [...pendingRepayments, ...(repayments?.filter(r => r.status === "overdue" && !r.is_reversed) || [])]
+  const partialPaymentsOnPending = unpaidRepayments
     .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
   const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
-  const totalPenalties = pendingRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
+  const totalPenalties = unpaidRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
   const totalOutstanding = Math.max(0, (loan.total_repayment || 0) - totalPaidIncludingPartial);
+  const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
+  const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
   const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
   const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
@@ -2787,13 +2896,57 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 {totalOutstanding > 0 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Rule set: carry-forward outstanding is always included; optional extra cash can be added and disbursed net of fees from a selected source account.
+                    </p>
+                    <div className="space-y-2 pt-1">
+                      <Label className="text-xs">Optional Extra Cash Top-Up (K)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0 (keep outstanding-only reloan)"
+                        value={reloanTopUpAmount}
+                        onChange={(e) => setReloanTopUpAmount(e.target.value)}
+                      />
+                    </div>
+                    {reloanTopUpNumeric > 0 && (
+                      <>
+                        <div className="space-y-2 pt-1">
+                          <Label className="text-xs">Top-Up Source Account *</Label>
+                          <Select value={reloanSourceAccountId} onValueChange={setReloanSourceAccountId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select source account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(fundingAccounts ?? []).map((acc) => (
+                                <SelectItem key={acc.id} value={acc.id}>
+                                  {acc.account_name} ({acc.account_type}) - K{Number(acc.balance).toLocaleString()}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 pt-1">
+                          <Label className="text-xs">Reason (Optional)</Label>
+                          <Input
+                            placeholder="Why extra cash is added to this reloan"
+                            value={reloanReason}
+                            onChange={(e) => setReloanReason(e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
                     <div className="grid grid-cols-2 gap-y-1">
-                      <span className="text-muted-foreground">New Principal (Outstanding)</span>
-                      <span className="text-right font-bold">K{totalOutstanding.toLocaleString()}</span>
+                      <span className="text-muted-foreground">Carry-forward Outstanding</span>
+                      <span className="text-right font-medium">K{totalOutstanding.toLocaleString()}</span>
+                      <span className="text-muted-foreground">Optional Top-Up</span>
+                      <span className="text-right font-medium">K{reloanTopUpNumeric.toLocaleString()}</span>
+                      <span className="text-muted-foreground font-semibold">Projected New Principal</span>
+                      <span className="text-right font-bold">K{reloanProjectedPrincipal.toLocaleString()}</span>
                       <span className="text-muted-foreground">Term</span>
                       <span className="text-right font-medium">{loan.loan_term_months} months @ {loan.interest_rate}%</span>
                       <span className="text-muted-foreground">Disbursement</span>
-                      <span className="text-right font-medium">None — funds already with borrower</span>
+                      <span className="text-right font-medium">{reloanTopUpNumeric > 0 ? "Optional top-up net disbursement after fees" : "None — funds already with borrower"}</span>
                     </div>
                   </div>
                 )}
@@ -2806,7 +2959,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
-              disabled={reloanMutation.isPending || totalPenalties > 0 || totalOutstanding <= 0}
+              disabled={reloanMutation.isPending || totalPenalties > 0 || totalOutstanding <= 0 || (reloanTopUpNumeric > 0 && !reloanSourceAccountId)}
             >
               {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
               Confirm Reloan

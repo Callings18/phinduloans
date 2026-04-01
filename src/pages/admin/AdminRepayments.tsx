@@ -162,7 +162,8 @@ const AdminRepayments = () => {
   const { data: paymentClaims = [] } = useQuery({
     queryKey: ["admin-payment-claims"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("payment_claims")
+      const { data, error } = await supabase
+        .from("payment_claims")
         .select("*")
         .eq("status", "pending")
         .order("created_at", { ascending: false });
@@ -184,6 +185,9 @@ const AdminRepayments = () => {
     mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, destinationAccountId, claimId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; destinationAccountId: string; claimId?: string | null }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
       if (!repayment) throw new Error("Repayment not found");
+      if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+        throw new Error("Payment amount must be greater than 0");
+      }
 
       if (!destinationAccountId) {
         throw new Error("Please select a destination account for the payment");
@@ -252,11 +256,15 @@ const AdminRepayments = () => {
       });
 
       if (claimId) {
-        await supabase.from("payment_claims").update({
-          status: "verified",
-          verified_at: new Date().toISOString(),
-          verified_by: user?.id ?? null,
-        }).eq("id", claimId);
+        const { error: claimErr } = await supabase
+          .from("payment_claims")
+          .update({
+            status: "verified",
+            verified_at: new Date().toISOString(),
+            verified_by: user?.id ?? null,
+          })
+          .eq("id", claimId);
+        if (claimErr) throw claimErr;
       }
 
       return { repayment, paidAmount, isFullPayment };
@@ -301,12 +309,17 @@ const AdminRepayments = () => {
 
       // Send SMS confirmation
       if (repayment?.loan_applications) {
-        const loanRepayments = repayments?.filter(r => r.loan_id === repayment.loan_id) || [];
+        // Recompute from DB after mutation so notifications use authoritative values.
+        const { data: refreshedRepayments } = await supabase
+          .from("loan_repayments")
+          .select("status, principal_paid, original_amount, amount")
+          .eq("loan_id", repayment.loan_id);
+        const loanRepayments = refreshedRepayments || [];
         const totalPaid = loanRepayments
-          .filter(r => r.status === 'paid')
-          .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) + paidAmount;
+          .filter(r => r.status === "paid")
+          .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
         const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.original_amount || r.amount), 0);
-        const remainingBalance = totalDue - totalPaid;
+        const remainingBalance = Math.max(0, totalDue - totalPaid);
 
         await notificationService.sendPaymentConfirmation(
           repayment.user_id,
@@ -417,10 +430,19 @@ const AdminRepayments = () => {
 
       const totalSplitAmount = validSplits.reduce((sum, sp) => sum + parseFloat(sp.amount), 0);
       
-      // For split payments, use the first split's destination account (or validate all have same destination)
+      // For split payments we currently post one repayment transaction row.
+      // Require all split legs to use the same destination account.
       const firstDestination = validSplits[0].destination_account_id;
       if (!firstDestination) {
         toast.error("Please select a destination account for at least one payment");
+        return;
+      }
+      if (validSplits.some((sp) => !sp.destination_account_id)) {
+        toast.error("Please select a destination account for each split payment");
+        return;
+      }
+      if (validSplits.some((sp) => sp.destination_account_id !== firstDestination)) {
+        toast.error("All split payments must use the same destination account");
         return;
       }
 
@@ -1178,6 +1200,28 @@ const AdminRepayments = () => {
                               placeholder="Transaction ref"
                               className="h-9"
                             />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Deposit To Account *</Label>
+                            <Select
+                              value={split.destination_account_id}
+                              onValueChange={(value) => updateSplitPayment(index, "destination_account_id", value)}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Select account" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {accounts.length === 0 ? (
+                                  <SelectItem value="none" disabled>No active accounts available</SelectItem>
+                                ) : (
+                                  accounts.map((account) => (
+                                    <SelectItem key={account.id} value={account.id}>
+                                      {account.account_name} (K{account.balance.toLocaleString()})
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                       ))}
