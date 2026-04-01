@@ -203,20 +203,27 @@ const AdminExpenses = () => {
           const account = accounts.find(a => a.id === expense.account_id);
           if (account) {
             const newBalance = account.balance - expense.amount;
-            await supabase.from('accounts').update({ balance: newBalance }).eq('id', expense.account_id);
-            
-            // Create transaction record
-            await supabase.from('account_transactions').insert({
+            if (newBalance < 0) {
+              throw new Error("Insufficient balance in the linked account to mark this expense as paid.");
+            }
+            const { error: accErr } = await supabase
+              .from("accounts")
+              .update({ balance: newBalance })
+              .eq("id", expense.account_id);
+            if (accErr) throw accErr;
+
+            const { error: txErr } = await supabase.from("account_transactions").insert({
               account_id: expense.account_id,
-              transaction_type: 'expense',
+              transaction_type: "expense",
               amount: expense.amount,
               balance_before: account.balance,
               balance_after: newBalance,
               destination: expense.vendor_payee,
-              reference_type: 'expense',
+              reference_type: "expense",
               reference_id: expense.id,
               notes: `Expense: ${expense.expense_category} - ${expense.vendor_payee}`,
             });
+            if (txErr) throw txErr;
           }
         }
       }

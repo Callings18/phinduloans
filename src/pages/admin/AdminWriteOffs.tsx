@@ -125,7 +125,7 @@ const AdminWriteOffs = () => {
       if (loanError) throw loanError;
 
       // Log in audit
-      await supabase.from("audit_logs").insert({
+      const { error: auditErr } = await supabase.from("audit_logs").insert({
         user_id: user?.id,
         action: "WRITEOFF_APPROVED",
         entity_type: "loan_writeoff",
@@ -136,14 +136,16 @@ const AdminWriteOffs = () => {
           borrower: writeOff.loan?.full_name,
         },
       });
+      if (auditErr) throw auditErr;
 
       // Log collection activity
-      await supabase.from("collection_activities").insert({
+      const { error: collErr } = await supabase.from("collection_activities").insert({
         loan_id: writeOff.loan_id,
         activity_type: "writeoff_approved",
         notes: `Write-off approved. Amount: K${Number(writeOff.writeoff_amount).toLocaleString()}`,
         outcome: "Loan written off - marked as defaulted",
       });
+      if (collErr) throw collErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });
@@ -175,12 +177,13 @@ const AdminWriteOffs = () => {
       if (error) throw error;
 
       // Log collection activity
-      await supabase.from("collection_activities").insert({
+      const { error: collRejectErr } = await supabase.from("collection_activities").insert({
         loan_id: writeOff.loan_id,
         activity_type: "writeoff_rejected",
         notes: `Write-off rejected. Reason: ${reason}`,
         outcome: "Continue collection efforts",
       });
+      if (collRejectErr) throw collRejectErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });
@@ -215,12 +218,13 @@ const AdminWriteOffs = () => {
       if (error) throw error;
 
       // Log activity
-      await supabase.from("collection_activities").insert({
+      const { error: recActErr } = await supabase.from("collection_activities").insert({
         loan_id: writeOff.loan_id,
         activity_type: "recovery_recorded",
         notes: `Recovery recorded: K${amount.toLocaleString()}. ${notes}`,
         outcome: `Total recovered: K${newRecoveryAmount.toLocaleString()}`,
       });
+      if (recActErr) throw recActErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });

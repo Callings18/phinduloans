@@ -358,7 +358,7 @@ const AdminCollections = () => {
       if (error) throw error;
 
       // Also log as collection activity
-      await supabase.from("collection_activities").insert({
+      const { error: activityErr } = await supabase.from("collection_activities").insert({
         loan_id: selectedRepayment.loan_id,
         repayment_id: selectedRepayment.id,
         staff_id: user?.id,
@@ -366,6 +366,7 @@ const AdminCollections = () => {
         notes: `${demandLetterType.replace("_", " ")} generated and downloaded`,
         outcome: "letter_issued",
       });
+      if (activityErr) throw activityErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["demand-letters"] });
