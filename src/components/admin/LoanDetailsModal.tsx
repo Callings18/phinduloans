@@ -459,7 +459,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           transaction_reference: transactionRef || null,
           amount: adjustedAmount,
           principal_paid: (Number(selectedRepayment.principal_paid) || 0) + principalPaid,
-          penalty_paid: penaltyPaid,
+          penalty_paid: alreadyPaidPenalty + penaltyPaid,
           original_amount: savedOriginalAmount,
         })
         .eq("id", selectedRepayment.id);
