@@ -384,11 +384,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
 
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
-      const dueAmount = selectedRepayment.amount + (selectedRepayment.penalty_amount || 0);
       const savedOriginalAmount = selectedRepayment.original_amount || selectedRepayment.amount;
 
-      // Calculate allocation (penalty first, then principal/interest)
-      const penaltyPaid = Math.min(paidAmount, selectedRepayment.penalty_amount || 0);
+      // Only count UNPAID penalty portion (total penalty minus already-paid penalty)
+      const totalPenalty = Number(selectedRepayment.penalty_amount || 0);
+      const alreadyPaidPenalty = Number(selectedRepayment.penalty_paid || 0);
+      const remainingPenalty = Math.max(0, totalPenalty - alreadyPaidPenalty);
+      const dueAmount = selectedRepayment.amount + remainingPenalty;
+
+      // Calculate allocation (remaining penalty first, then principal/interest)
+      const penaltyPaid = Math.min(paidAmount, remainingPenalty);
       const remainingAfterPenalty = paidAmount - penaltyPaid;
       const principalPaid = remainingAfterPenalty;
 
