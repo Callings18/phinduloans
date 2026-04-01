@@ -927,6 +927,22 @@ const AdminLoans = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Deposit To Account <span className="text-destructive">*</span></Label>
+                  <Select
+                    value={quickPaymentData.destination_account_id}
+                    onValueChange={(v) => setQuickPaymentData({ ...quickPaymentData, destination_account_id: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.account_name} ({acc.account_type}) — K{acc.balance.toLocaleString()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Transaction Reference (Optional)</Label>
                   <Input
                     value={quickPaymentData.transaction_reference}
