@@ -419,7 +419,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             const applied = Math.min(excess, npAmount);
 
             if (applied >= npAmount) {
-              await supabase
+              const { error: npFullErr } = await supabase
                 .from("loan_repayments")
                 .update({
                   status: "paid",
@@ -430,8 +430,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   amount: Number(npOriginal),
                 })
                 .eq("id", np.id);
+              if (npFullErr) throw npFullErr;
             } else {
-              await supabase
+              const { error: npPartErr } = await supabase
                 .from("loan_repayments")
                 .update({
                   amount: npAmount - applied,
@@ -439,6 +440,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   principal_paid: (Number(np.principal_paid) || 0) + applied,
                 })
                 .eq("id", np.id);
+              if (npPartErr) throw npPartErr;
             }
             excess -= applied;
           }
@@ -467,17 +469,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (error) throw error;
 
       // Check if all repayments are paid — auto-complete loan (no contract signing requirement)
-      const { data: remainingUnpaid } = await supabase
+      const { data: remainingUnpaid, error: remUnpaidErr } = await supabase
         .from("loan_repayments")
         .select("id")
         .eq("loan_id", loan.id)
         .in("status", ["pending", "overdue"]);
+      if (remUnpaidErr) throw remUnpaidErr;
 
       if (remainingUnpaid && remainingUnpaid.length === 0) {
-        await supabase
+        const { error: loanCompleteErr } = await supabase
           .from("loan_applications")
           .update({ status: "completed" as any })
           .eq("id", loan.id);
+        if (loanCompleteErr) throw loanCompleteErr;
         toast.success("🎉 All payments complete — loan marked as completed!");
       }
 
@@ -534,19 +538,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       // If loan was completed, revert to active
       if (loan.status === "completed") {
-        await supabase
+        const { error: revLoanStatusErr } = await supabase
           .from("loan_applications")
           .update({ status: "active" })
           .eq("id", loan.id);
+        if (revLoanStatusErr) throw revLoanStatusErr;
       }
 
       // Log the reversal
-      await supabase.from("collection_activities").insert({
+      const { error: revCollErr } = await supabase.from("collection_activities").insert({
         loan_id: loan.id,
         activity_type: "payment_reversal",
         notes: `Payment of K${selectedPaidRepayment.amount.toLocaleString()} reversed. Reason: ${reversalReason}`,
         outcome: "Payment reverted to pending",
       });
+      if (revCollErr) throw revCollErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -911,7 +917,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       }
 
       // Record loan event on original loan
-      await supabase.from("loan_events" as any).insert({
+      const { error: reloanEv1Err } = await supabase.from("loan_events" as any).insert({
         loan_id: loan.id,
         event_type: "reloan",
         performed_by: user?.id,
@@ -921,9 +927,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         new_loan_id: newLoan.id,
         amount: newPrincipal,
       });
+      if (reloanEv1Err) throw reloanEv1Err;
 
       // Record loan event on new loan for traceability
-      await supabase.from("loan_events" as any).insert({
+      const { error: reloanEv2Err } = await supabase.from("loan_events" as any).insert({
         loan_id: newLoan.id,
         event_type: "reloan_created",
         performed_by: user?.id,
@@ -932,6 +939,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         new_values: { principal: newPrincipal, total_repayment: newCalc.totalRepayment },
         amount: newPrincipal,
       });
+      if (reloanEv2Err) throw reloanEv2Err;
 
       await logAudit({
         action: "RELOAN",
@@ -1059,11 +1067,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (loanErr) throw loanErr;
 
       // Delete pending repayments and regenerate
-      await supabase
+      const { error: delPendingErr } = await supabase
         .from("loan_repayments")
         .delete()
         .eq("loan_id", loan.id)
         .eq("status", "pending");
+      if (delPendingErr) throw delPendingErr;
 
       const { data: paidReps } = await supabase
         .from("loan_repayments")
@@ -1097,10 +1106,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       // Deduct from source account
       const newBalance = freshAccount.balance - netDisbursement;
-      await supabase.from("accounts").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", freshAccount.id);
+      const { error: topUpAccErr } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq("id", freshAccount.id);
+      if (topUpAccErr) throw topUpAccErr;
 
       // Record transaction
-      await supabase.from("account_transactions").insert({
+      const { error: topUpTxErr } = await supabase.from("account_transactions").insert({
         account_id: freshAccount.id,
         transaction_type: "disbursement",
         amount: netDisbursement,
@@ -1113,9 +1126,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         notes: `Top-up +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()}) — ${topUpReason || "N/A"}`,
         created_by: user?.id,
       });
+      if (topUpTxErr) throw topUpTxErr;
 
       // Record loan event for history timeline
-      await supabase.from("loan_events" as any).insert({
+      const { error: topUpEvErr } = await supabase.from("loan_events" as any).insert({
         loan_id: loan.id,
         event_type: "top_up",
         performed_by: user?.id,
@@ -1141,6 +1155,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         net_amount: netDisbursement,
         source_account_id: topUpSourceAccountId,
       });
+      if (topUpEvErr) throw topUpEvErr;
 
       await logAudit({
         action: "LOAN_TOP_UP",
@@ -1345,10 +1360,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         if (sourceAccount) {
           const refundAmount = Number(disbursementRecord.amount);
           const newBalance = sourceAccount.balance + refundAmount;
-          await supabase.from("accounts").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", sourceAccount.id);
+          const { error: undoAccErr } = await supabase
+            .from("accounts")
+            .update({ balance: newBalance, updated_at: new Date().toISOString() })
+            .eq("id", sourceAccount.id);
+          if (undoAccErr) throw undoAccErr;
 
           // Record refund transaction
-          await supabase.from("account_transactions").insert({
+          const { error: undoTxErr } = await supabase.from("account_transactions").insert({
             account_id: sourceAccount.id,
             transaction_type: "refund",
             amount: refundAmount,
@@ -1361,20 +1380,23 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             notes: `Undo disbursement for ${loan.full_name} — K${refundAmount.toLocaleString()} refunded`,
             created_by: user?.id,
           });
+          if (undoTxErr) throw undoTxErr;
         }
       }
 
       // Delete disbursement record
-      await supabase
+      const { error: delDisbErr } = await supabase
         .from("disbursements")
         .delete()
         .eq("loan_id", loan.id);
+      if (delDisbErr) throw delDisbErr;
 
       // Delete all repayments
-      await supabase
+      const { error: delRepErr } = await supabase
         .from("loan_repayments")
         .delete()
         .eq("loan_id", loan.id);
+      if (delRepErr) throw delRepErr;
 
       // Revert loan status to approved
       const { error } = await supabase

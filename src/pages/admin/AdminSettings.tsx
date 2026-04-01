@@ -132,11 +132,12 @@ const AdminSettings = () => {
     setLoading(true);
     try {
       // 1. Fetch Payment Settings
-      const { data: pData } = await supabase
+      const { data: pData, error: pErr } = await supabase
         .from("payment_gateway_settings")
         .select("*")
         .eq("gateway_name", "lenco")
         .single();
+      if (pErr && pErr.code !== "PGRST116") throw pErr;
 
       if (pData) {
         setPaymentSettings(pData);
@@ -149,7 +150,8 @@ const AdminSettings = () => {
       }
 
       // 2. Fetch System Settings
-      const { data: sData } = await supabase.from("system_settings").select("*");
+      const { data: sData, error: sErr } = await supabase.from("system_settings").select("*");
+      if (sErr) throw sErr;
 
       if (sData) {
         sData.forEach(setting => {

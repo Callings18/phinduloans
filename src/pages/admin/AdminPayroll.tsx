@@ -99,11 +99,12 @@ const AdminPayroll = () => {
       if (!user) throw new Error("Not authenticated");
 
       // 1. Check if run already exists
-      const { data: existing } = await (supabase.from("payroll_runs") as any)
+      const { data: existing, error: existingErr } = await (supabase.from("payroll_runs") as any)
         .select("id")
         .eq("payroll_month", selectedMonth)
         .eq("payroll_year", selectedYear)
         .maybeSingle();
+      if (existingErr) throw existingErr;
       if (existing) throw new Error(`Payroll for ${getMonthName(selectedMonth)} ${selectedYear} already exists`);
 
       // 2. Fetch active employees
@@ -120,7 +121,7 @@ const AdminPayroll = () => {
       const commissionByEmployee: Record<string, number> = {};
       for (const emp of employees) {
         if (!emp.user_id || !emp.commission_percentage) continue;
-        const { data: loans } = await (supabase.from("loan_applications") as any)
+        const { data: loans, error: loansErr } = await (supabase.from("loan_applications") as any)
           .select("loan_amount")
           .or(`approved_by.eq.${emp.user_id},disbursed_by.eq.${emp.user_id}`)
           .gte("approved_at", `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`)
@@ -128,6 +129,7 @@ const AdminPayroll = () => {
             ? `${selectedYear + 1}-01-01`
             : `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`
           );
+        if (loansErr) throw loansErr;
         if (loans?.length) {
           const totalDisbursed = loans.reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
           commissionByEmployee[emp.id] = Math.round(totalDisbursed * (emp.commission_percentage / 100) * 100) / 100;
@@ -225,9 +227,10 @@ const AdminPayroll = () => {
         .update({ status: "approved", approved_by: user.id, approved_at: new Date().toISOString() })
         .eq("id", runId);
       if (error) throw error;
-      await (supabase.from("payroll_records") as any)
+      const { error: recApproveErr } = await (supabase.from("payroll_records") as any)
         .update({ status: "approved" })
         .eq("payroll_run_id", runId);
+      if (recApproveErr) throw recApproveErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
@@ -244,9 +247,10 @@ const AdminPayroll = () => {
         .update({ status: "paid" })
         .eq("id", runId);
       if (error) throw error;
-      await (supabase.from("payroll_records") as any)
+      const { error: recPaidErr } = await (supabase.from("payroll_records") as any)
         .update({ status: "paid", paid_at: now })
         .eq("payroll_run_id", runId);
+      if (recPaidErr) throw recPaidErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
