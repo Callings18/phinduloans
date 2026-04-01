@@ -384,11 +384,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
 
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
-      const dueAmount = selectedRepayment.amount + (selectedRepayment.penalty_amount || 0);
       const savedOriginalAmount = selectedRepayment.original_amount || selectedRepayment.amount;
 
-      // Calculate allocation (penalty first, then principal/interest)
-      const penaltyPaid = Math.min(paidAmount, selectedRepayment.penalty_amount || 0);
+      // Only count UNPAID penalty portion (total penalty minus already-paid penalty)
+      const totalPenalty = Number(selectedRepayment.penalty_amount || 0);
+      const alreadyPaidPenalty = Number(selectedRepayment.penalty_paid || 0);
+      const remainingPenalty = Math.max(0, totalPenalty - alreadyPaidPenalty);
+      const dueAmount = selectedRepayment.amount + remainingPenalty;
+
+      // Calculate allocation (remaining penalty first, then principal/interest)
+      const penaltyPaid = Math.min(paidAmount, remainingPenalty);
       const remainingAfterPenalty = paidAmount - penaltyPaid;
       const principalPaid = remainingAfterPenalty;
 
@@ -454,7 +459,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           transaction_reference: transactionRef || null,
           amount: adjustedAmount,
           principal_paid: (Number(selectedRepayment.principal_paid) || 0) + principalPaid,
-          penalty_paid: penaltyPaid,
+          penalty_paid: alreadyPaidPenalty + penaltyPaid,
           original_amount: savedOriginalAmount,
         })
         .eq("id", selectedRepayment.id);
@@ -1788,7 +1793,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         const nextPending = repayments.find(r => r.status === "pending");
                         if (nextPending) {
                           setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + (nextPending.penalty_amount || 0)).toString());
+                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
                           setIsRecordPaymentOpen(true);
                         }
                       }}>
@@ -1937,7 +1942,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         const nextPending = repayments.find(r => r.status === "pending");
                         if (nextPending) {
                           setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + (nextPending.penalty_amount || 0)).toString());
+                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
                           setIsRecordPaymentOpen(true);
                         } else {
                           toast.info("No pending repayments");
@@ -2007,7 +2012,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 : rep.status === "paid"
                                   ? "paid"
                                   : "pending";
-                          const totalDue = rep.amount + (rep.penalty_amount || 0);
+                          const totalDue = rep.amount + Math.max(0, (rep.penalty_amount || 0) - (rep.penalty_paid || 0));
 
                           // Format date based on frequency
                           const dateFormat = isDaily ? "MMM dd, yyyy" : isWeekly ? "MMM dd, yyyy" : "MMM dd, yyyy";
