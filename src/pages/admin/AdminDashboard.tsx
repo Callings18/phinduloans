@@ -32,11 +32,15 @@ const AdminDashboard = () => {
     queryKey: ['admin-stats'],
     queryFn: async () => {
       const [applications, profiles, disbursements, repayments] = await Promise.all([
-        supabase.from('loan_applications').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id'),
-        supabase.from('disbursements').select('*').eq('status', 'completed'),
-        supabase.from('loan_repayments').select('*'),
+        supabase.from('loan_applications').select('id, full_name, phone, loan_amount, status, total_repayment, created_at, user_id').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('disbursements').select('amount').eq('status', 'completed'),
+        supabase.from('loan_repayments').select('id, loan_id, amount, due_date, status, principal_paid, original_amount, penalty_amount, penalty_paid'),
       ]);
+
+      if (applications.error) throw applications.error;
+      if (disbursements.error) throw disbursements.error;
+      if (repayments.error) throw repayments.error;
 
       const loans = applications.data || [];
       const allRepayments = repayments.data || [];
@@ -59,7 +63,7 @@ const AdminDashboard = () => {
         approvedApplications: loans.filter(l => l.status === 'approved').length,
         activeLoans: activeLoans.length,
         completedLoans: loans.filter(l => l.status === 'completed').length,
-        totalBorrowers: (profiles.data || []).length,
+        totalBorrowers: profiles.count || 0,
         totalDisbursed,
         amountRecovered,
         outstandingBalance,
