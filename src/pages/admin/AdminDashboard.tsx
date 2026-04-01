@@ -63,7 +63,7 @@ const AdminDashboard = () => {
         approvedApplications: loans.filter(l => l.status === 'approved').length,
         activeLoans: activeLoans.length,
         completedLoans: loans.filter(l => l.status === 'completed').length,
-        totalBorrowers: (profiles.data || []).length,
+        totalBorrowers: profiles.count || 0,
         totalDisbursed,
         amountRecovered,
         outstandingBalance,
