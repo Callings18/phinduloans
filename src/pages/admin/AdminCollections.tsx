@@ -157,7 +157,7 @@ const AdminCollections = () => {
           )
         `)
         .lt("due_date", today)
-        .neq("status", "paid")
+        .not("status", "in", '("paid","cancelled")')
         .order("due_date", { ascending: true });
 
       if (error) throw error;

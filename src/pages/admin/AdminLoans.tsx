@@ -143,6 +143,7 @@ const AdminLoans = () => {
   const [quickPaymentData, setQuickPaymentData] = useState({
     payment_method: "mobile_money",
     transaction_reference: "",
+    destination_account_id: "",
   });
   const [nextRepayment, setNextRepayment] = useState<any>(null);
 
@@ -196,6 +197,20 @@ const AdminLoans = () => {
         .eq("is_active", true);
       if (error) throw error;
       return data as LoanProduct[];
+    },
+  });
+
+  // Fetch active accounts for payment deposit
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["active-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -289,6 +304,13 @@ const AdminLoans = () => {
       const paidAmount = quickPaymentAmount ? Number(quickPaymentAmount) : amountDue;
       if (isNaN(paidAmount) || paidAmount <= 0) throw new Error("Payment amount must be greater than 0");
 
+      if (!quickPaymentData.destination_account_id) {
+        throw new Error("Please select a destination account for the payment");
+      }
+
+      const destAccount = accounts.find(a => a.id === quickPaymentData.destination_account_id);
+      if (!destAccount) throw new Error("Destination account not found");
+
       // Preserve the original amount before any partial payments reduced it
       const savedOriginalAmount = nextRepayment.original_amount || nextRepayment.amount;
       const isFullPayment = paidAmount >= amountDue;
@@ -303,7 +325,7 @@ const AdminLoans = () => {
             transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
             principal_paid: Number(savedOriginalAmount),
             original_amount: savedOriginalAmount,
-            amount: Number(savedOriginalAmount), // restore to original on full pay
+            amount: Number(savedOriginalAmount),
           })
           .eq("id", nextRepayment.id);
         if (error) throw error;
@@ -326,7 +348,6 @@ const AdminLoans = () => {
             const applied = Math.min(excess, npAmount);
 
             if (applied >= npAmount) {
-              // Fully pays this installment too
               const { error: autoSettleErr } = await supabase
                 .from("loan_repayments")
                 .update({
@@ -354,7 +375,6 @@ const AdminLoans = () => {
           }
         }
       } else {
-        // Partial payment — reduce amount owed, keep status pending
         const remainingAmount = amountDue - paidAmount;
         const { error } = await supabase
           .from("loan_repayments")
@@ -369,7 +389,27 @@ const AdminLoans = () => {
         if (error) throw error;
       }
 
-      // Check if all repayments are paid — re-query AFTER updates
+      // Record account transaction
+      const newBalance = destAccount.balance + paidAmount;
+      const { error: accountError } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance })
+        .eq("id", quickPaymentData.destination_account_id);
+      if (accountError) throw accountError;
+
+      const { error: txError } = await supabase.from("account_transactions").insert({
+        account_id: quickPaymentData.destination_account_id,
+        transaction_type: "repayment",
+        amount: paidAmount,
+        balance_before: destAccount.balance,
+        balance_after: newBalance,
+        reference_type: "loan_repayment",
+        reference_id: nextRepayment.id,
+        notes: `Loan repayment from ${quickPaymentLoan.full_name}`,
+      });
+      if (txError) throw txError;
+
+      // Check if all repayments are paid
       const { data: remainingUnpaid } = await supabase
         .from("loan_repayments")
         .select("id")
@@ -388,10 +428,12 @@ const AdminLoans = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["loan-due-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       if (result.isFullPayment) {
-        toast.success("Full payment recorded successfully");
+        toast.success("Full payment recorded and deposited to account");
       } else {
-        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded and deposited`);
       }
       setIsQuickPaymentOpen(false);
       setQuickPaymentLoan(null);
@@ -416,7 +458,7 @@ const AdminLoans = () => {
   const openQuickPayment = async (loan: Loan) => {
     setQuickPaymentLoan(loan);
     setQuickPaymentAmount("");
-    setQuickPaymentData({ payment_method: "mobile_money", transaction_reference: "" });
+    setQuickPaymentData({ payment_method: "mobile_money", transaction_reference: "", destination_account_id: "" });
     const { data: repayment } = await supabase
       .from("loan_repayments")
       .select("*")
@@ -881,6 +923,22 @@ const AdminLoans = () => {
                       <SelectItem value="cash">
                         <div className="flex items-center gap-2"><Banknote size={14} /> Cash</div>
                       </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Deposit To Account <span className="text-destructive">*</span></Label>
+                  <Select
+                    value={quickPaymentData.destination_account_id}
+                    onValueChange={(v) => setQuickPaymentData({ ...quickPaymentData, destination_account_id: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.account_name} ({acc.account_type}) — K{acc.balance.toLocaleString()}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
