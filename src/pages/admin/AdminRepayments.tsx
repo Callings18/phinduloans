@@ -218,6 +218,51 @@ const AdminRepayments = () => {
           .eq("id", repaymentId);
 
         if (error) throw error;
+
+        // Handle overpayment — cascade excess to next pending installments
+        if (paidAmount > amountDue) {
+          let excess = paidAmount - amountDue;
+          const { data: nextPendings } = await supabase
+            .from("loan_repayments")
+            .select("id, amount, original_amount, principal_paid")
+            .eq("loan_id", repayment.loan_id)
+            .in("status", ["pending", "overdue"])
+            .neq("id", repaymentId)
+            .order("due_date", { ascending: true });
+
+          for (const np of (nextPendings || [])) {
+            if (excess <= 0) break;
+            const npAmount = Number(np.amount);
+            const npOriginal = np.original_amount || np.amount;
+            const applied = Math.min(excess, npAmount);
+
+            if (applied >= npAmount) {
+              const { error: autoErr } = await supabase
+                .from("loan_repayments")
+                .update({
+                  status: "paid",
+                  paid_date: new Date().toISOString().split("T")[0],
+                  payment_method: paymentMethod,
+                  principal_paid: Number(npOriginal),
+                  original_amount: npOriginal,
+                  amount: Number(npOriginal),
+                })
+                .eq("id", np.id);
+              if (autoErr) throw autoErr;
+            } else {
+              const { error: partialErr } = await supabase
+                .from("loan_repayments")
+                .update({
+                  amount: npAmount - applied,
+                  original_amount: npOriginal,
+                  principal_paid: (Number(np.principal_paid) || 0) + applied,
+                })
+                .eq("id", np.id);
+              if (partialErr) throw partialErr;
+            }
+            excess -= applied;
+          }
+        }
       } else {
         // Partial payment - reduce amount owed, keep pending
         const { error } = await supabase
