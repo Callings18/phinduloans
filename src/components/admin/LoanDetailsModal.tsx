@@ -1472,7 +1472,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
     0
   );
-  const totalOutstanding = Math.max(0, (loan.total_repayment || 0) - totalPaidIncludingPartial);
+  const totalOutstanding = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
