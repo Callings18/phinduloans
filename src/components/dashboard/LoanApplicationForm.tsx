@@ -206,6 +206,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const loanCalc = useMemo(() => {
     if (!selectedProduct) return null;
     return calculateLoan(loanAmount, loanTerm, {
+      product_name: selectedProduct.name,
       interest_rate: selectedProduct.interest_rate,
       interest_period: selectedProduct.interest_period as any,
       interest_type: selectedProduct.interest_type as any,

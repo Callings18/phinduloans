@@ -327,6 +327,7 @@ const AdminApplications = () => {
       const termUnit = ((selectedProduct as any)?.term_unit as 'days' | 'weeks' | 'months' | 'years') || 'months';
       const termValue = termUnit === 'weeks' ? termMonths : termMonths; // loan_term_months may store weeks when term_unit is weeks
       const loanCalc = calculateLoan(loanAmount, termValue, {
+        product_name: (selectedProduct as any)?.name || null,
         interest_rate: interestRate,
         interest_period: (selectedProduct as any)?.interest_period || 'monthly',
         interest_type: (selectedProduct as any)?.interest_type || 'flat',
@@ -1703,6 +1704,7 @@ const AdminApplications = () => {
                   parseFloat(newLoan.loan_amount),
                   parseInt(newLoan.loan_term_months),
                   {
+                    product_name: selectedProduct?.name || null,
                     interest_rate: parseFloat(newLoan.interest_rate),
                     interest_period: selectedProduct?.interest_period as any,
                     interest_type: selectedProduct?.interest_type as any,

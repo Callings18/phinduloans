@@ -231,15 +231,15 @@ const AdminLoans = () => {
       const termUnit = (editingLoan.term_unit as any) || 'months';
 
       // Fetch product settings for accurate calculation
-      let productSettings: any = { interest_rate: rate, interest_period: 'monthly', interest_type: 'flat' };
+      let productSettings: any = { product_name: null, interest_rate: rate, interest_period: 'monthly', interest_type: 'flat' };
       if (editingLoan.loan_product_id) {
         const { data: product } = await supabase
           .from("loan_products")
-          .select("interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit")
+          .select("name, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit")
           .eq("id", editingLoan.loan_product_id)
           .single();
         if (product) {
-          productSettings = { ...product, interest_rate: rate };
+          productSettings = { ...product, product_name: (product as any).name || null, interest_rate: rate };
         }
       }
 

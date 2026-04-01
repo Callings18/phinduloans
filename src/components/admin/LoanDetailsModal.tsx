@@ -257,7 +257,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!loan?.loan_product_id) return null;
       const { data, error } = await supabase
         .from("loan_products")
-        .select("term_unit, interest_period, repayment_frequency, interest_type")
+        .select("name, term_unit, interest_period, repayment_frequency, interest_type")
         .eq("id", loan.loan_product_id)
         .single();
 
@@ -811,7 +811,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // cancel pending/overdue repayments when loan status changes to "completed".
 
       // Recalculate new loan terms with carry-forward outstanding plus optional top-up.
-      const productForCalc: any = { interest_rate: interestRate, interest_period: interestPeriod, interest_type: interestType };
+      const productForCalc: any = {
+        product_name: loanProduct?.name || null,
+        interest_rate: interestRate,
+        interest_period: interestPeriod,
+        interest_type: interestType,
+      };
       const newCalc = calculateLoan(
         newPrincipal,
         loan.loan_term_months,
@@ -992,7 +997,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (loan.loan_product_id) {
         const { data: prod } = await supabase
           .from("loan_products")
-          .select("processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent, interest_period, interest_type, term_unit")
+          .select("name, processing_fee_percent, interest_rate, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent, interest_period, interest_type, term_unit")
           .eq("id", loan.loan_product_id)
           .single();
         if (prod) {
@@ -1024,6 +1029,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // New principal & recalculate using unified calculation
       const newPrincipal = loan.loan_amount + additionalAmount;
       const loanCalc = calculateLoan(newPrincipal, loan.loan_term_months, {
+        product_name: (loanProduct as any)?.name || null,
         interest_rate: interestRate,
         interest_period: interestPeriod as any,
         interest_type: interestType as any,
@@ -1184,6 +1190,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       // Use unified calculation for correct interest normalization
       const loanCalc = calculateLoan(principal, newTerm, {
+        product_name: (loanProduct as any)?.name || null,
         interest_rate: newRate,
         interest_period: interestPeriod as any,
         interest_type: interestType as any,

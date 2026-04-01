@@ -120,6 +120,7 @@ const LoanCalculator = () => {
 
   const productForCalc: LoanProductCalc = selectedProduct
     ? {
+        product_name: selectedProduct.name,
         interest_rate: selectedProduct.interest_rate,
         interest_period: selectedProduct.interest_period as any,
         interest_type: selectedProduct.interest_type as any,

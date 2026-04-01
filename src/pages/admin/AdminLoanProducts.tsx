@@ -327,6 +327,7 @@ const AdminLoanProducts = () => {
     else if (formData.term_unit === 'years') termMonths = term * 12;
 
     const result = calculateLoan(principal, termMonths, {
+      product_name: formData.name,
       interest_rate: formData.interest_rate,
       interest_period: formData.interest_period as any,
       interest_type: formData.interest_type as any,

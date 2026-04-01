@@ -128,6 +128,7 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
             const term = Math.max(product.min_term_months, Math.min(comparisonTerm, product.max_term_months));
 
             const calc = calculateLoan(amount, term, {
+                product_name: product.name,
                 interest_rate: product.interest_rate,
                 interest_period: product.interest_period as any,
                 interest_type: product.interest_type as any,

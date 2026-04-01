@@ -10,6 +10,7 @@ export type PenaltyFrequency = 'daily' | 'weekly' | 'monthly' | 'one_time';
 export type TermUnit = 'days' | 'weeks' | 'months' | 'years';
 
 export interface LoanProduct {
+  product_name?: string | null;
   interest_rate: number;
   interest_period?: InterestPeriod | null;
   interest_type?: InterestType | null;
@@ -153,6 +154,10 @@ export function calculateLoan(
   product: LoanProduct,
   termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
 ): LoanCalculationResult {
+  const normalizedProductName = (product.product_name || "").trim().toLowerCase();
+  const isBusinessShortTerm =
+    normalizedProductName === "business loan - short term" ||
+    (normalizedProductName.includes("business loan") && normalizedProductName.includes("short term"));
   const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const rawInterestType = (product.interest_type as string) || 'flat';
   const interestType = (rawInterestType === 'reducing_balance'
@@ -194,8 +199,12 @@ export function calculateLoan(
       monthlyPayment = calculateReducingBalancePayment(principal, monthlyRate, termMonths);
       totalInterest = calculateReducingBalanceInterest(principal, monthlyRate, termMonths);
     } else {
-      // Flat interest
-      totalInterest = calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);
+      // Flat interest:
+      // - Business Loan - Short Term: one-time flat interest over the full term (as agreed by business)
+      // - All other products: recurring interest by period
+      totalInterest = isBusinessShortTerm
+        ? principal * (product.interest_rate / 100)
+        : calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);
       monthlyPayment = (principal + totalInterest) / termMonths;
     }
     
