@@ -1793,7 +1793,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         const nextPending = repayments.find(r => r.status === "pending");
                         if (nextPending) {
                           setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + (nextPending.penalty_amount || 0)).toString());
+                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
                           setIsRecordPaymentOpen(true);
                         }
                       }}>
