@@ -428,10 +428,12 @@ const AdminLoans = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["loan-due-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       if (result.isFullPayment) {
-        toast.success("Full payment recorded successfully");
+        toast.success("Full payment recorded and deposited to account");
       } else {
-        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded and deposited`);
       }
       setIsQuickPaymentOpen(false);
       setQuickPaymentLoan(null);
