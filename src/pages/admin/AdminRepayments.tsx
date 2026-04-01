@@ -195,6 +195,9 @@ const AdminRepayments = () => {
 
       const amountDue = Number(repayment.amount);
       const savedOriginalAmount = repayment.original_amount || repayment.amount;
+      if (paidAmount > amountDue) {
+        throw new Error(`Amount exceeds remaining due (K${amountDue.toLocaleString()})`);
+      }
       const isFullPayment = paidAmount >= amountDue;
       const remainingAmount = amountDue - paidAmount;
 
@@ -244,7 +247,7 @@ const AdminRepayments = () => {
       if (accountError) throw accountError;
 
       // Record account transaction
-      await supabase.from("account_transactions").insert({
+      const { error: txError } = await supabase.from("account_transactions").insert({
         account_id: destinationAccountId,
         transaction_type: "repayment",
         amount: paidAmount,
@@ -254,6 +257,7 @@ const AdminRepayments = () => {
         reference_id: repaymentId,
         notes: `Loan repayment from ${repayment.loan_applications?.full_name || 'borrower'}`,
       });
+      if (txError) throw txError;
 
       if (claimId) {
         const { error: claimErr } = await supabase
@@ -429,6 +433,10 @@ const AdminRepayments = () => {
       }
 
       const totalSplitAmount = validSplits.reduce((sum, sp) => sum + parseFloat(sp.amount), 0);
+      if (totalSplitAmount > Number(selectedRepayment.amount)) {
+        toast.error(`Total split amount cannot exceed remaining due (K${Number(selectedRepayment.amount).toLocaleString()})`);
+        return;
+      }
       
       // For split payments we currently post one repayment transaction row.
       // Require all split legs to use the same destination account.
@@ -462,6 +470,14 @@ const AdminRepayments = () => {
     } else {
       // Single payment method
       const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
+      if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+        toast.error("Please enter a valid payment amount");
+        return;
+      }
+      if (paidAmount > Number(selectedRepayment.amount)) {
+        toast.error(`Amount cannot exceed remaining due (K${Number(selectedRepayment.amount).toLocaleString()})`);
+        return;
+      }
 
       if (!paymentData.destination_account_id) {
         toast.error("Please select a destination account");

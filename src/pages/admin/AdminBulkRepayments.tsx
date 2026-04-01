@@ -86,6 +86,7 @@ const AdminBulkRepayments = () => {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [transactionRef, setTransactionRef] = useState("");
+  const [destinationAccountId, setDestinationAccountId] = useState("");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [allocations, setAllocations] = useState<AllocationItem[]>([]);
   
@@ -148,6 +149,20 @@ const AdminBulkRepayments = () => {
     enabled: !!selectedBorrowerId,
   });
 
+  // Fetch active accounts for deposit destination
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["active-accounts-bulk-repayments"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   // Calculate allocation when payment amount changes
   const calculateAllocations = () => {
     if (!borrowerLoans || !paymentAmount) return [];
@@ -206,11 +221,38 @@ const AdminBulkRepayments = () => {
   const bulkPaymentMutation = useMutation({
     mutationFn: async () => {
       if (allocations.length === 0) throw new Error('No allocations to process');
+      if (!destinationAccountId) throw new Error("Please select a destination account");
 
       const paidDate = format(new Date(), 'yyyy-MM-dd');
+      const destination = accounts.find(a => a.id === destinationAccountId);
+      if (!destination) throw new Error("Destination account not found");
+
+      // Credit destination account once with the full bulk payment.
+      const totalBulkAmount = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
+      const newBalance = Number(destination.balance) + totalBulkAmount;
+      const { error: accErr } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance })
+        .eq("id", destinationAccountId);
+      if (accErr) throw accErr;
+
+      const { error: txErr } = await supabase.from("account_transactions").insert({
+        account_id: destinationAccountId,
+        transaction_type: "repayment",
+        amount: totalBulkAmount,
+        balance_before: Number(destination.balance),
+        balance_after: newBalance,
+        reference_type: "bulk_loan_repayment",
+        reference_id: selectedBorrowerId || null,
+        notes: `Bulk repayment allocation for borrower ${selectedBorrowerId}`,
+        created_by: user?.id,
+      });
+      if (txErr) throw txErr;
 
       // Update each repayment
+      const affectedLoanIds = new Set<string>();
       for (const allocation of allocations) {
+        affectedLoanIds.add(allocation.loanId);
         const isFullPayment = allocation.allocatedAmount >= allocation.originalAmount;
 
         if (isFullPayment) {
@@ -233,7 +275,7 @@ const AdminBulkRepayments = () => {
           // Partial payment - update amount and record partial
           const { data: currentRep } = await supabase
             .from('loan_repayments')
-            .select('amount, original_amount')
+            .select('amount, original_amount, principal_paid')
             .eq('id', allocation.repaymentId)
             .single();
 
@@ -256,6 +298,18 @@ const AdminBulkRepayments = () => {
         }
       }
 
+      // Auto-complete loans with no pending/overdue installments left.
+      for (const loanId of affectedLoanIds) {
+        const { data: remaining } = await supabase
+          .from("loan_repayments")
+          .select("id")
+          .eq("loan_id", loanId)
+          .in("status", ["pending", "overdue"]);
+        if (remaining && remaining.length === 0) {
+          await supabase.from("loan_applications").update({ status: "completed" }).eq("id", loanId);
+        }
+      }
+
       return { processed: allocations.length };
     },
     onSuccess: (result) => {
@@ -268,6 +322,7 @@ const AdminBulkRepayments = () => {
       setIsConfirmOpen(false);
       setPaymentAmount("");
       setTransactionRef("");
+      setDestinationAccountId("");
       setAllocations([]);
     },
     onError: (error: any) => {
@@ -479,6 +534,26 @@ const AdminBulkRepayments = () => {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label>Deposit To Account *</Label>
+                <Select value={destinationAccountId} onValueChange={setDestinationAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account to deposit this bulk payment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.length === 0 ? (
+                      <SelectItem value="none" disabled>No active accounts available</SelectItem>
+                    ) : (
+                      accounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.account_name} ({acc.account_type}) - K{Number(acc.balance).toLocaleString()}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Allocation Preview */}
               {previewAllocations.length > 0 && (
                 <div className="space-y-4">
@@ -538,7 +613,7 @@ const AdminBulkRepayments = () => {
 
               <Button 
                 onClick={handleConfirmPayment}
-                disabled={!paymentAmount || previewAllocations.length === 0}
+                disabled={!paymentAmount || !destinationAccountId || previewAllocations.length === 0}
                 className="w-full gradient-primary"
               >
                 <Receipt size={18} className="mr-2" />
