@@ -702,7 +702,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Reloan mutation - only reloans outstanding principal; blocks if interest/penalties unpaid
+  // Reloan mutation - carry-forward outstanding balance; blocks only if unpaid penalties remain
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
@@ -721,13 +721,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const totalPartialOnPending = pendingReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
       const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
       
-      // Outstanding = Total Repayment - Total Paid (this is the reloan amount)
-      const outstandingBalance = Math.max(0, (loan.total_repayment || 0) - totalAllPaid);
+      // Outstanding carry-forward = remaining installment balances (after any partial payments)
+      const outstandingBalance = pendingReps.reduce((sum, r) => sum + Number(r.amount || 0), 0);
       
-      // Check for unpaid penalties
-      const totalUnpaidPenalties = pendingReps.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-      
-      // Block if penalties are outstanding
+      // Check for unpaid penalties only (ignore penalties already settled)
+      const totalUnpaidPenalties = pendingReps.reduce(
+        (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+        0
+      );
+
+      // Block if penalties are still outstanding
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
@@ -1465,8 +1468,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const partialPaymentsOnPending = unpaidRepayments
     .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
   const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
-  const totalPenalties = unpaidRepayments.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0);
-  const totalOutstanding = Math.max(0, (loan.total_repayment || 0) - totalPaidIncludingPartial);
+  const totalPenalties = unpaidRepayments.reduce(
+    (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+    0
+  );
+  const totalOutstanding = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
@@ -2874,7 +2880,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
                     <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
                     <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
-                    <span className="text-muted-foreground">Outstanding Penalties</span>
+                    <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
                   </div>
                 </div>
