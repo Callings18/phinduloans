@@ -17,19 +17,41 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { toast } from "sonner";
-import { Banknote, Loader2, Eye } from "lucide-react";
+import {
+  Banknote,
+  Loader2,
+  Eye,
+  Home,
+  CreditCard,
+  Receipt,
+  User,
+  PlusCircle,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-import BorrowerBottomNav, { type BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
 import BorrowerHomeTab from "@/components/dashboard/BorrowerHomeTab";
 import BorrowerLoansTab from "@/components/dashboard/BorrowerLoansTab";
 import BorrowerPaymentsTab from "@/components/dashboard/BorrowerPaymentsTab";
 import BorrowerProfileTab from "@/components/dashboard/BorrowerProfileTab";
-import QuickApply from "@/components/dashboard/QuickApply";
 import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 
 import phinduLogo from "@/assets/phindu-logo-white.png";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
+
+export type BorrowerTab = "home" | "loans" | "apply" | "payments" | "profile";
+
+const sidebarItems: { id: BorrowerTab; label: string; icon: typeof Home }[] = [
+  { id: "home", label: "Dashboard", icon: Home },
+  { id: "loans", label: "My Loans", icon: CreditCard },
+  { id: "apply", label: "Apply for Loan", icon: PlusCircle },
+  { id: "payments", label: "Payments", icon: Receipt },
+  { id: "profile", label: "My Profile", icon: User },
+];
 
 const Dashboard = () => {
   const { user, isLoading, isAdmin, isStaff, signOut } = useAuth();
@@ -38,6 +60,7 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<BorrowerTab>("home");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Payment claim state
   const [submitPaymentRepayment, setSubmitPaymentRepayment] = useState<any>(null);
@@ -51,7 +74,6 @@ const Dashboard = () => {
   const [applyAmount, setApplyAmount] = useState<number | undefined>();
   const [applyTerm, setApplyTerm] = useState<number | undefined>();
 
-  // Check URL params for apply mode
   useEffect(() => {
     if (searchParams.get("apply") === "true") {
       setShowApplicationForm(true);
@@ -59,7 +81,6 @@ const Dashboard = () => {
       setApplyAmount(searchParams.get("amount") ? Number(searchParams.get("amount")) : undefined);
       setApplyTerm(searchParams.get("term") ? Number(searchParams.get("term")) : undefined);
     }
-    // If navigating to a specific tab
     const tab = searchParams.get("tab") as BorrowerTab | null;
     if (tab && ["home", "loans", "apply", "payments", "profile"].includes(tab)) {
       setActiveTab(tab);
@@ -67,12 +88,8 @@ const Dashboard = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      navigate('/auth');
-    }
-    if (!isLoading && user && isStaff && !searchParams.has('view')) {
-      navigate('/admin');
-    }
+    if (!isLoading && !user) navigate('/auth');
+    if (!isLoading && user && isStaff && !searchParams.has('view')) navigate('/admin');
   }, [user, isLoading, isStaff, navigate, searchParams]);
 
   // ─── Data Queries ────────────────────────────────────────────
@@ -91,7 +108,6 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
-  // Real-time subscription for loan status changes
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
@@ -319,7 +335,6 @@ const Dashboard = () => {
     }
   }, [handleStartApplication]);
 
-  // ─── Loading / Auth Guard ────────────────────────────────────
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -330,136 +345,222 @@ const Dashboard = () => {
 
   if (!user) return null;
 
-  // ─── Render ──────────────────────────────────────────────────
+  const tabTitle: Record<string, string> = {
+    home: "Dashboard",
+    loans: "My Loans",
+    apply: "Apply for Loan",
+    payments: "Payments",
+    profile: "My Profile",
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20">
-      {/* Compact top header — mobile-friendly */}
-      <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-lg border-b border-border">
-        <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
-          <img src={phinduLogo} alt="Phindu" className="h-8" />
-          <div className="flex items-center gap-1">
-            <ThemeToggle variant="minimal" />
-            <NotificationCenter />
-          </div>
+    <div className="min-h-screen bg-background text-foreground flex">
+      {/* ── Sidebar ─────────────────────────────────────────── */}
+      <aside
+        className={cn(
+          "hidden md:flex flex-col border-r border-border bg-card/80 backdrop-blur-lg transition-all duration-300 sticky top-0 h-screen z-40",
+          sidebarCollapsed ? "w-[68px]" : "w-[240px]"
+        )}
+      >
+        {/* Logo */}
+        <div className="flex items-center h-16 px-4 border-b border-border shrink-0">
+          <img src={phinduLogo} alt="Phindu" className={cn("transition-all", sidebarCollapsed ? "h-7" : "h-8")} />
         </div>
 
-        {/* Admin preview banner */}
-        {isStaff && (
-          <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-primary/10 border-b border-primary/20">
-            <div className="flex items-center gap-1.5 text-xs text-primary">
-              <Eye size={12} />
-              <span className="font-medium">Admin Preview</span>
+        {/* Nav Items */}
+        <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
+          {sidebarItems.map((item) => {
+            const isActive = showApplicationForm ? item.id === "apply" : activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={cn(
+                  "flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                  isActive
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+                title={sidebarCollapsed ? item.label : undefined}
+              >
+                <item.icon size={20} className="shrink-0" />
+                {!sidebarCollapsed && <span>{item.label}</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Bottom */}
+        <div className="border-t border-border p-2 space-y-1">
+          <button
+            onClick={async () => { await signOut(); navigate('/auth'); }}
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+            title={sidebarCollapsed ? "Sign Out" : undefined}
+          >
+            <LogOut size={20} className="shrink-0" />
+            {!sidebarCollapsed && <span>Sign Out</span>}
+          </button>
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-all"
+          >
+            {sidebarCollapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} className="shrink-0" /><span>Collapse</span></>}
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main Area ───────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Header */}
+        <header className="sticky top-0 z-30 bg-card/95 backdrop-blur-lg border-b border-border">
+          <div className="flex items-center justify-between h-16 px-6">
+            <div className="flex items-center gap-4">
+              {/* Mobile menu button */}
+              <button
+                className="md:hidden p-2 rounded-lg hover:bg-muted/50"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              >
+                <Menu size={20} />
+              </button>
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">
+                  {showApplicationForm ? "Apply for Loan" : tabTitle[activeTab]}
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  Welcome back, {profile?.full_name?.split(" ")[0] || "there"}
+                </p>
+              </div>
             </div>
-            <Button size="sm" variant="ghost" className="h-6 text-xs text-primary" asChild>
-              <Link to="/admin">← Back to Admin</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle variant="minimal" />
+              <NotificationCenter />
+              {isStaff && (
+                <Button size="sm" variant="outline" className="text-xs" asChild>
+                  <Link to="/admin"><Eye size={14} className="mr-1.5" />Admin Panel</Link>
+                </Button>
+              )}
+              <div className="hidden sm:flex items-center gap-2 ml-2 pl-2 border-l border-border">
+                <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+                  {(profile?.full_name || "U").charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-foreground hidden lg:inline">
+                  {profile?.full_name || "User"}
+                </span>
+              </div>
+            </div>
           </div>
-        )}
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main className="px-4 py-4 max-w-lg mx-auto">
-        {/* Application Form Overlay */}
-        {showApplicationForm ? (
-          <div>
-            <LoanApplicationForm
-              initialProductId={applyProductId}
-              initialAmount={applyAmount}
-              initialTerm={applyTerm}
-              onClose={handleCloseApplication}
-            />
+        {/* Mobile Bottom Nav */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border">
+          <div className="flex items-center justify-around h-14 px-2">
+            {sidebarItems.map((item) => {
+              const isActive = showApplicationForm ? item.id === "apply" : activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id)}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-0.5 flex-1 py-1 transition-colors",
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  <item.icon size={18} strokeWidth={isActive ? 2.5 : 1.5} />
+                  <span className="text-[10px] font-medium">{item.label.split(" ")[0]}</span>
+                </button>
+              );
+            })}
           </div>
-        ) : (
-          <>
-            {activeTab === "home" && (
-              <BorrowerHomeTab
-                user={user}
-                profile={profile}
-                loans={loans}
-                repayments={repayments}
-                activeLoans={activeLoans}
-                kycVerified={kycVerified}
-                isStaff={isStaff}
-                onTabChange={handleTabChange}
-              />
-            )}
+        </nav>
 
-            {activeTab === "loans" && (
-              <BorrowerLoansTab
-                userId={user.id}
-                loans={loans}
-                repayments={repayments}
-                onDownloadStatement={downloadStatement}
-                onDownloadSchedule={downloadSchedule}
-                onSubmitPayment={handleSubmitPayment}
-                isGenerating={isGenerating}
-                onApply={() => handleStartApplication()}
+        {/* Content */}
+        <main className="flex-1 p-6 pb-20 md:pb-6 overflow-y-auto">
+          <div className="max-w-6xl mx-auto">
+            {showApplicationForm ? (
+              <LoanApplicationForm
+                initialProductId={applyProductId}
+                initialAmount={applyAmount}
+                initialTerm={applyTerm}
+                onClose={handleCloseApplication}
               />
+            ) : (
+              <>
+                {activeTab === "home" && (
+                  <BorrowerHomeTab
+                    user={user}
+                    profile={profile}
+                    loans={loans}
+                    repayments={repayments}
+                    activeLoans={activeLoans}
+                    kycVerified={kycVerified}
+                    isStaff={isStaff}
+                    onTabChange={handleTabChange}
+                  />
+                )}
+                {activeTab === "loans" && (
+                  <BorrowerLoansTab
+                    userId={user.id}
+                    loans={loans}
+                    repayments={repayments}
+                    onDownloadStatement={downloadStatement}
+                    onDownloadSchedule={downloadSchedule}
+                    onSubmitPayment={handleSubmitPayment}
+                    isGenerating={isGenerating}
+                    onApply={() => handleStartApplication()}
+                  />
+                )}
+                {activeTab === "payments" && (
+                  <BorrowerPaymentsTab
+                    repayments={repayments}
+                    loans={loans}
+                    paymentClaims={paymentClaims}
+                    onSubmitPayment={handleSubmitPayment}
+                  />
+                )}
+                {activeTab === "profile" && (
+                  <BorrowerProfileTab
+                    user={user}
+                    profile={profile}
+                    kycVerified={kycVerified}
+                    onSignOut={async () => { await signOut(); navigate('/auth'); }}
+                  />
+                )}
+              </>
             )}
-
-            {activeTab === "payments" && (
-              <BorrowerPaymentsTab
-                repayments={repayments}
-                loans={loans}
-                paymentClaims={paymentClaims}
-                onSubmitPayment={handleSubmitPayment}
-              />
-            )}
-
-            {activeTab === "profile" && (
-              <BorrowerProfileTab
-                user={user}
-                profile={profile}
-                kycVerified={kycVerified}
-                onSignOut={async () => { await signOut(); navigate('/auth'); }}
-              />
-            )}
-          </>
-        )}
-      </main>
-
-      {/* Bottom Navigation */}
-      {!showApplicationForm && (
-        <BorrowerBottomNav
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          badgeCounts={{
-            loans: activeLoans.length,
-            payments: repayments.filter(r => ["pending", "overdue"].includes(r.status)).length,
-          }}
-        />
-      )}
+          </div>
+        </main>
+      </div>
 
       {/* Payment Claim Dialog */}
       <Dialog open={!!submitPaymentRepayment} onOpenChange={(open) => { if (!open) { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); } }}>
-        <DialogContent className="max-w-[90vw] sm:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">Submit Payment</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogTitle>Submit Payment Claim</DialogTitle>
+            <DialogDescription>
               Enter the amount paid and transaction reference. Admin will verify it.
             </DialogDescription>
           </DialogHeader>
           {submitPaymentRepayment && (
-            <div className="space-y-3 py-2">
-              <div className="space-y-1">
-                <Label htmlFor="claim-amount" className="text-xs">Amount (K)</Label>
-                <Input id="claim-amount" type="number" min="0" step="0.01" value={claimAmount} onChange={(e) => setClaimAmount(e.target.value)} className="h-9" />
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-amount">Amount (K)</Label>
+                <Input id="claim-amount" type="number" min="0" step="0.01" value={claimAmount} onChange={(e) => setClaimAmount(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="claim-reference" className="text-xs">Transaction Reference *</Label>
-                <Input id="claim-reference" value={claimReference} onChange={(e) => setClaimReference(e.target.value)} placeholder="e.g. MM123456789" className="h-9" />
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-reference">Transaction Reference *</Label>
+                <Input id="claim-reference" value={claimReference} onChange={(e) => setClaimReference(e.target.value)} placeholder="e.g. MM123456789" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Receipt (optional)</Label>
-                <Input type="file" accept="image/*,.pdf" onChange={(e) => setClaimReceiptFile(e.target.files?.[0] ?? null)} className="h-9 text-xs" />
+              <div className="space-y-1.5">
+                <Label>Receipt (optional)</Label>
+                <Input type="file" accept="image/*,.pdf" onChange={(e) => setClaimReceiptFile(e.target.files?.[0] ?? null)} />
               </div>
             </div>
           )}
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); }}>Cancel</Button>
-            <Button size="sm" onClick={() => submitPaymentClaimMutation.mutate()} disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}>
-              {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1" />}
-              Submit
+            <Button variant="outline" onClick={() => { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); }}>Cancel</Button>
+            <Button onClick={() => submitPaymentClaimMutation.mutate()} disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}>
+              {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1.5" />}
+              Submit Payment
             </Button>
           </DialogFooter>
         </DialogContent>
