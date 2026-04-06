@@ -60,6 +60,7 @@ interface Disbursement {
     full_name: string;
     email: string;
     loan_amount: number;
+    user_id?: string;
   };
 }
 
@@ -92,7 +93,8 @@ const AdminDisbursements = () => {
           loan_applications (
             full_name,
             email,
-            loan_amount
+            loan_amount,
+            user_id
           )
         `)
         .order("created_at", { ascending: false });
@@ -118,7 +120,7 @@ const AdminDisbursements = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_applications")
-        .select("id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url, status")
+        .select("id, user_id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url, status")
         .in("status", ["approved", "awaiting_disbursement", "contract_signing"])
         .order("created_at", { ascending: false });
 
@@ -128,6 +130,7 @@ const AdminDisbursements = () => {
         full_name: string;
         loan_amount: number;
         email: string;
+        user_id: string;
         borrower_signed: boolean | null;
         admin_signed: boolean | null;
         signed_contract_url: string | null;
@@ -135,6 +138,50 @@ const AdminDisbursements = () => {
       }>;
     },
   });
+
+  const selectedLoanData = approvedLoans?.find((loan) => loan.id === selectedLoan);
+  const { data: selectedBorrowerPayout } = useQuery({
+    queryKey: ["borrower-payout-for-disbursement", selectedLoanData?.user_id],
+    queryFn: async () => {
+      if (!selectedLoanData?.user_id) return null;
+      const { data, error } = await supabase
+        .from("borrower_kyc_info")
+        .select(
+          "bank_name, bank_account_number, bank_account_holder_name, mobile_money_account_name, airtel_money_number, mtn_mobile_money_number, zamtel_kwacha_number"
+        )
+        .eq("borrower_id", selectedLoanData.user_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedLoanData?.user_id,
+  });
+
+  useEffect(() => {
+    if (!selectedBorrowerPayout || !selectedLoan) return;
+    setFormData((prev) => {
+      if (prev.mobile_money_number || prev.account_number) return prev;
+      if (selectedBorrowerPayout.bank_account_number) {
+        return {
+          ...prev,
+          disbursement_method: "bank_transfer",
+          account_number: selectedBorrowerPayout.bank_account_number,
+          mobile_money_number: "",
+        };
+      }
+      const defaultMomo =
+        selectedBorrowerPayout.mtn_mobile_money_number ||
+        selectedBorrowerPayout.airtel_money_number ||
+        selectedBorrowerPayout.zamtel_kwacha_number ||
+        "";
+      return {
+        ...prev,
+        disbursement_method: "mobile_money",
+        mobile_money_number: defaultMomo,
+        account_number: "",
+      };
+    });
+  }, [selectedBorrowerPayout, selectedLoan]);
 
   // Fetch active accounts for source selection
   const { data: accounts = [] } = useQuery({
@@ -202,12 +249,32 @@ const AdminDisbursements = () => {
 
       // Create disbursement record with source account (status pending).
       // Account deduction happens only when status is set to "completed" (via DB trigger).
+      const resolvedMobileMoneyNumber =
+        formData.disbursement_method === "mobile_money"
+          ? formData.mobile_money_number ||
+            selectedBorrowerPayout?.mtn_mobile_money_number ||
+            selectedBorrowerPayout?.airtel_money_number ||
+            selectedBorrowerPayout?.zamtel_kwacha_number ||
+            null
+          : null;
+      const resolvedAccountNumber =
+        formData.disbursement_method === "bank_transfer"
+          ? formData.account_number || selectedBorrowerPayout?.bank_account_number || null
+          : null;
+
+      if (formData.disbursement_method === "mobile_money" && !resolvedMobileMoneyNumber) {
+        throw new Error("Missing mobile money destination. Add it in borrower KYC or enter it manually.");
+      }
+      if (formData.disbursement_method === "bank_transfer" && !resolvedAccountNumber) {
+        throw new Error("Missing bank account destination. Add it in borrower KYC or enter it manually.");
+      }
+
       const { data: inserted, error: disbError } = await supabase.from("disbursements").insert({
         loan_id: selectedLoan,
         amount: disbursementAmount,
         disbursement_method: formData.disbursement_method,
-        mobile_money_number: formData.disbursement_method === "mobile_money" ? formData.mobile_money_number : null,
-        account_number: formData.disbursement_method === "bank_transfer" ? formData.account_number : null,
+        mobile_money_number: resolvedMobileMoneyNumber,
+        account_number: resolvedAccountNumber,
         status: "pending",
         source_account_id: formData.source_account_id,
       }).select("id").single();
@@ -452,6 +519,23 @@ const AdminDisbursements = () => {
                     );
                   })()}
                 </div>
+
+                {selectedLoanData && (
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-xs font-medium text-primary mb-1">Borrower payout destination (from KYC)</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedBorrowerPayout?.bank_account_number
+                        ? `Bank: ${selectedBorrowerPayout.bank_name || "Bank"} (${selectedBorrowerPayout.bank_account_number})`
+                        : selectedBorrowerPayout?.mtn_mobile_money_number
+                          ? `MTN Mobile Money: ${selectedBorrowerPayout.mtn_mobile_money_number}`
+                          : selectedBorrowerPayout?.airtel_money_number
+                            ? `Airtel Money: ${selectedBorrowerPayout.airtel_money_number}`
+                            : selectedBorrowerPayout?.zamtel_kwacha_number
+                              ? `Zamtel Kwacha: ${selectedBorrowerPayout.zamtel_kwacha_number}`
+                              : "No payout destination saved by borrower yet."}
+                    </p>
+                  </div>
+                )}
 
                 {/* NEW: Source Account Selection */}
                 <div className="space-y-2">

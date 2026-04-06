@@ -14,6 +14,7 @@ import { format, isAfter, startOfDay } from "date-fns";
 import KYCStatusWidget from "./KYCStatusWidget";
 import ContractSigningWidget from "./ContractSigningWidget";
 import PaymentReminder from "./PaymentReminder";
+import WalletWidget from "./WalletWidget";
 import type { BorrowerTab } from "./BorrowerBottomNav";
 
 interface BorrowerHomeTabProps {
@@ -316,6 +317,9 @@ export default function BorrowerHomeTab({
 
       {/* KYC Status */}
       {user && <KYCStatusWidget userId={user.id} />}
+
+      {/* Wallet transactions linked to real disbursement/repayment records */}
+      {user && <WalletWidget />}
 
       {/* Contract Signing */}
       {user && <ContractSigningWidget userId={user.id} />}

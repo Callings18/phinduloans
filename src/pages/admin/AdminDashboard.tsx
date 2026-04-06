@@ -19,6 +19,7 @@ import {
   Receipt,
   User,
   Loader2,
+  Wrench,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,9 @@ import { format, differenceInDays, startOfDay } from "date-fns";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const developerWhatsappLink =
+    import.meta.env.VITE_DEV_SUPPORT_WHATSAPP ||
+    "https://wa.me/260000000000?text=Hello%20Developer%2C%20I%20need%20help%20with%20the%20admin%20system.";
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
@@ -121,6 +125,49 @@ const AdminDashboard = () => {
             </Link>
           </Button>
         </div>
+
+        <Card className="border-warning/40 bg-warning/10">
+          <CardContent className="py-2 px-0">
+            <div className="marquee-wrap">
+              <div className="marquee-track">
+                <div className="inline-flex items-center gap-3 px-4">
+                  <Badge className="bg-warning/20 text-warning border-warning/30 border">
+                    <Wrench size={12} className="mr-1" />
+                    Development Notice
+                  </Badge>
+                  <span className="text-sm text-foreground">
+                    Some admin features may be unstable during ongoing development.
+                  </span>
+                  <a
+                    href={developerWhatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-primary font-medium hover:underline"
+                  >
+                    Need help? Contact developer on WhatsApp
+                  </a>
+                </div>
+                <div className="inline-flex items-center gap-3 px-4" aria-hidden="true">
+                  <Badge className="bg-warning/20 text-warning border-warning/30 border">
+                    <Wrench size={12} className="mr-1" />
+                    Development Notice
+                  </Badge>
+                  <span className="text-sm text-foreground">
+                    Some admin features may be unstable during ongoing development.
+                  </span>
+                  <a
+                    href={developerWhatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-primary font-medium hover:underline"
+                  >
+                    Need help? Contact developer on WhatsApp
+                  </a>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Quick Actions */}
         <QuickActions />

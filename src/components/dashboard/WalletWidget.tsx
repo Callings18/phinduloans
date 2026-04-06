@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Wallet, ArrowUpCircle, ArrowDownCircle, Eye, EyeOff, Loader2, Building, Smartphone } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,17 +21,18 @@ interface Transaction {
   amount: number;
   created_at: string;
   notes: string | null;
+  reference?: string | null;
+  method?: string | null;
 }
 
 export default function WalletWidget() {
   const { user } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
 
-  // Calculate wallet-like data from loan repayments
+  // Calculate wallet totals from disbursements + repayments
   const { data: walletData, isLoading } = useQuery<WalletData>({
     queryKey: ["user-wallet-summary", user?.id],
     queryFn: async () => {
-      // Get all paid repayments as "deposits" to the loan
       const { data: repayments, error: repError } = await supabase
         .from("loan_repayments")
         .select("amount, status")
@@ -39,10 +40,16 @@ export default function WalletWidget() {
 
       if (repError) throw repError;
 
-      // Get disbursed loans as "received"
+      const { data: disbursements, error: disbursementError } = await supabase
+        .from("disbursements")
+        .select("amount, status, loan_applications!inner(user_id)")
+        .eq("loan_applications.user_id", user?.id)
+        .eq("status", "completed");
+      if (disbursementError) throw disbursementError;
+
       const { data: loans, error: loanError } = await supabase
         .from("loan_applications")
-        .select("loan_amount, total_repayment, status")
+        .select("total_repayment, status")
         .eq("user_id", user?.id)
         .in("status", ["active", "disbursed", "completed"]);
 
@@ -50,7 +57,7 @@ export default function WalletWidget() {
 
       const totalPaid = repayments?.filter(r => r.status === "paid").reduce((sum, r) => sum + Number(r.amount), 0) || 0;
       const totalPending = repayments?.filter(r => r.status === "pending").reduce((sum, r) => sum + Number(r.amount), 0) || 0;
-      const totalReceived = loans?.reduce((sum, l) => sum + Number(l.loan_amount), 0) || 0;
+      const totalReceived = disbursements?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
       const totalOwed = loans?.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0) || 0;
 
       return {
@@ -63,26 +70,52 @@ export default function WalletWidget() {
     enabled: !!user?.id,
   });
 
-  // Get recent repayment transactions
+  // Get recent disbursement + repayment transactions
   const { data: recentTransactions } = useQuery<Transaction[]>({
-    queryKey: ["user-recent-repayments", user?.id],
+    queryKey: ["user-recent-wallet-activity", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: repayments, error: repaymentsError } = await supabase
         .from("loan_repayments")
         .select("id, amount, status, paid_date, due_date, created_at")
         .eq("user_id", user?.id)
         .order("created_at", { ascending: false })
         .limit(5);
+      if (repaymentsError) throw repaymentsError;
 
-      if (error) throw error;
-      
-      return data?.map(r => ({
-        id: r.id,
-        transaction_type: r.status === "paid" ? "payment" : "due",
-        amount: Number(r.amount),
-        created_at: r.paid_date || r.due_date || r.created_at,
-        notes: r.status === "paid" ? "Loan repayment" : "Upcoming payment",
-      })) || [];
+      const { data: disbursements, error: disbursementsError } = await supabase
+        .from("disbursements")
+        .select("id, amount, disbursement_method, transaction_reference, disbursed_at, created_at, status, loan_applications!inner(user_id)")
+        .eq("loan_applications.user_id", user?.id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (disbursementsError) throw disbursementsError;
+
+      const repaymentEvents =
+        repayments?.map((r) => ({
+          id: `rep-${r.id}`,
+          transaction_type: r.status === "paid" ? "payment" : "due",
+          amount: Number(r.amount),
+          created_at: r.paid_date || r.due_date || r.created_at,
+          notes: r.status === "paid" ? "Loan repayment received" : "Upcoming repayment due",
+          reference: null,
+          method: null,
+        })) || [];
+
+      const disbursementEvents =
+        disbursements?.map((d) => ({
+          id: `disb-${d.id}`,
+          transaction_type: "disbursement",
+          amount: Number(d.amount),
+          created_at: d.disbursed_at || d.created_at,
+          notes: "Loan disbursed to declared payout destination",
+          reference: d.transaction_reference,
+          method: d.disbursement_method,
+        })) || [];
+
+      return [...repaymentEvents, ...disbursementEvents]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 8);
     },
     enabled: !!user?.id,
   });
@@ -100,11 +133,15 @@ export default function WalletWidget() {
   const wallet = walletData || { available_balance: 0, pending_balance: 0, total_deposited: 0, total_withdrawn: 0 };
 
   const getTransactionIcon = (type: string) => {
-    return type === "payment" ? ArrowDownCircle : ArrowUpCircle;
+    if (type === "payment") return ArrowDownCircle;
+    if (type === "disbursement") return ArrowUpCircle;
+    return ArrowUpCircle;
   };
 
   const getTransactionColor = (type: string) => {
-    return type === "payment" ? "text-success" : "text-warning";
+    if (type === "payment") return "text-success";
+    if (type === "disbursement") return "text-primary";
+    return "text-warning";
   };
 
   return (
@@ -178,6 +215,7 @@ export default function WalletWidget() {
               const Icon = getTransactionIcon(txn.transaction_type);
               const colorClass = getTransactionColor(txn.transaction_type);
               const isPayment = txn.transaction_type === "payment";
+              const isDisbursement = txn.transaction_type === "disbursement";
 
               return (
                 <div
@@ -190,16 +228,22 @@ export default function WalletWidget() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground capitalize">
-                        {isPayment ? "Payment Made" : "Payment Due"}
+                        {isPayment ? "Repayment Made" : isDisbursement ? "Loan Disbursed" : "Repayment Due"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {format(new Date(txn.created_at), "MMM dd, yyyy")}
                       </p>
+                      {isDisbursement && (
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          {txn.method === "bank_transfer" ? <Building size={11} /> : <Smartphone size={11} />}
+                          {txn.reference ? `Ref ${txn.reference}` : "Payout destination credited"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-semibold ${colorClass}`}>
-                      {isPayment ? "-" : ""}K{Number(txn.amount).toLocaleString()}
+                      {isPayment ? "-" : isDisbursement ? "+" : ""}K{Number(txn.amount).toLocaleString()}
                     </p>
                   </div>
                 </div>

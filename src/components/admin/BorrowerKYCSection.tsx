@@ -34,6 +34,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const [rejectDocLabel, setRejectDocLabel] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [expandedHistoryType, setExpandedHistoryType] = useState<string | null>(null);
 
   useEffect(() => {
     if (!borrowerId) return;
@@ -284,9 +285,11 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
             <div className="space-y-3">
               {KYC_DOC_TYPES.map((kycType) => {
                 const doc = docsByType[kycType.type];
+                const versions = vaultDocs.filter((d) => d.doc_type === kycType.type);
                 const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
                 return (
-                  <div key={kycType.type} className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/30">
+                  <div key={kycType.type} className="flex flex-col gap-2 p-3 rounded-lg bg-background/50 border border-border/30">
+                    <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <FileText size={16} className="text-muted-foreground" />
                       <div>
@@ -295,6 +298,15 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                           <p className="text-xs text-muted-foreground">{doc.file_name} • Uploaded {new Date(doc.uploaded_at).toLocaleDateString()}</p>
                         ) : (
                           <p className="text-xs text-muted-foreground">Not uploaded</p>
+                        )}
+                        {versions.length > 1 && (
+                          <button
+                            type="button"
+                            className="text-[11px] text-primary mt-0.5 hover:underline"
+                            onClick={() => setExpandedHistoryType(expandedHistoryType === kycType.type ? null : kycType.type)}
+                          >
+                            {expandedHistoryType === kycType.type ? "Hide" : "View"} history ({versions.length})
+                          </button>
                         )}
                         {isRejected && <p className="text-xs text-destructive mt-0.5">{doc.notes?.replace("Rejected: ", "")}</p>}
                       </div>
@@ -335,6 +347,26 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                         </>
                       )}
                     </div>
+                    </div>
+                    {expandedHistoryType === kycType.type && versions.length > 1 && (
+                      <div className="mt-2 pt-2 border-t border-border/40 w-full">
+                        <div className="space-y-1.5">
+                          {versions.slice(1).map((version) => (
+                            <div
+                              key={version.id}
+                              className="flex items-center justify-between gap-2 rounded-md border border-border/40 bg-muted/30 px-2 py-1.5"
+                            >
+                              <span className="text-[11px] text-muted-foreground truncate">
+                                {version.file_name} • {new Date(version.uploaded_at).toLocaleString()}
+                              </span>
+                              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handlePreview(version.file_url)}>
+                                <Eye size={12} />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
