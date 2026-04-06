@@ -45,6 +45,7 @@ import AdminPayroll from "./pages/admin/AdminPayroll";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
+import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 
 // Inline Theme - no external module
 type Theme = "dark" | "light" | "system";
@@ -164,6 +165,7 @@ function App() {
                     <Route path="email-log" element={<AdminEmailLog />} />
                     <Route path="user-guide" element={<AdminUserGuide />} />
                     <Route path="roles-permissions" element={<AdminRolesPermissions />} />
+                    <Route path="crb-queue" element={<AdminCRBQueue />} />
                   </Route>
                   <Route path="*" element={<NotFound />} />
                 </Routes>

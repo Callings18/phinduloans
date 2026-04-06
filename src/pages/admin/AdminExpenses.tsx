@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Plus, Receipt, Check, X, FileText, Download, Search, Filter } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -88,6 +89,9 @@ const formatCurrency = (amount: number) => {
 };
 
 const AdminExpenses = () => {
+  const { can } = usePermissions();
+  const canCreateExpense = can("expenses", "create");
+  const canApproveExpense = can("expenses", "approve");
   const queryClient = useQueryClient();
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -154,6 +158,7 @@ const AdminExpenses = () => {
   // Add expense mutation
   const addExpenseMutation = useMutation({
     mutationFn: async (data: typeof newExpense) => {
+      if (!canCreateExpense) throw new Error("Permission denied: expenses create");
       const { error } = await supabase.from('expenses').insert({
         expense_date: data.expense_date,
         expense_category: data.expense_category,
@@ -191,6 +196,9 @@ const AdminExpenses = () => {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      if (status === "approved" || status === "rejected" || status === "paid") {
+        if (!canApproveExpense) throw new Error("Permission denied: expenses approve");
+      }
       const updateData: any = { status };
       if (status === 'approved') {
         updateData.approved_at = new Date().toISOString();
@@ -280,7 +288,7 @@ const AdminExpenses = () => {
           </div>
           <Dialog open={addExpenseOpen} onOpenChange={setAddExpenseOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="gap-2" disabled={!canCreateExpense} title={!canCreateExpense ? "No permission to create expenses" : undefined}>
                 <Plus size={16} />
                 Record Expense
               </Button>
@@ -395,7 +403,7 @@ const AdminExpenses = () => {
                 <Button variant="outline" onClick={() => setAddExpenseOpen(false)}>Cancel</Button>
                 <Button 
                   onClick={() => addExpenseMutation.mutate(newExpense)} 
-                  disabled={addExpenseMutation.isPending || !newExpense.expense_category || !newExpense.vendor_payee || newExpense.amount <= 0}
+                  disabled={!canCreateExpense || addExpenseMutation.isPending || !newExpense.expense_category || !newExpense.vendor_payee || newExpense.amount <= 0}
                 >
                   Record Expense
                 </Button>
@@ -510,16 +518,25 @@ const AdminExpenses = () => {
                         <DropdownMenuContent align="end">
                           {expense.status === 'pending' && (
                             <>
-                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}>
+                              <DropdownMenuItem
+                                disabled={!canApproveExpense}
+                                onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
+                              >
                                 <Check className="mr-2 h-4 w-4" /> Approve
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'rejected' })}>
+                              <DropdownMenuItem
+                                disabled={!canApproveExpense}
+                                onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'rejected' })}
+                              >
                                 <X className="mr-2 h-4 w-4" /> Reject
                               </DropdownMenuItem>
                             </>
                           )}
                           {expense.status === 'approved' && (
-                            <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}>
+                            <DropdownMenuItem
+                              disabled={!canApproveExpense}
+                              onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}
+                            >
                               <Check className="mr-2 h-4 w-4" /> Mark as Paid
                             </DropdownMenuItem>
                           )}

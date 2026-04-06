@@ -22,6 +22,7 @@ import PMICEnrollmentList from "@/components/admin/pmic/PMICEnrollmentList";
 import PMICSubmissionList from "@/components/admin/pmic/PMICSubmissionList";
 import PMICExceptionList from "@/components/admin/pmic/PMICExceptionList";
 import PMICEligibilityCalculator from "@/components/admin/pmic/PMICEligibilityCalculator";
+import PMICReconciliationSummary from "@/components/admin/pmic/PMICReconciliationSummary";
 
 const AdminPMIC = () => {
   const {
@@ -29,6 +30,8 @@ const AdminPMIC = () => {
     stats,
     loading,
     refreshAll,
+    submissions,
+    exceptions,
   } = usePMIC();
 
   const [activeTab, setActiveTab] = useState("enrollments");
@@ -140,6 +143,12 @@ const AdminPMIC = () => {
             </CardContent>
           </Card>
         </div>
+
+        <PMICReconciliationSummary
+          submissions={submissions}
+          exceptions={exceptions}
+          onOpenExceptionsTab={() => setActiveTab("exceptions")}
+        />
 
         {/* Main Content Tabs */}
         <Card>

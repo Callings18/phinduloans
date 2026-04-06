@@ -99,6 +99,7 @@ const AdminWriteOffs = () => {
   // Approve write-off mutation
   const approveWriteOffMutation = useMutation({
     mutationFn: async (writeOffId: string) => {
+      if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
       const writeOff = writeOffs?.find(w => w.id === writeOffId);
       if (!writeOff) throw new Error("Write-off not found");
 
@@ -161,6 +162,7 @@ const AdminWriteOffs = () => {
   // Reject write-off mutation
   const rejectWriteOffMutation = useMutation({
     mutationFn: async ({ writeOffId, reason }: { writeOffId: string; reason: string }) => {
+      if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
       const writeOff = writeOffs?.find(w => w.id === writeOffId);
       if (!writeOff) throw new Error("Write-off not found");
 
@@ -200,6 +202,7 @@ const AdminWriteOffs = () => {
   // Record recovery mutation
   const recordRecoveryMutation = useMutation({
     mutationFn: async ({ writeOffId, amount, notes }: { writeOffId: string; amount: number; notes: string }) => {
+      if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
       const writeOff = writeOffs?.find(w => w.id === writeOffId);
       if (!writeOff) throw new Error("Write-off not found");
 

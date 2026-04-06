@@ -1,27 +1,16 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  CreditCard,
   LogOut,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Package,
-  Banknote,
-  Wallet,
-  FileSignature,
-  Settings,
-  Shield,
-  UserCog,
-  BookOpen,
   Eye,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo-white.png";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -30,77 +19,46 @@ import {
 } from "@/components/ui/collapsible";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
-
-interface MenuGroup {
-  label: string;
-  items: MenuItem[];
-}
-
-interface MenuItem {
-  icon: any;
-  label: string;
-  path: string;
-  adminOnly?: boolean;
-}
-
-const menuGroups: MenuGroup[] = [
-  {
-    label: "Overview",
-    items: [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-    ],
-  },
-  {
-    label: "Lending",
-    items: [
-      { icon: FileText, label: "Applications", path: "/admin/applications" },
-      { icon: Users, label: "Borrowers", path: "/admin/borrowers" },
-      { icon: Package, label: "Loan Products", path: "/admin/loan-products" },
-      { icon: CreditCard, label: "Loans", path: "/admin/loans" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements" },
-      { icon: Banknote, label: "Repayments", path: "/admin/repayments" },
-      { icon: Wallet, label: "Accounts", path: "/admin/accounts", adminOnly: true },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      { icon: FileSignature, label: "Contract Templates", path: "/admin/contract-templates" },
-      { icon: UserCog, label: "Staff", path: "/admin/staff" },
-      { icon: Shield, label: "Roles & Permissions", path: "/admin/roles-permissions", adminOnly: true },
-      { icon: BookOpen, label: "User Guide", path: "/admin/user-guide" },
-      { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
-    ],
-  },
-];
+import { adminMenuGroups, type SidebarMenuItem } from "./adminSidebarConfig";
 
 const AdminSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
-    menuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    adminMenuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
+  const { can, isLoading: permsLoading } = usePermissions();
 
-  // Filter menu items based on role
-  const filteredMenuGroups = menuGroups.map(group => ({
-    ...group,
-    items: group.items.filter(item => !item.adminOnly || isAdmin),
-  })).filter(group => group.items.length > 0);
+  const visibleItem = (item: SidebarMenuItem): boolean => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (!item.perm) return true;
+    if (permsLoading) return false;
+    if (isAdmin) return true;
+    return can(item.perm.module, item.perm.action);
+  };
+
+  const filteredMenuGroups = useMemo(
+    () =>
+      adminMenuGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(visibleItem),
+        }))
+        .filter((g) => g.items.length > 0),
+    [isAdmin, permsLoading, can]
+  );
 
   const toggleGroup = (label: string) => {
-    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
-  const isActiveGroup = (group: MenuGroup) => {
-    return group.items.some(item => location.pathname === item.path);
-  };
+  const pathActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+  const isActiveGroup = (group: (typeof filteredMenuGroups)[0]) =>
+    group.items.some((item) => pathActive(item.path));
 
   return (
     <aside
@@ -109,7 +67,6 @@ const AdminSidebar = () => {
         collapsed ? "w-20" : "w-64"
       )}
     >
-      {/* Logo */}
       <div className="h-20 flex items-center justify-between px-4 border-b border-sidebar-border shrink-0">
         {!collapsed && (
           <div className="flex items-center gap-3">
@@ -129,24 +86,25 @@ const AdminSidebar = () => {
         )}
       </div>
 
-      {/* Toggle Button */}
       <button
+        type="button"
         onClick={() => setCollapsed(!collapsed)}
         className="absolute -right-3 top-24 w-6 h-6 rounded-full bg-sidebar border border-sidebar-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      {/* Quick Actions - Theme & Notifications */}
-      <div className={cn(
-        "px-4 py-3 border-b border-sidebar-border flex gap-2 shrink-0",
-        collapsed ? "justify-center" : "justify-start"
-      )}>
+      <div
+        className={cn(
+          "px-4 py-3 border-b border-sidebar-border flex gap-2 shrink-0",
+          collapsed ? "justify-center" : "justify-start"
+        )}
+      >
         <ThemeToggle variant={collapsed ? "minimal" : "default"} />
         {!collapsed && <NotificationCenter />}
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
         {filteredMenuGroups.map((group) => {
           const isOpen = openGroups[group.label];
@@ -154,7 +112,7 @@ const AdminSidebar = () => {
 
           if (collapsed) {
             return group.items.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive = pathActive(item.path);
               return (
                 <Link
                   key={item.path}
@@ -191,7 +149,7 @@ const AdminSidebar = () => {
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-1 mt-1">
                 {group.items.map((item) => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = pathActive(item.path);
                   return (
                     <Link
                       key={item.path}
@@ -214,11 +172,10 @@ const AdminSidebar = () => {
         })}
       </nav>
 
-      {/* View as Borrower + Logout */}
       <div className="p-4 border-t border-sidebar-border shrink-0 space-y-2">
         <Button
           variant="outline"
-          onClick={() => navigate('/dashboard?view=borrower')}
+          onClick={() => navigate("/dashboard?view=borrower")}
           className={cn(
             "w-full justify-start text-primary border-primary/30 hover:bg-primary/10",
             collapsed && "justify-center"
