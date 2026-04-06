@@ -10,6 +10,14 @@ import {
   Calendar,
 } from "lucide-react";
 import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Props {
   repayments: any[];
@@ -30,7 +38,6 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
     return { label: "Pending", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
   };
 
-  // Sort: overdue first, then pending by date, then paid
   const sorted = [...repayments].sort((a, b) => {
     const order = { overdue: 0, pending: 1, paid: 2, cancelled: 3 };
     const aStatus = ["pending", "overdue"].includes(a.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(a.due_date))) ? "overdue" : a.status;
@@ -68,92 +75,95 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
   };
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-bold text-foreground">Payments</h2>
-
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="glass border-border/50">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground">Due</p>
-            <p className="text-lg font-bold text-warning">{pendingCount}</p>
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="border-border/50">
+          <CardContent className="p-5 text-center">
+            <p className="text-sm text-muted-foreground">Due</p>
+            <p className="text-3xl font-bold text-warning mt-1">{pendingCount}</p>
           </CardContent>
         </Card>
-        <Card className="glass border-border/50">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground">Paid</p>
-            <p className="text-lg font-bold text-success">{paidCount}</p>
+        <Card className="border-border/50">
+          <CardContent className="p-5 text-center">
+            <p className="text-sm text-muted-foreground">Paid</p>
+            <p className="text-3xl font-bold text-success mt-1">{paidCount}</p>
           </CardContent>
         </Card>
-        <Card className="glass border-border/50">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground">Total Paid</p>
-            <p className="text-sm font-bold text-foreground">K{totalPaid.toLocaleString()}</p>
+        <Card className="border-border/50">
+          <CardContent className="p-5 text-center">
+            <p className="text-sm text-muted-foreground">Total Paid</p>
+            <p className="text-2xl font-bold text-foreground mt-1">K{totalPaid.toLocaleString()}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Payment list */}
+      {/* Payments Table */}
       {sorted.length === 0 ? (
-        <Card className="glass border-border/50">
-          <CardContent className="p-8 text-center">
-            <Calendar className="mx-auto text-muted-foreground mb-2" size={32} />
-            <p className="text-sm text-muted-foreground">No payments yet</p>
+        <Card className="border-border/50">
+          <CardContent className="p-12 text-center">
+            <Calendar className="mx-auto text-muted-foreground mb-3" size={40} />
+            <p className="text-muted-foreground">No payments yet</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {sorted.map((rep) => {
-            const status = getRepaymentStatus(rep);
-            const StatusIcon = status.icon;
-            const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
-            const claim = claimsByRepaymentId.get(rep.id);
-            const claimStatus = getClaimStatus(claim);
-            return (
-              <Card key={rep.id} className="glass border-border/50">
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-bold shrink-0">
-                        #{rep.installment_number}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground text-sm truncate">
-                          K{Number(rep.original_amount || rep.amount).toLocaleString()}
-                          <span className="text-muted-foreground text-xs ml-1">({getLoanRef(rep.loan_id)})</span>
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {format(new Date(rep.due_date), "MMM dd, yyyy")}
-                          {rep.paid_date && ` • Paid ${format(new Date(rep.paid_date), "MMM dd")}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
-                        <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => onSubmitPayment(rep)}>
-                          <Banknote size={10} className="mr-0.5" />
-                          Pay
-                        </Button>
-                      )}
-                      <Badge className={`${status.color} border text-[10px] px-1.5 py-0`}>
-                        <StatusIcon size={8} className="mr-0.5" />
-                        {status.label}
-                      </Badge>
-                    </div>
-                  </div>
-                  {claimStatus && (
-                    <div className="mt-2 flex items-center justify-between">
-                      <Badge className={`${claimStatus.color} border text-[10px] px-1.5 py-0`}>
-                        {claimStatus.label}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground">Ref: {claim.reference}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <Card className="border-border/50">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[60px]">#</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Loan</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Paid Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Claim</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sorted.map((rep) => {
+                  const status = getRepaymentStatus(rep);
+                  const StatusIcon = status.icon;
+                  const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+                  const claim = claimsByRepaymentId.get(rep.id);
+                  const claimStatus = getClaimStatus(claim);
+                  return (
+                    <TableRow key={rep.id}>
+                      <TableCell className="font-medium">{rep.installment_number}</TableCell>
+                      <TableCell className="font-semibold">K{Number(rep.original_amount || rep.amount).toLocaleString()}</TableCell>
+                      <TableCell className="text-muted-foreground">{getLoanRef(rep.loan_id)}</TableCell>
+                      <TableCell>{format(new Date(rep.due_date), "MMM dd, yyyy")}</TableCell>
+                      <TableCell>{rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy") : "—"}</TableCell>
+                      <TableCell>
+                        <Badge className={`${status.color} border`}>
+                          <StatusIcon size={10} className="mr-1" />
+                          {status.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {claimStatus ? (
+                          <Badge className={`${claimStatus.color} border text-xs`}>
+                            {claimStatus.label}
+                          </Badge>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
+                          <Button variant="outline" size="sm" onClick={() => onSubmitPayment(rep)}>
+                            <Banknote size={14} className="mr-1.5" />
+                            Pay
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
     </div>
   );
