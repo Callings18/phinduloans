@@ -147,8 +147,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     enabled: !!user,
   });
 
-  const { data: hasActiveLoan } = useQuery({
-    queryKey: ["active-loan-check", user?.id],
+  const { data: hasOpenLoan } = useQuery({
+    queryKey: ["open-loan-check", user?.id],
     queryFn: async () => {
       if (!user) return false;
       const { data } = await supabase
@@ -424,11 +424,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         </Alert>
       )}
 
-      {hasActiveLoan && (
-        <Alert variant="destructive">
+      {hasOpenLoan && (
+        <Alert className="border-warning/40 bg-warning/10">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            You already have an active or pending loan. Please complete or wait for it to be processed before applying again.
+            You already have an existing active/pending loan. You can continue with this application, and final approval will depend on credit policy.
           </AlertDescription>
         </Alert>
       )}
@@ -509,7 +509,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           </div>
           <div className="flex justify-between pt-4">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => setStep(1)} disabled={!canProceedStep1 || !isProfileComplete || !!hasActiveLoan}>
+            <Button onClick={() => setStep(1)} disabled={!canProceedStep1 || !isProfileComplete}>
               Continue <ArrowRight size={16} className="ml-2" />
             </Button>
           </div>
@@ -869,7 +869,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             <Button
               variant="hero"
               onClick={handleSubmit}
-              disabled={isSubmitting || !canSubmit || !isProfileComplete || !!hasActiveLoan}
+              disabled={isSubmitting || !canSubmit || !isProfileComplete}
               className="min-w-[180px]"
             >
               {isSubmitting ? (

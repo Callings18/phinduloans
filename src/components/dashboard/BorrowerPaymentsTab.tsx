@@ -76,21 +76,23 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
 
   return (
     <div className="space-y-6">
+      <h2 className="text-xl font-bold text-foreground">Payments</h2>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="border-border/50">
+        <Card className="border-border/60 shadow-card">
           <CardContent className="p-5 text-center">
             <p className="text-sm text-muted-foreground">Due</p>
             <p className="text-3xl font-bold text-warning mt-1">{pendingCount}</p>
           </CardContent>
         </Card>
-        <Card className="border-border/50">
+        <Card className="border-border/60 shadow-card">
           <CardContent className="p-5 text-center">
             <p className="text-sm text-muted-foreground">Paid</p>
             <p className="text-3xl font-bold text-success mt-1">{paidCount}</p>
           </CardContent>
         </Card>
-        <Card className="border-border/50">
+        <Card className="border-border/60 shadow-card">
           <CardContent className="p-5 text-center">
             <p className="text-sm text-muted-foreground">Total Paid</p>
             <p className="text-2xl font-bold text-foreground mt-1">K{totalPaid.toLocaleString()}</p>
@@ -100,18 +102,18 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
 
       {/* Payments Table */}
       {sorted.length === 0 ? (
-        <Card className="border-border/50">
+        <Card className="border-border/60 shadow-card">
           <CardContent className="p-12 text-center">
             <Calendar className="mx-auto text-muted-foreground mb-3" size={40} />
             <p className="text-muted-foreground">No payments yet</p>
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-border/50">
+        <Card className="border-border/60 shadow-card">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-secondary/50">
                   <TableHead className="w-[60px]">#</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Loan</TableHead>
@@ -131,7 +133,7 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                   const claimStatus = getClaimStatus(claim);
                   return (
                     <TableRow key={rep.id}>
-                      <TableCell className="font-medium">{rep.installment_number}</TableCell>
+                      <TableCell className="font-medium text-muted-foreground">{rep.installment_number}</TableCell>
                       <TableCell className="font-semibold">K{Number(rep.original_amount || rep.amount).toLocaleString()}</TableCell>
                       <TableCell className="text-muted-foreground">{getLoanRef(rep.loan_id)}</TableCell>
                       <TableCell>{format(new Date(rep.due_date), "MMM dd, yyyy")}</TableCell>
@@ -153,7 +155,7 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
                           <Button variant="outline" size="sm" onClick={() => onSubmitPayment(rep)}>
                             <Banknote size={14} className="mr-1.5" />
-                            Pay
+                            I've paid
                           </Button>
                         )}
                       </TableCell>

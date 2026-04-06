@@ -181,8 +181,11 @@ const AdminApplications = () => {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { can } = usePermissions();
+  const canRecommendForApproval = can("loans", "assign");
+  const canApproveApplication = can("loans", "approve") || can("loans", "finance_approve");
+  const canDisburseApplication = can("disbursement", "disburse");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -526,19 +529,27 @@ const AdminApplications = () => {
         throw new Error("Insufficient funds in selected account. Please top up and try again.");
       }
 
-      const { error: disbError } = await supabase.from('disbursements').insert({
+      const { data: insertedDisbursement, error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
         amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
         account_number: data.account_number || null,
         mobile_money_number: data.mobile_money_number || null,
         transaction_reference: data.transaction_reference || null,
-        status: 'completed',
-        disbursed_at: new Date().toISOString(),
+        status: 'pending',
         source_account_id: data.source_account_id || null,
-      });
+      }).select("id").single();
 
       if (disbError) throw disbError;
+
+      const { error: completeError } = await supabase
+        .from("disbursements")
+        .update({
+          status: "completed",
+          disbursed_at: new Date().toISOString(),
+        })
+        .eq("id", insertedDisbursement.id);
+      if (completeError) throw completeError;
 
       // Update loan status to disbursed and set disbursed_by/disbursed_at
       const { error: loanError } = await supabase
@@ -688,6 +699,22 @@ const AdminApplications = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      if (selectedApp && variables.action === "approve") {
+        notificationService.sendLoanApproval(
+          selectedApp.user_id,
+          selectedApp.full_name,
+          selectedApp.loan_amount,
+          selectedApp.phone
+        );
+      } else if (selectedApp && variables.action === "reject") {
+        notificationService.sendLoanRejection(
+          selectedApp.user_id,
+          selectedApp.full_name,
+          selectedApp.phone,
+          selectedApp.email,
+          variables.reason
+        );
+      }
       const msg =
         variables.action === "verify_documents"
           ? "Documents marked as verified"
@@ -924,8 +951,7 @@ const AdminApplications = () => {
   const handleApprove = async () => {
     if (!selectedApp) return;
     setIsProcessing(true);
-    // V1.0.1: Simple direct approval - skip verification gates
-    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'approved' });
+    await transitionMutation.mutateAsync({ id: selectedApp.id, action: "approve" });
     setIsProcessing(false);
   };
 
@@ -935,7 +961,7 @@ const AdminApplications = () => {
       ? (rejectionReason ? `${rejectionCategory}: ${rejectionReason}` : rejectionCategory)
       : rejectionReason || "Rejected";
     setIsProcessing(true);
-    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'rejected', reason });
+    await transitionMutation.mutateAsync({ id: selectedApp.id, action: "reject", reason });
     setIsProcessing(false);
     setRejectionCategory("");
     setRejectionReason("");
@@ -996,8 +1022,9 @@ const AdminApplications = () => {
       (app.phone?.toLowerCase() || '').includes(query);
 
     const matchesSource = sourceFilter === 'all' || (app as any).source === sourceFilter;
+    const matchesStatus = statusFilter === 'all' || (app as any).status === statusFilter;
 
-    return matchesSearch && matchesSource;
+    return matchesSearch && matchesSource && matchesStatus;
   });
 
   // Toggle select all applications
@@ -1257,7 +1284,8 @@ const AdminApplications = () => {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
-                  {/* V2.0: CRB Failed, PMIC Pending hidden for V1.0.1 */}
+                  <SelectItem value="crb_failed">CRB Failed</SelectItem>
+                  <SelectItem value="pmic_pending">PMIC Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
@@ -2123,7 +2151,7 @@ const AdminApplications = () => {
 
                       <div className="flex gap-3">
                         {/* Loan officers see "Recommend" on pending apps; Admins see "Approve" */}
-                        {!isAdmin && selectedApp.status === 'pending' && (
+                        {canRecommendForApproval && selectedApp.status === 'pending' && !canApproveApplication && (
                           <Button
                             className="flex-1"
                             variant="outline"
@@ -2134,7 +2162,7 @@ const AdminApplications = () => {
                             Recommend for Approval
                           </Button>
                         )}
-                        {isAdmin && (
+                        {canApproveApplication && (
                           <Button
                             className="flex-1"
                             onClick={handleApprove}
@@ -2164,7 +2192,7 @@ const AdminApplications = () => {
                 )}
 
                 {/* Disburse - Admin only */}
-                {selectedApp.status === 'approved' && isAdmin && (
+                {selectedApp.status === 'approved' && canDisburseApplication && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-3">
                       <h4 className="font-semibold text-foreground">Disburse Loan</h4>

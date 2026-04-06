@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 
 interface IntegrationSettings {
+  lms_mode: "internal_only" | "external_adapter";
   crb_enabled: boolean;
   crb_provider: string;
   crb_auto_decline_score: number;
@@ -30,6 +31,7 @@ interface IntegrationSettings {
 }
 
 const defaultSettings: IntegrationSettings = {
+  lms_mode: "internal_only",
   crb_enabled: false,
   crb_provider: "creditbridge",
   crb_auto_decline_score: 250,
@@ -192,6 +194,40 @@ export const IntegrationsSettings = () => {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            LMS Release Mode
+          </CardTitle>
+          <CardDescription>
+            Choose whether this release runs on internal LMS paths only, or enables external adapter integration.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <Select
+              value={settings.lms_mode}
+              onValueChange={(value: "internal_only" | "external_adapter") =>
+                setSettings({ ...settings, lms_mode: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="internal_only">Internal LMS only (recommended for this release)</SelectItem>
+                <SelectItem value="external_adapter">Enable external LMS adapter path</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Current mode controls release policy and avoids accidental claims of unsupported external LMS integrations.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* CRB Integration */}
       <Card>
         <CardHeader>

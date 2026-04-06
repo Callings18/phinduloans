@@ -127,13 +127,13 @@ class NotificationService {
     }
 
     // Check if channel is enabled
-    let enabled = false;
+    let enabled = true;
     if (params.type === 'sms' && settings) {
-      enabled = settings.sms_enabled;
+      enabled = settings.sms_enabled !== false;
     } else if (params.type === 'whatsapp' && settings) {
-      enabled = settings.whatsapp_enabled;
+      enabled = settings.whatsapp_enabled !== false;
     } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled;
+      enabled = settings.email_enabled !== false;
     }
 
     if (!enabled) {

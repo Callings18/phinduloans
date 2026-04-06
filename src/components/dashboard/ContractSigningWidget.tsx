@@ -267,7 +267,19 @@ export default function ContractSigningWidget({ userId }: Props) {
   }
 
   if (!loansAwaitingSignature || loansAwaitingSignature.length === 0) {
-    return null; // Don't show widget if no contracts to sign
+    return (
+      <Card className="glass border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock size={18} className="text-muted-foreground" />
+            Contract Signing
+          </CardTitle>
+          <CardDescription>
+            No contracts are awaiting your signature right now.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
   }
 
   return (

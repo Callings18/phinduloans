@@ -940,8 +940,14 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`[Notification] Using SMS provider: ${smsProvider}`);
         
         if (smsProvider === 'excitesms') {
-          const exciteCreds = await getExciteSmsCredentials(supabase);
-          result = await sendSMS_ExciteSMS(to, message, exciteCreds);
+          try {
+            const exciteCreds = await getExciteSmsCredentials(supabase);
+            result = await sendSMS_ExciteSMS(to, message, exciteCreds);
+          } catch (exciteError: any) {
+            console.error("[Notification] ExciteSMS failed, falling back to Twilio:", exciteError.message);
+            const twilioCreds = await getTwilioCredentials(supabase);
+            result = await sendSMS_Twilio(to, message, twilioCreds);
+          }
         } else {
           const twilioCreds = await getTwilioCredentials(supabase);
           result = await sendSMS_Twilio(to, message, twilioCreds);

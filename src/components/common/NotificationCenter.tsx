@@ -87,6 +87,11 @@ const NotificationCenter: React.FC = () => {
     // Check push notification permission status
     useEffect(() => {
         const checkPushStatus = async () => {
+            if (!pushNotificationManager.isSubscriptionReady()) {
+                setPushEnabled(false);
+                setShowPushPrompt(false);
+                return;
+            }
             const permission = pushNotificationManager.getPermissionStatus();
             setPushEnabled(permission === 'granted');
             
@@ -143,6 +148,14 @@ const NotificationCenter: React.FC = () => {
 
     // Enable push notifications
     const handleEnablePush = async () => {
+        if (!pushNotificationManager.isSubscriptionReady()) {
+            toast({
+                title: "Push Notifications Unavailable",
+                description: "Push subscriptions are temporarily disabled while backend sync is finalized.",
+            });
+            return;
+        }
+
         const permission = await pushNotificationManager.requestPermission();
         if (permission === 'granted') {
             await pushNotificationManager.init();

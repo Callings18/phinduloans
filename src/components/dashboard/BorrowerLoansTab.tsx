@@ -29,19 +29,18 @@ import {
 import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import { ApplicationStatusTracker } from "./ApplicationStatusTracker";
 import DocumentChecklist from "./DocumentChecklist";
-import type { BorrowerTab } from "@/pages/Dashboard";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: "Submitted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
-  under_review: { label: "Under Review", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: FileText },
-  approved: { label: "Approved", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: CheckCircle },
-  contract_signing: { label: "Contract Signing", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: FileText },
-  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30", icon: Banknote },
-  rejected: { label: "Rejected", color: "bg-red-500/20 text-red-400 border-red-500/30", icon: AlertCircle },
-  disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: CreditCard },
-  active: { label: "Active", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: TrendingUp },
-  completed: { label: "Completed", color: "bg-gray-500/20 text-gray-400 border-gray-500/30", icon: CheckCircle },
-  defaulted: { label: "Defaulted", color: "bg-red-600/20 text-red-500 border-red-600/30", icon: AlertCircle },
+  pending: { label: "Submitted", color: "bg-warning/20 text-warning border-warning/30", icon: Clock },
+  under_review: { label: "Under Review", color: "bg-info/20 text-info border-info/30", icon: FileText },
+  approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
+  contract_signing: { label: "Contract Signing", color: "bg-accent/20 text-accent border-accent/30", icon: FileText },
+  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-primary/20 text-primary border-primary/30", icon: Banknote },
+  rejected: { label: "Rejected", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertCircle },
+  disbursed: { label: "Disbursed", color: "bg-primary/20 text-primary border-primary/30", icon: CreditCard },
+  active: { label: "Active", color: "bg-success/20 text-success border-success/30", icon: TrendingUp },
+  completed: { label: "Completed", color: "bg-muted/50 text-muted-foreground border-border", icon: CheckCircle },
+  defaulted: { label: "Defaulted", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertCircle },
 };
 
 interface Props {
@@ -101,12 +100,12 @@ export default function BorrowerLoansTab({
 
     return (
       <Collapsible key={loan.id} open={isExpanded} onOpenChange={() => setExpandedLoan(isExpanded ? null : loan.id)}>
-        <Card className="glass border-border/50">
+        <Card className="border-border/60 shadow-card">
           <CardContent className="p-4 space-y-3">
             {/* Header */}
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
                   <StatusIcon className="text-primary" size={20} />
                 </div>
                 <div>
@@ -165,7 +164,7 @@ export default function BorrowerLoansTab({
                       const status = getRepaymentStatus(rep);
                       const StatusIcon = status.icon;
                       return (
-                        <div key={rep.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 text-xs">
+                        <div key={rep.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary/40 border border-border/40 text-xs">
                           <div className="flex items-center gap-2">
                             <span className="w-6 h-6 rounded-full bg-background flex items-center justify-center text-[10px] font-medium shrink-0">
                               #{rep.installment_number}
@@ -204,26 +203,26 @@ export default function BorrowerLoansTab({
   };
 
   const EmptyState = ({ icon: Icon, title, subtitle, showCta = false }: { icon: any; title: string; subtitle: string; showCta?: boolean }) => (
-    <Card className="glass border-border/50">
+    <Card className="border-border/60 shadow-card">
       <CardContent className="p-8 text-center">
-        <div className="w-12 h-12 rounded-full bg-secondary mx-auto mb-3 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-3 flex items-center justify-center">
           <Icon className="text-muted-foreground" size={24} />
         </div>
         <h3 className="text-sm font-semibold text-foreground mb-1">{title}</h3>
         <p className="text-xs text-muted-foreground mb-3">{subtitle}</p>
         {showCta && (
-          <Button variant="hero" size="sm" onClick={onApply}>Apply for a Loan</Button>
+          <Button className="gradient-primary text-primary-foreground hover:opacity-90" size="sm" onClick={onApply}>Apply for a Loan</Button>
         )}
       </CardContent>
     </Card>
   );
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-bold text-foreground">My Loans</h2>
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-foreground">My Loans</h2>
 
       <Tabs defaultValue="active" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 h-9">
+        <TabsList className="grid w-full grid-cols-4 h-10 bg-secondary/70 border border-border/60">
           <TabsTrigger value="tracker" className="text-xs gap-1"><Activity size={12} />Track</TabsTrigger>
           <TabsTrigger value="active" className="text-xs gap-1"><TrendingUp size={12} />Active ({activeLoans.length})</TabsTrigger>
           <TabsTrigger value="pending" className="text-xs gap-1"><Clock size={12} />Pending ({pendingApps.length})</TabsTrigger>
@@ -232,7 +231,9 @@ export default function BorrowerLoansTab({
 
         <TabsContent value="tracker" className="space-y-3 mt-3">
           <ApplicationStatusTracker userId={userId} />
-          {loans.filter((l) => l.status === "under_review").map((loan) => (
+          {loans
+            .filter((l) => ["pending", "under_review", "approved", "contract_signing", "awaiting_disbursement"].includes(l.status))
+            .map((loan) => (
             <DocumentChecklist key={loan.id} loanId={loan.id} userId={userId} />
           ))}
         </TabsContent>

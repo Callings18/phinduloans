@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,10 +64,9 @@ interface Disbursement {
 }
 
 const AdminDisbursements = () => {
-  const { isAdmin } = useAuth();
   const { can } = usePermissions();
-  const canCompleteDisbursement = isAdmin;
-  const canCreateDisbursement = isAdmin;
+  const canCompleteDisbursement = can("disbursement", "disburse");
+  const canCreateDisbursement = can("disbursement", "disburse");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
