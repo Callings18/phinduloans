@@ -8,6 +8,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Info, Package, Loader2, Scale } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { apiFeatureFlags } from "@/config/apiMode";
+import { fetchActiveLoanProducts } from "@/services/repositories/loanProductsRepository";
 import { cn } from "@/lib/utils";
 import { calculateLoan, generateRepaymentSchedule, LoanProduct as LoanProductCalc, getInterestPeriodLabel } from "@/utils/loanCalculations";
 import LoanComparison from "@/components/common/LoanComparison";
@@ -21,12 +23,7 @@ const Calculator = () => {
   const { data: products, isLoading } = useQuery({
     queryKey: ['active-loan-products'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('loan_products')
-        .select('*')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
+      return fetchActiveLoanProducts({ sort: "name", ascending: true });
     },
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true, // Refetch when component mounts
@@ -37,6 +34,8 @@ const Calculator = () => {
   const selectedProduct = products?.find(p => p.id === selectedProductId) || products?.[0];
 
   useEffect(() => {
+    if (apiFeatureFlags.loanProducts) return;
+
     const channel = supabase
       .channel("loan-products-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "loan_products" }, () => {

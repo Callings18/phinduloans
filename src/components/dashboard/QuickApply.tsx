@@ -16,7 +16,7 @@ import {
   AlertCircle,
   Upload,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchActiveLoanProducts } from "@/services/repositories/loanProductsRepository";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
 
 interface Profile {
@@ -64,13 +64,8 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
   const { data: loanProducts } = useQuery({
     queryKey: ["loan-products-quick"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loan_products")
-        .select("*")
-        .eq("is_active", true)
-        .order("min_amount", { ascending: true });
-      if (error) throw error;
-      return data as LoanProduct[];
+      const rows = await fetchActiveLoanProducts({ sort: "min_amount", ascending: true });
+      return rows as LoanProduct[];
     },
     staleTime: 30000,
   });

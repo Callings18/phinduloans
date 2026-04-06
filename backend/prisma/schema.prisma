@@ -1,0 +1,81 @@
+// Mirrors `public.loan_products` (see src/integrations/supabase/types.ts).
+// If introspecting an existing DB: `npx prisma db pull` then `npx prisma generate`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model LoanProduct {
+  id                           String    @id @db.Uuid
+  amount_logic                 String?
+  auto_disbursement            Boolean?
+  blacklist_check_required     Boolean?
+  channels                     String[]?
+  collateral_required          Boolean?
+  contract_template_url        String?
+  crb_auto_approve_score       Decimal?  @db.Decimal(18, 4)
+  crb_auto_decline_score       Decimal?  @db.Decimal(18, 4)
+  crb_check_required           Boolean?
+  crb_manual_review_score      Decimal?  @db.Decimal(18, 4)
+  created_at                   DateTime  @default(now()) @db.Timestamptz(6)
+  default_threshold_days       Int?
+  description                  String?
+  digital_signature_required     Boolean?
+  early_repayment_allowed      Boolean?
+  early_repayment_fee_percent  Decimal?  @db.Decimal(18, 4)
+  eligible_locations           String[]?
+  employer_whitelist_enabled   Boolean?
+  employment_types             String[]?
+  enforcement_fee_percent      Decimal?  @db.Decimal(18, 4)
+  flat_interest_mode           String?
+  grace_period_days            Int?
+  guarantee_fee_percent        Decimal?  @db.Decimal(18, 4)
+  guarantee_provider           String?
+  guarantee_required           Boolean?
+  installment_structure        String?
+  insurance_percent            Decimal?  @db.Decimal(18, 4)
+  insurance_required           Boolean?
+  interest_period              String?
+  interest_rate                Decimal   @db.Decimal(18, 4)
+  interest_type                String?
+  is_active                    Boolean?
+  late_payment_penalty_percent Decimal?  @db.Decimal(18, 4)
+  legal_escalation_days        Int?
+  max_age                      Int?
+  max_amount                   Decimal   @db.Decimal(18, 4)
+  max_concurrent_loans         Int?
+  max_dti_ratio                Decimal?  @db.Decimal(18, 4)
+  max_guarantee_percent        Decimal?  @db.Decimal(18, 4)
+  max_salary_percent           Decimal?  @db.Decimal(18, 4)
+  max_term_months              Int
+  min_age                      Int?
+  min_amount                   Decimal   @db.Decimal(18, 4)
+  min_credit_score             Int?
+  min_salary                   Decimal?  @db.Decimal(18, 4)
+  min_term_months              Int
+  mou_required                 Boolean?
+  name                         String
+  parent_product_id            String?   @db.Uuid
+  partial_disbursement         Boolean?
+  penalty_frequency            String?
+  platform_fee_percent         Decimal?  @db.Decimal(18, 4)
+  platform_fee_type            String?
+  processing_fee_percent       Decimal?  @db.Decimal(18, 4)
+  product_code                 String?
+  repayment_frequency          String?
+  repayment_methods            String[]?
+  required_documents           Json?
+  requirements                 String[]?
+  status                       String?
+  term_unit                    String
+  updated_at                   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  vat_percent                  Decimal?  @db.Decimal(18, 4)
+  version                      Int?
+
+  @@map("loan_products")
+}
