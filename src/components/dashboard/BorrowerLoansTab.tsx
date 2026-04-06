@@ -29,7 +29,7 @@ import {
 import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import { ApplicationStatusTracker } from "./ApplicationStatusTracker";
 import DocumentChecklist from "./DocumentChecklist";
-import type { BorrowerTab } from "./BorrowerBottomNav";
+import type { BorrowerTab } from "@/pages/Dashboard";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "Submitted", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
