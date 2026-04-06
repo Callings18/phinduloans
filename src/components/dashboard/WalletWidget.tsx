@@ -13,6 +13,8 @@ interface WalletData {
   pending_balance: number;
   total_deposited: number;
   total_withdrawn: number;
+  expected_disbursed_total: number;
+  reconciliation_gap: number;
 }
 
 interface Transaction {
@@ -49,7 +51,7 @@ export default function WalletWidget() {
 
       const { data: loans, error: loanError } = await supabase
         .from("loan_applications")
-        .select("total_repayment, status")
+        .select("loan_amount, total_repayment, status")
         .eq("user_id", user?.id)
         .in("status", ["active", "disbursed", "completed"]);
 
@@ -59,12 +61,18 @@ export default function WalletWidget() {
       const totalPending = repayments?.filter(r => r.status === "pending").reduce((sum, r) => sum + Number(r.amount), 0) || 0;
       const totalReceived = disbursements?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
       const totalOwed = loans?.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0) || 0;
+      const expectedDisbursed = loans
+        ?.filter((l) => ["disbursed", "active", "completed"].includes(l.status))
+        .reduce((sum, l) => sum + Number(l.loan_amount || 0), 0) || 0;
+      const reconciliationGap = Math.round((expectedDisbursed - totalReceived) * 100) / 100;
 
       return {
         available_balance: totalOwed - totalPaid, // Outstanding balance
         pending_balance: totalPending,
         total_deposited: totalPaid, // Amount paid
         total_withdrawn: totalReceived, // Amount received
+        expected_disbursed_total: expectedDisbursed,
+        reconciliation_gap: reconciliationGap,
       };
     },
     enabled: !!user?.id,
@@ -130,7 +138,14 @@ export default function WalletWidget() {
     );
   }
 
-  const wallet = walletData || { available_balance: 0, pending_balance: 0, total_deposited: 0, total_withdrawn: 0 };
+  const wallet = walletData || {
+    available_balance: 0,
+    pending_balance: 0,
+    total_deposited: 0,
+    total_withdrawn: 0,
+    expected_disbursed_total: 0,
+    reconciliation_gap: 0,
+  };
 
   const getTransactionIcon = (type: string) => {
     if (type === "payment") return ArrowDownCircle;
@@ -198,6 +213,17 @@ export default function WalletWidget() {
               {showBalance ? `K${Number(wallet.total_withdrawn).toLocaleString()}` : "••••"}
             </p>
           </div>
+        </div>
+        <div className="mt-3">
+          {Math.abs(wallet.reconciliation_gap) < 0.01 ? (
+            <Badge variant="outline" className="bg-success/15 text-success border-success/30 text-xs">
+              Reconciled with disbursement records
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30 text-xs">
+              Reconciliation gap K{Math.abs(wallet.reconciliation_gap).toLocaleString()} - support is reviewing
+            </Badge>
+          )}
         </div>
       </div>
 

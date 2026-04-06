@@ -108,7 +108,7 @@ const NotificationCenter: React.FC = () => {
         if (!user?.id) return;
 
         const channel = supabase
-            .channel("notifications")
+            .channel(`notifications-${user.id}`)
             .on(
                 "postgres_changes",
                 {
@@ -137,6 +137,18 @@ const NotificationCenter: React.FC = () => {
                             data: newNotification,
                         });
                     }
+                }
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "notification_logs",
+                    filter: `user_id=eq.${user.id}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
                 }
             )
             .subscribe();

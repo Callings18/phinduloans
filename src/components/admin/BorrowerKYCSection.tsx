@@ -10,6 +10,7 @@ import { getSignedUrl } from "@/utils/storageHelpers";
 import {
   CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle, Upload,
 } from "lucide-react";
+import { differenceInHours } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PersonalInfoForm from "./kyc/PersonalInfoForm";
 import EmploymentIncomeForm from "./kyc/EmploymentIncomeForm";
@@ -287,6 +288,8 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                 const doc = docsByType[kycType.type];
                 const versions = vaultDocs.filter((d) => d.doc_type === kycType.type);
                 const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
+                const pendingHours = doc?.uploaded_at ? differenceInHours(new Date(), new Date(doc.uploaded_at)) : 0;
+                const pendingState = pendingHours >= 72 ? "urgent" : pendingHours >= 48 ? "waiting" : "normal";
                 return (
                   <div key={kycType.type} className="flex flex-col gap-2 p-3 rounded-lg bg-background/50 border border-border/30">
                     <div className="flex items-center justify-between">
@@ -340,7 +343,16 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                         </>
                       ) : (
                         <>
-                          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1"><Clock size={12} /> Pending</Badge>
+                          <Badge
+                            className={
+                              pendingState === "urgent"
+                                ? "bg-destructive/20 text-destructive border-destructive/30 border gap-1"
+                                : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1"
+                            }
+                          >
+                            <Clock size={12} />
+                            {pendingState === "urgent" ? `Urgent (${pendingHours}h)` : pendingState === "waiting" ? `Waiting (${pendingHours}h)` : "Pending"}
+                          </Badge>
                           <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
                           <Button size="sm" className="h-7 text-xs" onClick={() => approveMutation.mutate(doc.id)} disabled={approveMutation.isPending}>Approve</Button>
                           <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/30" onClick={() => { setRejectDocId(doc.id); setRejectDocLabel(kycType.label); }}>Reject</Button>

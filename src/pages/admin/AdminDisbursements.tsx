@@ -66,8 +66,8 @@ interface Disbursement {
 
 const AdminDisbursements = () => {
   const { can } = usePermissions();
-  const canCompleteDisbursement = can("disbursement", "disburse");
   const canCreateDisbursement = can("disbursement", "disburse");
+  const canApproveDisbursement = can("disbursement", "approve") || can("disbursement", "disburse");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -157,6 +157,29 @@ const AdminDisbursements = () => {
     enabled: !!selectedLoanData?.user_id,
   });
 
+  const { data: selectedBorrowerKycSummary } = useQuery({
+    queryKey: ["borrower-kyc-summary-for-disbursement", selectedLoanData?.user_id],
+    queryFn: async () => {
+      if (!selectedLoanData?.user_id) return { verifiedRequiredDocs: 0 };
+      const { data, error } = await supabase
+        .from("borrower_document_vault")
+        .select("doc_type, is_verified, uploaded_at")
+        .eq("borrower_id", selectedLoanData.user_id)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      const required = ["nrc_front", "nrc_back", "selfie"];
+      const latestByType = new Map<string, { is_verified: boolean | null }>();
+      (data ?? []).forEach((doc) => {
+        if (!latestByType.has(doc.doc_type)) {
+          latestByType.set(doc.doc_type, { is_verified: doc.is_verified });
+        }
+      });
+      const verifiedRequiredDocs = required.filter((type) => latestByType.get(type)?.is_verified === true).length;
+      return { verifiedRequiredDocs };
+    },
+    enabled: !!selectedLoanData?.user_id,
+  });
+
   useEffect(() => {
     if (!selectedBorrowerPayout || !selectedLoan) return;
     setFormData((prev) => {
@@ -202,6 +225,10 @@ const AdminDisbursements = () => {
     mutationFn: async () => {
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
+      const verifiedDocs = selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0;
+      if (verifiedDocs < 3) {
+        throw new Error("Disbursement blocked: borrower KYC is incomplete. Verify NRC Front, NRC Back, and Selfie first.");
+      }
 
       // V1.0.1: Simplified flow - contract check only requires uploaded PDF or approval signatures
       const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
@@ -536,6 +563,24 @@ const AdminDisbursements = () => {
                     </p>
                   </div>
                 )}
+                {selectedLoanData && (
+                  <div
+                    className={
+                      (selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0) >= 3
+                        ? "p-3 rounded-lg bg-success/10 border border-success/20"
+                        : "p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                    }
+                  >
+                    <p className="text-xs font-medium text-foreground">
+                      KYC disbursement gate: {(selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0)}/3 required docs verified
+                    </p>
+                    {(selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0) < 3 && (
+                      <p className="text-xs text-destructive mt-0.5">
+                        Blocked-disbursement: complete borrower KYC verification before completing this disbursement.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* NEW: Source Account Selection */}
                 <div className="space-y-2">
@@ -824,7 +869,7 @@ const AdminDisbursements = () => {
                         <td className="py-4 px-4 text-right">
                           {disbursement.status === "pending" && (
                             <div className="flex items-center justify-end gap-2">
-                              {canCompleteDisbursement ? (
+                              {canApproveDisbursement ? (
                                 <>
                                   <Button
                                     size="sm"
@@ -836,7 +881,8 @@ const AdminDisbursements = () => {
                                         status: "completed",
                                       })
                                     }
-                                    disabled={updateStatusMutation.isPending}
+                                    disabled={updateStatusMutation.isPending || !canApproveDisbursement}
+                                    title={!canApproveDisbursement ? "Approval permission required" : undefined}
                                   >
                                     <CheckCircle size={14} className="mr-1" />
                                     Complete
@@ -851,7 +897,8 @@ const AdminDisbursements = () => {
                                         status: "failed",
                                       })
                                     }
-                                    disabled={updateStatusMutation.isPending}
+                                    disabled={updateStatusMutation.isPending || !canApproveDisbursement}
+                                    title={!canApproveDisbursement ? "Approval permission required" : undefined}
                                   >
                                     <XCircle size={14} className="mr-1" />
                                     Fail

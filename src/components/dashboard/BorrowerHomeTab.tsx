@@ -93,6 +93,16 @@ export default function BorrowerHomeTab({
     if (kycInfo?.zamtel_kwacha_number) return `Zamtel Kwacha (${kycInfo.zamtel_kwacha_number})`;
     return null;
   })();
+  const accountHealth = (() => {
+    const blockers: string[] = [];
+    if (!kycVerified) blockers.push("Complete KYC verification");
+    if (!hasBankDetails && !hasMobileMoney) blockers.push("Add payout destination (mobile money or bank)");
+    if (totalOverdue > 0) blockers.push(`Resolve overdue repayments (K${totalOverdue.toLocaleString()})`);
+    return {
+      status: blockers.length === 0 ? "healthy" : blockers.length === 1 ? "warning" : "critical",
+      blockers,
+    };
+  })();
 
   const nextStep = (() => {
     if (!kycVerified) {
@@ -227,6 +237,38 @@ export default function BorrowerHomeTab({
           >
             {nextStep.cta}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card
+        className={
+          accountHealth.status === "healthy"
+            ? "border-success/40 bg-success/5 shadow-card"
+            : accountHealth.status === "warning"
+              ? "border-warning/40 bg-warning/10 shadow-card"
+              : "border-destructive/40 bg-destructive/10 shadow-card"
+        }
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-foreground">Account Health</p>
+            <span className="text-xs text-muted-foreground">
+              {accountHealth.status === "healthy" ? "All clear" : `${accountHealth.blockers.length} blocker(s)`}
+            </span>
+          </div>
+          {accountHealth.blockers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Your account is ready for smooth disbursement and repayment operations.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {accountHealth.blockers.map((blocker) => (
+                <p key={blocker} className="text-xs text-foreground">
+                  - {blocker}
+                </p>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
