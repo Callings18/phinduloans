@@ -6,8 +6,11 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   Banknote,
+  CheckCircle2,
   Eye,
+  ShieldAlert,
   Plus,
+  Sparkles,
   TrendingUp,
 } from "lucide-react";
 import { format, isAfter, startOfDay } from "date-fns";
@@ -38,7 +41,6 @@ export default function BorrowerHomeTab({
   onTabChange,
 }: BorrowerHomeTabProps) {
   void loans;
-  void kycVerified;
   void isStaff;
 
   const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
@@ -72,6 +74,46 @@ export default function BorrowerHomeTab({
   const nextPaymentAmount = nextPayment
     ? Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0))
     : 0;
+
+  const nextStep = (() => {
+    if (!kycVerified) {
+      return {
+        title: "Complete KYC verification",
+        description: "Verify your NRC and selfie to unlock faster approvals and disbursement.",
+        cta: "Go to profile",
+        tab: "profile" as BorrowerTab,
+        icon: ShieldAlert,
+      };
+    }
+    if (totalOverdue > 0) {
+      return {
+        title: "Resolve overdue repayments",
+        description: `You have K${totalOverdue.toLocaleString()} overdue. Submit payment claims to avoid penalties.`,
+        cta: "Open payments",
+        tab: "payments" as BorrowerTab,
+        icon: Banknote,
+      };
+    }
+    if (activeLoans.length > 0) {
+      return {
+        title: "Track your active loan",
+        description: nextPayment
+          ? `Your next payment is K${nextPaymentAmount.toLocaleString()} due ${format(new Date(nextPayment.due_date), "MMM dd")}.`
+          : "Check your repayment schedule and keep your account in good standing.",
+        cta: "View my loans",
+        tab: "loans" as BorrowerTab,
+        icon: CheckCircle2,
+      };
+    }
+    return {
+      title: "Apply for a new loan",
+      description: "You’re all set. Start a new application in minutes.",
+      cta: "Apply now",
+      tab: "apply" as BorrowerTab,
+      icon: Sparkles,
+    };
+  })();
+  const NextStepIcon = nextStep.icon;
 
   return (
     <div className="space-y-4">
@@ -120,6 +162,28 @@ export default function BorrowerHomeTab({
       {repayments && repayments.length > 0 && (
         <PaymentReminder repayments={repayments} />
       )}
+
+      <Card className="border-primary/30 bg-primary/5 shadow-card">
+        <CardContent className="p-4 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0">
+              <NextStepIcon size={18} />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-primary font-semibold">What’s next</p>
+              <h3 className="text-sm font-semibold text-foreground">{nextStep.title}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{nextStep.description}</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="gradient-primary text-primary-foreground hover:opacity-90 h-8 px-3 text-xs shrink-0"
+            onClick={() => onTabChange(nextStep.tab)}
+          >
+            {nextStep.cta}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card className="border border-border/60 bg-card">
         <CardContent className="p-4">

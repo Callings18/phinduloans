@@ -50,6 +50,12 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
   const pendingCount = repayments.filter((r) => ["pending", "overdue"].includes(r.status)).length;
   const paidCount = repayments.filter((r) => r.status === "paid").length;
   const totalPaid = repayments.filter((r) => r.status === "paid").reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+  const overdueAmount = repayments
+    .filter((r) => {
+      const dueDate = startOfDay(new Date(r.due_date));
+      return ["pending", "overdue"].includes(r.status) && isAfter(startOfDay(new Date()), dueDate);
+    })
+    .reduce((sum, r) => sum + Math.max(0, Number(r.original_amount || r.amount) - Number(r.principal_paid || 0)), 0);
 
   const getLoanRef = (loanId: string) => {
     const loan = loans.find((l) => l.id === loanId);
@@ -79,7 +85,7 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
       <h2 className="text-xl font-bold text-foreground">Payments</h2>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-border/60 shadow-card">
           <CardContent className="p-5 text-center">
             <p className="text-sm text-muted-foreground">Due</p>
@@ -98,6 +104,12 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
             <p className="text-2xl font-bold text-foreground mt-1">K{totalPaid.toLocaleString()}</p>
           </CardContent>
         </Card>
+        <Card className="border-border/60 shadow-card">
+          <CardContent className="p-5 text-center">
+            <p className="text-sm text-muted-foreground">Overdue Value</p>
+            <p className="text-2xl font-bold text-destructive mt-1">K{overdueAmount.toLocaleString()}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Payments Table */}
@@ -109,7 +121,55 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-border/60 shadow-card">
+        <>
+          <div className="space-y-2 md:hidden">
+            {sorted.map((rep) => {
+              const status = getRepaymentStatus(rep);
+              const StatusIcon = status.icon;
+              const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+              const claim = claimsByRepaymentId.get(rep.id);
+              const claimStatus = getClaimStatus(claim);
+              return (
+                <Card key={rep.id} className="border-border/60 shadow-card">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          K{Number(rep.original_amount || rep.amount).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Installment #{rep.installment_number} • {getLoanRef(rep.loan_id)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Due {format(new Date(rep.due_date), "MMM dd, yyyy")}
+                        </p>
+                      </div>
+                      <Badge className={`${status.color} border text-[10px]`}>
+                        <StatusIcon size={10} className="mr-1" />
+                        {status.label}
+                      </Badge>
+                    </div>
+                    {claimStatus && (
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge className={`${claimStatus.color} border text-[10px]`}>
+                          {claimStatus.label}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground truncate">Ref: {claim.reference}</span>
+                      </div>
+                    )}
+                    {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => onSubmitPayment(rep)}>
+                        <Banknote size={14} className="mr-1.5" />
+                        I've paid
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <Card className="border-border/60 shadow-card hidden md:block">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -165,7 +225,8 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
               </TableBody>
             </Table>
           </div>
-        </Card>
+          </Card>
+        </>
       )}
     </div>
   );

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   User,
   Mail,
@@ -23,6 +24,15 @@ interface Props {
 }
 
 export default function BorrowerProfileTab({ user, profile, kycVerified, onSignOut }: Props) {
+  const profileCompletion = (() => {
+    let score = 35;
+    if (profile?.full_name) score += 20;
+    if (profile?.phone) score += 15;
+    if (profile?.address || profile?.city) score += 10;
+    if (kycVerified) score += 20;
+    return Math.min(100, score);
+  })();
+
   const menuItems = [
     { icon: User, label: "Personal Information", to: "/profile", desc: "Name, NRC, phone number, address" },
     { icon: FileText, label: "My Documents", to: "/profile?tab=documents", desc: "KYC uploads & document vault" },
@@ -65,6 +75,17 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onSignO
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Profile completion</span>
+              <span className="text-foreground font-medium">{profileCompletion}%</span>
+            </div>
+            <Progress value={profileCompletion} className="h-2" />
+            <p className="text-[11px] text-muted-foreground">
+              Complete your profile and KYC details to speed up approvals and support.
+            </p>
           </div>
         </CardContent>
       </Card>
