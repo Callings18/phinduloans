@@ -42,6 +42,7 @@ import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 import phinduLogo from "@/assets/phindu-logo-white.png";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
+import { submitPaymentClaim } from "@/services/repositories/workflowRepository";
 
 export type BorrowerTab = "home" | "loans" | "apply" | "payments" | "profile";
 
@@ -191,6 +192,47 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`borrower-realtime-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_document_vault", filter: `borrower_id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", user.id] });
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_kyc_info", filter: `borrower_id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-info", user.id] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "payment_claims", filter: `user_id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["user-payment-claims", user.id] });
+          queryClient.invalidateQueries({ queryKey: ["borrower-loan-events", user.id] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_events" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-loan-events", user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
+
   const kycVerified = useMemo(() => {
     if (kycInfo?.is_verified === true) return true;
     const KYC_TYPES = ["nrc_front", "nrc_back", "selfie"];
@@ -282,17 +324,6 @@ const Dashboard = () => {
       const amount = parseFloat(claimAmount);
       if (isNaN(amount) || amount <= 0) throw new Error("Enter a valid amount");
       if (!claimReference.trim()) throw new Error("Enter transaction reference");
-      const { data: existingClaims, error: existingError } = await supabase
-        .from("payment_claims")
-        .select("id")
-        .eq("repayment_id", submitPaymentRepayment.id)
-        .eq("user_id", user.id)
-        .eq("status", "pending")
-        .limit(1);
-      if (existingError) throw existingError;
-      if (existingClaims?.length) {
-        throw new Error("You already have a pending claim for this installment.");
-      }
 
       let receiptUrl: string | null = null;
       if (claimReceiptFile) {
@@ -305,26 +336,42 @@ const Dashboard = () => {
         receiptUrl = path;
       }
 
-      const { error } = await supabase.from("payment_claims").insert({
-        loan_id: submitPaymentRepayment.loan_id,
-        repayment_id: submitPaymentRepayment.id,
-        user_id: user.id,
-        amount,
-        reference: claimReference.trim(),
-        receipt_url: receiptUrl,
-        status: "pending",
-      });
-      if (error) throw error;
+      await submitPaymentClaim(
+        submitPaymentRepayment.id,
+        {
+          amount,
+          reference: claimReference.trim(),
+          receiptUrl,
+        },
+        {
+          loanId: submitPaymentRepayment.loan_id,
+          userId: user.id,
+        },
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-repayments", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["user-payment-claims", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-loan-events", user?.id] });
       toast.success("Payment reference submitted. Admin will verify it.");
       setSubmitPaymentRepayment(null);
       setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null);
     },
     onError: (e) => toast.error((e as Error).message || "Failed to submit"),
   });
+
+  const { data: borrowerLoanEvents = [] } = useQuery({
+    queryKey: ["borrower-loan-events", user?.id, loans.map((l) => l.id).join(",")],
+    queryFn: async () => {
+      if (!loans.length) return [];
+      const { fetchBorrowerLoanEvents } = await import("@/services/repositories/workflowRepository");
+      const byLoan = await Promise.all(loans.slice(0, 12).map((loan) => fetchBorrowerLoanEvents(loan.id)));
+      return byLoan.flat();
+    },
+    enabled: !!user?.id && loans.length > 0,
+  });
+
+  void borrowerLoanEvents;
 
   const handleTabChange = useCallback((tab: BorrowerTab) => {
     if (tab === "apply") {
@@ -427,7 +474,7 @@ const Dashboard = () => {
                   {showApplicationForm ? "Apply for Loan" : tabTitle[activeTab]}
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Welcome back, {profile?.full_name?.split(" ")[0] || "there"}
+                  Welcome back, {profile?.full_name || "Customer"}
                 </p>
               </div>
             </div>
@@ -489,6 +536,7 @@ const Dashboard = () => {
                   <BorrowerHomeTab
                     user={user}
                     profile={profile}
+                    kycInfo={kycInfo}
                     loans={loans}
                     repayments={repayments}
                     activeLoans={activeLoans}
@@ -502,6 +550,7 @@ const Dashboard = () => {
                     userId={user.id}
                     loans={loans}
                     repayments={repayments}
+                    loanEvents={borrowerLoanEvents}
                     onDownloadStatement={downloadStatement}
                     onDownloadSchedule={downloadSchedule}
                     onSubmitPayment={handleSubmitPayment}

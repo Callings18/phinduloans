@@ -81,6 +81,7 @@ import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/compon
 import { Checkbox } from "@/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
+import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -413,8 +414,14 @@ const AdminApplications = () => {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
+      await transitionLoanStatus({
+        loanId: id,
+        toStatus: status,
+        reasonCode: reason ? "manual_admin_update" : undefined,
+        reasonText: reason,
+      });
+
       const updateData: any = {
-        status,
         reviewed_by: user?.id,
         reviewed_at: new Date().toISOString(),
       };
@@ -435,12 +442,13 @@ const AdminApplications = () => {
         updateData.rejection_reason = reason;
       }
 
-      const { error } = await supabase
-        .from('loan_applications')
-        .update(updateData)
-        .eq('id', id);
-
-      if (error) throw error;
+      if (Object.keys(updateData).length > 0) {
+        const { error } = await supabase
+          .from('loan_applications')
+          .update(updateData)
+          .eq('id', id);
+        if (error) throw error;
+      }
 
       await logAudit({
         action: "STATUS_UPDATE",
@@ -551,20 +559,24 @@ const AdminApplications = () => {
         .eq("id", insertedDisbursement.id);
       if (completeError) throw completeError;
 
-      // Update loan status to disbursed and set disbursed_by/disbursed_at
-      const { error: loanError } = await supabase
-        .from('loan_applications')
+      // Enforce state-machine transition via API route (no direct status mutation here).
+      await transitionLoanStatus({
+        loanId: selectedApp.id,
+        toStatus: "disbursed",
+        reasonCode: "disbursement_completed",
+        reasonText: "Loan disbursement completed by admin",
+      });
+
+      const { error: loanMetadataError } = await supabase
+        .from("loan_applications")
         .update({
-          status: 'disbursed',
           disbursed_by: user?.id,
           disbursed_at: new Date().toISOString(),
-          reviewed_by: user?.id,
-          reviewed_at: new Date().toISOString(),
-          approval_stage: 'disbursed',
+          approval_stage: "disbursed",
         })
-        .eq('id', selectedApp.id);
+        .eq("id", selectedApp.id);
 
-      if (loanError) throw loanError;
+      if (loanMetadataError) throw loanMetadataError;
 
       await logAudit({
         action: "DISBURSE",
@@ -688,6 +700,15 @@ const AdminApplications = () => {
   // Workflow transition (verify_documents, finance_approve, approve, reject)
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
+      if (action === "approve" || action === "reject") {
+        await transitionLoanStatus({
+          loanId: id,
+          toStatus: action === "approve" ? "approved" : "rejected",
+          reasonCode: reason ? "workflow_transition" : undefined,
+          reasonText: reason,
+        });
+        return;
+      }
       const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
@@ -919,18 +940,22 @@ const AdminApplications = () => {
     if (!selectedApp) return;
     setIsProcessing(true);
     try {
-      const { error } = await supabase
-        .from('loan_applications')
+      await transitionLoanStatus({
+        loanId: selectedApp.id,
+        toStatus: "under_review",
+        reasonCode: "recommended_for_review",
+        reasonText: "Application recommended for admin review",
+      });
+
+      const { error: metadataError } = await supabase
+        .from("loan_applications")
         .update({
-          status: 'under_review' as any,
-          approval_stage: 'recommended',
+          approval_stage: "recommended",
           recommended_by: user?.id,
           recommended_at: new Date().toISOString(),
-          reviewed_by: user?.id,
-          reviewed_at: new Date().toISOString(),
         })
-        .eq('id', selectedApp.id);
-      if (error) throw error;
+        .eq("id", selectedApp.id);
+      if (metadataError) throw metadataError;
       await logAudit({
         action: "RECOMMEND",
         entity_type: "loan_application",
@@ -1065,6 +1090,15 @@ const AdminApplications = () => {
 
   /** Bulk workflow RPC: surfaces PostgREST errors and RPC { ok: false } results. */
   const assertBulkTransition = async (id: string, action: string, reason?: string) => {
+    if (action === "approve" || action === "reject") {
+      await transitionLoanStatus({
+        loanId: id,
+        toStatus: action === "approve" ? "approved" : "rejected",
+        reasonCode: reason ? "bulk_transition" : undefined,
+        reasonText: reason,
+      });
+      return;
+    }
     const { data, error } = await supabase.rpc("transition_loan_status", {
       p_loan_id: id,
       p_action: action,

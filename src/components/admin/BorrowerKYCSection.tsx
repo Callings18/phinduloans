@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +35,32 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const [rejectReason, setRejectReason] = useState("");
   const [uploadingType, setUploadingType] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!borrowerId) return;
+    const channel = supabase
+      .channel(`admin-borrower-kyc-${borrowerId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_document_vault", filter: `borrower_id=eq.${borrowerId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_kyc_info", filter: `borrower_id=eq.${borrowerId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-info", borrowerId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [borrowerId, queryClient]);
+
   // Upload KYC document on behalf of borrower
   const handleUploadKYC = async (file: File, docType: string, docLabel: string) => {
     setUploadingType(docType);
@@ -44,29 +70,26 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
 
       const { error: uploadError } = await supabase.storage
         .from("loan-documents")
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: false, contentType: file.type });
 
       if (uploadError) throw uploadError;
 
-      const existing = vaultDocs.find(d => d.doc_type === docType);
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from("borrower_document_vault")
-          .update({
-            file_url: filePath, file_name: file.name, file_size: file.size, mime_type: file.type,
-            uploaded_at: new Date().toISOString(), is_verified: false, verified_at: null, verified_by: null, notes: null,
-          })
-          .eq("id", existing.id);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from("borrower_document_vault")
-          .insert({
-            borrower_id: borrowerId, doc_type: docType, doc_label: docLabel,
-            file_url: filePath, file_name: file.name, file_size: file.size, mime_type: file.type,
-          });
-        if (insertError) throw insertError;
-      }
+      const { error: insertError } = await supabase
+        .from("borrower_document_vault")
+        .insert({
+          borrower_id: borrowerId,
+          doc_type: docType,
+          doc_label: docLabel,
+          file_url: filePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          is_verified: false,
+          verified_at: null,
+          verified_by: null,
+          notes: null,
+        });
+      if (insertError) throw insertError;
 
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +42,25 @@ export default function ProfileDocumentVault({ userId }: Props) {
     enabled: !!userId,
   });
 
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`borrower-kyc-vault-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_document_vault", filter: `borrower_id=eq.${userId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", userId] });
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, queryClient]);
+
   const uploadMutation = useMutation({
     mutationFn: async ({ file, docType, label }: { file: File; docType: string; label: string }) => {
       setUploadingType(docType);
@@ -50,7 +69,7 @@ export default function ProfileDocumentVault({ userId }: Props) {
 
       const { error: uploadError } = await supabase.storage
         .from("loan-documents")
-        .upload(path, file, { contentType: file.type, upsert: true });
+        .upload(path, file, { contentType: file.type, upsert: false });
       if (uploadError) throw uploadError;
 
       const { error: dbError } = await supabase.from("borrower_document_vault").insert({

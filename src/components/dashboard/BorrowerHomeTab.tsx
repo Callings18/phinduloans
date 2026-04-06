@@ -3,13 +3,10 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import {
   ArrowDownLeft,
-  ArrowRightLeft,
-  ArrowUpRight,
   Banknote,
   CheckCircle2,
   Eye,
   ShieldAlert,
-  Plus,
   Sparkles,
   TrendingUp,
 } from "lucide-react";
@@ -22,6 +19,7 @@ import type { BorrowerTab } from "./BorrowerBottomNav";
 interface BorrowerHomeTabProps {
   user: any;
   profile: any;
+  kycInfo?: any;
   loans: any[];
   repayments: any[];
   activeLoans: any[];
@@ -33,6 +31,7 @@ interface BorrowerHomeTabProps {
 export default function BorrowerHomeTab({
   user,
   profile,
+  kycInfo,
   loans,
   repayments,
   activeLoans,
@@ -68,12 +67,31 @@ export default function BorrowerHomeTab({
     .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0;
   const totalRepaymentDue = activeLoans.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0);
   const overallProgress = totalRepaymentDue > 0 ? Math.round((totalPaid / totalRepaymentDue) * 100) : 0;
-  const firstName = profile?.full_name?.split(" ")[0] || "Borrower";
-  const initials = firstName.slice(0, 1).toUpperCase();
+  const fullName = profile?.full_name?.trim() || "Customer";
+  const firstName = fullName.split(" ")[0] || "Customer";
+  const initials = fullName.slice(0, 1).toUpperCase();
   const walletBalance = Math.max(totalPaid, 0);
   const nextPaymentAmount = nextPayment
     ? Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0))
     : 0;
+  const totalDisbursed = loans
+    .filter((loan) => ["disbursed", "active", "completed"].includes(loan.status))
+    .reduce((sum, loan) => sum + Number(loan.loan_amount || 0), 0);
+  const hasBankDetails = Boolean(kycInfo?.bank_name && kycInfo?.bank_account_number);
+  const hasMobileMoney = Boolean(
+    kycInfo?.airtel_money_number || kycInfo?.mtn_mobile_money_number || kycInfo?.zamtel_kwacha_number
+  );
+  const disbursementDestination = (() => {
+    if (hasBankDetails) {
+      const account = String(kycInfo.bank_account_number);
+      const masked = account.length > 4 ? `****${account.slice(-4)}` : account;
+      return `${kycInfo.bank_name} (${masked})`;
+    }
+    if (kycInfo?.mtn_mobile_money_number) return `MTN Mobile Money (${kycInfo.mtn_mobile_money_number})`;
+    if (kycInfo?.airtel_money_number) return `Airtel Money (${kycInfo.airtel_money_number})`;
+    if (kycInfo?.zamtel_kwacha_number) return `Zamtel Kwacha (${kycInfo.zamtel_kwacha_number})`;
+    return null;
+  })();
 
   const nextStep = (() => {
     if (!kycVerified) {
@@ -125,8 +143,8 @@ export default function BorrowerHomeTab({
                 {initials}
               </div>
               <div>
-                <p className="text-sm/4 text-muted-foreground">Hello,</p>
-                <p className="text-base font-semibold">{firstName}</p>
+                <p className="text-sm/4 text-muted-foreground">Hello, {fullName}</p>
+                <p className="text-base font-semibold">Welcome back</p>
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">{format(new Date(), "MMM d, yyyy")}</p>
@@ -138,22 +156,48 @@ export default function BorrowerHomeTab({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Button className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl">
-              <Plus size={16} className="mr-1" /> Fund
+            <Button
+              className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl"
+              onClick={() => onTabChange("payments")}
+            >
+              <Banknote size={16} className="mr-1" /> Make Payment
             </Button>
-            <Button className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl">
-              <ArrowUpRight size={16} className="mr-1" /> Send
+            <Button
+              className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl"
+              onClick={() => onTabChange("apply")}
+            >
+              <TrendingUp size={16} className="mr-1" /> Apply Loan
             </Button>
           </div>
 
           <div className="rounded-2xl bg-secondary/70 border border-border/60 p-3">
             <p className="text-xs text-muted-foreground mb-2">Your Wallet</p>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold border border-primary/30">ZMW</span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">USD</span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">EUR</span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">+ Add Wallet</span>
+              <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold border border-primary/30">
+                ZMW
+              </span>
+              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+                Disbursed: K{totalDisbursed.toLocaleString()}
+              </span>
+              {disbursementDestination ? (
+                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+                  Destination: {disbursementDestination}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => onTabChange("profile")}
+                >
+                  Add payout details
+                </button>
+              )}
             </div>
+            {!hasBankDetails && !hasMobileMoney && (
+              <p className="text-[11px] text-warning mt-2">
+                Add mobile money or bank details in Profile so admin can disburse to your preferred destination.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -188,29 +232,29 @@ export default function BorrowerHomeTab({
       <Card className="border border-border/60 bg-card">
         <CardContent className="p-4">
           <div className="grid grid-cols-4 gap-3 text-center">
-            <button className="space-y-1">
+            <button className="space-y-1" onClick={() => onTabChange("loans")} type="button">
               <div className="h-12 w-12 mx-auto rounded-full border border-primary/30 bg-primary/10 flex items-center justify-center text-primary">
                 <ArrowDownLeft size={18} />
               </div>
-              <p className="text-xs text-muted-foreground">Receive</p>
+              <p className="text-xs text-muted-foreground">Disbursements</p>
             </button>
-            <button className="space-y-1">
+            <button className="space-y-1" onClick={() => onTabChange("payments")} type="button">
               <div className="h-12 w-12 mx-auto rounded-full border border-accent/30 bg-accent/10 flex items-center justify-center text-accent">
                 <Banknote size={18} />
               </div>
-              <p className="text-xs text-muted-foreground">Request</p>
+              <p className="text-xs text-muted-foreground">Repay</p>
             </button>
-            <button className="space-y-1">
+            <button className="space-y-1" onClick={() => onTabChange("profile")} type="button">
               <div className="h-12 w-12 mx-auto rounded-full border border-info/30 bg-info/10 flex items-center justify-center text-info">
-                <ArrowRightLeft size={18} />
+                <ShieldAlert size={18} />
               </div>
-              <p className="text-xs text-muted-foreground">Exchange</p>
+              <p className="text-xs text-muted-foreground">KYC & Wallet</p>
             </button>
-            <button className="space-y-1">
+            <button className="space-y-1" onClick={() => onTabChange("apply")} type="button">
               <div className="h-12 w-12 mx-auto rounded-full border border-warning/30 bg-warning/10 flex items-center justify-center text-warning">
-                <ArrowUpRight size={18} />
+                <Sparkles size={18} />
               </div>
-              <p className="text-xs text-muted-foreground">Withdraw</p>
+              <p className="text-xs text-muted-foreground">New Loan</p>
             </button>
           </div>
         </CardContent>
