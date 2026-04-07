@@ -110,6 +110,7 @@ interface LoanProduct {
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Activity },
   active: { label: "Active", color: "bg-info/20 text-info border-info/30", icon: Activity },
   completed: { label: "Completed", color: "bg-primary/20 text-primary border-primary/30", icon: CheckCircle },
@@ -117,7 +118,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("approved");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -158,7 +159,7 @@ const AdminLoans = () => {
       const { data, error } = await supabase
         .from("loan_applications")
         .select("*")
-        .in("status", ["active", "disbursed", "completed", "defaulted"])
+        .in("status", ["approved", "active", "disbursed", "completed", "defaulted"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -234,6 +235,49 @@ const AdminLoans = () => {
       toast.success("Loan moved to defaulted");
     },
     onError: (err: any) => toast.error(err.message || "Failed to update status"),
+  });
+
+  // Disburse loan mutation - moves approved → disbursed, creates disbursement record
+  const disburseLoanMutation = useMutation({
+    mutationFn: async (loanId: string) => {
+      const loan = loans?.find(l => l.id === loanId);
+      if (!loan) throw new Error("Loan not found");
+
+      // Create disbursement record (trigger will generate repayment schedule & set to active)
+      const { error: disbError } = await supabase.from("disbursements").insert({
+        loan_id: loanId,
+        amount: Number(loan.loan_amount),
+        disbursement_method: "bank_transfer",
+        status: "completed",
+        disbursed_at: new Date().toISOString(),
+      });
+      if (disbError) throw disbError;
+
+      // The generate_repayment_schedule trigger fires on disbursement status=completed,
+      // which also sets loan to active. But we first need to set it to disbursed.
+      const { error: statusError } = await supabase
+        .from("loan_applications")
+        .update({
+          status: "disbursed" as any,
+          disbursed_at: new Date().toISOString(),
+          disbursed_by: user?.id,
+        })
+        .eq("id", loanId);
+      if (statusError) throw statusError;
+
+      await logAudit({
+        action: "LOAN_DISBURSED",
+        entity_type: "loan_application",
+        entity_id: loanId,
+        module: "loans",
+        new_values: { status: "disbursed" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
+      toast.success("Loan disbursed successfully — repayment schedule generated");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to disburse loan"),
   });
 
   // Edit loan mutation
@@ -485,7 +529,9 @@ const AdminLoans = () => {
   // Filter loans based on active tab
   const getFilteredLoans = () => {
     let filtered = loans || [];
-    if (activeTab === "active") {
+    if (activeTab === "approved") {
+      filtered = filtered.filter(l => l.status === "approved");
+    } else if (activeTab === "active") {
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
       filtered = filtered.filter(l => l.status === "completed");
@@ -529,6 +575,7 @@ const AdminLoans = () => {
 
   const stats = {
     total: loans?.length || 0,
+    approved: loans?.filter(l => l.status === "approved").length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
     completed: loans?.filter(l => l.status === "completed").length || 0,
     defaulted: loans?.filter(l => l.status === "defaulted").length || 0,
@@ -607,7 +654,8 @@ const AdminLoans = () => {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setStatusFilter("all"); }}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="approved">Approved ({stats.approved})</TabsTrigger>
             <TabsTrigger value="active">Active Loans ({stats.active})</TabsTrigger>
             <TabsTrigger value="completed">Completed ({stats.completed})</TabsTrigger>
             <TabsTrigger value="defaulted">Defaulted ({stats.defaulted})</TabsTrigger>
@@ -732,6 +780,19 @@ const AdminLoans = () => {
                                       <Edit size={14} className="mr-2" />
                                       Edit Loan
                                     </DropdownMenuItem>
+                                  )}
+                                  {loan.status === "approved" && can('loans', 'edit') && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={() => {
+                                        if (confirm(`Disburse loan for ${loan.full_name} (K${Number(loan.loan_amount).toLocaleString()})?`)) {
+                                          disburseLoanMutation.mutate(loan.id);
+                                        }
+                                      }}>
+                                        <Banknote size={14} className="mr-2" />
+                                        Disburse Loan
+                                      </DropdownMenuItem>
+                                    </>
                                   )}
                                   {["active", "disbursed"].includes(loan.status) && (
                                     <>
