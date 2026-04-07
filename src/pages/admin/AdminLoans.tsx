@@ -531,8 +531,8 @@ const AdminLoans = () => {
       }
 
       // Fetch system settings for company info
-      const { data: settings } = await supabase
-        .from("system_settings")
+      const { data: settings } = await (supabase
+        .from("system_settings") as any)
         .select("setting_key, setting_value")
         .in("setting_key", ["company_name", "company_address", "company_phone"]);
 
