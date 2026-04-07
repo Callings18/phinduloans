@@ -237,6 +237,49 @@ const AdminLoans = () => {
     onError: (err: any) => toast.error(err.message || "Failed to update status"),
   });
 
+  // Disburse loan mutation - moves approved → disbursed, creates disbursement record
+  const disburseLoanMutation = useMutation({
+    mutationFn: async (loanId: string) => {
+      const loan = loans?.find(l => l.id === loanId);
+      if (!loan) throw new Error("Loan not found");
+
+      // Create disbursement record (trigger will generate repayment schedule & set to active)
+      const { error: disbError } = await supabase.from("disbursements").insert({
+        loan_id: loanId,
+        amount: Number(loan.loan_amount),
+        disbursement_method: "bank_transfer",
+        status: "completed",
+        disbursed_at: new Date().toISOString(),
+      });
+      if (disbError) throw disbError;
+
+      // The generate_repayment_schedule trigger fires on disbursement status=completed,
+      // which also sets loan to active. But we first need to set it to disbursed.
+      const { error: statusError } = await supabase
+        .from("loan_applications")
+        .update({
+          status: "disbursed" as any,
+          disbursed_at: new Date().toISOString(),
+          disbursed_by: user?.id,
+        })
+        .eq("id", loanId);
+      if (statusError) throw statusError;
+
+      await logAudit({
+        action: "LOAN_DISBURSED",
+        entity_type: "loan_application",
+        entity_id: loanId,
+        module: "loans",
+        new_values: { status: "disbursed" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
+      toast.success("Loan disbursed successfully — repayment schedule generated");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to disburse loan"),
+  });
+
   // Edit loan mutation
   const editLoanMutation = useMutation({
     mutationFn: async () => {
