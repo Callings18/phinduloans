@@ -2020,7 +2020,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         )}
                       </>
                     )}
-                    )}
+
                   </CardContent>
                 </Card>
 
