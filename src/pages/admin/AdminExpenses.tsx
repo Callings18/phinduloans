@@ -193,54 +193,31 @@ const AdminExpenses = () => {
     },
   });
 
-  // Update status mutation
+  // Update status mutation - uses atomic server-side RPC
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, rejectReason }: { id: string; status: string; rejectReason?: string }) => {
       if (status === "approved" || status === "rejected" || status === "paid") {
         if (!canApproveExpense) throw new Error("Permission denied: expenses approve");
       }
-      const updateData: any = { status };
-      if (status === 'approved') {
-        updateData.approved_at = new Date().toISOString();
-      } else if (status === 'paid') {
-        updateData.paid_at = new Date().toISOString();
-        
-        // Deduct from account if linked
-        const expense = expenses.find(e => e.id === id);
-        if (expense?.account_id) {
-          const account = accounts.find(a => a.id === expense.account_id);
-          if (account) {
-            const newBalance = account.balance - expense.amount;
-            if (newBalance < 0) {
-              throw new Error("Insufficient balance in the linked account to mark this expense as paid.");
-            }
-            const { error: accErr } = await supabase
-              .from("accounts")
-              .update({ balance: newBalance })
-              .eq("id", expense.account_id);
-            if (accErr) throw accErr;
-
-            const { error: txErr } = await supabase.from("account_transactions").insert({
-              account_id: expense.account_id,
-              transaction_type: "expense",
-              amount: expense.amount,
-              balance_before: account.balance,
-              balance_after: newBalance,
-              destination: expense.vendor_payee,
-              reference_type: "expense",
-              reference_id: expense.id,
-              notes: `Expense: ${expense.expense_category} - ${expense.vendor_payee}`,
-            });
-            if (txErr) throw txErr;
-          }
-        }
-      }
       
-      const { error } = await supabase
-        .from('expenses')
-        .update(updateData)
-        .eq('id', id);
-      if (error) throw error;
+      if (status === "approved" || status === "rejected" || status === "paid") {
+        const { data, error } = await supabase.rpc("admin_set_expense_status", {
+          p_expense_id: id,
+          p_new_status: status,
+          p_reject_reason: rejectReason ?? null,
+        });
+        if (error) throw error;
+        const result = data as any;
+        if (result && !result.success) {
+          throw new Error(result.error || "Operation failed");
+        }
+      } else {
+        const { error } = await supabase
+          .from('expenses')
+          .update({ status })
+          .eq('id', id);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
