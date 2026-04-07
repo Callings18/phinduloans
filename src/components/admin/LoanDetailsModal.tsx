@@ -1962,52 +1962,64 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardTitle className="text-base">Quick Actions</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
-                    {(!repayments || repayments.length === 0) && (
-                      <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
-                        <Plus size={14} className="mr-1" /> Generate Schedule
+                    {/* Disburse button for awaiting_disbursement / approved */}
+                    {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
+                      <Button size="sm" onClick={() => setIsDisburseOpen(true)}>
+                        <Banknote size={14} className="mr-1" /> Disburse Funds
                       </Button>
                     )}
-                    {repayments && repayments.length > 0 && (
-                      <Button size="sm" onClick={() => {
-                        const nextPending = repayments.find(r => r.status === "pending");
-                        if (nextPending) {
-                          setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
-                          setIsRecordPaymentOpen(true);
-                        }
-                      }}>
-                        <CreditCard size={14} className="mr-1" /> Record Payment
-                      </Button>
+                    {/* Post-disbursement actions only */}
+                    {!isPreDisbursement && (
+                      <>
+                        {(!repayments || repayments.length === 0) && (
+                          <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
+                            <Plus size={14} className="mr-1" /> Generate Schedule
+                          </Button>
+                        )}
+                        {repayments && repayments.length > 0 && (
+                          <Button size="sm" onClick={() => {
+                            const nextPending = repayments.find(r => r.status === "pending");
+                            if (nextPending) {
+                              setSelectedRepayment(nextPending);
+                              setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                              setIsRecordPaymentOpen(true);
+                            }
+                          }}>
+                            <CreditCard size={14} className="mr-1" /> Record Payment
+                          </Button>
+                        )}
+                        {overdueCount > 0 && (
+                          <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
+                            <AlertCircle size={14} className="mr-1" /> Apply Penalties
+                          </Button>
+                        )}
+                        {loan.status === "active" && (
+                          <Button size="sm" variant="outline" onClick={() => calculateEarlySettlementMutation.mutate()}>
+                            <Calculator size={14} className="mr-1" /> Early Settlement
+                          </Button>
+                        )}
+                        {(loan.status === "active" || loan.status === "disbursed") && (
+                          <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
+                            <RefreshCw size={14} className="mr-1" /> Restructure
+                          </Button>
+                        )}
+                        {(loan.status === "active" || loan.status === "disbursed") && (
+                          <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
+                            <ArrowRight size={14} className="mr-1" /> Reloan
+                          </Button>
+                        )}
+                        {(loan.status === "active" || loan.status === "disbursed") && (
+                          <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
+                            <Plus size={14} className="mr-1" /> Top Up
+                          </Button>
+                        )}
+                        {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
+                          <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
+                            <Undo2 size={14} className="mr-1" /> Undo Disbursement
+                          </Button>
+                        )}
+                      </>
                     )}
-                    {overdueCount > 0 && (
-                      <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
-                        <AlertCircle size={14} className="mr-1" /> Apply Penalties
-                      </Button>
-                    )}
-                    {loan.status === "active" && (
-                      <Button size="sm" variant="outline" onClick={() => calculateEarlySettlementMutation.mutate()}>
-                        <Calculator size={14} className="mr-1" /> Early Settlement
-                      </Button>
-                    )}
-                    {(loan.status === "active" || loan.status === "disbursed") && (
-                      <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
-                        <RefreshCw size={14} className="mr-1" /> Restructure
-                      </Button>
-                    )}
-                    {(loan.status === "active" || loan.status === "disbursed") && (
-                      <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
-                        <ArrowRight size={14} className="mr-1" /> Reloan
-                      </Button>
-                    )}
-                    {(loan.status === "active" || loan.status === "disbursed") && (
-                      <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
-                        <Plus size={14} className="mr-1" /> Top Up
-                      </Button>
-                    )}
-                    {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
-                      <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
-                        <Undo2 size={14} className="mr-1" /> Undo Disbursement
-                      </Button>
                     )}
                   </CardContent>
                 </Card>
