@@ -81,7 +81,6 @@ import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/compon
 import { Checkbox } from "@/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
-import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -182,11 +181,8 @@ const AdminApplications = () => {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { can } = usePermissions();
-  const canRecommendForApproval = can("loans", "assign");
-  const canApproveApplication = can("loans", "approve") || can("loans", "finance_approve");
-  const canDisburseApplication = can("disbursement", "disburse");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -414,14 +410,8 @@ const AdminApplications = () => {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
-      await transitionLoanStatus({
-        loanId: id,
-        toStatus: status,
-        reasonCode: reason ? "manual_admin_update" : undefined,
-        reasonText: reason,
-      });
-
       const updateData: any = {
+        status,
         reviewed_by: user?.id,
         reviewed_at: new Date().toISOString(),
       };
@@ -442,13 +432,12 @@ const AdminApplications = () => {
         updateData.rejection_reason = reason;
       }
 
-      if (Object.keys(updateData).length > 0) {
-        const { error } = await supabase
-          .from('loan_applications')
-          .update(updateData)
-          .eq('id', id);
-        if (error) throw error;
-      }
+      const { error } = await supabase
+        .from('loan_applications')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
 
       await logAudit({
         action: "STATUS_UPDATE",
@@ -537,46 +526,34 @@ const AdminApplications = () => {
         throw new Error("Insufficient funds in selected account. Please top up and try again.");
       }
 
-      const { data: insertedDisbursement, error: disbError } = await supabase.from('disbursements').insert({
+      const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
         amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
         account_number: data.account_number || null,
         mobile_money_number: data.mobile_money_number || null,
         transaction_reference: data.transaction_reference || null,
-        status: 'pending',
+        status: 'completed',
+        disbursed_at: new Date().toISOString(),
         source_account_id: data.source_account_id || null,
-      }).select("id").single();
+      });
 
       if (disbError) throw disbError;
 
-      const { error: completeError } = await supabase
-        .from("disbursements")
+      // Update loan status to disbursed and set disbursed_by/disbursed_at
+      const { error: loanError } = await supabase
+        .from('loan_applications')
         .update({
-          status: "completed",
-          disbursed_at: new Date().toISOString(),
-        })
-        .eq("id", insertedDisbursement.id);
-      if (completeError) throw completeError;
-
-      // Enforce state-machine transition via API route (no direct status mutation here).
-      await transitionLoanStatus({
-        loanId: selectedApp.id,
-        toStatus: "disbursed",
-        reasonCode: "disbursement_completed",
-        reasonText: "Loan disbursement completed by admin",
-      });
-
-      const { error: loanMetadataError } = await supabase
-        .from("loan_applications")
-        .update({
+          status: 'disbursed',
           disbursed_by: user?.id,
           disbursed_at: new Date().toISOString(),
-          approval_stage: "disbursed",
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+          approval_stage: 'disbursed',
         })
-        .eq("id", selectedApp.id);
+        .eq('id', selectedApp.id);
 
-      if (loanMetadataError) throw loanMetadataError;
+      if (loanError) throw loanError;
 
       await logAudit({
         action: "DISBURSE",
@@ -700,15 +677,6 @@ const AdminApplications = () => {
   // Workflow transition (verify_documents, finance_approve, approve, reject)
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
-      if (action === "approve" || action === "reject") {
-        await transitionLoanStatus({
-          loanId: id,
-          toStatus: action === "approve" ? "approved" : "rejected",
-          reasonCode: reason ? "workflow_transition" : undefined,
-          reasonText: reason,
-        });
-        return;
-      }
       const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
@@ -720,22 +688,6 @@ const AdminApplications = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
-      if (selectedApp && variables.action === "approve") {
-        notificationService.sendLoanApproval(
-          selectedApp.user_id,
-          selectedApp.full_name,
-          selectedApp.loan_amount,
-          selectedApp.phone
-        );
-      } else if (selectedApp && variables.action === "reject") {
-        notificationService.sendLoanRejection(
-          selectedApp.user_id,
-          selectedApp.full_name,
-          selectedApp.phone,
-          selectedApp.email,
-          variables.reason
-        );
-      }
       const msg =
         variables.action === "verify_documents"
           ? "Documents marked as verified"
@@ -940,22 +892,18 @@ const AdminApplications = () => {
     if (!selectedApp) return;
     setIsProcessing(true);
     try {
-      await transitionLoanStatus({
-        loanId: selectedApp.id,
-        toStatus: "under_review",
-        reasonCode: "recommended_for_review",
-        reasonText: "Application recommended for admin review",
-      });
-
-      const { error: metadataError } = await supabase
-        .from("loan_applications")
+      const { error } = await supabase
+        .from('loan_applications')
         .update({
-          approval_stage: "recommended",
+          status: 'under_review' as any,
+          approval_stage: 'recommended',
           recommended_by: user?.id,
           recommended_at: new Date().toISOString(),
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
         })
-        .eq("id", selectedApp.id);
-      if (metadataError) throw metadataError;
+        .eq('id', selectedApp.id);
+      if (error) throw error;
       await logAudit({
         action: "RECOMMEND",
         entity_type: "loan_application",
@@ -976,7 +924,8 @@ const AdminApplications = () => {
   const handleApprove = async () => {
     if (!selectedApp) return;
     setIsProcessing(true);
-    await transitionMutation.mutateAsync({ id: selectedApp.id, action: "approve" });
+    // V1.0.1: Simple direct approval - skip verification gates
+    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'approved' });
     setIsProcessing(false);
   };
 
@@ -986,7 +935,7 @@ const AdminApplications = () => {
       ? (rejectionReason ? `${rejectionCategory}: ${rejectionReason}` : rejectionCategory)
       : rejectionReason || "Rejected";
     setIsProcessing(true);
-    await transitionMutation.mutateAsync({ id: selectedApp.id, action: "reject", reason });
+    await updateStatusMutation.mutateAsync({ id: selectedApp.id, status: 'rejected', reason });
     setIsProcessing(false);
     setRejectionCategory("");
     setRejectionReason("");
@@ -1047,9 +996,8 @@ const AdminApplications = () => {
       (app.phone?.toLowerCase() || '').includes(query);
 
     const matchesSource = sourceFilter === 'all' || (app as any).source === sourceFilter;
-    const matchesStatus = statusFilter === 'all' || (app as any).status === statusFilter;
 
-    return matchesSearch && matchesSource && matchesStatus;
+    return matchesSearch && matchesSource;
   });
 
   // Toggle select all applications
@@ -1090,15 +1038,6 @@ const AdminApplications = () => {
 
   /** Bulk workflow RPC: surfaces PostgREST errors and RPC { ok: false } results. */
   const assertBulkTransition = async (id: string, action: string, reason?: string) => {
-    if (action === "approve" || action === "reject") {
-      await transitionLoanStatus({
-        loanId: id,
-        toStatus: action === "approve" ? "approved" : "rejected",
-        reasonCode: reason ? "bulk_transition" : undefined,
-        reasonText: reason,
-      });
-      return;
-    }
     const { data, error } = await supabase.rpc("transition_loan_status", {
       p_loan_id: id,
       p_action: action,
@@ -1318,8 +1257,7 @@ const AdminApplications = () => {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
-                  <SelectItem value="crb_failed">CRB Failed</SelectItem>
-                  <SelectItem value="pmic_pending">PMIC Pending</SelectItem>
+                  {/* V2.0: CRB Failed, PMIC Pending hidden for V1.0.1 */}
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
@@ -2185,7 +2123,7 @@ const AdminApplications = () => {
 
                       <div className="flex gap-3">
                         {/* Loan officers see "Recommend" on pending apps; Admins see "Approve" */}
-                        {canRecommendForApproval && selectedApp.status === 'pending' && !canApproveApplication && (
+                        {!isAdmin && selectedApp.status === 'pending' && (
                           <Button
                             className="flex-1"
                             variant="outline"
@@ -2196,7 +2134,7 @@ const AdminApplications = () => {
                             Recommend for Approval
                           </Button>
                         )}
-                        {canApproveApplication && (
+                        {isAdmin && (
                           <Button
                             className="flex-1"
                             onClick={handleApprove}
@@ -2226,7 +2164,7 @@ const AdminApplications = () => {
                 )}
 
                 {/* Disburse - Admin only */}
-                {selectedApp.status === 'approved' && canDisburseApplication && (
+                {selectedApp.status === 'approved' && isAdmin && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-3">
                       <h4 className="font-semibold text-foreground">Disburse Loan</h4>

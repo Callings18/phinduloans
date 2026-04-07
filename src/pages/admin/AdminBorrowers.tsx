@@ -200,31 +200,6 @@ const AdminBorrowers = () => {
     enabled: !!selectedBorrower?.id && isViewOpen,
   });
 
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-borrowers-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["admin-borrowers"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "loan_applications" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["borrower-loan-counts"] });
-        if (selectedBorrower?.id) {
-          queryClient.invalidateQueries({ queryKey: ["borrower-loans", selectedBorrower.id] });
-        }
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "borrower_document_vault" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
-        if (selectedBorrower?.id) {
-          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", selectedBorrower.id] });
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, selectedBorrower?.id]);
-
   // Create borrower mutation - Uses edge function to create auth user
   const createMutation = useMutation({
     mutationFn: async (data: BorrowerForm) => {

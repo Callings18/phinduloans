@@ -61,7 +61,6 @@ import { useSystemSettings } from "@/hooks/useSystemSettings";
 import BulkActions, { defaultRepaymentActions } from "@/components/common/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
 import PaginationControls from "@/components/common/PaginationControls";
-import { fetchAdminPaymentClaims, reviewPaymentClaim } from "@/services/repositories/workflowRepository";
 
 interface Repayment {
   id: string;
@@ -100,7 +99,6 @@ const AdminRepayments = () => {
   const { user } = useAuth();
   const { can } = usePermissions();
   const canRecordPayment = can("repayments", "record");
-  const canApprovePaymentClaim = can("repayments", "approve") || can("repayments", "record");
   const { data: settings } = useSystemSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -164,7 +162,12 @@ const AdminRepayments = () => {
   const { data: paymentClaims = [] } = useQuery({
     queryKey: ["admin-payment-claims"],
     queryFn: async () => {
-      const data = await fetchAdminPaymentClaims("pending_review");
+      const { data, error } = await supabase
+        .from("payment_claims")
+        .select("*")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
       return (data || []) as unknown as PaymentClaim[];
     },
   });
@@ -188,9 +191,6 @@ const AdminRepayments = () => {
 
       if (!destinationAccountId) {
         throw new Error("Please select a destination account for the payment");
-      }
-      if (claimId && !canApprovePaymentClaim) {
-        throw new Error("Approval permission required to verify borrower payment claims.");
       }
 
       const amountDue = Number(repayment.amount);
@@ -302,12 +302,15 @@ const AdminRepayments = () => {
       if (txError) throw txError;
 
       if (claimId) {
-        await reviewPaymentClaim({
-          claimId,
-          decision: "approved",
-          reviewComment: "Payment verified by admin and recorded",
-          decisionReasonCode: "verified_and_recorded",
-        });
+        const { error: claimErr } = await supabase
+          .from("payment_claims")
+          .update({
+            status: "verified",
+            verified_at: new Date().toISOString(),
+            verified_by: user?.id ?? null,
+          })
+          .eq("id", claimId);
+        if (claimErr) throw claimErr;
       }
 
       return { repayment, paidAmount, isFullPayment };
@@ -986,7 +989,7 @@ const AdminRepayments = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-col items-end gap-1">
-                            {rep.status === "pending" && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
+                            {rep.status === "pending" && canRecordPayment && claimsByRepaymentId[rep.id] && (
                               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                                 <Badge variant="secondary" className="text-xs">Borrower reported – pending verification</Badge>
                                 <Button

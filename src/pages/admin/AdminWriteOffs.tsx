@@ -96,16 +96,56 @@ const AdminWriteOffs = () => {
     },
   });
 
-  // Approve write-off mutation - atomic RPC
+  // Approve write-off mutation
   const approveWriteOffMutation = useMutation({
     mutationFn: async (writeOffId: string) => {
-      if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
-      const { data, error } = await supabase.rpc("admin_approve_loan_writeoff", {
-        p_writeoff_id: writeOffId,
+      const writeOff = writeOffs?.find(w => w.id === writeOffId);
+      if (!writeOff) throw new Error("Write-off not found");
+
+      const user = (await supabase.auth.getUser()).data.user;
+
+      // Update write-off status
+      const { error: writeOffError } = await supabase
+        .from("loan_writeoffs")
+        .update({
+          status: "approved",
+          approved_at: new Date().toISOString(),
+          approved_by: user?.id,
+        })
+        .eq("id", writeOffId);
+
+      if (writeOffError) throw writeOffError;
+
+      // Update loan status to defaulted
+      const { error: loanError } = await supabase
+        .from("loan_applications")
+        .update({ status: "defaulted" })
+        .eq("id", writeOff.loan_id);
+
+      if (loanError) throw loanError;
+
+      // Log in audit
+      const { error: auditErr } = await supabase.from("audit_logs").insert({
+        user_id: user?.id,
+        action: "WRITEOFF_APPROVED",
+        entity_type: "loan_writeoff",
+        entity_id: writeOffId,
+        details: {
+          loan_id: writeOff.loan_id,
+          amount: writeOff.writeoff_amount,
+          borrower: writeOff.loan?.full_name,
+        },
       });
-      if (error) throw error;
-      const result = data as any;
-      if (result && !result.success) throw new Error(result.error || "Operation failed");
+      if (auditErr) throw auditErr;
+
+      // Log collection activity
+      const { error: collErr } = await supabase.from("collection_activities").insert({
+        loan_id: writeOff.loan_id,
+        activity_type: "writeoff_approved",
+        notes: `Write-off approved. Amount: K${Number(writeOff.writeoff_amount).toLocaleString()}`,
+        outcome: "Loan written off - marked as defaulted",
+      });
+      if (collErr) throw collErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });
@@ -118,17 +158,32 @@ const AdminWriteOffs = () => {
     },
   });
 
-  // Reject write-off mutation - atomic RPC
+  // Reject write-off mutation
   const rejectWriteOffMutation = useMutation({
     mutationFn: async ({ writeOffId, reason }: { writeOffId: string; reason: string }) => {
-      if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
-      const { data, error } = await supabase.rpc("admin_reject_loan_writeoff", {
-        p_writeoff_id: writeOffId,
-        p_reason: reason,
-      });
+      const writeOff = writeOffs?.find(w => w.id === writeOffId);
+      if (!writeOff) throw new Error("Write-off not found");
+
+      const user = (await supabase.auth.getUser()).data.user;
+
+      const { error } = await supabase
+        .from("loan_writeoffs")
+        .update({
+          status: "rejected",
+          recovery_notes: `Rejected: ${reason}`,
+        })
+        .eq("id", writeOffId);
+
       if (error) throw error;
-      const result = data as any;
-      if (result && !result.success) throw new Error(result.error || "Operation failed");
+
+      // Log collection activity
+      const { error: collRejectErr } = await supabase.from("collection_activities").insert({
+        loan_id: writeOff.loan_id,
+        activity_type: "writeoff_rejected",
+        notes: `Write-off rejected. Reason: ${reason}`,
+        outcome: "Continue collection efforts",
+      });
+      if (collRejectErr) throw collRejectErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });
@@ -142,18 +197,34 @@ const AdminWriteOffs = () => {
     },
   });
 
-  // Record recovery mutation - atomic RPC
+  // Record recovery mutation
   const recordRecoveryMutation = useMutation({
     mutationFn: async ({ writeOffId, amount, notes }: { writeOffId: string; amount: number; notes: string }) => {
-      if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
-      const { data, error } = await supabase.rpc("admin_record_writeoff_recovery", {
-        p_writeoff_id: writeOffId,
-        p_amount: amount,
-        p_notes: notes,
-      });
+      const writeOff = writeOffs?.find(w => w.id === writeOffId);
+      if (!writeOff) throw new Error("Write-off not found");
+
+      const newRecoveryAmount = (Number(writeOff.recovery_amount) || 0) + amount;
+      const existingNotes = writeOff.recovery_notes || "";
+      const newNotes = `${existingNotes}\n[${format(new Date(), "yyyy-MM-dd")}] Recovered K${amount.toLocaleString()}: ${notes}`.trim();
+
+      const { error } = await supabase
+        .from("loan_writeoffs")
+        .update({
+          recovery_amount: newRecoveryAmount,
+          recovery_notes: newNotes,
+        })
+        .eq("id", writeOffId);
+
       if (error) throw error;
-      const result = data as any;
-      if (result && !result.success) throw new Error(result.error || "Operation failed");
+
+      // Log activity
+      const { error: recActErr } = await supabase.from("collection_activities").insert({
+        loan_id: writeOff.loan_id,
+        activity_type: "recovery_recorded",
+        notes: `Recovery recorded: K${amount.toLocaleString()}. ${notes}`,
+        outcome: `Total recovered: K${newRecoveryAmount.toLocaleString()}`,
+      });
+      if (recActErr) throw recActErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });

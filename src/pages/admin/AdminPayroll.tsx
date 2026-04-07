@@ -225,8 +225,7 @@ const AdminPayroll = () => {
       if (!user) throw new Error("Not authenticated");
       const { error } = await (supabase.from("payroll_runs") as any)
         .update({ status: "approved", approved_by: user.id, approved_at: new Date().toISOString() })
-        .eq("id", runId)
-        .eq("status", "draft");
+        .eq("id", runId);
       if (error) throw error;
       const { error: recApproveErr } = await (supabase.from("payroll_records") as any)
         .update({ status: "approved" })
@@ -246,8 +245,7 @@ const AdminPayroll = () => {
       const now = new Date().toISOString();
       const { error } = await (supabase.from("payroll_runs") as any)
         .update({ status: "paid" })
-        .eq("id", runId)
-        .eq("status", "approved");
+        .eq("id", runId);
       if (error) throw error;
       const { error: recPaidErr } = await (supabase.from("payroll_records") as any)
         .update({ status: "paid", paid_at: now })

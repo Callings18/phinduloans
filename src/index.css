@@ -324,23 +324,3 @@
 .animate-shrink-width {
   animation: shrink-width linear forwards;
 }
-
-@keyframes marquee-left {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.marquee-wrap {
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.marquee-track {
-  display: inline-flex;
-  min-width: 200%;
-  animation: marquee-left 24s linear infinite;
-}

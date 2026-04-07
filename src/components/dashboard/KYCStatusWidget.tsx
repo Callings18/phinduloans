@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Clock, AlertTriangle, CheckCircle, XCircle, Upload } from "lucide-react";
-import { differenceInHours } from "date-fns";
 
 const KYC_DOC_TYPES = [
   { type: "nrc_front", label: "NRC (Front)" },
@@ -23,7 +22,7 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("borrower_document_vault")
-        .select("doc_type, is_verified, verified_at, notes, uploaded_at")
+        .select("doc_type, is_verified, verified_at, notes")
         .eq("borrower_id", userId)
         .order("uploaded_at", { ascending: false });
       if (error) throw error;
@@ -41,15 +40,6 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
   const verifiedCount = KYC_DOC_TYPES.filter((t) => docsByType[t.type]?.is_verified).length;
   const allVerified = verifiedCount === KYC_DOC_TYPES.length;
   const uploadedCount = KYC_DOC_TYPES.filter((t) => !!docsByType[t.type]).length;
-  const pendingDocs = KYC_DOC_TYPES
-    .map((t) => docsByType[t.type])
-    .filter((doc) => doc && !doc.is_verified && !(doc.verified_at && doc.notes?.startsWith("Rejected:")));
-  const oldestPendingHours = pendingDocs.reduce((max, doc) => {
-    if (!doc?.uploaded_at) return max;
-    return Math.max(max, differenceInHours(new Date(), new Date(doc.uploaded_at)));
-  }, 0);
-  const slaState =
-    oldestPendingHours >= 72 ? "urgent" : oldestPendingHours >= 48 ? "waiting" : pendingDocs.length > 0 ? "pending" : "none";
 
   if (allVerified) {
     return (
@@ -68,10 +58,10 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
   }
 
   return (
-    <Card className={slaState === "urgent" ? "glass border-destructive/40 bg-destructive/10" : "glass border-yellow-500/30 bg-yellow-500/5"}>
+    <Card className="glass border-yellow-500/30 bg-yellow-500/5">
       <CardHeader className="pb-2 pt-4 px-4">
         <CardTitle className="text-sm flex items-center gap-2">
-          <Clock className={slaState === "urgent" ? "text-destructive" : "text-yellow-400"} size={16} />
+          <Clock className="text-yellow-400" size={16} />
           KYC Status
         </CardTitle>
       </CardHeader>
@@ -97,14 +87,8 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
                     <XCircle size={10} /> Rejected
                   </Badge>
                 ) : (
-                  <Badge
-                    className={
-                      slaState === "urgent"
-                        ? "bg-destructive/20 text-destructive border-destructive/30 border text-xs gap-1"
-                        : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border text-xs gap-1"
-                    }
-                  >
-                    <Clock size={10} /> {slaState === "urgent" ? "Urgent Review" : "Pending Review"}
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border text-xs gap-1">
+                    <Clock size={10} /> Pending Review
                   </Badge>
                 )}
               </div>
@@ -123,7 +107,6 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
           <p className="text-xs text-muted-foreground mt-2 text-center">
             <AlertTriangle size={12} className="inline mr-1" />
             Documents submitted — awaiting admin review
-            {oldestPendingHours > 0 ? ` (${oldestPendingHours}h)` : ""}
           </p>
         )}
       </CardContent>

@@ -60,12 +60,6 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-## NestJS API (strangler backend)
-
-The [`backend/`](backend/) folder contains a **NestJS + Prisma + PostgreSQL** service used to migrate off direct Supabase calls. See [`backend/README.md`](backend/README.md), [`docs/API_CONTRACTS.md`](docs/API_CONTRACTS.md), and [`docs/SUPABASE_AUDIT.md`](docs/SUPABASE_AUDIT.md).
-
-**Optional env (frontend):** `VITE_API_URL` and `VITE_API_LOAN_PRODUCTS=true` to read loan products from the API instead of Supabase (see `.env.example`).
-
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.

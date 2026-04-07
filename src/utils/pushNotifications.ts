@@ -18,14 +18,6 @@ export interface PushNotificationOptions {
 class PushNotificationManager {
   private registration: ServiceWorkerRegistration | null = null;
 
-  /**
-   * Subscription backend is not productionized yet.
-   * Keep browser push UI disabled until server-side subscription storage is ready.
-   */
-  isSubscriptionReady(): boolean {
-    return false;
-  }
-
   async init() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       console.warn('Push notifications are not supported');
@@ -58,11 +50,6 @@ class PushNotificationManager {
   }
 
   async subscribe(userId: string): Promise<PushSubscription | null> {
-    if (!this.isSubscriptionReady()) {
-      console.warn("Push subscription is disabled until backend subscription storage is configured.");
-      return null;
-    }
-
     if (!this.registration) {
       await this.init();
     }
@@ -78,12 +65,10 @@ class PushNotificationManager {
         return existingSubscription;
       }
 
-      console.log("Push subscription saved for user:", userId);
-      return await this.registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        // Deliberately guarded by isSubscriptionReady(); this branch is unreachable until enabled.
-        applicationServerKey: new Uint8Array(),
-      });
+      // Note: Full push subscription requires VAPID keys and a push_subscriptions table
+      // This is a placeholder - actual implementation would need proper VAPID setup
+      console.log('Push subscription would be saved for user:', userId);
+      return null;
     } catch (error) {
       console.error('Failed to subscribe to push notifications:', error);
       return null;

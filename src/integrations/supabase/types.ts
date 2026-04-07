@@ -1780,7 +1780,6 @@ export type Database = {
           previous_values: Json | null
           reason: string | null
           source_account_id: string | null
-          visibility: string
         }
         Insert: {
           amount?: number | null
@@ -1798,7 +1797,6 @@ export type Database = {
           previous_values?: Json | null
           reason?: string | null
           source_account_id?: string | null
-          visibility?: string
         }
         Update: {
           amount?: number | null
@@ -1816,7 +1814,6 @@ export type Database = {
           previous_values?: Json | null
           reason?: string | null
           source_account_id?: string | null
-          visibility?: string
         }
         Relationships: [
           {
@@ -2293,57 +2290,6 @@ export type Database = {
           },
         ]
       }
-      loan_status_transitions: {
-        Row: {
-          actor_id: string | null
-          actor_type: string
-          created_at: string
-          from_status: string
-          id: string
-          loan_id: string
-          reason_code: string | null
-          reason_text: string | null
-          to_status: string
-        }
-        Insert: {
-          actor_id?: string | null
-          actor_type: string
-          created_at?: string
-          from_status: string
-          id?: string
-          loan_id: string
-          reason_code?: string | null
-          reason_text?: string | null
-          to_status: string
-        }
-        Update: {
-          actor_id?: string | null
-          actor_type?: string
-          created_at?: string
-          from_status?: string
-          id?: string
-          loan_id?: string
-          reason_code?: string | null
-          reason_text?: string | null
-          to_status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "loan_status_transitions_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loan_applications"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "loan_status_transitions_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "overdue_loans_view"
-            referencedColumns: ["loan_id"]
-          },
-        ]
-      }
       loan_writeoffs: {
         Row: {
           approved_at: string | null
@@ -2522,13 +2468,11 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
-          decision_reason_code: string | null
           id: string
           loan_id: string
           receipt_url: string | null
           reference: string
           repayment_id: string
-          review_comment: string | null
           status: string
           user_id: string
           verified_at: string | null
@@ -2537,13 +2481,11 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
-          decision_reason_code?: string | null
           id?: string
           loan_id: string
           receipt_url?: string | null
           reference: string
           repayment_id: string
-          review_comment?: string | null
           status?: string
           user_id: string
           verified_at?: string | null
@@ -2552,13 +2494,11 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
-          decision_reason_code?: string | null
           id?: string
           loan_id?: string
           receipt_url?: string | null
           reference?: string
           repayment_id?: string
-          review_comment?: string | null
           status?: string
           user_id?: string
           verified_at?: string | null
@@ -3673,30 +3613,6 @@ export type Database = {
       }
     }
     Functions: {
-      admin_approve_loan_writeoff: {
-        Args: { p_writeoff_id: string }
-        Returns: Json
-      }
-      admin_mark_loan_defaulted: {
-        Args: { p_loan_id: string; p_reason: string }
-        Returns: Json
-      }
-      admin_record_writeoff_recovery: {
-        Args: { p_amount: number; p_notes: string; p_writeoff_id: string }
-        Returns: Json
-      }
-      admin_reject_loan_writeoff: {
-        Args: { p_reason: string; p_writeoff_id: string }
-        Returns: Json
-      }
-      admin_set_expense_status: {
-        Args: {
-          p_expense_id: string
-          p_new_status: string
-          p_reject_reason?: string
-        }
-        Returns: Json
-      }
       apply_loan_penalties: { Args: { p_loan_id: string }; Returns: number }
       calculate_early_settlement: {
         Args: { p_loan_id: string }

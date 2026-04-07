@@ -1,26 +1,25 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import {
-  ArrowDownLeft,
-  Banknote,
-  CheckCircle2,
-  Eye,
-  ShieldAlert,
-  Sparkles,
+  CreditCard,
+  Wallet,
+  Calendar,
+  AlertTriangle,
   TrendingUp,
+  ArrowRight,
+  Eye,
 } from "lucide-react";
 import { format, isAfter, startOfDay } from "date-fns";
 import KYCStatusWidget from "./KYCStatusWidget";
 import ContractSigningWidget from "./ContractSigningWidget";
 import PaymentReminder from "./PaymentReminder";
-import WalletWidget from "./WalletWidget";
 import type { BorrowerTab } from "./BorrowerBottomNav";
 
 interface BorrowerHomeTabProps {
   user: any;
   profile: any;
-  kycInfo?: any;
   loans: any[];
   repayments: any[];
   activeLoans: any[];
@@ -32,7 +31,6 @@ interface BorrowerHomeTabProps {
 export default function BorrowerHomeTab({
   user,
   profile,
-  kycInfo,
   loans,
   repayments,
   activeLoans,
@@ -40,9 +38,6 @@ export default function BorrowerHomeTab({
   isStaff,
   onTabChange,
 }: BorrowerHomeTabProps) {
-  void loans;
-  void isStaff;
-
   const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
 
   const upcomingRepayments = repayments?.filter(
@@ -68,274 +63,64 @@ export default function BorrowerHomeTab({
     .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0;
   const totalRepaymentDue = activeLoans.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0);
   const overallProgress = totalRepaymentDue > 0 ? Math.round((totalPaid / totalRepaymentDue) * 100) : 0;
-  const fullName = profile?.full_name?.trim() || "Customer";
-  const firstName = fullName.split(" ")[0] || "Customer";
-  const initials = fullName.slice(0, 1).toUpperCase();
-  const walletBalance = Math.max(totalPaid, 0);
-  const nextPaymentAmount = nextPayment
-    ? Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0))
-    : 0;
-  const totalDisbursed = loans
-    .filter((loan) => ["disbursed", "active", "completed"].includes(loan.status))
-    .reduce((sum, loan) => sum + Number(loan.loan_amount || 0), 0);
-  const hasBankDetails = Boolean(kycInfo?.bank_name && kycInfo?.bank_account_number);
-  const hasMobileMoney = Boolean(
-    kycInfo?.airtel_money_number || kycInfo?.mtn_mobile_money_number || kycInfo?.zamtel_kwacha_number
-  );
-  const disbursementDestination = (() => {
-    if (hasBankDetails) {
-      const account = String(kycInfo.bank_account_number);
-      const masked = account.length > 4 ? `****${account.slice(-4)}` : account;
-      return `${kycInfo.bank_name} (${masked})`;
-    }
-    if (kycInfo?.mtn_mobile_money_number) return `MTN Mobile Money (${kycInfo.mtn_mobile_money_number})`;
-    if (kycInfo?.airtel_money_number) return `Airtel Money (${kycInfo.airtel_money_number})`;
-    if (kycInfo?.zamtel_kwacha_number) return `Zamtel Kwacha (${kycInfo.zamtel_kwacha_number})`;
-    return null;
-  })();
-  const accountHealth = (() => {
-    const blockers: string[] = [];
-    if (!kycVerified) blockers.push("Complete KYC verification");
-    if (!hasBankDetails && !hasMobileMoney) blockers.push("Add payout destination (mobile money or bank)");
-    if (totalOverdue > 0) blockers.push(`Resolve overdue repayments (K${totalOverdue.toLocaleString()})`);
-    return {
-      status: blockers.length === 0 ? "healthy" : blockers.length === 1 ? "warning" : "critical",
-      blockers,
-    };
-  })();
-
-  const nextStep = (() => {
-    if (!kycVerified) {
-      return {
-        title: "Complete KYC verification",
-        description: "Verify your NRC and selfie to unlock faster approvals and disbursement.",
-        cta: "Go to profile",
-        tab: "profile" as BorrowerTab,
-        icon: ShieldAlert,
-      };
-    }
-    if (totalOverdue > 0) {
-      return {
-        title: "Resolve overdue repayments",
-        description: `You have K${totalOverdue.toLocaleString()} overdue. Submit payment claims to avoid penalties.`,
-        cta: "Open payments",
-        tab: "payments" as BorrowerTab,
-        icon: Banknote,
-      };
-    }
-    if (activeLoans.length > 0) {
-      return {
-        title: "Track your active loan",
-        description: nextPayment
-          ? `Your next payment is K${nextPaymentAmount.toLocaleString()} due ${format(new Date(nextPayment.due_date), "MMM dd")}.`
-          : "Check your repayment schedule and keep your account in good standing.",
-        cta: "View my loans",
-        tab: "loans" as BorrowerTab,
-        icon: CheckCircle2,
-      };
-    }
-    return {
-      title: "Apply for a new loan",
-      description: "You’re all set. Start a new application in minutes.",
-      cta: "Apply now",
-      tab: "apply" as BorrowerTab,
-      icon: Sparkles,
-    };
-  })();
-  const NextStepIcon = nextStep.icon;
 
   return (
     <div className="space-y-4">
-      <Card className="overflow-hidden border border-border/60 gradient-card shadow-elevated text-card-foreground">
-        <CardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/20 border border-primary/30 text-primary-foreground flex items-center justify-center font-semibold">
-                {initials}
-              </div>
-              <div>
-                <p className="text-sm/4 text-muted-foreground">Hello, {fullName}</p>
-                <p className="text-base font-semibold">Welcome back</p>
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">{format(new Date(), "MMM d, yyyy")}</p>
-          </div>
-
-          <div className="text-center space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Wallet Balance</p>
-            <p className="text-3xl font-bold">K{walletBalance.toLocaleString()}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl"
-              onClick={() => onTabChange("payments")}
-            >
-              <Banknote size={16} className="mr-1" /> Make Payment
-            </Button>
-            <Button
-              className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl"
-              onClick={() => onTabChange("apply")}
-            >
-              <TrendingUp size={16} className="mr-1" /> Apply Loan
-            </Button>
-          </div>
-
-          <div className="rounded-2xl bg-secondary/70 border border-border/60 p-3">
-            <p className="text-xs text-muted-foreground mb-2">Your Wallet</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold border border-primary/30">
-                ZMW
-              </span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                Disbursed: K{totalDisbursed.toLocaleString()}
-              </span>
-              {disbursementDestination ? (
-                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                  Destination: {disbursementDestination}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => onTabChange("profile")}
-                >
-                  Add payout details
-                </button>
-              )}
-            </div>
-            {!hasBankDetails && !hasMobileMoney && (
-              <p className="text-[11px] text-warning mt-2">
-                Add mobile money or bank details in Profile so admin can disburse to your preferred destination.
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Greeting */}
+      <div>
+        <h1 className="text-xl font-bold text-foreground">
+          Hi, {profile?.full_name?.split(" ")[0] || "there"} 👋
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {format(new Date(), "EEEE, MMMM d, yyyy")}
+        </p>
+      </div>
 
       {/* Payment Reminders */}
       {repayments && repayments.length > 0 && (
         <PaymentReminder repayments={repayments} />
       )}
 
-      <Card className="border-primary/30 bg-primary/5 shadow-card">
-        <CardContent className="p-4 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0">
-              <NextStepIcon size={18} />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-primary font-semibold">What’s next</p>
-              <h3 className="text-sm font-semibold text-foreground">{nextStep.title}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{nextStep.description}</p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="gradient-primary text-primary-foreground hover:opacity-90 h-8 px-3 text-xs shrink-0"
-            onClick={() => onTabChange(nextStep.tab)}
-          >
-            {nextStep.cta}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card
-        className={
-          accountHealth.status === "healthy"
-            ? "border-success/40 bg-success/5 shadow-card"
-            : accountHealth.status === "warning"
-              ? "border-warning/40 bg-warning/10 shadow-card"
-              : "border-destructive/40 bg-destructive/10 shadow-card"
-        }
-      >
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-foreground">Account Health</p>
-            <span className="text-xs text-muted-foreground">
-              {accountHealth.status === "healthy" ? "All clear" : `${accountHealth.blockers.length} blocker(s)`}
-            </span>
-          </div>
-          {accountHealth.blockers.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Your account is ready for smooth disbursement and repayment operations.
-            </p>
-          ) : (
-            <div className="space-y-1">
-              {accountHealth.blockers.map((blocker) => (
-                <p key={blocker} className="text-xs text-foreground">
-                  - {blocker}
-                </p>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border border-border/60 bg-card">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-4 gap-3 text-center">
-            <button className="space-y-1" onClick={() => onTabChange("loans")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-primary/30 bg-primary/10 flex items-center justify-center text-primary">
-                <ArrowDownLeft size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">Disbursements</p>
-            </button>
-            <button className="space-y-1" onClick={() => onTabChange("payments")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-accent/30 bg-accent/10 flex items-center justify-center text-accent">
-                <Banknote size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">Repay</p>
-            </button>
-            <button className="space-y-1" onClick={() => onTabChange("profile")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-info/30 bg-info/10 flex items-center justify-center text-info">
-                <ShieldAlert size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">KYC & Wallet</p>
-            </button>
-            <button className="space-y-1" onClick={() => onTabChange("apply")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-warning/30 bg-warning/10 flex items-center justify-center text-warning">
-                <Sparkles size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">New Loan</p>
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Stats - 2x2 grid for mobile */}
       <div className="grid grid-cols-2 gap-3">
-        <Card className="border-border/60">
+        <Card className="glass border-border/50">
           <CardContent className="p-4">
             <p className="text-muted-foreground text-xs">Active Loans</p>
-            <p className="text-xl font-bold text-foreground">{activeLoans.length}</p>
+            <p className="text-2xl font-bold text-foreground">{activeLoans.length}</p>
           </CardContent>
         </Card>
-        <Card className="border-border/60">
+        <Card className="glass border-border/50">
           <CardContent className="p-4">
             <p className="text-muted-foreground text-xs">Total Borrowed</p>
-            <p className="text-xl font-bold text-foreground">K{totalBorrowed.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground">K{totalBorrowed.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card className="border-border/60">
+        <Card className="glass border-border/50">
           <CardContent className="p-4">
             <p className="text-muted-foreground text-xs">Next Payment</p>
             {nextPayment ? (
               <>
-                <p className="text-lg font-bold text-foreground">K{nextPaymentAmount.toLocaleString()}</p>
-                <p className="text-[11px] text-muted-foreground">{format(new Date(nextPayment.due_date), "MMM dd")}</p>
+                <p className="text-lg font-bold text-foreground">
+                  K{Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0)).toLocaleString()}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {format(new Date(nextPayment.due_date), "MMM dd")}
+                </p>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">No upcoming</p>
             )}
           </CardContent>
         </Card>
-        <Card className={totalOverdue > 0 ? "border-destructive/50" : "border-border/60"}>
+        <Card className={`glass border-border/50 ${totalOverdue > 0 ? "border-destructive/50" : ""}`}>
           <CardContent className="p-4">
             <p className="text-muted-foreground text-xs">Overdue</p>
-            <p className={`text-xl font-bold ${totalOverdue > 0 ? "text-destructive" : "text-foreground"}`}>
+            <p className={`text-2xl font-bold ${totalOverdue > 0 ? "text-destructive" : "text-foreground"}`}>
               K{totalOverdue.toLocaleString()}
             </p>
-            {totalOverdue > 0 && <p className="text-[11px] text-destructive">{overdueRepayments.length} payment(s)</p>}
+            {totalOverdue > 0 && (
+              <p className="text-[10px] text-destructive">{overdueRepayments.length} payment(s)</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -360,9 +145,6 @@ export default function BorrowerHomeTab({
       {/* KYC Status */}
       {user && <KYCStatusWidget userId={user.id} />}
 
-      {/* Wallet transactions linked to real disbursement/repayment records */}
-      {user && <WalletWidget />}
-
       {/* Contract Signing */}
       {user && <ContractSigningWidget userId={user.id} />}
 
@@ -370,14 +152,15 @@ export default function BorrowerHomeTab({
       <div className="grid grid-cols-2 gap-3">
         <Button
           variant="outline"
-          className="h-auto py-4 flex flex-col gap-1 rounded-xl"
+          className="h-auto py-4 flex flex-col gap-1 glass border-border/50"
           onClick={() => onTabChange("loans")}
         >
           <Eye size={20} className="text-primary" />
           <span className="text-xs">View Loans</span>
         </Button>
         <Button
-          className="h-auto py-4 flex flex-col gap-1 rounded-xl gradient-primary text-primary-foreground hover:opacity-90"
+          variant="hero"
+          className="h-auto py-4 flex flex-col gap-1"
           onClick={() => onTabChange("apply")}
         >
           <TrendingUp size={20} />

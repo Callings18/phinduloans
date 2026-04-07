@@ -16,7 +16,7 @@ import {
   AlertCircle,
   Upload,
 } from "lucide-react";
-import { fetchActiveLoanProducts } from "@/services/repositories/loanProductsRepository";
+import { supabase } from "@/integrations/supabase/client";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
 
 interface Profile {
@@ -64,8 +64,13 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
   const { data: loanProducts } = useQuery({
     queryKey: ["loan-products-quick"],
     queryFn: async () => {
-      const rows = await fetchActiveLoanProducts({ sort: "min_amount", ascending: true });
-      return rows as LoanProduct[];
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("*")
+        .eq("is_active", true)
+        .order("min_amount", { ascending: true });
+      if (error) throw error;
+      return data as LoanProduct[];
     },
     staleTime: 30000,
   });
@@ -107,14 +112,18 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
 
   return (
     <Card className="glass border-border/50 overflow-hidden">
-      <div className={`${kycVerified ? 'gradient-primary' : 'bg-muted/50'} p-6`}>
+      <div className={`${kycVerified && !hasActiveLoan ? 'gradient-primary' : 'bg-muted/50'} p-6`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <h3 className={`text-xl font-bold ${kycVerified ? 'text-primary-foreground' : 'text-foreground'}`}>
-                {kycVerified ? 'Loan Calculator' : 'Apply for a Loan'}
+              <h3 className={`text-xl font-bold ${kycVerified && !hasActiveLoan ? 'text-primary-foreground' : 'text-foreground'}`}>
+                {hasActiveLoan ? 'Loan in Progress' : kycVerified ? 'Loan Calculator' : 'Apply for a Loan'}
               </h3>
-              {kycVerified ? (
+              {hasActiveLoan ? (
+                <Badge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-500/10">
+                  <CreditCard size={12} className="mr-1" /> Active Loan
+                </Badge>
+              ) : kycVerified ? (
                 <Badge className="bg-white/20 text-white border-white/30">
                   <Zap size={12} className="mr-1" /> Fast Track
                 </Badge>
@@ -124,25 +133,26 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
                 </Badge>
               )}
             </div>
-            <p className={`text-sm ${kycVerified ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
-              {kycVerified
+            <p className={`text-sm ${kycVerified && !hasActiveLoan ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+              {hasActiveLoan
+                ? "You have an active loan. Complete it before applying for a new one."
+                : kycVerified
                 ? "Estimate your repayments and apply when ready"
                 : "Your identity documents must be verified before you can apply"}
             </p>
-            {hasActiveLoan && (
-              <p className="text-xs mt-1 text-primary-foreground/90">
-                Existing active loan detected. Your new application will still go through policy review.
-              </p>
-            )}
           </div>
           <div className="flex gap-2">
-            {kycVerified ? (
+            {hasActiveLoan ? (
+              <Button variant="outline" disabled>
+                <CreditCard size={18} className="mr-2" /> Application Locked
+              </Button>
+            ) : kycVerified ? (
               <Button
                 variant="secondary"
                 onClick={handleApply}
                 className="bg-white/20 border-white/30 text-white hover:bg-white/30"
               >
-                <FileText size={18} className="mr-2" /> {hasActiveLoan ? "Apply Again" : "Apply Now"}
+                <FileText size={18} className="mr-2" /> Apply Now
               </Button>
             ) : (
               <Button variant="outline" onClick={() => navigate("/profile")}>
@@ -153,7 +163,8 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
         </div>
       </div>
 
-      <CardContent className="p-6 space-y-5">
+      {!hasActiveLoan && (
+        <CardContent className="p-6 space-y-5">
           <div className="space-y-2">
             <Label>Loan Product</Label>
             <Select
@@ -224,11 +235,12 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
           )}
 
           {kycVerified && (
-            <Button variant="hero" className="w-full" onClick={handleApply}>
+            <Button variant="hero" className="w-full" onClick={handleApply} disabled={hasActiveLoan}>
               <Zap size={16} className="mr-2" /> Apply for This Loan
             </Button>
           )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   );
 };

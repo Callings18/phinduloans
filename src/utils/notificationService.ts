@@ -111,39 +111,6 @@ class NotificationService {
     this.settingsLoadedAt = 0;
   }
 
-  private async isDuplicateWithinWindow(params: SendNotificationParams, windowMinutes = 10) {
-    const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from("notification_logs")
-      .select("id")
-      .eq("recipient", params.to)
-      .eq("type", params.type)
-      .eq("title", params.title ?? params.subject ?? null)
-      .eq("message", params.message ?? null)
-      .gte("created_at", cutoff)
-      .limit(1);
-    if (error) {
-      console.warn("[Notification Service] Dedup check failed:", error.message);
-      return false;
-    }
-    return Boolean(data && data.length > 0);
-  }
-
-  private async invokeProvider(params: SendNotificationParams) {
-    return supabase.functions.invoke("send-notification", {
-      body: {
-        type: params.type,
-        to: params.to,
-        subject: params.subject,
-        message: params.message,
-        title: params.title,
-        htmlContent: params.htmlContent,
-        userId: params.userId,
-        eventType: params.eventType,
-      },
-    });
-  }
-
   async send(params: SendNotificationParams) {
     console.log(`[Notification Service] Sending ${params.type} to ${params.to}: ${params.title || params.subject}`);
 
@@ -160,13 +127,13 @@ class NotificationService {
     }
 
     // Check if channel is enabled
-    let enabled = true;
+    let enabled = false;
     if (params.type === 'sms' && settings) {
-      enabled = settings.sms_enabled !== false;
+      enabled = settings.sms_enabled;
     } else if (params.type === 'whatsapp' && settings) {
-      enabled = settings.whatsapp_enabled !== false;
+      enabled = settings.whatsapp_enabled;
     } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled !== false;
+      enabled = settings.email_enabled;
     }
 
     if (!enabled) {
@@ -175,20 +142,18 @@ class NotificationService {
     }
 
     try {
-      const isDuplicate = await this.isDuplicateWithinWindow(params, 10);
-      if (isDuplicate) {
-        console.log(`[Notification Service] Duplicate suppressed for ${params.type} to ${params.to}`);
-        return { success: true, skipped: true, message: "Duplicate suppressed" };
-      }
-
-      let { data, error } = await this.invokeProvider(params);
-      if (error || !data?.success) {
-        // One safe retry to reduce transient provider failures
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        const retry = await this.invokeProvider(params);
-        data = retry.data;
-        error = retry.error;
-      }
+      const { data, error } = await supabase.functions.invoke("send-notification", {
+        body: {
+          type: params.type,
+          to: params.to,
+          subject: params.subject,
+          message: params.message,
+          title: params.title,
+          htmlContent: params.htmlContent,
+          userId: params.userId,
+          eventType: params.eventType,
+        },
+      });
 
       if (error) throw error;
       
@@ -209,15 +174,17 @@ class NotificationService {
       }
       return { success: true, data };
     } catch (error: any) {
-      await supabase.from("notification_logs").insert({
-        user_id: params.userId ?? null,
-        type: params.type,
-        recipient: params.to,
-        subject: params.subject ?? null,
-        title: params.title ?? params.subject ?? `${params.type.toUpperCase()} Notification`,
-        message: error?.message ?? String(error),
-        status: "failed",
-      });
+      if (params.type === "email") {
+        await supabase.from("notification_logs").insert({
+          user_id: params.userId ?? null,
+          type: "email",
+          recipient: params.to,
+          subject: params.subject ?? null,
+          title: params.subject ?? "Email Notification",
+          message: error?.message ?? String(error),
+          status: "failed",
+        });
+      }
       console.error('[NotificationService] Error:', error?.message, {
         component: 'NotificationService',
         action: `send_${params.type}`,

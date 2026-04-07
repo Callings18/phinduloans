@@ -19,8 +19,6 @@ import {
     Info
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { apiFeatureFlags } from "@/config/apiMode";
-import { fetchActiveLoanProducts } from "@/services/repositories/loanProductsRepository";
 import { calculateLoan } from "@/utils/loanCalculations";
 import { cn } from "@/lib/utils";
 import {
@@ -63,8 +61,14 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
     const { data: loanProducts, isLoading } = useQuery({
         queryKey: ['loan-products-comparison'],
         queryFn: async () => {
-            const rows = await fetchActiveLoanProducts({ sort: "interest_rate", ascending: true });
-            return rows as LoanProduct[];
+            const { data, error } = await supabase
+                .from('loan_products')
+                .select('*')
+                .eq('is_active', true)
+                .order('interest_rate', { ascending: true });
+
+            if (error) throw error;
+            return data as LoanProduct[];
         },
         staleTime: 0, // Always fetch fresh data
         refetchOnMount: true, // Refetch when component mounts
@@ -72,9 +76,8 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
         refetchInterval: 30000, // Refetch every 30 seconds to catch updates
     });
 
+    // Real-time subscription to loan products changes
     useEffect(() => {
-        if (apiFeatureFlags.loanProducts) return;
-
         const channel = supabase
             .channel("loan-products-comparison-changes")
             .on(
@@ -85,6 +88,7 @@ const LoanComparison = ({ className }: LoanComparisonProps) => {
                     table: "loan_products",
                 },
                 () => {
+                    // Invalidate and refetch when any loan product changes
                     queryClient.invalidateQueries({ queryKey: ["loan-products-comparison"] });
                 }
             )
