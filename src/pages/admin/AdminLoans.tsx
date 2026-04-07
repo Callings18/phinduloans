@@ -246,24 +246,69 @@ const AdminLoans = () => {
     onError: (err: any) => toast.error(err.message || "Failed to update status"),
   });
 
-  // Disburse loan mutation - moves approved → disbursed, creates disbursement record
+  // Disburse loan mutation - moves awaiting_disbursement → disbursed, creates disbursement record, deducts from source account
   const disburseLoanMutation = useMutation({
-    mutationFn: async (loanId: string) => {
-      const loan = loans?.find(l => l.id === loanId);
-      if (!loan) throw new Error("Loan not found");
+    mutationFn: async () => {
+      if (!disbursementLoan) throw new Error("No loan selected");
+      if (!disbursementSourceAccountId) throw new Error("Please select a source account for disbursement");
+
+      const loan = disbursementLoan;
+      const product = loanProducts?.find(p => p.id === loan.loan_product_id);
+      const principal = Number(loan.loan_amount);
+
+      // Calculate fees for net disbursement
+      const processingFee = product?.processing_fee_percent ? (principal * product.processing_fee_percent / 100) : 0;
+      const enforcementFee = product?.enforcement_fee_percent ? (principal * product.enforcement_fee_percent / 100) : 0;
+      const insuranceFee = (product as any)?.insurance_percent ? (principal * (product as any).insurance_percent / 100) : 0;
+      const platformFee = (product as any)?.platform_fee_percent ? (principal * (product as any).platform_fee_percent / 100) : 0;
+      const vatableAmount = processingFee + enforcementFee + platformFee;
+      const vatAmount = (product as any)?.vat_percent ? (vatableAmount * (product as any).vat_percent / 100) : 0;
+      const netDisbursement = principal - processingFee - enforcementFee - insuranceFee - platformFee - vatAmount;
+
+      // Fresh read of source account balance
+      const { data: sourceAcc, error: accReadErr } = await supabase
+        .from("accounts")
+        .select("id, account_name, balance")
+        .eq("id", disbursementSourceAccountId)
+        .single();
+      if (accReadErr || !sourceAcc) throw new Error("Source account not found");
+      if (sourceAcc.balance < netDisbursement) throw new Error(`Insufficient balance in ${sourceAcc.account_name}. Available: K${sourceAcc.balance.toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
+
+      // Deduct from source account
+      const newBalance = sourceAcc.balance - netDisbursement;
+      const { error: balErr } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance })
+        .eq("id", disbursementSourceAccountId);
+      if (balErr) throw balErr;
+
+      // Record account transaction
+      const { error: txErr } = await supabase.from("account_transactions").insert({
+        account_id: disbursementSourceAccountId,
+        transaction_type: "disbursement",
+        amount: netDisbursement,
+        balance_before: sourceAcc.balance,
+        balance_after: newBalance,
+        destination: loan.full_name,
+        reference_type: "loan_disbursement",
+        reference_id: loan.id,
+        notes: `Loan disbursement to ${loan.full_name} — K${netDisbursement.toLocaleString()} (Principal: K${principal.toLocaleString()}, Fees deducted: K${(principal - netDisbursement).toLocaleString()})`,
+      });
+      if (txErr) throw txErr;
 
       // Create disbursement record (trigger will generate repayment schedule & set to active)
       const { error: disbError } = await supabase.from("disbursements").insert({
-        loan_id: loanId,
-        amount: Number(loan.loan_amount),
-        disbursement_method: "bank_transfer",
+        loan_id: loan.id,
+        amount: netDisbursement,
+        disbursement_method: disbursementMethod,
         status: "completed",
         disbursed_at: new Date().toISOString(),
+        source_account_id: disbursementSourceAccountId,
+        transaction_reference: disbursementReference || `DISB-${Date.now()}`,
       });
       if (disbError) throw disbError;
 
-      // The generate_repayment_schedule trigger fires on disbursement status=completed,
-      // which also sets loan to active. But we first need to set it to disbursed.
+      // Update loan status to disbursed (trigger auto-transitions to active)
       const { error: statusError } = await supabase
         .from("loan_applications")
         .update({
@@ -271,20 +316,27 @@ const AdminLoans = () => {
           disbursed_at: new Date().toISOString(),
           disbursed_by: user?.id,
         })
-        .eq("id", loanId);
+        .eq("id", loan.id);
       if (statusError) throw statusError;
 
       await logAudit({
         action: "LOAN_DISBURSED",
         entity_type: "loan_application",
-        entity_id: loanId,
+        entity_id: loan.id,
         module: "loans",
-        new_values: { status: "disbursed" },
+        new_values: { status: "disbursed", net_amount: netDisbursement, source_account: sourceAcc.account_name },
       });
+
+      return { netDisbursement, borrowerName: loan.full_name };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
-      toast.success("Loan disbursed successfully — repayment schedule generated");
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      toast.success(`K${result.netDisbursement.toLocaleString()} disbursed to ${result.borrowerName} — repayment schedule generated`);
+      setIsDisbursementOpen(false);
+      setDisbursementLoan(null);
+      setDisbursementSourceAccountId("");
+      setDisbursementReference("");
     },
     onError: (err: any) => toast.error(err.message || "Failed to disburse loan"),
   });
