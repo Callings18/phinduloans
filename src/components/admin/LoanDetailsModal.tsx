@@ -3231,6 +3231,93 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Disburse Funds Dialog */}
+      <Dialog open={isDisburseOpen} onOpenChange={setIsDisburseOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote size={20} /> Disburse Loan — {loan.full_name}
+            </DialogTitle>
+            <DialogDescription>
+              Select a source account and confirm disbursement. Fees will be deducted from the principal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Fee Breakdown */}
+            {(() => {
+              const principal = loan.loan_amount;
+              // Show fee estimate (will be recalculated on submit with fresh product data)
+              return (
+                <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Principal</span>
+                    <span className="font-bold">K{Number(principal).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Term</span>
+                    <span className="font-medium">{loan.loan_term_months} {termUnit} @ {loan.interest_rate}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Repayment</span>
+                    <span className="font-medium">K{Number(loan.total_repayment).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    Processing fees, insurance, enforcement fees, and VAT will be deducted from the principal. The net amount will be disbursed.
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div>
+              <Label>Source Account *</Label>
+              <Select value={disburseSourceAccountId} onValueChange={setDisburseSourceAccountId}>
+                <SelectTrigger><SelectValue placeholder="Select funding account" /></SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts ?? []).map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.account_name} ({acc.account_type}) — K{Number(acc.balance).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Disbursement Method</Label>
+              <Select value={disburseMethod} onValueChange={setDisburseMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Transaction Reference (Optional)</Label>
+              <Input
+                value={disburseTransactionRef}
+                onChange={(e) => setDisburseTransactionRef(e.target.value)}
+                placeholder="e.g., Bank ref, receipt number"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsDisburseOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => disburseLoanFromDetailMutation.mutate()}
+                disabled={disburseLoanFromDetailMutation.isPending || !disburseSourceAccountId}
+              >
+                {disburseLoanFromDetailMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+                <Banknote size={14} className="mr-1" /> Confirm Disbursement
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
