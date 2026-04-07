@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.transition_loan_status(uuid, text);
