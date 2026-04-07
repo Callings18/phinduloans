@@ -1,77 +1,29 @@
 
 
-# Plan: Enhance Loan Details Modal — Repayments Tab & Reloan Dialog
+## Root Cause Found
 
-## Problems Identified
+The error `invalid input value for enum loan_status: "crb_failed"` reveals the actual problem: **the `crb_failed` and `pmic_pending` values were never added to the PostgreSQL `loan_status` enum type**.
 
-1. **Repayment table missing columns**: No "Outstanding/Balance" column showing remaining amount per installment. The screenshot shows minimal info.
-2. **Reloan dialog is inaccurate**: Shows old text saying "Mark all pending repayments as paid" and displays full loan amount instead of outstanding principal. No eligibility check shown before confirming.
-3. **Overview summary cards** don't show Total Paid vs Balance prominently.
-4. **No loan financial summary strip** at the top of the Repayments tab.
+The original enum only has: `pending`, `under_review`, `approved`, `rejected`, `disbursed`, `active`, `completed`, `defaulted`, `contract_signing`, `awaiting_disbursement`.
 
-## Changes
+The trigger function `enforce_loan_application_status_transition` references `crb_failed` and `pmic_pending` in its IF conditions. When PostgreSQL evaluates `NEW.status IN (..., 'crb_failed', 'pmic_pending')`, it tries to cast those strings to the `loan_status` enum, which fails because they do not exist as valid enum values. This causes every status update to crash, even `pending → approved`.
 
-### 1. Add Loan Financial Summary to Repayments Tab (above the table)
+## Fix Plan
 
-Add a compact summary strip showing:
-- **Principal**: K3,300 | **Total Due**: K4,455 | **Total Paid**: K0 | **Outstanding Balance**: K4,455 | **Penalties**: K0 | **Interest**: K1,155
+### 1. Database Migration: Add missing enum values
+Add `crb_failed` and `pmic_pending` to the `loan_status` enum so the trigger stops crashing.
 
-This gives instant visibility into the loan's financial state.
-
-**File**: `src/components/admin/LoanDetailsModal.tsx` — Insert summary cards between the "Repayment Schedule" header and the table (around line 1760).
-
-### 2. Add "Outstanding" Column to Repayment Table
-
-Add a column after "Paid" showing per-installment outstanding:
-- `Outstanding = (original_amount || amount) - (principal_paid || 0)` for pending/overdue rows
-- `K0` for paid rows
-- Styled in amber/destructive when > 0
-
-**File**: `src/components/admin/LoanDetailsModal.tsx` — Add `<TableHead>Outstanding</TableHead>` and corresponding `<TableCell>` in the repayment map (lines 1769-1940).
-
-### 3. Enhance Reloan Dialog with Eligibility Summary
-
-Replace the current generic text in the reloan `AlertDialog` (lines 2564-2594) with a detailed financial breakdown:
-
-```
-Loan Summary:
-  Principal:           K3,300
-  Total Paid:          K0
-  Outstanding Principal: K3,300
-  Outstanding Penalties:  K0
-  Outstanding Interest:   K0
-
-Eligibility:
-  ✅ No outstanding penalties — eligible
-  ✅ No outstanding interest — eligible
-  ✅ Outstanding principal K3,300 — will carry forward
-
-New Reloan Terms:
-  Amount: K3,300 (outstanding only)
-  Term: 1 month @ 35%
-  No new disbursement
+```sql
+ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'crb_failed';
+ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'pmic_pending';
 ```
 
-If penalties or interest are outstanding, show red ❌ blockers explaining what must be cleared first. The "Confirm Reloan" button is disabled when blocked.
+### 2. Simplify the trigger for direct approval
+Since CRB and PMIC are disabled, also update the trigger to cast status to `text` before comparison, preventing future enum mismatch crashes. Keep the `pending → approved` path open.
 
-**File**: `src/components/admin/LoanDetailsModal.tsx` — Rewrite the reloan `AlertDialog` content (lines 2564-2594) to compute and display these values using the same `totalPaid`, `totalPenalties`, and `outstandingPrincipal` variables already available.
+### 3. No frontend changes needed
+The RPC `transition_loan_status` and the bulk approval code in `AdminApplications.tsx` are already correctly calling `approve` action. The only blocker is the database enum crash.
 
-### 4. Fix Reloan Dialog Text
-
-Current text incorrectly says:
-- "Mark all pending repayments as paid (interest settlement)" — WRONG, we removed this
-- "Create a new loan with the same terms (K full amount)" — WRONG, should show outstanding principal only
-
-Replace with accurate description matching the actual reloan logic.
-
-## Files Modified
-
-- `src/components/admin/LoanDetailsModal.tsx` — All changes in this single file
-
-## Implementation Order
-
-1. Add financial summary strip to Repayments tab
-2. Add Outstanding column to repayment table
-3. Rewrite reloan dialog with eligibility check and accurate figures
-4. Verify computed values match existing variables
+## Why previous fixes did not work
+Multiple migrations rewrote the trigger function, but none added the missing enum values. Every rewrite still referenced `crb_failed`/`pmic_pending` in the IN clause, so the trigger kept crashing on every status update attempt.
 
