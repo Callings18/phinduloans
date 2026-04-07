@@ -150,6 +150,13 @@ const AdminLoans = () => {
   });
   const [nextRepayment, setNextRepayment] = useState<any>(null);
 
+  // Disbursement Dialog State
+  const [isDisbursementOpen, setIsDisbursementOpen] = useState(false);
+  const [disbursementLoan, setDisbursementLoan] = useState<Loan | null>(null);
+  const [disbursementMethod, setDisbursementMethod] = useState("bank_transfer");
+  const [disbursementSourceAccountId, setDisbursementSourceAccountId] = useState("");
+  const [disbursementReference, setDisbursementReference] = useState("");
+
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can } = usePermissions();
