@@ -865,11 +865,13 @@ const AdminLoans = () => {
                               <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
                             </TableCell>
                             <TableCell>
-                              {dueDate ? (
+                              {dueDate && ["active", "disbursed"].includes(loan.status) ? (
                                 <p className={`text-sm ${isOverdue ? 'text-destructive font-medium' : 'text-foreground'}`}>
                                   {format(new Date(dueDate), "MMM dd, yyyy")}
                                   {isOverdue && <span className="text-xs block text-destructive">Overdue</span>}
                                 </p>
+                              ) : ["awaiting_disbursement", "approved"].includes(loan.status) ? (
+                                <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/30">Pending Disburse</Badge>
                               ) : (
                                 <p className="text-sm text-muted-foreground">-</p>
                               )}
