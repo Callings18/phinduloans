@@ -3801,6 +3801,8 @@ export type Database = {
         | "active"
         | "completed"
         | "defaulted"
+        | "crb_failed"
+        | "pmic_pending"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3952,6 +3954,8 @@ export const Constants = {
         "active",
         "completed",
         "defaulted",
+        "crb_failed",
+        "pmic_pending",
       ],
     },
   },
