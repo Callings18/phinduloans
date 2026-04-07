@@ -1083,17 +1083,8 @@ const AdminApplications = () => {
       : []),
   ].filter(Boolean) as BulkAction[];
 
-  /** Bulk workflow RPC: surfaces PostgREST errors and RPC { ok: false } results. */
+  /** Bulk workflow RPC: all actions go through the server-side RPC. */
   const assertBulkTransition = async (id: string, action: string, reason?: string) => {
-    if (action === "approve" || action === "reject") {
-      await transitionLoanStatus({
-        loanId: id,
-        toStatus: action === "approve" ? "approved" : "rejected",
-        reasonCode: reason ? "bulk_transition" : undefined,
-        reasonText: reason,
-      });
-      return;
-    }
     const { data, error } = await supabase.rpc("transition_loan_status", {
       p_loan_id: id,
       p_action: action,
