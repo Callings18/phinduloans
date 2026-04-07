@@ -150,6 +150,13 @@ const AdminLoans = () => {
   });
   const [nextRepayment, setNextRepayment] = useState<any>(null);
 
+  // Disbursement Dialog State
+  const [isDisbursementOpen, setIsDisbursementOpen] = useState(false);
+  const [disbursementLoan, setDisbursementLoan] = useState<Loan | null>(null);
+  const [disbursementMethod, setDisbursementMethod] = useState("bank_transfer");
+  const [disbursementSourceAccountId, setDisbursementSourceAccountId] = useState("");
+  const [disbursementReference, setDisbursementReference] = useState("");
+
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can } = usePermissions();
@@ -239,24 +246,69 @@ const AdminLoans = () => {
     onError: (err: any) => toast.error(err.message || "Failed to update status"),
   });
 
-  // Disburse loan mutation - moves approved → disbursed, creates disbursement record
+  // Disburse loan mutation - moves awaiting_disbursement → disbursed, creates disbursement record, deducts from source account
   const disburseLoanMutation = useMutation({
-    mutationFn: async (loanId: string) => {
-      const loan = loans?.find(l => l.id === loanId);
-      if (!loan) throw new Error("Loan not found");
+    mutationFn: async () => {
+      if (!disbursementLoan) throw new Error("No loan selected");
+      if (!disbursementSourceAccountId) throw new Error("Please select a source account for disbursement");
+
+      const loan = disbursementLoan;
+      const product = loanProducts?.find(p => p.id === loan.loan_product_id);
+      const principal = Number(loan.loan_amount);
+
+      // Calculate fees for net disbursement
+      const processingFee = product?.processing_fee_percent ? (principal * product.processing_fee_percent / 100) : 0;
+      const enforcementFee = product?.enforcement_fee_percent ? (principal * product.enforcement_fee_percent / 100) : 0;
+      const insuranceFee = (product as any)?.insurance_percent ? (principal * (product as any).insurance_percent / 100) : 0;
+      const platformFee = (product as any)?.platform_fee_percent ? (principal * (product as any).platform_fee_percent / 100) : 0;
+      const vatableAmount = processingFee + enforcementFee + platformFee;
+      const vatAmount = (product as any)?.vat_percent ? (vatableAmount * (product as any).vat_percent / 100) : 0;
+      const netDisbursement = principal - processingFee - enforcementFee - insuranceFee - platformFee - vatAmount;
+
+      // Fresh read of source account balance
+      const { data: sourceAcc, error: accReadErr } = await supabase
+        .from("accounts")
+        .select("id, account_name, balance")
+        .eq("id", disbursementSourceAccountId)
+        .single();
+      if (accReadErr || !sourceAcc) throw new Error("Source account not found");
+      if (sourceAcc.balance < netDisbursement) throw new Error(`Insufficient balance in ${sourceAcc.account_name}. Available: K${sourceAcc.balance.toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
+
+      // Deduct from source account
+      const newBalance = sourceAcc.balance - netDisbursement;
+      const { error: balErr } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance })
+        .eq("id", disbursementSourceAccountId);
+      if (balErr) throw balErr;
+
+      // Record account transaction
+      const { error: txErr } = await supabase.from("account_transactions").insert({
+        account_id: disbursementSourceAccountId,
+        transaction_type: "disbursement",
+        amount: netDisbursement,
+        balance_before: sourceAcc.balance,
+        balance_after: newBalance,
+        destination: loan.full_name,
+        reference_type: "loan_disbursement",
+        reference_id: loan.id,
+        notes: `Loan disbursement to ${loan.full_name} — K${netDisbursement.toLocaleString()} (Principal: K${principal.toLocaleString()}, Fees deducted: K${(principal - netDisbursement).toLocaleString()})`,
+      });
+      if (txErr) throw txErr;
 
       // Create disbursement record (trigger will generate repayment schedule & set to active)
       const { error: disbError } = await supabase.from("disbursements").insert({
-        loan_id: loanId,
-        amount: Number(loan.loan_amount),
-        disbursement_method: "bank_transfer",
+        loan_id: loan.id,
+        amount: netDisbursement,
+        disbursement_method: disbursementMethod,
         status: "completed",
         disbursed_at: new Date().toISOString(),
+        source_account_id: disbursementSourceAccountId,
+        transaction_reference: disbursementReference || `DISB-${Date.now()}`,
       });
       if (disbError) throw disbError;
 
-      // The generate_repayment_schedule trigger fires on disbursement status=completed,
-      // which also sets loan to active. But we first need to set it to disbursed.
+      // Update loan status to disbursed (trigger auto-transitions to active)
       const { error: statusError } = await supabase
         .from("loan_applications")
         .update({
@@ -264,20 +316,27 @@ const AdminLoans = () => {
           disbursed_at: new Date().toISOString(),
           disbursed_by: user?.id,
         })
-        .eq("id", loanId);
+        .eq("id", loan.id);
       if (statusError) throw statusError;
 
       await logAudit({
         action: "LOAN_DISBURSED",
         entity_type: "loan_application",
-        entity_id: loanId,
+        entity_id: loan.id,
         module: "loans",
-        new_values: { status: "disbursed" },
+        new_values: { status: "disbursed", net_amount: netDisbursement, source_account: sourceAcc.account_name },
       });
+
+      return { netDisbursement, borrowerName: loan.full_name };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
-      toast.success("Loan disbursed successfully — repayment schedule generated");
+      queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
+      toast.success(`K${result.netDisbursement.toLocaleString()} disbursed to ${result.borrowerName} — repayment schedule generated`);
+      setIsDisbursementOpen(false);
+      setDisbursementLoan(null);
+      setDisbursementSourceAccountId("");
+      setDisbursementReference("");
     },
     onError: (err: any) => toast.error(err.message || "Failed to disburse loan"),
   });
@@ -806,11 +865,13 @@ const AdminLoans = () => {
                               <p className="text-sm">{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
                             </TableCell>
                             <TableCell>
-                              {dueDate ? (
+                              {dueDate && ["active", "disbursed"].includes(loan.status) ? (
                                 <p className={`text-sm ${isOverdue ? 'text-destructive font-medium' : 'text-foreground'}`}>
                                   {format(new Date(dueDate), "MMM dd, yyyy")}
                                   {isOverdue && <span className="text-xs block text-destructive">Overdue</span>}
                                 </p>
+                              ) : ["awaiting_disbursement", "approved"].includes(loan.status) ? (
+                                <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/30">Pending Disburse</Badge>
                               ) : (
                                 <p className="text-sm text-muted-foreground">-</p>
                               )}
@@ -841,12 +902,21 @@ const AdminLoans = () => {
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem onClick={() => {
-                                        if (confirm(`Disburse loan for ${loan.full_name} (K${Number(loan.loan_amount).toLocaleString()})?`)) {
-                                          disburseLoanMutation.mutate(loan.id);
-                                        }
+                                        setDisbursementLoan(loan);
+                                        setDisbursementMethod("bank_transfer");
+                                        setDisbursementSourceAccountId("");
+                                        setDisbursementReference("");
+                                        setIsDisbursementOpen(true);
                                       }}>
                                         <Banknote size={14} className="mr-2" />
-                                        Disburse Loan
+                                        Disburse Funds
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => {
+                                        setSelectedLoan(loan);
+                                        setIsDetailsOpen(true);
+                                      }}>
+                                        <Eye size={14} className="mr-2" />
+                                        Review & Disburse
                                       </DropdownMenuItem>
                                     </>
                                   )}
@@ -1099,6 +1169,151 @@ const AdminLoans = () => {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Disbursement Dialog */}
+      <Dialog open={isDisbursementOpen} onOpenChange={setIsDisbursementOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote size={20} className="text-success" />
+              Disburse Loan
+            </DialogTitle>
+            <DialogDescription>
+              Release funds for {disbursementLoan?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {disbursementLoan && (() => {
+            const product = loanProducts?.find(p => p.id === disbursementLoan.loan_product_id);
+            const principal = Number(disbursementLoan.loan_amount);
+            const processingFee = product?.processing_fee_percent ? (principal * product.processing_fee_percent / 100) : 0;
+            const enforcementFee = product?.enforcement_fee_percent ? (principal * product.enforcement_fee_percent / 100) : 0;
+            const insuranceFee = (product as any)?.insurance_percent ? (principal * (product as any).insurance_percent / 100) : 0;
+            const platformFee = (product as any)?.platform_fee_percent ? (principal * (product as any).platform_fee_percent / 100) : 0;
+            const vatableAmount = processingFee + enforcementFee + platformFee;
+            const vatAmount = (product as any)?.vat_percent ? (vatableAmount * (product as any).vat_percent / 100) : 0;
+            const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+            const netDisbursement = principal - totalFees;
+
+            return (
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Borrower</span>
+                    <span className="font-medium">{disbursementLoan.full_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Principal Amount</span>
+                    <span className="font-medium">K{principal.toLocaleString()}</span>
+                  </div>
+                  {totalFees > 0 && (
+                    <>
+                      {processingFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Processing Fee</span>
+                          <span className="text-destructive">-K{processingFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {enforcementFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Enforcement Fee</span>
+                          <span className="text-destructive">-K{enforcementFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {insuranceFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Insurance</span>
+                          <span className="text-destructive">-K{insuranceFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {platformFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Platform Fee</span>
+                          <span className="text-destructive">-K{platformFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {vatAmount > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">VAT</span>
+                          <span className="text-destructive">-K{vatAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex justify-between border-t border-border pt-2 mt-2">
+                    <span className="font-semibold">Net Disbursement</span>
+                    <span className="text-xl font-bold text-success">K{netDisbursement.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Term</span>
+                    <span className="font-medium">{disbursementLoan.loan_term_months} {disbursementLoan.term_unit || 'months'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Total Repayment</span>
+                    <span className="font-medium">K{Number(disbursementLoan.total_repayment || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Source Account <span className="text-destructive">*</span></Label>
+                    <Select value={disbursementSourceAccountId} onValueChange={setDisbursementSourceAccountId}>
+                      <SelectTrigger><SelectValue placeholder="Select funding account" /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.account_name} ({acc.account_type}) — K{acc.balance.toLocaleString()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Disbursement Method</Label>
+                    <Select value={disbursementMethod} onValueChange={setDisbursementMethod}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bank_transfer">
+                          <div className="flex items-center gap-2"><Building size={14} /> Bank Transfer</div>
+                        </SelectItem>
+                        <SelectItem value="mobile_money">
+                          <div className="flex items-center gap-2"><Phone size={14} /> Mobile Money</div>
+                        </SelectItem>
+                        <SelectItem value="cash">
+                          <div className="flex items-center gap-2"><Banknote size={14} /> Cash</div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Transaction Reference (Optional)</Label>
+                    <Input
+                      value={disbursementReference}
+                      onChange={(e) => setDisbursementReference(e.target.value)}
+                      placeholder="Enter reference number"
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 mt-4">
+                  <Button variant="outline" onClick={() => setIsDisbursementOpen(false)}>Cancel</Button>
+                  <Button
+                    onClick={() => disburseLoanMutation.mutate()}
+                    disabled={disburseLoanMutation.isPending || !disbursementSourceAccountId}
+                    className="bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    {disburseLoanMutation.isPending ? (
+                      <Loader2 className="animate-spin mr-2" size={16} />
+                    ) : (
+                      <Banknote size={16} className="mr-2" />
+                    )}
+                    Confirm Disbursement
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </AdminLayout>
