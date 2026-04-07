@@ -1169,6 +1169,151 @@ const AdminLoans = () => {
           )}
         </DialogContent>
       </Dialog>
+      {/* Disbursement Dialog */}
+      <Dialog open={isDisbursementOpen} onOpenChange={setIsDisbursementOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote size={20} className="text-success" />
+              Disburse Loan
+            </DialogTitle>
+            <DialogDescription>
+              Release funds for {disbursementLoan?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {disbursementLoan && (() => {
+            const product = loanProducts?.find(p => p.id === disbursementLoan.loan_product_id);
+            const principal = Number(disbursementLoan.loan_amount);
+            const processingFee = product?.processing_fee_percent ? (principal * product.processing_fee_percent / 100) : 0;
+            const enforcementFee = product?.enforcement_fee_percent ? (principal * product.enforcement_fee_percent / 100) : 0;
+            const insuranceFee = (product as any)?.insurance_percent ? (principal * (product as any).insurance_percent / 100) : 0;
+            const platformFee = (product as any)?.platform_fee_percent ? (principal * (product as any).platform_fee_percent / 100) : 0;
+            const vatableAmount = processingFee + enforcementFee + platformFee;
+            const vatAmount = (product as any)?.vat_percent ? (vatableAmount * (product as any).vat_percent / 100) : 0;
+            const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+            const netDisbursement = principal - totalFees;
+
+            return (
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Borrower</span>
+                    <span className="font-medium">{disbursementLoan.full_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Principal Amount</span>
+                    <span className="font-medium">K{principal.toLocaleString()}</span>
+                  </div>
+                  {totalFees > 0 && (
+                    <>
+                      {processingFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Processing Fee</span>
+                          <span className="text-destructive">-K{processingFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {enforcementFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Enforcement Fee</span>
+                          <span className="text-destructive">-K{enforcementFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {insuranceFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Insurance</span>
+                          <span className="text-destructive">-K{insuranceFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {platformFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Platform Fee</span>
+                          <span className="text-destructive">-K{platformFee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {vatAmount > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">VAT</span>
+                          <span className="text-destructive">-K{vatAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex justify-between border-t border-border pt-2 mt-2">
+                    <span className="font-semibold">Net Disbursement</span>
+                    <span className="text-xl font-bold text-success">K{netDisbursement.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Term</span>
+                    <span className="font-medium">{disbursementLoan.loan_term_months} {disbursementLoan.term_unit || 'months'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Total Repayment</span>
+                    <span className="font-medium">K{Number(disbursementLoan.total_repayment || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Source Account <span className="text-destructive">*</span></Label>
+                    <Select value={disbursementSourceAccountId} onValueChange={setDisbursementSourceAccountId}>
+                      <SelectTrigger><SelectValue placeholder="Select funding account" /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.account_name} ({acc.account_type}) — K{acc.balance.toLocaleString()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Disbursement Method</Label>
+                    <Select value={disbursementMethod} onValueChange={setDisbursementMethod}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bank_transfer">
+                          <div className="flex items-center gap-2"><Building size={14} /> Bank Transfer</div>
+                        </SelectItem>
+                        <SelectItem value="mobile_money">
+                          <div className="flex items-center gap-2"><Phone size={14} /> Mobile Money</div>
+                        </SelectItem>
+                        <SelectItem value="cash">
+                          <div className="flex items-center gap-2"><Banknote size={14} /> Cash</div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Transaction Reference (Optional)</Label>
+                    <Input
+                      value={disbursementReference}
+                      onChange={(e) => setDisbursementReference(e.target.value)}
+                      placeholder="Enter reference number"
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 mt-4">
+                  <Button variant="outline" onClick={() => setIsDisbursementOpen(false)}>Cancel</Button>
+                  <Button
+                    onClick={() => disburseLoanMutation.mutate()}
+                    disabled={disburseLoanMutation.isPending || !disbursementSourceAccountId}
+                    className="bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    {disburseLoanMutation.isPending ? (
+                      <Loader2 className="animate-spin mr-2" size={16} />
+                    ) : (
+                      <Banknote size={16} className="mr-2" />
+                    )}
+                    Confirm Disbursement
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 };
