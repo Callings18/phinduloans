@@ -3774,7 +3774,7 @@ export type Database = {
       }
       transition_loan_status: {
         Args: { p_action: string; p_loan_id: string; p_reason?: string }
-        Returns: Json
+        Returns: undefined
       }
     }
     Enums: {
