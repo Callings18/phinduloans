@@ -2445,6 +2445,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </Button>
                   </div>
                 )}
+                )}
               </TabsContent>
 
               {/* V1.0.1: Simple Contract Tab */}
