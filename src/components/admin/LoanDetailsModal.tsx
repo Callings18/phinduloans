@@ -2131,6 +2131,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </CardContent>
                   </Card>
                 ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h3 className="font-semibold">Repayment Schedule</h3>
                   <div className="flex gap-2">
