@@ -1954,7 +1954,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
 
                 {/* Quick Actions */}
                 <Card>
