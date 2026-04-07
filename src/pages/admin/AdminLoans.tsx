@@ -110,6 +110,7 @@ interface LoanProduct {
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Activity },
   active: { label: "Active", color: "bg-info/20 text-info border-info/30", icon: Activity },
   completed: { label: "Completed", color: "bg-primary/20 text-primary border-primary/30", icon: CheckCircle },
@@ -158,7 +159,7 @@ const AdminLoans = () => {
       const { data, error } = await supabase
         .from("loan_applications")
         .select("*")
-        .in("status", ["active", "disbursed", "completed", "defaulted"])
+        .in("status", ["approved", "active", "disbursed", "completed", "defaulted"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -485,7 +486,9 @@ const AdminLoans = () => {
   // Filter loans based on active tab
   const getFilteredLoans = () => {
     let filtered = loans || [];
-    if (activeTab === "active") {
+    if (activeTab === "approved") {
+      filtered = filtered.filter(l => l.status === "approved");
+    } else if (activeTab === "active") {
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
       filtered = filtered.filter(l => l.status === "completed");
@@ -529,6 +532,7 @@ const AdminLoans = () => {
 
   const stats = {
     total: loans?.length || 0,
+    approved: loans?.filter(l => l.status === "approved").length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
     completed: loans?.filter(l => l.status === "completed").length || 0,
     defaulted: loans?.filter(l => l.status === "defaulted").length || 0,
@@ -607,7 +611,8 @@ const AdminLoans = () => {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setStatusFilter("all"); }}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="approved">Approved ({stats.approved})</TabsTrigger>
             <TabsTrigger value="active">Active Loans ({stats.active})</TabsTrigger>
             <TabsTrigger value="completed">Completed ({stats.completed})</TabsTrigger>
             <TabsTrigger value="defaulted">Defaulted ({stats.defaulted})</TabsTrigger>
