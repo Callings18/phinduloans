@@ -2116,6 +2116,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
               {/* Repayments Tab */}
               <TabsContent value="repayments" className="m-0 space-y-4">
+                {isPreDisbursement ? (
+                  <Card className="border-info/40 bg-info/10">
+                    <CardContent className="p-6 text-center space-y-3">
+                      <DollarSign size={40} className="mx-auto text-info" />
+                      <p className="font-semibold text-lg">No Repayment Schedule Yet</p>
+                      <p className="text-sm text-muted-foreground">
+                        The repayment schedule will be automatically generated once this loan is disbursed.
+                        Go to the Overview tab to disburse this loan.
+                      </p>
+                      <Button size="sm" variant="outline" onClick={() => setActiveTab("overview")}>
+                        Go to Overview
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
                 <div className="flex justify-between items-center">
                   <h3 className="font-semibold">Repayment Schedule</h3>
                   <div className="flex gap-2">
