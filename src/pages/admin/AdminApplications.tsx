@@ -411,52 +411,47 @@ const AdminApplications = () => {
     },
   });
 
-  // Update status mutation
+  // Update status mutation — uses server-side RPC for approve/reject
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
-      await transitionLoanStatus({
-        loanId: id,
-        toStatus: status,
-        reasonCode: reason ? "manual_admin_update" : undefined,
-        reasonText: reason,
-      });
-
-      const updateData: any = {
-        reviewed_by: user?.id,
-        reviewed_at: new Date().toISOString(),
-      };
-      if (status === "under_review") {
-        updateData.approval_stage = "under_review";
-      }
-      // V1.0.1: Auto-set both signatures on approval (simplified flow)
-      if (status === "approved") {
-        updateData.approved_by = user?.id;
-        updateData.approved_at = new Date().toISOString();
-        updateData.admin_signed = true;
-        updateData.admin_signed_at = new Date().toISOString();
-        updateData.admin_signed_by = user?.id;
-        updateData.borrower_signed = true;
-        updateData.borrower_signed_at = new Date().toISOString();
-      }
-      if (reason) {
-        updateData.rejection_reason = reason;
-      }
-
-      if (Object.keys(updateData).length > 0) {
+      if (status === "approved" || status === "rejected") {
+        // Use the atomic RPC which handles status update, signatures, audit in one transaction
+        const action = status === "approved" ? "approve" : "reject";
+        const { data, error } = await supabase.rpc("transition_loan_status", {
+          p_loan_id: id,
+          p_action: action,
+          ...(reason ? { p_reason: reason } : {}),
+        });
+        if (error) throw error;
+        const res = data as { ok?: boolean; error?: string };
+        if (!res?.ok) throw new Error(res?.error || "Transition failed");
+      } else {
+        // For other status changes (under_review, etc.), use direct update
+        const updateData: any = {
+          status,
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+        };
+        if (status === "under_review") {
+          updateData.approval_stage = "under_review";
+        }
+        if (reason) {
+          updateData.rejection_reason = reason;
+        }
         const { error } = await supabase
           .from('loan_applications')
           .update(updateData)
           .eq('id', id);
         if (error) throw error;
-      }
 
-      await logAudit({
-        action: "STATUS_UPDATE",
-        entity_type: "loan_application",
-        entity_id: id,
-        module: "loans",
-        new_values: { status, rejection_reason: reason ?? null },
-      });
+        await logAudit({
+          action: "STATUS_UPDATE",
+          entity_type: "loan_application",
+          entity_id: id,
+          module: "loans",
+          new_values: { status, rejection_reason: reason ?? null },
+        });
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
@@ -697,22 +692,13 @@ const AdminApplications = () => {
     },
   });
 
-  // Workflow transition (verify_documents, finance_approve, approve, reject)
+  // Workflow transition (verify_documents, finance_approve, approve, reject) — all via RPC
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
-      if (action === "approve" || action === "reject") {
-        await transitionLoanStatus({
-          loanId: id,
-          toStatus: action === "approve" ? "approved" : "rejected",
-          reasonCode: reason ? "workflow_transition" : undefined,
-          reasonText: reason,
-        });
-        return;
-      }
-      const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
+      const { data, error } = await supabase.rpc("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
-        p_reason: reason ?? null,
+        ...(reason ? { p_reason: reason } : {}),
       });
       if (error) throw error;
       const result = data as { ok: boolean; error?: string };
@@ -1088,17 +1074,8 @@ const AdminApplications = () => {
       : []),
   ].filter(Boolean) as BulkAction[];
 
-  /** Bulk workflow RPC: surfaces PostgREST errors and RPC { ok: false } results. */
+  /** Bulk workflow RPC: all actions go through the server-side RPC. */
   const assertBulkTransition = async (id: string, action: string, reason?: string) => {
-    if (action === "approve" || action === "reject") {
-      await transitionLoanStatus({
-        loanId: id,
-        toStatus: action === "approve" ? "approved" : "rejected",
-        reasonCode: reason ? "bulk_transition" : undefined,
-        reasonText: reason,
-      });
-      return;
-    }
     const { data, error } = await supabase.rpc("transition_loan_status", {
       p_loan_id: id,
       p_action: action,
