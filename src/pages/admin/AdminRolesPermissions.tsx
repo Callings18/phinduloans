@@ -1,3 +1,7 @@
+/**
+ * RBAC matrix UI — expects tables from 20260209232412 migration:
+ * roles(name), permissions(module, action), role_permissions(role_name, permission_id).
+ */
 import { useState, useEffect, useMemo } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

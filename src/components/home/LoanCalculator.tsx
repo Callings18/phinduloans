@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Link } from "react-router-dom";
 import { ArrowRight, Loader2, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { apiFeatureFlags } from "@/config/apiMode";
+import { fetchActiveLoanProducts } from "@/services/repositories/loanProductsRepository";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calculateLoan, LoanProduct as LoanProductCalc } from "@/utils/loanCalculations";
 import { format, addMonths } from "date-fns";
@@ -44,14 +46,8 @@ const LoanCalculator = () => {
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["loan-products-public"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loan_products")
-        .select("*")
-        .eq("is_active", true)
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      return data as LoanProduct[];
+      const rows = await fetchActiveLoanProducts({ sort: "name", ascending: true });
+      return rows as LoanProduct[];
     },
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true, // Refetch when component mounts
@@ -59,8 +55,10 @@ const LoanCalculator = () => {
     refetchInterval: 30000, // Refetch every 30 seconds to catch updates
   });
 
-  // Real-time subscription to loan products changes
+  // Real-time subscription to loan products changes (Supabase only)
   useEffect(() => {
+    if (apiFeatureFlags.loanProducts) return;
+
     const channel = supabase
       .channel("loan-products-public-changes")
       .on(
@@ -71,7 +69,6 @@ const LoanCalculator = () => {
           table: "loan_products",
         },
         () => {
-          // Invalidate and refetch when any loan product changes
           queryClient.invalidateQueries({ queryKey: ["loan-products-public"] });
         }
       )

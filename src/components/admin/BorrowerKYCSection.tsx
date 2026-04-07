@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { getSignedUrl } from "@/utils/storageHelpers";
 import {
   CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle, Upload,
 } from "lucide-react";
+import { differenceInHours } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PersonalInfoForm from "./kyc/PersonalInfoForm";
 import EmploymentIncomeForm from "./kyc/EmploymentIncomeForm";
@@ -34,6 +35,33 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   const [rejectDocLabel, setRejectDocLabel] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [expandedHistoryType, setExpandedHistoryType] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!borrowerId) return;
+    const channel = supabase
+      .channel(`admin-borrower-kyc-${borrowerId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_document_vault", filter: `borrower_id=eq.${borrowerId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "borrower_kyc_info", filter: `borrower_id=eq.${borrowerId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["borrower-kyc-info", borrowerId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [borrowerId, queryClient]);
 
   // Upload KYC document on behalf of borrower
   const handleUploadKYC = async (file: File, docType: string, docLabel: string) => {
@@ -44,29 +72,26 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
 
       const { error: uploadError } = await supabase.storage
         .from("loan-documents")
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: false, contentType: file.type });
 
       if (uploadError) throw uploadError;
 
-      const existing = vaultDocs.find(d => d.doc_type === docType);
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from("borrower_document_vault")
-          .update({
-            file_url: filePath, file_name: file.name, file_size: file.size, mime_type: file.type,
-            uploaded_at: new Date().toISOString(), is_verified: false, verified_at: null, verified_by: null, notes: null,
-          })
-          .eq("id", existing.id);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from("borrower_document_vault")
-          .insert({
-            borrower_id: borrowerId, doc_type: docType, doc_label: docLabel,
-            file_url: filePath, file_name: file.name, file_size: file.size, mime_type: file.type,
-          });
-        if (insertError) throw insertError;
-      }
+      const { error: insertError } = await supabase
+        .from("borrower_document_vault")
+        .insert({
+          borrower_id: borrowerId,
+          doc_type: docType,
+          doc_label: docLabel,
+          file_url: filePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          is_verified: false,
+          verified_at: null,
+          verified_by: null,
+          notes: null,
+        });
+      if (insertError) throw insertError;
 
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", borrowerId] });
       queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
@@ -261,9 +286,13 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
             <div className="space-y-3">
               {KYC_DOC_TYPES.map((kycType) => {
                 const doc = docsByType[kycType.type];
+                const versions = vaultDocs.filter((d) => d.doc_type === kycType.type);
                 const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
+                const pendingHours = doc?.uploaded_at ? differenceInHours(new Date(), new Date(doc.uploaded_at)) : 0;
+                const pendingState = pendingHours >= 72 ? "urgent" : pendingHours >= 48 ? "waiting" : "normal";
                 return (
-                  <div key={kycType.type} className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/30">
+                  <div key={kycType.type} className="flex flex-col gap-2 p-3 rounded-lg bg-background/50 border border-border/30">
+                    <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <FileText size={16} className="text-muted-foreground" />
                       <div>
@@ -272,6 +301,15 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                           <p className="text-xs text-muted-foreground">{doc.file_name} • Uploaded {new Date(doc.uploaded_at).toLocaleDateString()}</p>
                         ) : (
                           <p className="text-xs text-muted-foreground">Not uploaded</p>
+                        )}
+                        {versions.length > 1 && (
+                          <button
+                            type="button"
+                            className="text-[11px] text-primary mt-0.5 hover:underline"
+                            onClick={() => setExpandedHistoryType(expandedHistoryType === kycType.type ? null : kycType.type)}
+                          >
+                            {expandedHistoryType === kycType.type ? "Hide" : "View"} history ({versions.length})
+                          </button>
                         )}
                         {isRejected && <p className="text-xs text-destructive mt-0.5">{doc.notes?.replace("Rejected: ", "")}</p>}
                       </div>
@@ -305,13 +343,42 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                         </>
                       ) : (
                         <>
-                          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1"><Clock size={12} /> Pending</Badge>
+                          <Badge
+                            className={
+                              pendingState === "urgent"
+                                ? "bg-destructive/20 text-destructive border-destructive/30 border gap-1"
+                                : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1"
+                            }
+                          >
+                            <Clock size={12} />
+                            {pendingState === "urgent" ? `Urgent (${pendingHours}h)` : pendingState === "waiting" ? `Waiting (${pendingHours}h)` : "Pending"}
+                          </Badge>
                           <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
                           <Button size="sm" className="h-7 text-xs" onClick={() => approveMutation.mutate(doc.id)} disabled={approveMutation.isPending}>Approve</Button>
                           <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/30" onClick={() => { setRejectDocId(doc.id); setRejectDocLabel(kycType.label); }}>Reject</Button>
                         </>
                       )}
                     </div>
+                    </div>
+                    {expandedHistoryType === kycType.type && versions.length > 1 && (
+                      <div className="mt-2 pt-2 border-t border-border/40 w-full">
+                        <div className="space-y-1.5">
+                          {versions.slice(1).map((version) => (
+                            <div
+                              key={version.id}
+                              className="flex items-center justify-between gap-2 rounded-md border border-border/40 bg-muted/30 px-2 py-1.5"
+                            >
+                              <span className="text-[11px] text-muted-foreground truncate">
+                                {version.file_name} • {new Date(version.uploaded_at).toLocaleString()}
+                              </span>
+                              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handlePreview(version.file_url)}>
+                                <Eye size={12} />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Plus, Receipt, Check, X, FileText, Download, Search, Filter } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -88,6 +89,9 @@ const formatCurrency = (amount: number) => {
 };
 
 const AdminExpenses = () => {
+  const { can } = usePermissions();
+  const canCreateExpense = can("expenses", "create");
+  const canApproveExpense = can("expenses", "approve");
   const queryClient = useQueryClient();
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -154,6 +158,7 @@ const AdminExpenses = () => {
   // Add expense mutation
   const addExpenseMutation = useMutation({
     mutationFn: async (data: typeof newExpense) => {
+      if (!canCreateExpense) throw new Error("Permission denied: expenses create");
       const { error } = await supabase.from('expenses').insert({
         expense_date: data.expense_date,
         expense_category: data.expense_category,
@@ -188,51 +193,31 @@ const AdminExpenses = () => {
     },
   });
 
-  // Update status mutation
+  // Update status mutation - uses atomic server-side RPC
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const updateData: any = { status };
-      if (status === 'approved') {
-        updateData.approved_at = new Date().toISOString();
-      } else if (status === 'paid') {
-        updateData.paid_at = new Date().toISOString();
-        
-        // Deduct from account if linked
-        const expense = expenses.find(e => e.id === id);
-        if (expense?.account_id) {
-          const account = accounts.find(a => a.id === expense.account_id);
-          if (account) {
-            const newBalance = account.balance - expense.amount;
-            if (newBalance < 0) {
-              throw new Error("Insufficient balance in the linked account to mark this expense as paid.");
-            }
-            const { error: accErr } = await supabase
-              .from("accounts")
-              .update({ balance: newBalance })
-              .eq("id", expense.account_id);
-            if (accErr) throw accErr;
-
-            const { error: txErr } = await supabase.from("account_transactions").insert({
-              account_id: expense.account_id,
-              transaction_type: "expense",
-              amount: expense.amount,
-              balance_before: account.balance,
-              balance_after: newBalance,
-              destination: expense.vendor_payee,
-              reference_type: "expense",
-              reference_id: expense.id,
-              notes: `Expense: ${expense.expense_category} - ${expense.vendor_payee}`,
-            });
-            if (txErr) throw txErr;
-          }
-        }
+    mutationFn: async ({ id, status, rejectReason }: { id: string; status: string; rejectReason?: string }) => {
+      if (status === "approved" || status === "rejected" || status === "paid") {
+        if (!canApproveExpense) throw new Error("Permission denied: expenses approve");
       }
       
-      const { error } = await supabase
-        .from('expenses')
-        .update(updateData)
-        .eq('id', id);
-      if (error) throw error;
+      if (status === "approved" || status === "rejected" || status === "paid") {
+        const { data, error } = await supabase.rpc("admin_set_expense_status", {
+          p_expense_id: id,
+          p_new_status: status,
+          p_reject_reason: rejectReason ?? null,
+        });
+        if (error) throw error;
+        const result = data as any;
+        if (result && !result.success) {
+          throw new Error(result.error || "Operation failed");
+        }
+      } else {
+        const { error } = await supabase
+          .from('expenses')
+          .update({ status })
+          .eq('id', id);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
@@ -280,7 +265,7 @@ const AdminExpenses = () => {
           </div>
           <Dialog open={addExpenseOpen} onOpenChange={setAddExpenseOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="gap-2" disabled={!canCreateExpense} title={!canCreateExpense ? "No permission to create expenses" : undefined}>
                 <Plus size={16} />
                 Record Expense
               </Button>
@@ -395,7 +380,7 @@ const AdminExpenses = () => {
                 <Button variant="outline" onClick={() => setAddExpenseOpen(false)}>Cancel</Button>
                 <Button 
                   onClick={() => addExpenseMutation.mutate(newExpense)} 
-                  disabled={addExpenseMutation.isPending || !newExpense.expense_category || !newExpense.vendor_payee || newExpense.amount <= 0}
+                  disabled={!canCreateExpense || addExpenseMutation.isPending || !newExpense.expense_category || !newExpense.vendor_payee || newExpense.amount <= 0}
                 >
                   Record Expense
                 </Button>
@@ -510,16 +495,25 @@ const AdminExpenses = () => {
                         <DropdownMenuContent align="end">
                           {expense.status === 'pending' && (
                             <>
-                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}>
+                              <DropdownMenuItem
+                                disabled={!canApproveExpense}
+                                onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
+                              >
                                 <Check className="mr-2 h-4 w-4" /> Approve
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'rejected' })}>
+                              <DropdownMenuItem
+                                disabled={!canApproveExpense}
+                                onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'rejected' })}
+                              >
                                 <X className="mr-2 h-4 w-4" /> Reject
                               </DropdownMenuItem>
                             </>
                           )}
                           {expense.status === 'approved' && (
-                            <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}>
+                            <DropdownMenuItem
+                              disabled={!canApproveExpense}
+                              onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}
+                            >
                               <Check className="mr-2 h-4 w-4" /> Mark as Paid
                             </DropdownMenuItem>
                           )}

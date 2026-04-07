@@ -19,6 +19,7 @@ import {
   Receipt,
   User,
   Loader2,
+  Wrench,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,9 @@ import { format, differenceInDays, startOfDay } from "date-fns";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const developerWhatsappLink =
+    import.meta.env.VITE_DEV_SUPPORT_WHATSAPP ||
+    "https://wa.me/260000000000?text=Hello%20Developer%2C%20I%20need%20help%20with%20the%20admin%20system.";
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
@@ -90,6 +94,42 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: operationalRisk } = useQuery({
+    queryKey: ["admin-operational-risk"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [disbursements, disbursementTransactions, pendingClaims, staleKycDocs] = await Promise.all([
+        supabase.from("disbursements").select("id, amount, status"),
+        supabase
+          .from("account_transactions")
+          .select("id, amount, transaction_type, reference_type")
+          .eq("transaction_type", "disbursement"),
+        supabase.from("payment_claims").select("id, created_at, status").eq("status", "pending_review"),
+        supabase
+          .from("borrower_document_vault")
+          .select("id, uploaded_at, is_verified")
+          .eq("is_verified", false)
+          .lt("uploaded_at", since),
+      ]);
+      if (disbursements.error) throw disbursements.error;
+      if (disbursementTransactions.error) throw disbursementTransactions.error;
+      if (pendingClaims.error) throw pendingClaims.error;
+      if (staleKycDocs.error) throw staleKycDocs.error;
+
+      const completedDisbursements = (disbursements.data || []).filter((d) => d.status === "completed");
+      const completedTotal = completedDisbursements.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      const accountTxTotal = (disbursementTransactions.data || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+      return {
+        pendingDisbursements: (disbursements.data || []).filter((d) => d.status === "pending").length,
+        failedDisbursements: (disbursements.data || []).filter((d) => d.status === "failed").length,
+        stalePaymentClaims: (pendingClaims.data || []).filter((c) => differenceInDays(new Date(), new Date(c.created_at)) >= 1).length,
+        staleKycDocs: staleKycDocs.data?.length || 0,
+        disbursementGap: Math.round((completedTotal - accountTxTotal) * 100) / 100,
+      };
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       pending: "bg-warning/20 text-warning border-warning/30",
@@ -122,8 +162,116 @@ const AdminDashboard = () => {
           </Button>
         </div>
 
+        <Card className="border-warning/40 bg-warning/10">
+          <CardContent className="py-2 px-0">
+            <div className="marquee-wrap">
+              <div className="marquee-track">
+                <div className="inline-flex items-center gap-3 px-4">
+                  <Badge className="bg-warning/20 text-warning border-warning/30 border">
+                    <Wrench size={12} className="mr-1" />
+                    Development Notice
+                  </Badge>
+                  <span className="text-sm text-foreground">
+                    Some admin features may be unstable during ongoing development.
+                  </span>
+                  <a
+                    href={developerWhatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-primary font-medium hover:underline"
+                  >
+                    Need help? Contact developer on WhatsApp
+                  </a>
+                </div>
+                <div className="inline-flex items-center gap-3 px-4" aria-hidden="true">
+                  <Badge className="bg-warning/20 text-warning border-warning/30 border">
+                    <Wrench size={12} className="mr-1" />
+                    Development Notice
+                  </Badge>
+                  <span className="text-sm text-foreground">
+                    Some admin features may be unstable during ongoing development.
+                  </span>
+                  <a
+                    href={developerWhatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-primary font-medium hover:underline"
+                  >
+                    Need help? Contact developer on WhatsApp
+                  </a>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quick Actions */}
         <QuickActions />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border-border/50 bg-card/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Operational Risk Strip</CardTitle>
+              <CardDescription>Realtime blockers requiring action</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Pending disbursements</span>
+                <Badge variant="outline">{operationalRisk?.pendingDisbursements ?? 0}</Badge>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Failed disbursements</span>
+                <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">
+                  {operationalRisk?.failedDisbursements ?? 0}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Claims {" > "} 24h pending</span>
+                <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
+                  {operationalRisk?.stalePaymentClaims ?? 0}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">KYC docs {" > "} 24h unreviewed</span>
+                <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
+                  {operationalRisk?.staleKycDocs ?? 0}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 bg-card/80">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Daily Close Checklist</CardTitle>
+              <CardDescription>Finance reconciliation before day close</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Disbursement ledger balanced</span>
+                <Badge
+                  variant="outline"
+                  className={
+                    Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
+                      ? "bg-success/20 text-success border-success/30"
+                      : "bg-destructive/20 text-destructive border-destructive/30"
+                  }
+                >
+                  {Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
+                    ? "PASS"
+                    : `GAP K${Math.abs(operationalRisk?.disbursementGap ?? 0).toLocaleString()}`}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">No failed disbursements outstanding</span>
+                <Badge variant="outline">{(operationalRisk?.failedDisbursements ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">No stale payment claims</span>
+                <Badge variant="outline">{(operationalRisk?.stalePaymentClaims ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Key Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

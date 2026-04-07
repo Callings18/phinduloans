@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, User, LogOut, LayoutDashboard, ChevronDown } from "lucide-react";
+import { Menu, X, User, LogOut, LayoutDashboard, ChevronDown, Shield } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -58,6 +58,18 @@ const Navbar = () => {
                     }`} />
                 </Link>
               ))}
+              {user && isStaff && (
+                <Link
+                  to="/admin"
+                  className={`text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${location.pathname.startsWith("/admin")
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  <Shield size={16} className="opacity-80" />
+                  Admin
+                </Link>
+              )}
             </div>
 
             {/* CTA Buttons */}

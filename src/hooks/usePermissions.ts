@@ -17,10 +17,12 @@ export function usePermissions() {
   const { user, isLoading: authLoading, isAdmin } = useAuth();
   const [permissionSet, setPermissionSet] = useState<Set<PermissionKey>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [rpcError, setRpcError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
       setPermissionSet(new Set());
+      setRpcError(null);
       setLoading(false);
       return;
     }
@@ -34,8 +36,10 @@ export function usePermissions() {
         if (error) {
           console.warn("get_my_permissions failed — UI permission checks may deny actions until this succeeds. Backend RLS still applies.", error);
           setPermissionSet(new Set());
+          setRpcError(error.message ?? String(error));
           return;
         }
+        setRpcError(null);
         const set = new Set<PermissionKey>();
         (data ?? []).forEach((row: { module: string; action: string }) => {
           set.add(permKey(row.module, row.action));
@@ -92,8 +96,15 @@ export function usePermissions() {
   const isLoading = authLoading || loading;
 
   return useMemo(
-    () => ({ can, hasPermission, hasRole, permissions: permissionSet, isLoading }),
-    [can, hasPermission, hasRole, permissionSet, isLoading]
+    () => ({
+      can,
+      hasPermission,
+      hasRole,
+      permissions: permissionSet,
+      isLoading,
+      rpcError,
+    }),
+    [can, hasPermission, hasRole, permissionSet, isLoading, rpcError]
   );
 }
 

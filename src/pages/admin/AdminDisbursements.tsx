@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,14 +60,14 @@ interface Disbursement {
     full_name: string;
     email: string;
     loan_amount: number;
+    user_id?: string;
   };
 }
 
 const AdminDisbursements = () => {
-  const { isAdmin } = useAuth();
   const { can } = usePermissions();
-  const canCompleteDisbursement = isAdmin;
-  const canCreateDisbursement = isAdmin;
+  const canCreateDisbursement = can("disbursement", "disburse");
+  const canApproveDisbursement = can("disbursement", "approve") || can("disbursement", "disburse");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -94,7 +93,8 @@ const AdminDisbursements = () => {
           loan_applications (
             full_name,
             email,
-            loan_amount
+            loan_amount,
+            user_id
           )
         `)
         .order("created_at", { ascending: false });
@@ -120,7 +120,7 @@ const AdminDisbursements = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_applications")
-        .select("id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url, status")
+        .select("id, user_id, full_name, loan_amount, email, borrower_signed, admin_signed, signed_contract_url, status")
         .in("status", ["approved", "awaiting_disbursement", "contract_signing"])
         .order("created_at", { ascending: false });
 
@@ -130,6 +130,7 @@ const AdminDisbursements = () => {
         full_name: string;
         loan_amount: number;
         email: string;
+        user_id: string;
         borrower_signed: boolean | null;
         admin_signed: boolean | null;
         signed_contract_url: string | null;
@@ -137,6 +138,73 @@ const AdminDisbursements = () => {
       }>;
     },
   });
+
+  const selectedLoanData = approvedLoans?.find((loan) => loan.id === selectedLoan);
+  const { data: selectedBorrowerPayout } = useQuery({
+    queryKey: ["borrower-payout-for-disbursement", selectedLoanData?.user_id],
+    queryFn: async () => {
+      if (!selectedLoanData?.user_id) return null;
+      const { data, error } = await supabase
+        .from("borrower_kyc_info")
+        .select(
+          "bank_name, bank_account_number, bank_account_holder_name, mobile_money_account_name, airtel_money_number, mtn_mobile_money_number, zamtel_kwacha_number"
+        )
+        .eq("borrower_id", selectedLoanData.user_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedLoanData?.user_id,
+  });
+
+  const { data: selectedBorrowerKycSummary } = useQuery({
+    queryKey: ["borrower-kyc-summary-for-disbursement", selectedLoanData?.user_id],
+    queryFn: async () => {
+      if (!selectedLoanData?.user_id) return { verifiedRequiredDocs: 0 };
+      const { data, error } = await supabase
+        .from("borrower_document_vault")
+        .select("doc_type, is_verified, uploaded_at")
+        .eq("borrower_id", selectedLoanData.user_id)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      const required = ["nrc_front", "nrc_back", "selfie"];
+      const latestByType = new Map<string, { is_verified: boolean | null }>();
+      (data ?? []).forEach((doc) => {
+        if (!latestByType.has(doc.doc_type)) {
+          latestByType.set(doc.doc_type, { is_verified: doc.is_verified });
+        }
+      });
+      const verifiedRequiredDocs = required.filter((type) => latestByType.get(type)?.is_verified === true).length;
+      return { verifiedRequiredDocs };
+    },
+    enabled: !!selectedLoanData?.user_id,
+  });
+
+  useEffect(() => {
+    if (!selectedBorrowerPayout || !selectedLoan) return;
+    setFormData((prev) => {
+      if (prev.mobile_money_number || prev.account_number) return prev;
+      if (selectedBorrowerPayout.bank_account_number) {
+        return {
+          ...prev,
+          disbursement_method: "bank_transfer",
+          account_number: selectedBorrowerPayout.bank_account_number,
+          mobile_money_number: "",
+        };
+      }
+      const defaultMomo =
+        selectedBorrowerPayout.mtn_mobile_money_number ||
+        selectedBorrowerPayout.airtel_money_number ||
+        selectedBorrowerPayout.zamtel_kwacha_number ||
+        "";
+      return {
+        ...prev,
+        disbursement_method: "mobile_money",
+        mobile_money_number: defaultMomo,
+        account_number: "",
+      };
+    });
+  }, [selectedBorrowerPayout, selectedLoan]);
 
   // Fetch active accounts for source selection
   const { data: accounts = [] } = useQuery({
@@ -157,6 +225,10 @@ const AdminDisbursements = () => {
     mutationFn: async () => {
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
+      const verifiedDocs = selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0;
+      if (verifiedDocs < 3) {
+        throw new Error("Disbursement blocked: borrower KYC is incomplete. Verify NRC Front, NRC Back, and Selfie first.");
+      }
 
       // V1.0.1: Simplified flow - contract check only requires uploaded PDF or approval signatures
       const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
@@ -204,12 +276,32 @@ const AdminDisbursements = () => {
 
       // Create disbursement record with source account (status pending).
       // Account deduction happens only when status is set to "completed" (via DB trigger).
+      const resolvedMobileMoneyNumber =
+        formData.disbursement_method === "mobile_money"
+          ? formData.mobile_money_number ||
+            selectedBorrowerPayout?.mtn_mobile_money_number ||
+            selectedBorrowerPayout?.airtel_money_number ||
+            selectedBorrowerPayout?.zamtel_kwacha_number ||
+            null
+          : null;
+      const resolvedAccountNumber =
+        formData.disbursement_method === "bank_transfer"
+          ? formData.account_number || selectedBorrowerPayout?.bank_account_number || null
+          : null;
+
+      if (formData.disbursement_method === "mobile_money" && !resolvedMobileMoneyNumber) {
+        throw new Error("Missing mobile money destination. Add it in borrower KYC or enter it manually.");
+      }
+      if (formData.disbursement_method === "bank_transfer" && !resolvedAccountNumber) {
+        throw new Error("Missing bank account destination. Add it in borrower KYC or enter it manually.");
+      }
+
       const { data: inserted, error: disbError } = await supabase.from("disbursements").insert({
         loan_id: selectedLoan,
         amount: disbursementAmount,
         disbursement_method: formData.disbursement_method,
-        mobile_money_number: formData.disbursement_method === "mobile_money" ? formData.mobile_money_number : null,
-        account_number: formData.disbursement_method === "bank_transfer" ? formData.account_number : null,
+        mobile_money_number: resolvedMobileMoneyNumber,
+        account_number: resolvedAccountNumber,
         status: "pending",
         source_account_id: formData.source_account_id,
       }).select("id").single();
@@ -454,6 +546,41 @@ const AdminDisbursements = () => {
                     );
                   })()}
                 </div>
+
+                {selectedLoanData && (
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-xs font-medium text-primary mb-1">Borrower payout destination (from KYC)</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedBorrowerPayout?.bank_account_number
+                        ? `Bank: ${selectedBorrowerPayout.bank_name || "Bank"} (${selectedBorrowerPayout.bank_account_number})`
+                        : selectedBorrowerPayout?.mtn_mobile_money_number
+                          ? `MTN Mobile Money: ${selectedBorrowerPayout.mtn_mobile_money_number}`
+                          : selectedBorrowerPayout?.airtel_money_number
+                            ? `Airtel Money: ${selectedBorrowerPayout.airtel_money_number}`
+                            : selectedBorrowerPayout?.zamtel_kwacha_number
+                              ? `Zamtel Kwacha: ${selectedBorrowerPayout.zamtel_kwacha_number}`
+                              : "No payout destination saved by borrower yet."}
+                    </p>
+                  </div>
+                )}
+                {selectedLoanData && (
+                  <div
+                    className={
+                      (selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0) >= 3
+                        ? "p-3 rounded-lg bg-success/10 border border-success/20"
+                        : "p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                    }
+                  >
+                    <p className="text-xs font-medium text-foreground">
+                      KYC disbursement gate: {(selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0)}/3 required docs verified
+                    </p>
+                    {(selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0) < 3 && (
+                      <p className="text-xs text-destructive mt-0.5">
+                        Blocked-disbursement: complete borrower KYC verification before completing this disbursement.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* NEW: Source Account Selection */}
                 <div className="space-y-2">
@@ -742,7 +869,7 @@ const AdminDisbursements = () => {
                         <td className="py-4 px-4 text-right">
                           {disbursement.status === "pending" && (
                             <div className="flex items-center justify-end gap-2">
-                              {canCompleteDisbursement ? (
+                              {canApproveDisbursement ? (
                                 <>
                                   <Button
                                     size="sm"
@@ -754,7 +881,8 @@ const AdminDisbursements = () => {
                                         status: "completed",
                                       })
                                     }
-                                    disabled={updateStatusMutation.isPending}
+                                    disabled={updateStatusMutation.isPending || !canApproveDisbursement}
+                                    title={!canApproveDisbursement ? "Approval permission required" : undefined}
                                   >
                                     <CheckCircle size={14} className="mr-1" />
                                     Complete
@@ -769,7 +897,8 @@ const AdminDisbursements = () => {
                                         status: "failed",
                                       })
                                     }
-                                    disabled={updateStatusMutation.isPending}
+                                    disabled={updateStatusMutation.isPending || !canApproveDisbursement}
+                                    title={!canApproveDisbursement ? "Approval permission required" : undefined}
                                   >
                                     <XCircle size={14} className="mr-1" />
                                     Fail

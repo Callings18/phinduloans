@@ -1,6 +1,11 @@
 -- RBAC: roles, permissions, role_permissions, has_permission
 -- Phase 1.1 - Run after app_role and user_roles exist
 -- Date: 2026-02-10
+--
+-- NOTE: If your database was already migrated with 20260209232412, tables use
+-- role_permissions(role_name, permission_id) and roles(name). This file's
+-- alternate shape is skipped by IF NOT EXISTS; apply 20260407120000_rbac_canonical_permission_functions.sql
+-- so has_permission / get_my_permissions match the role_name model.
 
 -- 1. roles table (display name + code matching app_role for join)
 CREATE TABLE IF NOT EXISTS public.roles (

@@ -87,6 +87,11 @@ const NotificationCenter: React.FC = () => {
     // Check push notification permission status
     useEffect(() => {
         const checkPushStatus = async () => {
+            if (!pushNotificationManager.isSubscriptionReady()) {
+                setPushEnabled(false);
+                setShowPushPrompt(false);
+                return;
+            }
             const permission = pushNotificationManager.getPermissionStatus();
             setPushEnabled(permission === 'granted');
             
@@ -103,7 +108,7 @@ const NotificationCenter: React.FC = () => {
         if (!user?.id) return;
 
         const channel = supabase
-            .channel("notifications")
+            .channel(`notifications-${user.id}`)
             .on(
                 "postgres_changes",
                 {
@@ -134,6 +139,18 @@ const NotificationCenter: React.FC = () => {
                     }
                 }
             )
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "notification_logs",
+                    filter: `user_id=eq.${user.id}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+                }
+            )
             .subscribe();
 
         return () => {
@@ -143,6 +160,14 @@ const NotificationCenter: React.FC = () => {
 
     // Enable push notifications
     const handleEnablePush = async () => {
+        if (!pushNotificationManager.isSubscriptionReady()) {
+            toast({
+                title: "Push Notifications Unavailable",
+                description: "Push subscriptions are temporarily disabled while backend sync is finalized.",
+            });
+            return;
+        }
+
         const permission = await pushNotificationManager.requestPermission();
         if (permission === 'granted') {
             await pushNotificationManager.init();
