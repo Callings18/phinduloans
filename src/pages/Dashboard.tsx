@@ -550,7 +550,6 @@ const Dashboard = () => {
                     userId={user.id}
                     loans={loans}
                     repayments={repayments}
-                    loanEvents={borrowerLoanEvents}
                     onDownloadStatement={downloadStatement}
                     onDownloadSchedule={downloadSchedule}
                     onSubmitPayment={handleSubmitPayment}
