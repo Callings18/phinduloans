@@ -111,6 +111,7 @@ interface LoanProduct {
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-warning/20 text-warning border-warning/30", icon: Banknote },
   approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
   disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Activity },
   active: { label: "Active", color: "bg-info/20 text-info border-info/30", icon: Activity },
@@ -119,7 +120,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("approved");
+  const [activeTab, setActiveTab] = useState("awaiting_disbursement");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -160,7 +161,7 @@ const AdminLoans = () => {
       const { data, error } = await supabase
         .from("loan_applications")
         .select("*")
-        .in("status", ["approved", "active", "disbursed", "completed", "defaulted"])
+        .in("status", ["awaiting_disbursement", "approved", "active", "disbursed", "completed", "defaulted"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -584,8 +585,8 @@ const AdminLoans = () => {
   // Filter loans based on active tab
   const getFilteredLoans = () => {
     let filtered = loans || [];
-    if (activeTab === "approved") {
-      filtered = filtered.filter(l => l.status === "approved");
+    if (activeTab === "awaiting_disbursement") {
+      filtered = filtered.filter(l => ["awaiting_disbursement", "approved"].includes(l.status));
     } else if (activeTab === "active") {
       filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
     } else if (activeTab === "completed") {
@@ -630,7 +631,7 @@ const AdminLoans = () => {
 
   const stats = {
     total: loans?.length || 0,
-    approved: loans?.filter(l => l.status === "approved").length || 0,
+    awaitingDisbursement: loans?.filter(l => ["awaiting_disbursement", "approved"].includes(l.status)).length || 0,
     active: loans?.filter(l => ["active", "disbursed"].includes(l.status)).length || 0,
     completed: loans?.filter(l => l.status === "completed").length || 0,
     defaulted: loans?.filter(l => l.status === "defaulted").length || 0,
@@ -710,7 +711,7 @@ const AdminLoans = () => {
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setStatusFilter("all"); }}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="approved">Approved ({stats.approved})</TabsTrigger>
+            <TabsTrigger value="awaiting_disbursement">Awaiting Disbursement ({stats.awaitingDisbursement})</TabsTrigger>
             <TabsTrigger value="active">Active Loans ({stats.active})</TabsTrigger>
             <TabsTrigger value="completed">Completed ({stats.completed})</TabsTrigger>
             <TabsTrigger value="defaulted">Defaulted ({stats.defaulted})</TabsTrigger>
@@ -836,7 +837,7 @@ const AdminLoans = () => {
                                       Edit Loan
                                     </DropdownMenuItem>
                                   )}
-                                  {loan.status === "approved" && can('loans', 'edit') && (
+                                  {["awaiting_disbursement", "approved"].includes(loan.status) && can('loans', 'edit') && (
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem onClick={() => {
