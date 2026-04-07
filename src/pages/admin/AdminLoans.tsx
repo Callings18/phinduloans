@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
+import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -515,6 +516,60 @@ const AdminLoans = () => {
     setIsQuickPaymentOpen(true);
   };
 
+  const handleDownloadSchedule = useCallback(async (loan: Loan) => {
+    try {
+      const { data: repayments, error } = await supabase
+        .from("loan_repayments")
+        .select("installment_number, due_date, amount, status, paid_date, original_amount")
+        .eq("loan_id", loan.id)
+        .order("installment_number", { ascending: true });
+
+      if (error) throw error;
+      if (!repayments || repayments.length === 0) {
+        toast.error("No repayment schedule found for this loan");
+        return;
+      }
+
+      // Fetch system settings for company info
+      const { data: settings } = await (supabase
+        .from("system_settings") as any)
+        .select("setting_key, setting_value")
+        .in("setting_key", ["company_name", "company_address", "company_phone"]);
+
+      const settingsMap: Record<string, string> = {};
+      settings?.forEach((s: any) => { settingsMap[s.setting_key] = s.setting_value; });
+
+      downloadLoanSchedule({
+        borrowerName: loan.full_name,
+        borrowerPhone: loan.phone || "",
+        borrowerEmail: loan.email || "",
+        loanReference: loan.id.substring(0, 8).toUpperCase(),
+        loanAmount: Number(loan.loan_amount),
+        interestRate: Number(loan.interest_rate) || 0,
+        interestPeriod: loan.term_unit === "weeks" ? "weekly" : loan.term_unit === "days" ? "daily" : "monthly",
+        termMonths: loan.loan_term_months,
+        monthlyPayment: Number(loan.monthly_payment) || 0,
+        totalRepayment: Number(loan.total_repayment) || 0,
+        disbursementDate: loan.created_at,
+        firstRepaymentDate: repayments[0]?.due_date || "",
+        repayments: repayments.map((r: any) => ({
+          installmentNumber: r.installment_number,
+          dueDate: r.due_date,
+          amount: Number(r.original_amount || r.amount),
+          status: r.status,
+          paidDate: r.paid_date || undefined,
+        })),
+        companyName: settingsMap.company_name,
+        companyAddress: settingsMap.company_address,
+        companyPhone: settingsMap.company_phone,
+      });
+
+      toast.success("Repayment schedule PDF downloaded");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate schedule PDF");
+    }
+  }, []);
+
   const getStatusBadge = (status: string) => {
     const config = statusConfig[status] || { label: status, color: "bg-muted text-muted-foreground", icon: Activity };
     const Icon = config.icon;
@@ -801,12 +856,9 @@ const AdminLoans = () => {
                                         <Receipt size={14} className="mr-2" />
                                         Record Payment
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => {
-                                        setSelectedLoan(loan);
-                                        setIsDetailsOpen(true);
-                                      }}>
+                                      <DropdownMenuItem onClick={() => handleDownloadSchedule(loan)}>
                                         <Download size={14} className="mr-2" />
-                                        View Schedule
+                                        Download Schedule PDF
                                       </DropdownMenuItem>
                                     </>
                                   )}
