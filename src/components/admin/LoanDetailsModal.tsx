@@ -1907,8 +1907,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </Card>
                 )}
 
-                {/* Alerts */}
-                <div className="flex flex-wrap gap-3">
+                {/* Alerts - only show for post-disbursement loans */}
+                {!isPreDisbursement && <div className="flex flex-wrap gap-3">
                   {overdueCount > 0 && (
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                       <AlertTriangle className="text-destructive" size={18} />
