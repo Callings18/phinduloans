@@ -1,29 +1,51 @@
 
 
-## Root Cause Found
+# Fix: Loan Status Flow — Pending → Approved → Disbursed → Active
 
-The error `invalid input value for enum loan_status: "crb_failed"` reveals the actual problem: **the `crb_failed` and `pmic_pending` values were never added to the PostgreSQL `loan_status` enum type**.
+## Problem
 
-The original enum only has: `pending`, `under_review`, `approved`, `rejected`, `disbursed`, `active`, `completed`, `defaulted`, `contract_signing`, `awaiting_disbursement`.
+When loans are approved (pending → approved), they remain in the Applications module with "approved" status. They don't appear in the Loans module because that module only queries for `active`, `disbursed`, `completed`, `defaulted` statuses. The loans haven't "disappeared" — they're waiting for disbursement in the Applications module.
 
-The trigger function `enforce_loan_application_status_transition` references `crb_failed` and `pmic_pending` in its IF conditions. When PostgreSQL evaluates `NEW.status IN (..., 'crb_failed', 'pmic_pending')`, it tries to cast those strings to the `loan_status` enum, which fails because they do not exist as valid enum values. This causes every status update to crash, even `pending → approved`.
+## Your Desired Flow
 
-## Fix Plan
-
-### 1. Database Migration: Add missing enum values
-Add `crb_failed` and `pmic_pending` to the `loan_status` enum so the trigger stops crashing.
-
-```sql
-ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'crb_failed';
-ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'pmic_pending';
+```text
+Pending → Approved → Disbursed → Active → Completed
+         (approve)   (disburse)  (auto)    (all paid)
 ```
 
-### 2. Simplify the trigger for direct approval
-Since CRB and PMIC are disabled, also update the trigger to cast status to `text` before comparison, preventing future enum mismatch crashes. Keep the `pending → approved` path open.
+- **Pending**: New application submitted
+- **Approved**: Admin approves the loan (ready for disbursement)
+- **Disbursed**: Money has been sent to borrower
+- **Active**: Loan is being repaid (set automatically after disbursement)
+- **Completed**: All repayments cleared
 
-### 3. No frontend changes needed
-The RPC `transition_loan_status` and the bulk approval code in `AdminApplications.tsx` are already correctly calling `approve` action. The only blocker is the database enum crash.
+## Changes
 
-## Why previous fixes did not work
-Multiple migrations rewrote the trigger function, but none added the missing enum values. Every rewrite still referenced `crb_failed`/`pmic_pending` in the IN clause, so the trigger kept crashing on every status update attempt.
+### 1. Add "Approved" loans to the Loans module
+Update `AdminLoans.tsx` to include `approved` status in its query and add a new "Approved" tab so approved loans waiting for disbursement are visible in the Loans module alongside active ones.
+
+### 2. Add disbursement action in Loans module
+Add a "Disburse" button on approved loans in the Loans module so admins can disburse directly from there (instead of having to go back to Applications).
+
+### 3. Update the database trigger
+Update `enforce_loan_application_status_transition` to support:
+- `approved` → `disbursed` (direct disbursement)
+- `disbursed` → `active` (automatic on disbursement)
+
+### 4. Update borrower dashboard
+Update `BorrowerLoansTab.tsx` to include `approved` in the pending/in-progress category so borrowers can see their approved loan waiting for disbursement.
+
+### 5. Update status labels and configs
+Add `approved` status styling to the Loans module `statusConfig` and ensure consistent labeling across both modules.
+
+## What Won't Change
+- The Applications module continues to show all statuses (unchanged)
+- The approval RPC (`transition_loan_status`) stays the same
+- No database schema changes needed (the `approved` enum value already exists)
+
+## Technical Details
+- `AdminLoans.tsx` query: add `approved` to the `.in("status", [...])` filter
+- Add a 4th tab "Approved" before "Active" in the Loans module tabs
+- Add disburse action button for approved loans in the Loans table
+- The trigger already allows `approved → disbursed` transition
 
