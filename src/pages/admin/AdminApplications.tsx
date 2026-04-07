@@ -692,22 +692,13 @@ const AdminApplications = () => {
     },
   });
 
-  // Workflow transition (verify_documents, finance_approve, approve, reject)
+  // Workflow transition (verify_documents, finance_approve, approve, reject) — all via RPC
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
-      if (action === "approve" || action === "reject") {
-        await transitionLoanStatus({
-          loanId: id,
-          toStatus: action === "approve" ? "approved" : "rejected",
-          reasonCode: reason ? "workflow_transition" : undefined,
-          reasonText: reason,
-        });
-        return;
-      }
-      const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
+      const { data, error } = await supabase.rpc("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
-        p_reason: reason ?? null,
+        ...(reason ? { p_reason: reason } : {}),
       });
       if (error) throw error;
       const result = data as { ok: boolean; error?: string };
