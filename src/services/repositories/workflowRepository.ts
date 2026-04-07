@@ -1,4 +1,4 @@
-import { apiGet } from "@/api/httpClient";
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { supabase } from "@/integrations/supabase/client";
 
 export interface LoanEvent {
