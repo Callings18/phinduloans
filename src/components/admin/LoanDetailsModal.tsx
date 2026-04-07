@@ -233,6 +233,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [topUpReason, setTopUpReason] = useState("");
   const [topUpSourceAccountId, setTopUpSourceAccountId] = useState("");
 
+  // Disbursement from detail view
+  const [isDisburseOpen, setIsDisburseOpen] = useState(false);
+  const [disburseSourceAccountId, setDisburseSourceAccountId] = useState("");
+  const [disburseMethod, setDisburseMethod] = useState("bank_transfer");
+  const [disburseTransactionRef, setDisburseTransactionRef] = useState("");
+
   // Phase 1 new states
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
