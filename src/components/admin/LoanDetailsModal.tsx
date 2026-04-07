@@ -233,6 +233,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [topUpReason, setTopUpReason] = useState("");
   const [topUpSourceAccountId, setTopUpSourceAccountId] = useState("");
 
+  // Disbursement from detail view
+  const [isDisburseOpen, setIsDisburseOpen] = useState(false);
+  const [disburseSourceAccountId, setDisburseSourceAccountId] = useState("");
+  const [disburseMethod, setDisburseMethod] = useState("bank_transfer");
+  const [disburseTransactionRef, setDisburseTransactionRef] = useState("");
+
   // Phase 1 new states
   const [isReversalOpen, setIsReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
@@ -344,6 +350,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan,
   });
 
+  const isPreDisbursement = loan?.status === "awaiting_disbursement" || loan?.status === "approved" || loan?.status === "pending" || loan?.status === "under_review";
   const isDisbursed = loan?.status === "disbursed" || loan?.status === "active";
   const isFullySigned = !!(loan?.borrower_signed && loan?.admin_signed);
   const contractMessageNotSigned = isDisbursed
@@ -708,7 +715,130 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Reloan mutation - carry-forward outstanding balance; blocks only if unpaid penalties remain
+  // Disburse loan from detail view mutation
+  const disburseLoanFromDetailMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+      if (!disburseSourceAccountId) throw new Error("Select a source account");
+
+      // Fetch product fees
+      let processingFeePercent = 0, insurancePercent = 0, enforcementPercent = 0, vatPercent = 0, platformPercent = 0;
+      if (loan.loan_product_id) {
+        const { data: prod } = await supabase
+          .from("loan_products")
+          .select("processing_fee_percent, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent")
+          .eq("id", loan.loan_product_id)
+          .single();
+        if (prod) {
+          processingFeePercent = Number(prod.processing_fee_percent) || 0;
+          insurancePercent = Number(prod.insurance_percent) || 0;
+          enforcementPercent = Number(prod.enforcement_fee_percent) || 0;
+          vatPercent = Number(prod.vat_percent) || 0;
+          platformPercent = Number(prod.platform_fee_percent) || 0;
+        }
+      }
+
+      const principal = loan.loan_amount;
+      const processingFee = principal * (processingFeePercent / 100);
+      const insuranceFee = principal * (insurancePercent / 100);
+      const enforcementFee = principal * (enforcementPercent / 100);
+      const platformFee = principal * (platformPercent / 100);
+      const vatableAmount = processingFee + enforcementFee + platformFee;
+      const vatFee = vatableAmount * (vatPercent / 100);
+      const totalFees = processingFee + insuranceFee + enforcementFee + platformFee + vatFee;
+      const netDisbursement = principal - totalFees;
+
+      if (netDisbursement <= 0) throw new Error("Net disbursement is zero or negative after fees");
+
+      // Fresh balance check
+      const { data: freshAccount, error: accErr } = await supabase
+        .from("accounts")
+        .select("id, account_name, balance")
+        .eq("id", disburseSourceAccountId)
+        .single();
+      if (accErr || !freshAccount) throw new Error("Source account not found");
+      if (Number(freshAccount.balance) < netDisbursement) {
+        throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
+      }
+
+      // Deduct from source account
+      const newBalance = Number(freshAccount.balance) - netDisbursement;
+      const { error: accUpdateErr } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq("id", freshAccount.id);
+      if (accUpdateErr) throw accUpdateErr;
+
+      // Record transaction
+      const { error: txErr } = await supabase.from("account_transactions").insert({
+        account_id: freshAccount.id,
+        transaction_type: "disbursement",
+        amount: netDisbursement,
+        balance_before: Number(freshAccount.balance),
+        balance_after: newBalance,
+        reference_type: "loan_disbursement",
+        reference_id: loan.id,
+        source: freshAccount.account_name,
+        destination: `${loan.full_name} (Loan Disbursement)`,
+        notes: `Principal K${principal.toLocaleString()}, Fees K${totalFees.toLocaleString()}, Net K${netDisbursement.toLocaleString()}`,
+        created_by: user?.id,
+      });
+      if (txErr) throw txErr;
+
+      // Record disbursement
+      const { error: disbErr } = await supabase.from("disbursements").insert({
+        loan_id: loan.id,
+        amount: netDisbursement,
+        disbursement_method: disburseMethod,
+        source_account_id: freshAccount.id,
+        transaction_reference: disburseTransactionRef || null,
+        status: "completed",
+        disbursed_at: new Date().toISOString(),
+      });
+      if (disbErr) throw disbErr;
+
+      // Update loan status to disbursed (trigger generates schedule + transitions to active)
+      const { error: loanErr } = await supabase
+        .from("loan_applications")
+        .update({
+          status: "disbursed" as any,
+          disbursed_by: user?.id,
+          disbursed_at: new Date().toISOString(),
+        })
+        .eq("id", loan.id);
+      if (loanErr) throw loanErr;
+
+      await logAudit({
+        action: "LOAN_DISBURSED",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: {
+          net_disbursement: netDisbursement,
+          total_fees: totalFees,
+          source_account: freshAccount.account_name,
+          method: disburseMethod,
+        },
+      });
+
+      return { netDisbursement, totalFees, accountName: freshAccount.account_name };
+    },
+    onSuccess: ({ netDisbursement, accountName }) => {
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["loan-disbursement", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast.success(`Loan disbursed! K${netDisbursement.toLocaleString()} from ${accountName}`);
+      setIsDisburseOpen(false);
+      setDisburseSourceAccountId("");
+      setDisburseTransactionRef("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to disburse loan");
+    },
+  });
+
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
@@ -1735,8 +1865,29 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </Card>
                 </div>
 
+                {/* Awaiting Disbursement Banner */}
+                {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
+                  <Card className="border-info/40 bg-info/10">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <DollarSign size={24} className="text-info mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-info">Awaiting Disbursement</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            This loan has been approved and is waiting for funds to be disbursed. 
+                            No repayment schedule or interest will be generated until disbursement is completed.
+                          </p>
+                          <Button size="sm" className="mt-3" onClick={() => setIsDisburseOpen(true)}>
+                            <Banknote size={14} className="mr-1" /> Disburse Funds
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Progress */}
-                {repayments && repayments.length > 0 && (
+                {!isPreDisbursement && repayments && repayments.length > 0 && (
                   <Card>
                     <CardContent className="p-4 space-y-3">
                       <div className="flex justify-between items-center">
@@ -1756,8 +1907,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </Card>
                 )}
 
-                {/* Alerts */}
-                <div className="flex flex-wrap gap-3">
+                {/* Alerts - only show for post-disbursement loans */}
+                {!isPreDisbursement && <div className="flex flex-wrap gap-3">
                   {overdueCount > 0 && (
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                       <AlertTriangle className="text-destructive" size={18} />
@@ -1803,7 +1954,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
 
                 {/* Quick Actions */}
                 <Card>
@@ -1811,53 +1962,65 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardTitle className="text-base">Quick Actions</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
-                    {(!repayments || repayments.length === 0) && (
-                      <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
-                        <Plus size={14} className="mr-1" /> Generate Schedule
+                    {/* Disburse button for awaiting_disbursement / approved */}
+                    {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
+                      <Button size="sm" onClick={() => setIsDisburseOpen(true)}>
+                        <Banknote size={14} className="mr-1" /> Disburse Funds
                       </Button>
                     )}
-                    {repayments && repayments.length > 0 && (
-                      <Button size="sm" onClick={() => {
-                        const nextPending = repayments.find(r => r.status === "pending");
-                        if (nextPending) {
-                          setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
-                          setIsRecordPaymentOpen(true);
-                        }
-                      }}>
-                        <CreditCard size={14} className="mr-1" /> Record Payment
-                      </Button>
+                    {/* Post-disbursement actions only */}
+                    {!isPreDisbursement && (
+                      <>
+                        {(!repayments || repayments.length === 0) && (
+                          <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
+                            <Plus size={14} className="mr-1" /> Generate Schedule
+                          </Button>
+                        )}
+                        {repayments && repayments.length > 0 && (
+                          <Button size="sm" onClick={() => {
+                            const nextPending = repayments.find(r => r.status === "pending");
+                            if (nextPending) {
+                              setSelectedRepayment(nextPending);
+                              setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                              setIsRecordPaymentOpen(true);
+                            }
+                          }}>
+                            <CreditCard size={14} className="mr-1" /> Record Payment
+                          </Button>
+                        )}
+                        {overdueCount > 0 && (
+                          <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
+                            <AlertCircle size={14} className="mr-1" /> Apply Penalties
+                          </Button>
+                        )}
+                        {loan.status === "active" && (
+                          <Button size="sm" variant="outline" onClick={() => calculateEarlySettlementMutation.mutate()}>
+                            <Calculator size={14} className="mr-1" /> Early Settlement
+                          </Button>
+                        )}
+                        {(loan.status === "active" || loan.status === "disbursed") && (
+                          <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
+                            <RefreshCw size={14} className="mr-1" /> Restructure
+                          </Button>
+                        )}
+                        {(loan.status === "active" || loan.status === "disbursed") && (
+                          <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
+                            <ArrowRight size={14} className="mr-1" /> Reloan
+                          </Button>
+                        )}
+                        {(loan.status === "active" || loan.status === "disbursed") && (
+                          <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
+                            <Plus size={14} className="mr-1" /> Top Up
+                          </Button>
+                        )}
+                        {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
+                          <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
+                            <Undo2 size={14} className="mr-1" /> Undo Disbursement
+                          </Button>
+                        )}
+                      </>
                     )}
-                    {overdueCount > 0 && (
-                      <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
-                        <AlertCircle size={14} className="mr-1" /> Apply Penalties
-                      </Button>
-                    )}
-                    {loan.status === "active" && (
-                      <Button size="sm" variant="outline" onClick={() => calculateEarlySettlementMutation.mutate()}>
-                        <Calculator size={14} className="mr-1" /> Early Settlement
-                      </Button>
-                    )}
-                    {(loan.status === "active" || loan.status === "disbursed") && (
-                      <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
-                        <RefreshCw size={14} className="mr-1" /> Restructure
-                      </Button>
-                    )}
-                    {(loan.status === "active" || loan.status === "disbursed") && (
-                      <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
-                        <ArrowRight size={14} className="mr-1" /> Reloan
-                      </Button>
-                    )}
-                    {(loan.status === "active" || loan.status === "disbursed") && (
-                      <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
-                        <Plus size={14} className="mr-1" /> Top Up
-                      </Button>
-                    )}
-                    {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
-                      <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
-                        <Undo2 size={14} className="mr-1" /> Undo Disbursement
-                      </Button>
-                    )}
+
                   </CardContent>
                 </Card>
 
@@ -1953,6 +2116,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
               {/* Repayments Tab */}
               <TabsContent value="repayments" className="m-0 space-y-4">
+                {isPreDisbursement ? (
+                  <Card className="border-info/40 bg-info/10">
+                    <CardContent className="p-6 text-center space-y-3">
+                      <DollarSign size={40} className="mx-auto text-info" />
+                      <p className="font-semibold text-lg">No Repayment Schedule Yet</p>
+                      <p className="text-sm text-muted-foreground">
+                        The repayment schedule will be automatically generated once this loan is disbursed.
+                        Go to the Overview tab to disburse this loan.
+                      </p>
+                      <Button size="sm" variant="outline" onClick={() => setActiveTab("overview")}>
+                        Go to Overview
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                <>
                 <div className="flex justify-between items-center">
                   <h3 className="font-semibold">Repayment Schedule</h3>
                   <div className="flex gap-2">
@@ -2266,6 +2445,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <Plus size={16} className="mr-2" /> Generate Schedule
                     </Button>
                   </div>
+                )}
+                </>
                 )}
               </TabsContent>
 
@@ -3063,6 +3244,93 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               >
                 {topUpMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
                 Confirm Top-Up
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disburse Funds Dialog */}
+      <Dialog open={isDisburseOpen} onOpenChange={setIsDisburseOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote size={20} /> Disburse Loan — {loan.full_name}
+            </DialogTitle>
+            <DialogDescription>
+              Select a source account and confirm disbursement. Fees will be deducted from the principal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Fee Breakdown */}
+            {(() => {
+              const principal = loan.loan_amount;
+              // Show fee estimate (will be recalculated on submit with fresh product data)
+              return (
+                <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Principal</span>
+                    <span className="font-bold">K{Number(principal).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Term</span>
+                    <span className="font-medium">{loan.loan_term_months} {termUnit} @ {loan.interest_rate}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Repayment</span>
+                    <span className="font-medium">K{Number(loan.total_repayment).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    Processing fees, insurance, enforcement fees, and VAT will be deducted from the principal. The net amount will be disbursed.
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div>
+              <Label>Source Account *</Label>
+              <Select value={disburseSourceAccountId} onValueChange={setDisburseSourceAccountId}>
+                <SelectTrigger><SelectValue placeholder="Select funding account" /></SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts ?? []).map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.account_name} ({acc.account_type}) — K{Number(acc.balance).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Disbursement Method</Label>
+              <Select value={disburseMethod} onValueChange={setDisburseMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Transaction Reference (Optional)</Label>
+              <Input
+                value={disburseTransactionRef}
+                onChange={(e) => setDisburseTransactionRef(e.target.value)}
+                placeholder="e.g., Bank ref, receipt number"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsDisburseOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => disburseLoanFromDetailMutation.mutate()}
+                disabled={disburseLoanFromDetailMutation.isPending || !disburseSourceAccountId}
+              >
+                {disburseLoanFromDetailMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+                <Banknote size={14} className="mr-1" /> Confirm Disbursement
               </Button>
             </div>
           </div>
