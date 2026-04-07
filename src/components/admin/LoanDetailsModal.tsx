@@ -350,6 +350,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     enabled: !!loan,
   });
 
+  const isPreDisbursement = loan?.status === "awaiting_disbursement" || loan?.status === "approved" || loan?.status === "pending" || loan?.status === "under_review";
   const isDisbursed = loan?.status === "disbursed" || loan?.status === "active";
   const isFullySigned = !!(loan?.borrower_signed && loan?.admin_signed);
   const contractMessageNotSigned = isDisbursed
