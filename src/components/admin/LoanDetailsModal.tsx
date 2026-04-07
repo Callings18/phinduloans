@@ -1865,8 +1865,29 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </Card>
                 </div>
 
+                {/* Awaiting Disbursement Banner */}
+                {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
+                  <Card className="border-info/40 bg-info/10">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <DollarSign size={24} className="text-info mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-info">Awaiting Disbursement</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            This loan has been approved and is waiting for funds to be disbursed. 
+                            No repayment schedule or interest will be generated until disbursement is completed.
+                          </p>
+                          <Button size="sm" className="mt-3" onClick={() => setIsDisburseOpen(true)}>
+                            <Banknote size={14} className="mr-1" /> Disburse Funds
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Progress */}
-                {repayments && repayments.length > 0 && (
+                {!isPreDisbursement && repayments && repayments.length > 0 && (
                   <Card>
                     <CardContent className="p-4 space-y-3">
                       <div className="flex justify-between items-center">
