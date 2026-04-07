@@ -900,12 +900,21 @@ const AdminLoans = () => {
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem onClick={() => {
-                                        if (confirm(`Disburse loan for ${loan.full_name} (K${Number(loan.loan_amount).toLocaleString()})?`)) {
-                                          disburseLoanMutation.mutate(loan.id);
-                                        }
+                                        setDisbursementLoan(loan);
+                                        setDisbursementMethod("bank_transfer");
+                                        setDisbursementSourceAccountId("");
+                                        setDisbursementReference("");
+                                        setIsDisbursementOpen(true);
                                       }}>
                                         <Banknote size={14} className="mr-2" />
-                                        Disburse Loan
+                                        Disburse Funds
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => {
+                                        setSelectedLoan(loan);
+                                        setIsDetailsOpen(true);
+                                      }}>
+                                        <Eye size={14} className="mr-2" />
+                                        Review & Disburse
                                       </DropdownMenuItem>
                                     </>
                                   )}
