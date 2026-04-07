@@ -1,5 +1,5 @@
-import { apiGet, apiPost } from "@/api/httpClient";
-import { apiFeatureFlags } from "@/config/apiMode";
+import { apiGet } from "@/api/httpClient";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface LoanEvent {
   id: string;
@@ -17,33 +17,46 @@ export interface PaymentClaimInput {
   receiptUrl?: string | null;
 }
 
-function assertWorkflowApiEnabled() {
-  if (!apiFeatureFlags.phase1Workflow) {
-    throw new Error("Workflow API mode is required for this operation. Enable VITE_API_PHASE1_WORKFLOW.");
-  }
-}
-
 export async function submitPaymentClaim(
   repaymentId: string,
   payload: PaymentClaimInput,
   fallbackData?: { loanId: string; userId: string },
 ) {
-  void fallbackData;
-  assertWorkflowApiEnabled();
-  const res = await apiPost<{ ok: true; data: unknown }>(`/api/v1/repayments/${repaymentId}/payment-claims`, payload);
-  return res.data;
+  if (fallbackData) {
+    const { data, error } = await supabase.from("payment_claims").insert({
+      repayment_id: repaymentId,
+      loan_id: fallbackData.loanId,
+      user_id: fallbackData.userId,
+      amount: payload.amount,
+      reference: payload.reference,
+      receipt_url: payload.receiptUrl ?? null,
+      status: "pending",
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+  throw new Error("Workflow API mode is not available. Provide fallbackData.");
 }
 
 export async function fetchBorrowerLoanEvents(loanId: string): Promise<LoanEvent[]> {
-  assertWorkflowApiEnabled();
-  const res = await apiGet<{ ok: true; data: LoanEvent[] }>(`/api/v1/loans/${loanId}/events?scope=borrower`);
-  return res.data ?? [];
+  const { data, error } = await supabase
+    .from("loan_events")
+    .select("*")
+    .eq("loan_id", loanId)
+    .in("visibility", ["borrower", "both"])
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as unknown as LoanEvent[]) ?? [];
 }
 
 export async function fetchAdminPaymentClaims(status = "pending_review") {
-  assertWorkflowApiEnabled();
-  const res = await apiGet<{ ok: true; data: any[] }>(`/api/v1/admin/payment-claims?status=${encodeURIComponent(status)}`);
-  return res.data ?? [];
+  const { data, error } = await supabase
+    .from("payment_claims")
+    .select("*")
+    .eq("status", status)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function reviewPaymentClaim(input: {
@@ -52,10 +65,15 @@ export async function reviewPaymentClaim(input: {
   reviewComment?: string;
   decisionReasonCode?: string;
 }) {
-  assertWorkflowApiEnabled();
-  return apiPost(`/api/v1/payment-claims/${input.claimId}/review`, input, {
-    headers: { "Idempotency-Key": `${input.claimId}:${input.decision}` },
-  });
+  const { error } = await supabase
+    .from("payment_claims")
+    .update({
+      status: input.decision,
+      review_comment: input.reviewComment ?? null,
+      decision_reason_code: input.decisionReasonCode ?? null,
+    })
+    .eq("id", input.claimId);
+  if (error) throw error;
 }
 
 export async function transitionLoanStatus(input: {
@@ -64,6 +82,14 @@ export async function transitionLoanStatus(input: {
   reasonCode?: string;
   reasonText?: string;
 }) {
-  assertWorkflowApiEnabled();
-  return apiPost(`/api/v1/loans/${input.loanId}/transitions`, input);
+  const { error } = await supabase.from("loan_status_transitions").insert({
+    loan_id: input.loanId,
+    from_status: "",
+    to_status: input.toStatus,
+    actor_type: "admin",
+    actor_id: (await supabase.auth.getUser()).data.user?.id,
+    reason_code: input.reasonCode ?? null,
+    reason_text: input.reasonText ?? null,
+  });
+  if (error) throw error;
 }
