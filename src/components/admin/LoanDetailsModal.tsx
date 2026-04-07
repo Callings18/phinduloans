@@ -715,7 +715,130 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Reloan mutation - carry-forward outstanding balance; blocks only if unpaid penalties remain
+  // Disburse loan from detail view mutation
+  const disburseLoanFromDetailMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+      if (!disburseSourceAccountId) throw new Error("Select a source account");
+
+      // Fetch product fees
+      let processingFeePercent = 0, insurancePercent = 0, enforcementPercent = 0, vatPercent = 0, platformPercent = 0;
+      if (loan.loan_product_id) {
+        const { data: prod } = await supabase
+          .from("loan_products")
+          .select("processing_fee_percent, insurance_percent, enforcement_fee_percent, vat_percent, platform_fee_percent")
+          .eq("id", loan.loan_product_id)
+          .single();
+        if (prod) {
+          processingFeePercent = Number(prod.processing_fee_percent) || 0;
+          insurancePercent = Number(prod.insurance_percent) || 0;
+          enforcementPercent = Number(prod.enforcement_fee_percent) || 0;
+          vatPercent = Number(prod.vat_percent) || 0;
+          platformPercent = Number(prod.platform_fee_percent) || 0;
+        }
+      }
+
+      const principal = loan.loan_amount;
+      const processingFee = principal * (processingFeePercent / 100);
+      const insuranceFee = principal * (insurancePercent / 100);
+      const enforcementFee = principal * (enforcementPercent / 100);
+      const platformFee = principal * (platformPercent / 100);
+      const vatableAmount = processingFee + enforcementFee + platformFee;
+      const vatFee = vatableAmount * (vatPercent / 100);
+      const totalFees = processingFee + insuranceFee + enforcementFee + platformFee + vatFee;
+      const netDisbursement = principal - totalFees;
+
+      if (netDisbursement <= 0) throw new Error("Net disbursement is zero or negative after fees");
+
+      // Fresh balance check
+      const { data: freshAccount, error: accErr } = await supabase
+        .from("accounts")
+        .select("id, account_name, balance")
+        .eq("id", disburseSourceAccountId)
+        .single();
+      if (accErr || !freshAccount) throw new Error("Source account not found");
+      if (Number(freshAccount.balance) < netDisbursement) {
+        throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
+      }
+
+      // Deduct from source account
+      const newBalance = Number(freshAccount.balance) - netDisbursement;
+      const { error: accUpdateErr } = await supabase
+        .from("accounts")
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq("id", freshAccount.id);
+      if (accUpdateErr) throw accUpdateErr;
+
+      // Record transaction
+      const { error: txErr } = await supabase.from("account_transactions").insert({
+        account_id: freshAccount.id,
+        transaction_type: "disbursement",
+        amount: netDisbursement,
+        balance_before: Number(freshAccount.balance),
+        balance_after: newBalance,
+        reference_type: "loan_disbursement",
+        reference_id: loan.id,
+        source: freshAccount.account_name,
+        destination: `${loan.full_name} (Loan Disbursement)`,
+        notes: `Principal K${principal.toLocaleString()}, Fees K${totalFees.toLocaleString()}, Net K${netDisbursement.toLocaleString()}`,
+        created_by: user?.id,
+      });
+      if (txErr) throw txErr;
+
+      // Record disbursement
+      const { error: disbErr } = await supabase.from("disbursements").insert({
+        loan_id: loan.id,
+        amount: netDisbursement,
+        disbursement_method: disburseMethod,
+        source_account_id: freshAccount.id,
+        transaction_reference: disburseTransactionRef || null,
+        status: "completed",
+        disbursed_at: new Date().toISOString(),
+      });
+      if (disbErr) throw disbErr;
+
+      // Update loan status to disbursed (trigger generates schedule + transitions to active)
+      const { error: loanErr } = await supabase
+        .from("loan_applications")
+        .update({
+          status: "disbursed" as any,
+          disbursed_by: user?.id,
+          disbursed_at: new Date().toISOString(),
+        })
+        .eq("id", loan.id);
+      if (loanErr) throw loanErr;
+
+      await logAudit({
+        action: "LOAN_DISBURSED",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: {
+          net_disbursement: netDisbursement,
+          total_fees: totalFees,
+          source_account: freshAccount.account_name,
+          method: disburseMethod,
+        },
+      });
+
+      return { netDisbursement, totalFees, accountName: freshAccount.account_name };
+    },
+    onSuccess: ({ netDisbursement, accountName }) => {
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["loan-disbursement", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast.success(`Loan disbursed! K${netDisbursement.toLocaleString()} from ${accountName}`);
+      setIsDisburseOpen(false);
+      setDisburseSourceAccountId("");
+      setDisburseTransactionRef("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to disburse loan");
+    },
+  });
+
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
