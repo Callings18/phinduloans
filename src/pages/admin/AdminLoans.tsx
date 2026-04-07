@@ -118,7 +118,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 };
 
 const AdminLoans = () => {
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("approved");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -737,6 +737,19 @@ const AdminLoans = () => {
                                       <Edit size={14} className="mr-2" />
                                       Edit Loan
                                     </DropdownMenuItem>
+                                  )}
+                                  {loan.status === "approved" && can('loans', 'edit') && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={() => {
+                                        if (confirm(`Disburse loan for ${loan.full_name} (K${Number(loan.loan_amount).toLocaleString()})?`)) {
+                                          disburseLoanMutation.mutate(loan.id);
+                                        }
+                                      }}>
+                                        <Banknote size={14} className="mr-2" />
+                                        Disburse Loan
+                                      </DropdownMenuItem>
+                                    </>
                                   )}
                                   {["active", "disbursed"].includes(loan.status) && (
                                     <>
