@@ -856,12 +856,9 @@ const AdminLoans = () => {
                                         <Receipt size={14} className="mr-2" />
                                         Record Payment
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => {
-                                        setSelectedLoan(loan);
-                                        setIsDetailsOpen(true);
-                                      }}>
+                                      <DropdownMenuItem onClick={() => handleDownloadSchedule(loan)}>
                                         <Download size={14} className="mr-2" />
-                                        View Schedule
+                                        Download Schedule PDF
                                       </DropdownMenuItem>
                                     </>
                                   )}
