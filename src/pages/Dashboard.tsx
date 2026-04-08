@@ -44,7 +44,8 @@ import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
 import { submitPaymentClaim } from "@/services/repositories/workflowRepository";
 
-export type BorrowerTab = "home" | "loans" | "apply" | "payments" | "profile";
+import type { BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
+export type { BorrowerTab };
 
 const sidebarItems: { id: BorrowerTab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Dashboard", icon: Home },
