@@ -350,7 +350,8 @@ const AdminDisbursements = () => {
 
       if (error) throw error;
 
-      // Update loan status only. Account deduction and schedule generation are DB-owned side effects.
+      // Record disbursement metadata on the loan — the DB trigger on disbursements
+      // auto-generates the repayment schedule and sets the loan to "active".
       if (status === "completed") {
         const disbursement = disbursements?.find((d) => d.id === id);
         if (disbursement) {
@@ -358,10 +359,10 @@ const AdminDisbursements = () => {
             throw new Error("No source account linked to this disbursement. Please create a new disbursement with a source account.");
           }
 
+          // Only update metadata; do NOT set status — the trigger handles that
           await supabase
             .from("loan_applications")
             .update({
-              status: "disbursed",
               disbursed_by: (await supabase.auth.getUser()).data.user?.id ?? null,
               disbursed_at: new Date().toISOString(),
             })

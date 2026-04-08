@@ -51,7 +51,7 @@ const AdminDashboard = () => {
       const completedDisbursements = disbursements.data || [];
       
       const totalDisbursed = completedDisbursements.reduce((sum, d) => sum + Number(d.amount), 0);
-      const activeLoans = loans.filter(l => ['active', 'disbursed'].includes(l.status));
+      const activeLoans = loans.filter(l => l.status === 'active');
       const paidRepayments = allRepayments.filter(r => r.status === 'paid');
       const amountRecovered = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
       const pendingRepayments = allRepayments.filter(r => r.status === 'pending');
