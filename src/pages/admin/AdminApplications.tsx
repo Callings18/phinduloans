@@ -106,6 +106,17 @@ const sourceConfig = {
   mobile_app: { label: "Mobile App", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: "📲" },
 };
 
+function assertTransitionRpcSuccess(data: unknown) {
+  if (data == null) return;
+
+  if (typeof data === "object" && "ok" in data) {
+    const result = data as { ok?: boolean; error?: string };
+    if (!result.ok) {
+      throw new Error(result.error || "Transition failed");
+    }
+  }
+}
+
 const AdminApplications = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -424,8 +435,7 @@ const AdminApplications = () => {
           ...(reason ? { p_reason: reason } : {}),
         });
         if (error) throw error;
-        const res = data as { ok?: boolean; error?: string };
-        if (!res?.ok) throw new Error(res?.error || "Transition failed");
+        assertTransitionRpcSuccess(data);
       } else {
         // For other status changes (under_review, etc.), use direct update
         const updateData: any = {
@@ -711,8 +721,7 @@ const AdminApplications = () => {
         ...(reason ? { p_reason: reason } : {}),
       });
       if (error) throw error;
-      const result = data as { ok: boolean; error?: string };
-      if (!result?.ok) throw new Error(result?.error || "Transition failed");
+      assertTransitionRpcSuccess(data);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
@@ -1092,8 +1101,7 @@ const AdminApplications = () => {
       ...(reason !== undefined ? { p_reason: reason } : {}),
     });
     if (error) throw error;
-    const res = data as { ok?: boolean; error?: string };
-    if (!res?.ok) throw new Error(res?.error || "Transition failed");
+    assertTransitionRpcSuccess(data);
   };
 
   // Handle bulk action execution
