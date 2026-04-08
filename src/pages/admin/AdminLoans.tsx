@@ -113,7 +113,7 @@ interface LoanProduct {
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-warning/20 text-warning border-warning/30", icon: Banknote },
   approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
-  disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Activity },
+  disbursed: { label: "Disbursed", color: "bg-accent/20 text-accent-foreground border-accent/30", icon: Activity },
   active: { label: "Active", color: "bg-info/20 text-info border-info/30", icon: Activity },
   completed: { label: "Completed", color: "bg-primary/20 text-primary border-primary/30", icon: CheckCircle },
   defaulted: { label: "Defaulted", color: "bg-destructive/20 text-destructive border-destructive/30", icon: XCircle },
