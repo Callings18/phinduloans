@@ -30,7 +30,6 @@ function formatPhoneNumber(phone: string): string {
 }
 
 function generateOTP(): string {
-  // Generate 6-digit OTP
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
@@ -54,9 +53,7 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
   const providers = providersData?.value || {};
   const config = configData?.value || {};
 
-  // Correct URL is .com (verified from ExciteSMS login page)
   const apiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
-  // Ensure we use .com (the correct domain)
   const correctedApiUrl = apiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com");
 
   return {
@@ -68,13 +65,13 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
 
 async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promise<any> {
   if (!creds.apiToken) {
-    throw new Error("ExciteSMS API token not configured");
+    throw new Error("SMS provider not configured");
   }
 
   const phone = formatPhoneNumber(to).replace("+", "");
   const url = `${creds.apiUrl}/sms/send`;
 
-  console.log(`[OTP - ExciteSMS] Sending to ${phone}`);
+  console.log(`[OTP] Sending to ${phone}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -98,20 +95,17 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
     try {
       result = JSON.parse(responseText);
     } catch {
-      throw new Error(`ExciteSMS returned invalid JSON. Response: ${responseText.substring(0, 100)}`);
+      console.error("[OTP] Invalid JSON from SMS provider:", responseText.substring(0, 100));
+      throw new Error("SMS delivery failed");
     }
   } else {
-    if (responseText.trim().startsWith("<!") || responseText.includes("<html")) {
-      throw new Error(
-        `ExciteSMS returned HTML (Status: ${response.status}). Check API URL and token (auth failure or wrong endpoint).`
-      );
-    }
-    throw new Error(`ExciteSMS unexpected response: ${contentType}. ${responseText.substring(0, 100)}`);
+    console.error(`[OTP] Non-JSON response from SMS provider (${response.status}): ${responseText.substring(0, 200)}`);
+    throw new Error("SMS delivery failed");
   }
-  console.log("[OTP - ExciteSMS] Response:", JSON.stringify(result));
+  console.log("[OTP] SMS provider response:", JSON.stringify(result));
 
   if (result.status === "error") {
-    throw new Error(result.message || "Failed to send OTP via ExciteSMS");
+    throw new Error("SMS delivery failed");
   }
 
   return result;
@@ -166,17 +160,15 @@ serve(async (req) => {
         .maybeSingle();
 
       if (!existingProfile) {
-        console.log(`[OTP] No account found for phone: ${formattedPhone}`);
         return new Response(
-          JSON.stringify({ success: false, error: "No account found for this number/email. Please sign up first." }),
+          JSON.stringify({ success: false, error: "No account found for this number. Please sign up first." }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
 
-    // Generate OTP
     const otp = generateOTP();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
     // Invalidate any existing OTPs for this phone
     await supabase
@@ -225,16 +217,15 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         message: "OTP sent successfully",
-        expiresIn: 300, // 5 minutes in seconds
+        expiresIn: 300,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error: unknown) {
     console.error("[OTP] Error:", error);
-    const message = error instanceof Error ? error.message : "Failed to send OTP";
     return new Response(
-      JSON.stringify({ success: false, error: message }),
+      JSON.stringify({ success: false, error: "Failed to send verification code. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

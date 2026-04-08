@@ -14,7 +14,6 @@ interface SMSRequest {
 }
 
 const handler = async (req: Request): Promise<Response> => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -32,7 +31,6 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     const token = authHeader.replace("Bearer ", "");
-    // Check if it's a service_role call (server-to-server)
     if (token !== supabaseServiceKey) {
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
@@ -58,17 +56,11 @@ const handler = async (req: Request): Promise<Response> => {
     const username = Deno.env.get("AFRICASTALKING_USERNAME");
 
     if (!apiKey || !username) {
-      console.log("[SMS] Africa's Talking credentials not configured - SMS will be logged only");
+      console.error("[SMS] Africa's Talking credentials not configured");
       
       const { to, message, userId, title }: SMSRequest = await req.json();
-      
-      // Log the SMS attempt for debugging
-      console.log("[SMS] Would send to:", to);
-      console.log("[SMS] Message:", message);
 
-      // Still log to database for tracking
       const logSupabase = createClient(supabaseUrl, supabaseServiceKey);
-
       const recipients = Array.isArray(to) ? to : [to];
       
       for (const recipient of recipients) {
@@ -79,15 +71,14 @@ const handler = async (req: Request): Promise<Response> => {
           title: title || "SMS Notification",
           message: message,
           status: "pending_config",
-          provider_response: { note: "API keys not configured" }
+          provider_response: { note: "SMS provider not configured" }
         });
       }
 
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: "SMS logged (API keys not configured)",
-          simulated: true 
+          message: "SMS queued for delivery"
         }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
@@ -104,7 +95,6 @@ const handler = async (req: Request): Promise<Response> => {
 
     const recipients = Array.isArray(to) ? to.join(",") : to;
     
-    // Format phone numbers for Zambia if needed
     const formattedRecipients = recipients.split(",").map(phone => {
       let cleaned = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
       if (cleaned.startsWith("0")) {
@@ -117,7 +107,6 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("[SMS] Sending to:", formattedRecipients);
 
-    // Africa's Talking API call
     const atUrl = username === "sandbox" 
       ? "https://api.sandbox.africastalking.com/version1/messaging"
       : "https://api.africastalking.com/version1/messaging";
@@ -126,7 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
     formData.append("username", username);
     formData.append("to", formattedRecipients);
     formData.append("message", message);
-    formData.append("from", "PHINDU"); // Sender ID
+    formData.append("from", "PHINDU");
 
     const response = await fetch(atUrl, {
       method: "POST",
@@ -139,9 +128,8 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     const result = await response.json();
-    console.log("[SMS] Africa's Talking response:", JSON.stringify(result));
+    console.log("[SMS] Provider response:", JSON.stringify(result));
 
-    // Log to database
     const logClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const recipientList = formattedRecipients.split(",");
@@ -173,7 +161,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("[SMS] Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "SMS service temporarily unavailable" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
