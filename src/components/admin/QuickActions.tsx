@@ -32,7 +32,9 @@ const quickActions = [
   },
 ];
 
-const QuickActions = () => {
+import { forwardRef } from "react";
+
+const QuickActions = forwardRef<HTMLDivElement>((_, ref) => {
   return (
     <Card className="border-border/50 bg-card/80">
       <CardHeader className="pb-3">
@@ -66,6 +68,8 @@ const QuickActions = () => {
       </CardContent>
     </Card>
   );
-};
+});
+
+QuickActions.displayName = "QuickActions";
 
 export default QuickActions;

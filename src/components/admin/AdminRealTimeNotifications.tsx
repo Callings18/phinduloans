@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, forwardRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Bell, CheckCircle, AlertTriangle, Info, FileText, Download, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ interface Notification {
   };
 }
 
-const AdminRealTimeNotifications = () => {
+const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -254,6 +254,8 @@ const AdminRealTimeNotifications = () => {
       })}
     </div>
   );
-};
+});
+
+AdminRealTimeNotifications.displayName = "AdminRealTimeNotifications";
 
 export default AdminRealTimeNotifications;

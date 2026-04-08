@@ -50,14 +50,14 @@ const getStatusIndex = (status: string): number => {
 
 const getStatusColor = (status: string): string => {
   switch (status) {
-    case "pending": return "bg-yellow-500";
-    case "under_review": return "bg-blue-500";
-    case "approved": return "bg-green-500";
-    case "contract_signing": return "bg-orange-500";
-    case "awaiting_disbursement": return "bg-indigo-500";
-    case "rejected": return "bg-red-500";
-    case "disbursed": return "bg-purple-500";
-    case "active": return "bg-emerald-500";
+    case "pending": return "bg-warning";
+    case "under_review": return "bg-info";
+    case "approved": return "bg-success";
+    case "contract_signing": return "bg-accent";
+    case "awaiting_disbursement": return "bg-primary";
+    case "rejected": return "bg-destructive";
+    case "disbursed": return "bg-primary";
+    case "active": return "bg-success";
     case "completed": return "bg-primary";
     case "defaulted": return "bg-destructive";
     default: return "bg-muted";
