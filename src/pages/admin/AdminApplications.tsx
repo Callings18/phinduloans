@@ -99,6 +99,9 @@ const statusConfig = {
   defaulted: { label: "Defaulted", color: "bg-destructive/20 text-destructive border-destructive/30" },
 };
 
+const APPROVABLE_STATUSES = ["pending", "under_review", "crb_failed", "pmic_pending"] as const;
+const DISBURSABLE_APPLICATION_STATUSES = ["approved", "awaiting_disbursement"] as const;
+
 const sourceConfig = {
   website: { label: "Website", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: "🌐" },
   internal: { label: "Internal", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: "🏢" },
@@ -725,6 +728,30 @@ const AdminApplications = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      if (variables.action === "approve") {
+        setSelectedApp((current: any) =>
+          current?.id === variables.id
+            ? {
+                ...current,
+                status: "awaiting_disbursement",
+                approval_stage: "approved",
+                approved_by: user?.id ?? current.approved_by,
+                approved_at: new Date().toISOString(),
+              }
+            : current,
+        );
+      } else if (variables.action === "reject") {
+        setSelectedApp((current: any) =>
+          current?.id === variables.id
+            ? {
+                ...current,
+                status: "rejected",
+                rejection_reason: variables.reason ?? current.rejection_reason,
+              }
+            : current,
+        );
+      }
+
       if (selectedApp && variables.action === "approve") {
         notificationService.sendLoanApproval(
           selectedApp.user_id,
@@ -748,7 +775,7 @@ const AdminApplications = () => {
             ? "Finance approved"
             : variables.action === "reject"
               ? "Application rejected"
-              : "Application approved";
+              : "Application moved to Awaiting Disbursement";
       toast({ title: msg });
     },
     onError: (error) => {
@@ -981,8 +1008,11 @@ const AdminApplications = () => {
   const handleApprove = async () => {
     if (!selectedApp) return;
     setIsProcessing(true);
-    await transitionMutation.mutateAsync({ id: selectedApp.id, action: "approve" });
-    setIsProcessing(false);
+    try {
+      await transitionMutation.mutateAsync({ id: selectedApp.id, action: "approve" });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleReject = async () => {
@@ -991,10 +1021,13 @@ const AdminApplications = () => {
       ? (rejectionReason ? `${rejectionCategory}: ${rejectionReason}` : rejectionCategory)
       : rejectionReason || "Rejected";
     setIsProcessing(true);
-    await transitionMutation.mutateAsync({ id: selectedApp.id, action: "reject", reason });
-    setIsProcessing(false);
-    setRejectionCategory("");
-    setRejectionReason("");
+    try {
+      await transitionMutation.mutateAsync({ id: selectedApp.id, action: "reject", reason });
+      setRejectionCategory("");
+      setRejectionReason("");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleCreateLoan = () => {
@@ -1316,6 +1349,8 @@ const AdminApplications = () => {
                   <SelectItem value="crb_failed">CRB Failed</SelectItem>
                   <SelectItem value="pmic_pending">PMIC Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="contract_signing">Contract Signing</SelectItem>
+                  <SelectItem value="awaiting_disbursement">Awaiting Disbursement</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="disbursed">Disbursed</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
@@ -2162,7 +2197,7 @@ const AdminApplications = () => {
                 </Card>
 
                 {/* Recommend / Approve / Reject */}
-                {(selectedApp.status === 'pending' || selectedApp.status === 'under_review') && (
+                {APPROVABLE_STATUSES.includes(selectedApp.status as (typeof APPROVABLE_STATUSES)[number]) && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-4">
                       <h4 className="font-semibold text-foreground">Decision</h4>
@@ -2221,7 +2256,7 @@ const AdminApplications = () => {
                 )}
 
                 {/* Disburse - Admin only */}
-                {selectedApp.status === 'approved' && canDisburseApplication && (
+                {DISBURSABLE_APPLICATION_STATUSES.includes(selectedApp.status as (typeof DISBURSABLE_APPLICATION_STATUSES)[number]) && canDisburseApplication && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-3">
                       <h4 className="font-semibold text-foreground">Disburse Loan</h4>
