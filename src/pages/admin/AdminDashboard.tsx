@@ -297,7 +297,7 @@ const AdminDashboard = () => {
                   <p className="text-muted-foreground text-sm font-medium">Active Loans</p>
                   <p className="text-4xl font-bold text-foreground">{stats?.activeLoans || 0}</p>
                 </div>
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-warning to-orange-600 flex items-center justify-center shadow-lg">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-warning to-warning/70 flex items-center justify-center shadow-lg">
                   <Clock className="text-white" size={24} />
                 </div>
               </div>
@@ -312,7 +312,7 @@ const AdminDashboard = () => {
                   <p className="text-muted-foreground text-sm font-medium">Total Borrowers</p>
                   <p className="text-4xl font-bold text-foreground">{stats?.totalBorrowers || 0}</p>
                 </div>
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-success to-success/70 flex items-center justify-center shadow-lg">
                   <Users className="text-white" size={24} />
                 </div>
               </div>
@@ -322,14 +322,14 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="relative overflow-hidden border-border/50 bg-gradient-to-br from-purple-500/10 via-card to-card hover:border-purple-500/50 transition-all duration-300">
+          <Card className="relative overflow-hidden border-border/50 bg-gradient-to-br from-primary/10 via-card to-card hover:border-primary/50 transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-muted-foreground text-sm font-medium">Total Disbursed</p>
                   <p className="text-3xl font-bold text-foreground">K{(stats?.totalDisbursed || 0).toLocaleString()}</p>
                 </div>
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg">
                   <Wallet className="text-white" size={24} />
                 </div>
               </div>
