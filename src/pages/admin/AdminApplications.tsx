@@ -84,18 +84,18 @@ import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
 
 const statusConfig = {
-  pending: { label: "Pending", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-  under_review: { label: "Under Review", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  crb_failed: { label: "CRB Failed", color: "bg-amber-600/20 text-amber-400 border-amber-600/30" },
-  pmic_pending: { label: "PMIC Pending", color: "bg-cyan-600/20 text-cyan-400 border-cyan-600/30" },
-  approved: { label: "Approved", color: "bg-green-500/20 text-green-400 border-green-500/30" },
-  contract_signing: { label: "Contract Signing", color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
-  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-teal-500/20 text-teal-400 border-teal-500/30" },
-  rejected: { label: "Rejected", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  disbursed: { label: "Disbursed", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
-  active: { label: "Active", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-  completed: { label: "Completed", color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
-  defaulted: { label: "Defaulted", color: "bg-red-600/20 text-red-500 border-red-600/30" },
+  pending: { label: "Pending", color: "bg-warning/20 text-warning border-warning/30" },
+  under_review: { label: "Under Review", color: "bg-info/20 text-info border-info/30" },
+  crb_failed: { label: "CRB Failed", color: "bg-warning/20 text-warning border-warning/30" },
+  pmic_pending: { label: "PMIC Pending", color: "bg-info/20 text-info border-info/30" },
+  approved: { label: "Approved", color: "bg-success/20 text-success border-success/30" },
+  contract_signing: { label: "Contract Signing", color: "bg-accent/20 text-accent-foreground border-accent/30" },
+  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-primary/20 text-primary border-primary/30" },
+  rejected: { label: "Rejected", color: "bg-destructive/20 text-destructive border-destructive/30" },
+  disbursed: { label: "Disbursed", color: "bg-primary/20 text-primary border-primary/30" },
+  active: { label: "Active", color: "bg-success/20 text-success border-success/30" },
+  completed: { label: "Completed", color: "bg-muted/50 text-muted-foreground border-border" },
+  defaulted: { label: "Defaulted", color: "bg-destructive/20 text-destructive border-destructive/30" },
 };
 
 const sourceConfig = {
