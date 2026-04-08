@@ -868,7 +868,12 @@ const AdminLoans = () => {
                               <div>
                                 <p className="font-medium">K{Number(loan.loan_amount).toLocaleString()}</p>
                                 {(processingFee > 0 || enforcementFee > 0 || insuranceFee > 0 || platformFee > 0 || vatAmount > 0) && (
-                                  <p className="text-xs text-success">Disbursed: K{disbursedAmount.toLocaleString()}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {["disbursed", "active", "completed", "defaulted"].includes(loan.status)
+                                      ? <span className="text-success">Disbursed: K{disbursedAmount.toLocaleString()}</span>
+                                      : <span className="text-warning">Net payout: K{disbursedAmount.toLocaleString()}</span>
+                                    }
+                                  </p>
                                 )}
                               </div>
                             </TableCell>
