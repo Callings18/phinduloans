@@ -36,7 +36,7 @@ import { forwardRef } from "react";
 
 const QuickActions = forwardRef<HTMLDivElement>((_, ref) => {
   return (
-    <Card className="border-border/50 bg-card/80">
+    <Card ref={ref} className="border-border/50 bg-card/80">
       <CardHeader className="pb-3">
         <CardTitle className="text-foreground text-lg flex items-center gap-2">
           <Plus size={18} className="text-primary" />
