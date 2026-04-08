@@ -23,6 +23,23 @@ export async function createRepaymentScheduleForLoan(
   loan: LoanForSchedule,
   supabase: SupabaseClient
 ): Promise<void> {
+  const { count: existingRepaymentsCount, error: existingRepaymentsError } = await supabase
+    .from("loan_repayments")
+    .select("id", { count: "exact", head: true })
+    .eq("loan_id", loan.id);
+
+  if (existingRepaymentsError) throw existingRepaymentsError;
+
+  if ((existingRepaymentsCount ?? 0) > 0) {
+    const { error: ensureActiveError } = await supabase
+      .from("loan_applications")
+      .update({ status: "active" })
+      .eq("id", loan.id)
+      .neq("status", "active");
+    if (ensureActiveError) throw ensureActiveError;
+    return;
+  }
+
   let termUnit = loan.term_unit ?? "months";
   let interestPeriod = "monthly";
   let repaymentFrequency = "monthly";

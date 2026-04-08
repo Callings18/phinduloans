@@ -26,6 +26,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import {
   Banknote,
   Plus,
@@ -358,6 +359,15 @@ const AdminDisbursements = () => {
           if (!disbursement.source_account_id) {
             throw new Error("No source account linked to this disbursement. Please create a new disbursement with a source account.");
           }
+
+          const { data: freshLoan, error: loanFetchError } = await supabase
+            .from("loan_applications")
+            .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
+            .eq("id", disbursement.loan_id)
+            .single();
+          if (loanFetchError) throw loanFetchError;
+
+          await createRepaymentScheduleForLoan(freshLoan, supabase);
 
           // Only update metadata; do NOT set status — the trigger handles that
           await supabase

@@ -82,6 +82,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
+import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-warning/20 text-warning border-warning/30" },
@@ -553,6 +554,15 @@ const AdminApplications = () => {
         })
         .eq("id", insertedDisbursement.id);
       if (completeError) throw completeError;
+
+      const { data: freshLoan, error: loanFetchError } = await supabase
+        .from("loan_applications")
+        .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
+        .eq("id", selectedApp.id)
+        .single();
+      if (loanFetchError) throw loanFetchError;
+
+      await createRepaymentScheduleForLoan(freshLoan, supabase);
 
       // Enforce state-machine transition via API route (no direct status mutation here).
       await transitionLoanStatus({

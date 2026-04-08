@@ -797,6 +797,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       });
       if (disbErr) throw disbErr;
 
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
+          user_id: loan.user_id,
+          loan_term_months: loan.loan_term_months,
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
+          loan_product_id: loan.loan_product_id,
+          term_unit: (loan as any).term_unit,
+        },
+        supabase,
+      );
+
       // Record disbursement metadata (trigger already set status to active via generate_repayment_schedule)
       const { error: loanErr } = await supabase
         .from("loan_applications")
