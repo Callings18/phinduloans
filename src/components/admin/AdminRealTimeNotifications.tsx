@@ -134,7 +134,7 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[100] space-y-3 max-w-md">
+    <div ref={ref} className="fixed top-4 right-4 z-[100] space-y-3 max-w-md">
       {notifications.map((notification) => {
         const isContractSigned = notification.event_type === 'contract_signed';
         const hasSignature = !!notification.provider_response?.signatureUrl;
