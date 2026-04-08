@@ -797,11 +797,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       });
       if (disbErr) throw disbErr;
 
-      // Update loan status to disbursed (trigger generates schedule + transitions to active)
+      // Record disbursement metadata (trigger already set status to active via generate_repayment_schedule)
       const { error: loanErr } = await supabase
         .from("loan_applications")
         .update({
-          status: "disbursed" as any,
           disbursed_by: user?.id,
           disbursed_at: new Date().toISOString(),
         })

@@ -308,11 +308,10 @@ const AdminLoans = () => {
       });
       if (disbError) throw disbError;
 
-      // Update loan status to disbursed (trigger auto-transitions to active)
+      // Record disbursement metadata on the loan (trigger already set status to active)
       const { error: statusError } = await supabase
         .from("loan_applications")
         .update({
-          status: "disbursed" as any,
           disbursed_at: new Date().toISOString(),
           disbursed_by: user?.id,
         })
