@@ -23,7 +23,7 @@ interface SendDirectNotificationParams {
  * Use this for admin-initiated actions where the admin explicitly clicks a button.
  */
 export async function sendDirectNotification(params: SendDirectNotificationParams) {
-  console.log(`[Direct Notification] Sending ${params.type} to ${params.to}`);
+  if (import.meta.env.DEV) console.log(`[Direct Notification] Sending ${params.type} to ${params.to}`);
   
   try {
     const { data, error } = await supabase.functions.invoke("send-notification", {
@@ -51,7 +51,7 @@ export async function sendDirectNotification(params: SendDirectNotificationParam
       throw new Error(errorMsg);
     }
 
-    console.log("[Direct Notification] Success:", data);
+    if (import.meta.env.DEV) console.log("[Direct Notification] Success:", data);
     return { success: true, data };
   } catch (error: any) {
     console.error("[Direct Notification] Error:", error);

@@ -139,33 +139,33 @@ function App() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/admin" element={<AdminRoute />}>
-                    <Route index element={<AdminDashboard />} />
-                    <Route path="applications" element={<AdminApplications />} />
-                    <Route path="borrowers" element={<AdminBorrowers />} />
-                    <Route path="settings" element={<AdminSettings />} />
-                    <Route path="employers" element={<AdminEmployers />} />
-                    <Route path="disbursements" element={<AdminDisbursements />} />
-                    <Route path="reports" element={<AdminReports />} />
-                    <Route path="loan-products" element={<AdminLoanProducts />} />
-                    <Route path="loans" element={<AdminLoans />} />
-                    <Route path="repayments" element={<AdminRepayments />} />
-                    <Route path="collections" element={<AdminCollections />} />
-                    <Route path="staff" element={<AdminStaff />} />
-                    <Route path="audit-logs" element={<AdminAuditLogs />} />
-                    <Route path="write-offs" element={<AdminWriteOffs />} />
-                    <Route path="bulk-repayments" element={<AdminBulkRepayments />} />
-                    <Route path="contract-templates" element={<AdminContractTemplates />} />
-                    <Route path="pmic" element={<AdminPMIC />} />
-                    <Route path="accounts" element={<AdminAccounts />} />
-                    <Route path="expenses" element={<AdminExpenses />} />
-                    <Route path="court-cases" element={<AdminCourtCases />} />
-                    <Route path="wallets" element={<AdminWallets />} />
-                    <Route path="hr" element={<AdminHR />} />
-                    <Route path="payroll" element={<AdminPayroll />} />
-                    <Route path="email-log" element={<AdminEmailLog />} />
-                    <Route path="user-guide" element={<AdminUserGuide />} />
-                    <Route path="roles-permissions" element={<AdminRolesPermissions />} />
-                    <Route path="crb-queue" element={<AdminCRBQueue />} />
+                    <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
+                    <Route path="applications" element={<ErrorBoundary><AdminApplications /></ErrorBoundary>} />
+                    <Route path="borrowers" element={<ErrorBoundary><AdminBorrowers /></ErrorBoundary>} />
+                    <Route path="settings" element={<ErrorBoundary><AdminSettings /></ErrorBoundary>} />
+                    <Route path="employers" element={<ErrorBoundary><AdminEmployers /></ErrorBoundary>} />
+                    <Route path="disbursements" element={<ErrorBoundary><AdminDisbursements /></ErrorBoundary>} />
+                    <Route path="reports" element={<ErrorBoundary><AdminReports /></ErrorBoundary>} />
+                    <Route path="loan-products" element={<ErrorBoundary><AdminLoanProducts /></ErrorBoundary>} />
+                    <Route path="loans" element={<ErrorBoundary><AdminLoans /></ErrorBoundary>} />
+                    <Route path="repayments" element={<ErrorBoundary><AdminRepayments /></ErrorBoundary>} />
+                    <Route path="collections" element={<ErrorBoundary><AdminCollections /></ErrorBoundary>} />
+                    <Route path="staff" element={<ErrorBoundary><AdminStaff /></ErrorBoundary>} />
+                    <Route path="audit-logs" element={<ErrorBoundary><AdminAuditLogs /></ErrorBoundary>} />
+                    <Route path="write-offs" element={<ErrorBoundary><AdminWriteOffs /></ErrorBoundary>} />
+                    <Route path="bulk-repayments" element={<ErrorBoundary><AdminBulkRepayments /></ErrorBoundary>} />
+                    <Route path="contract-templates" element={<ErrorBoundary><AdminContractTemplates /></ErrorBoundary>} />
+                    <Route path="pmic" element={<ErrorBoundary><AdminPMIC /></ErrorBoundary>} />
+                    <Route path="accounts" element={<ErrorBoundary><AdminAccounts /></ErrorBoundary>} />
+                    <Route path="expenses" element={<ErrorBoundary><AdminExpenses /></ErrorBoundary>} />
+                    <Route path="court-cases" element={<ErrorBoundary><AdminCourtCases /></ErrorBoundary>} />
+                    <Route path="wallets" element={<ErrorBoundary><AdminWallets /></ErrorBoundary>} />
+                    <Route path="hr" element={<ErrorBoundary><AdminHR /></ErrorBoundary>} />
+                    <Route path="payroll" element={<ErrorBoundary><AdminPayroll /></ErrorBoundary>} />
+                    <Route path="email-log" element={<ErrorBoundary><AdminEmailLog /></ErrorBoundary>} />
+                    <Route path="user-guide" element={<ErrorBoundary><AdminUserGuide /></ErrorBoundary>} />
+                    <Route path="roles-permissions" element={<ErrorBoundary><AdminRolesPermissions /></ErrorBoundary>} />
+                    <Route path="crb-queue" element={<ErrorBoundary><AdminCRBQueue /></ErrorBoundary>} />
                   </Route>
                   <Route path="*" element={<NotFound />} />
                 </Routes>

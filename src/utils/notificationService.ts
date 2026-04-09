@@ -145,7 +145,7 @@ class NotificationService {
   }
 
   async send(params: SendNotificationParams) {
-    console.log(`[Notification Service] Sending ${params.type} to ${params.to}: ${params.title || params.subject}`);
+    if (import.meta.env.DEV) console.log(`[Notification Service] Sending ${params.type} to ${params.to}: ${params.title || params.subject}`);
 
     const settings = await this.getSettings();
     
@@ -154,7 +154,7 @@ class NotificationService {
       const eventKey = `notify_on_${params.eventType}` as keyof NotificationSettings;
       const eventEnabled = settings[eventKey];
       if (eventEnabled === false) {
-        console.log(`[Notification Service] ${params.eventType} notifications are disabled`);
+        if (import.meta.env.DEV) console.log(`[Notification Service] ${params.eventType} notifications are disabled`);
         return { success: false, message: "Notification type disabled" };
       }
     }
@@ -170,14 +170,14 @@ class NotificationService {
     }
 
     if (!enabled) {
-      console.log(`[Notification Service] ${params.type} notifications not enabled`);
+      if (import.meta.env.DEV) console.log(`[Notification Service] ${params.type} notifications not enabled`);
       return { success: false, message: "Channel not enabled" };
     }
 
     try {
       const isDuplicate = await this.isDuplicateWithinWindow(params, 10);
       if (isDuplicate) {
-        console.log(`[Notification Service] Duplicate suppressed for ${params.type} to ${params.to}`);
+        if (import.meta.env.DEV) console.log(`[Notification Service] Duplicate suppressed for ${params.type} to ${params.to}`);
         return { success: true, skipped: true, message: "Duplicate suppressed" };
       }
 
