@@ -839,7 +839,9 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     const token = authHeader.replace("Bearer ", "");
-    if (token !== supabaseKey) {
+    // Allow service role key or anon key (used by internal function-to-function calls via supabase.functions.invoke)
+    const isInternalCall = token === supabaseKey || token === supabaseAnonKey;
+    if (!isInternalCall) {
       // Validate the JWT by calling getUser with the token
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
