@@ -840,16 +840,17 @@ const handler = async (req: Request): Promise<Response> => {
     }
     const token = authHeader.replace("Bearer ", "");
     if (token !== supabaseKey) {
+      // Validate the JWT by calling getUser with the token
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-      if (claimsError || !claimsData?.claims) {
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      if (userError || !userData?.user) {
         return new Response(JSON.stringify({ error: "Invalid token" }), {
           status: 401, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
-      const userId = claimsData.claims.sub as string;
+      const userId = userData.user.id;
       const adminClient = createClient(supabaseUrl, supabaseKey);
       const { data: roles } = await adminClient.from("user_roles").select("role").eq("user_id", userId);
       const isAuthorized = roles?.some((r: any) => ["admin", "super_admin", "loan_officer", "finance_officer", "collections_officer", "credit_officer", "user"].includes(r.role));
