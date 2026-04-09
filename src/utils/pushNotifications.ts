@@ -78,7 +78,7 @@ class PushNotificationManager {
         return existingSubscription;
       }
 
-      console.log("Push subscription saved for user:", userId);
+      if (import.meta.env.DEV) console.log("Push subscription saved for user:", userId);
       return await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
         // Deliberately guarded by isSubscriptionReady(); this branch is unreachable until enabled.
@@ -99,7 +99,7 @@ class PushNotificationManager {
       const subscription = await (this.registration as any).pushManager?.getSubscription();
       if (subscription) {
         await subscription.unsubscribe();
-        console.log('Push subscription removed for user:', userId);
+        if (import.meta.env.DEV) console.log('Push subscription removed for user:', userId);
         return true;
       }
       return false;

@@ -505,7 +505,7 @@ const AdminRepayments = () => {
 
       // Note: Split payments stored as separate repayment records would require schema changes
       // For now, log split payments in notes/audit log instead
-      console.log("Split payments recorded:", validSplits);
+      if (import.meta.env.DEV) console.log("Split payments recorded:", validSplits);
     } else {
       // Single payment method
       const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);

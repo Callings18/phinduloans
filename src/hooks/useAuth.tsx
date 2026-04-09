@@ -159,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           '',
           email
         );
-        console.log('[Auth] Welcome email sent successfully');
+        if (import.meta.env.DEV) console.log('[Auth] Welcome email sent successfully');
       } catch (notifyError) {
         console.error('[Auth] Failed to send welcome email:', notifyError);
       }

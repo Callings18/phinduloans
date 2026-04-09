@@ -10,7 +10,7 @@ export interface SMSParams {
 
 export const smsService = {
   async send(params: SMSParams) {
-    console.log("[SMS Service] Sending SMS via Twilio:", params);
+    if (import.meta.env.DEV) console.log("[SMS Service] Sending SMS:", params.to);
     
     // Handle array of recipients
     if (Array.isArray(params.to)) {

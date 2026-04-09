@@ -135,12 +135,13 @@ export async function sendRespondIOTemplate(
       result = { error: responseText, status: response.status };
     }
 
-    // Log the response for debugging
-    console.log('[Respond.io] API Response:', {
-      status: response.status,
-      statusText: response.statusText,
-      body: result,
-    });
+    if (import.meta.env.DEV) {
+      console.log('[Respond.io] API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: result,
+      });
+    }
 
     // Check if request was successful
     if (!response.ok) {
