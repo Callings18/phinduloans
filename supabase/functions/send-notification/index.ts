@@ -998,9 +998,10 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     if (status === "failed") {
+      // Return 200 with success:false so callers don't treat notification failures as critical errors
       return new Response(
-        JSON.stringify({ success: false, error: result.error }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ success: false, error: result.error, delivered: false }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
