@@ -3,72 +3,43 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { X, Download, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
+import { usePwaInstallPrompt } from "@/hooks/usePwaInstallPrompt";
 
 export const PWAInstallPrompt = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const { deferredPrompt, promptInstall } = usePwaInstallPrompt();
   const [showPrompt, setShowPrompt] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      // Prevent the mini-infobar from appearing on mobile
-      e.preventDefault();
-      // Stash the event so it can be triggered later
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      
-      // Check if user has dismissed the prompt before
-      const dismissed = localStorage.getItem('pwa-install-dismissed');
-      if (!dismissed) {
-        setShowPrompt(true);
-      }
-    };
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (window.matchMedia("(display-mode: standalone)").matches) {
       setShowPrompt(false);
-    }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-    };
-  }, []);
-
-  const handleInstall = async () => {
-    if (!deferredPrompt) {
       return;
     }
+    const dismissed = localStorage.getItem("pwa-install-dismissed");
+    if (deferredPrompt && !dismissed) {
+      setShowPrompt(true);
+    }
+    if (!deferredPrompt) {
+      setShowPrompt(false);
+    }
+  }, [deferredPrompt]);
 
-    // Show the install prompt
-    deferredPrompt.prompt();
-
-    // Wait for the user to respond to the prompt
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
+  const handleInstall = async () => {
+    const choice = await promptInstall();
+    if (choice?.outcome === "accepted") {
       toast({
         title: "App Installing",
         description: "Phindu Loans is being added to your home screen",
       });
     }
-
-    // Clear the deferredPrompt
-    setDeferredPrompt(null);
     setShowPrompt(false);
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem('pwa-install-dismissed', 'true');
-    // Auto-show again after 7 days
+    localStorage.setItem("pwa-install-dismissed", "true");
     setTimeout(() => {
-      localStorage.removeItem('pwa-install-dismissed');
+      localStorage.removeItem("pwa-install-dismissed");
     }, 7 * 24 * 60 * 60 * 1000);
   };
 
@@ -94,29 +65,18 @@ export const PWAInstallPrompt = () => {
 
             <div className="flex-1 space-y-3">
               <div>
-                <h3 className="font-semibold text-foreground mb-1">
-                  Install Phindu Loans App
-                </h3>
+                <h3 className="font-semibold text-foreground mb-1">Install Phindu Loans App</h3>
                 <p className="text-sm text-muted-foreground">
                   Install our app for quick access to loans, faster applications, and offline support.
                 </p>
               </div>
 
               <div className="flex gap-2">
-                <Button
-                  variant="hero"
-                  size="sm"
-                  onClick={handleInstall}
-                  className="flex-1"
-                >
+                <Button variant="hero" size="sm" onClick={handleInstall} className="flex-1">
                   <Download size={16} className="mr-2" />
                   Install App
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDismiss}
-                >
+                <Button variant="ghost" size="sm" onClick={handleDismiss}>
                   Not Now
                 </Button>
               </div>

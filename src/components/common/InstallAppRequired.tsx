@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Smartphone, Share, PlusSquare } from "lucide-react";
+import { Smartphone, Share, PlusSquare, Download } from "lucide-react";
 import { isStandaloneDisplayMode } from "@/utils/pwaDisplayMode";
+import { usePwaInstallPrompt } from "@/hooks/usePwaInstallPrompt";
+import { useToast } from "@/hooks/use-toast";
 
 const isLikelyIOS =
   typeof navigator !== "undefined" &&
@@ -10,8 +13,34 @@ const isLikelyIOS =
 
 /**
  * Shown when borrower flows require the installed PWA but the user is in a normal browser tab.
+ * Offers a one-tap Install when the browser fires `beforeinstallprompt` (Chrome, Edge, etc.).
+ * iOS Safari has no programmatic install — instructions only.
  */
 export function InstallAppRequired() {
+  const { deferredPrompt, promptInstall } = usePwaInstallPrompt();
+  const { toast } = useToast();
+  const [installBusy, setInstallBusy] = useState(false);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      return;
+    }
+    setInstallBusy(true);
+    try {
+      const choice = await promptInstall();
+      if (choice?.outcome === "accepted") {
+        toast({
+          title: "App installing",
+          description: "Open Phindu from your home screen when it appears.",
+        });
+      }
+    } finally {
+      setInstallBusy(false);
+    }
+  };
+
+  const canUseInstallButton = Boolean(deferredPrompt) && !isLikelyIOS && !isStandaloneDisplayMode();
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
       <Card className="max-w-md w-full border-primary/30 shadow-lg">
@@ -47,14 +76,25 @@ export function InstallAppRequired() {
             </ol>
           ) : (
             <p className="text-sm text-muted-foreground text-center">
-              Use your browser&apos;s <strong className="text-foreground">Install app</strong> or{" "}
-              <strong className="text-foreground">Add to Home screen</strong> option, then return to this page from the
-              installed icon.
+              {canUseInstallButton
+                ? "Tap Install below, or use your browser menu if you prefer."
+                : "If no Install button appears yet, wait a moment or use your browser’s menu (⋮ → Install app / Add to Home screen)."}
             </p>
           )}
 
           <div className="flex flex-col gap-2">
-            <Button variant="hero" className="w-full" asChild>
+            {canUseInstallButton && (
+              <Button
+                variant="hero"
+                className="w-full"
+                onClick={handleInstallClick}
+                disabled={installBusy}
+              >
+                <Download size={18} className="mr-2" />
+                {installBusy ? "Opening installer…" : "Install app"}
+              </Button>
+            )}
+            <Button variant={canUseInstallButton ? "outline" : "hero"} className="w-full" asChild>
               <a href="/">Back to home</a>
             </Button>
           </div>
