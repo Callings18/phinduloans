@@ -35,12 +35,12 @@ import { Users, Building2, FileText, Calendar, Plus, Pencil, Loader2 } from "luc
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { getMonthName } from "@/utils/payrollCalculations";
 
 const AdminHR = () => {
   const { can } = usePermissions();
-  const canManage = can("payroll", "manage");
-  const canView = can("payroll", "view");
+  const canManage = can("hr", "manage");
+  const canView = can("hr", "view") || can("hr", "manage");
   const [editId, setEditId] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const { toast } = useToast();
@@ -87,12 +87,13 @@ const AdminHR = () => {
     return current?.basic_salary ?? null;
   };
 
-  const { data: payrollPeriods = [] } = useQuery({
-    queryKey: ["admin-hr-payroll-periods"],
+  const { data: payrollRunsPreview = [] } = useQuery({
+    queryKey: ["admin-hr-payroll-runs-preview"],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("payroll_periods")
-        .select("id, period_name, period_start_date, period_end_date, pay_date, status, total_net, total_employees")
-        .order("period_start_date", { ascending: false })
+      const { data, error } = await (supabase.from as any)("payroll_runs")
+        .select("id, payroll_month, payroll_year, status, total_net, total_employees, created_at")
+        .order("payroll_year", { ascending: false })
+        .order("payroll_month", { ascending: false })
         .limit(10);
       if (error) throw error;
       return (data ?? []) as any[];
@@ -169,12 +170,12 @@ const AdminHR = () => {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Payroll Periods</CardTitle>
+              <CardTitle className="text-sm font-medium">Payroll runs</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{payrollPeriods.length}</div>
-              <p className="text-xs text-muted-foreground">Recent periods</p>
+              <div className="text-2xl font-bold">{payrollRunsPreview.length}</div>
+              <p className="text-xs text-muted-foreground">Recent payroll runs</p>
             </CardContent>
           </Card>
           <Card>
@@ -256,33 +257,31 @@ const AdminHR = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent Payroll Periods</CardTitle>
-            <CardDescription>Latest payroll runs</CardDescription>
+            <CardTitle>Recent payroll runs</CardTitle>
+            <CardDescription>Same data as Payroll admin — monthly runs from payroll_runs</CardDescription>
           </CardHeader>
           <CardContent>
-            {payrollPeriods.length === 0 ? (
-              <p className="text-muted-foreground py-4">No payroll periods yet.</p>
+            {payrollRunsPreview.length === 0 ? (
+              <p className="text-muted-foreground py-4">No payroll runs yet.</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Period</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>End</TableHead>
-                    <TableHead>Pay date</TableHead>
+                    <TableHead className="text-right">Employees</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total net</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payrollPeriods.map((p: Record<string, unknown>) => (
-                    <TableRow key={p.id as string}>
-                      <TableCell className="font-medium">{p.period_name as string}</TableCell>
-                      <TableCell>{format(new Date(p.period_start_date as string), "yyyy-MM-dd")}</TableCell>
-                      <TableCell>{format(new Date(p.period_end_date as string), "yyyy-MM-dd")}</TableCell>
-                      <TableCell>{format(new Date(p.pay_date as string), "yyyy-MM-dd")}</TableCell>
+                  {payrollRunsPreview.map((p: { id: string; payroll_month: number; payroll_year: number; status: string; total_employees: number | null; total_net: number | null }) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">
+                        {getMonthName(p.payroll_month)} {p.payroll_year}
+                      </TableCell>
+                      <TableCell className="text-right">{p.total_employees ?? "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{p.status as string}</Badge>
+                        <Badge variant="secondary">{p.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         {p.total_net != null ? `K${Number(p.total_net).toLocaleString()}` : "—"}

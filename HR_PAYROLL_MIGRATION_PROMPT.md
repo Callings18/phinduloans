@@ -24,11 +24,12 @@ This migration creates a complete HR and Payroll management system for Phindu Lo
    - Other deductions (union dues, loans, etc.)
    - Calculated gross and net salary
 
-3. **`payroll_periods`** - Payroll processing periods
+3. **`payroll_periods`** - Payroll processing periods (legacy schema)
    - Period name, type (monthly, bi-weekly, weekly)
    - Start/end dates and pay date
    - Status tracking (draft, processing, approved, paid)
    - Totals (gross, deductions, net, employee count)
+   - **App UI:** Admin HR and Admin Payroll use **`payroll_runs`** (month/year + totals) as the source of truth for displayed periods and exports. The `payroll_periods` table may remain for older data models but is not queried by the current admin screens.
 
 4. **`payroll_records`** - Individual payroll records per employee per period
    - Salary components snapshot

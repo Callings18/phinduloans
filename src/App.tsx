@@ -386,7 +386,12 @@ function App() {
                       path="hr"
                       element={
                         <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "payroll", action: "view" }}>
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "hr", action: "view" },
+                              { module: "hr", action: "manage" },
+                            ]}
+                          >
                             <AdminHR />
                           </PermissionRoute>
                         </ErrorBoundary>
@@ -400,6 +405,7 @@ function App() {
                             anyOf={[
                               { module: "payroll", action: "view" },
                               { module: "payroll", action: "manage" },
+                              { module: "payroll", action: "approve" },
                             ]}
                           >
                             <AdminPayroll />

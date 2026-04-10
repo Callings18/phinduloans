@@ -9,10 +9,13 @@ const taxBands: TaxBand[] = [
   { band_min: 9200.01, band_max: null, rate_percent: 37.5, label: "Band 4: 37.5%" },
 ];
 
+/** Legacy comparison: PAYE on full gross, no personal relief (matches pre-enhancement behaviour). */
 const taxConfig: TaxConfig = {
   payeBands: taxBands,
   nhima: { employee_rate_percent: 1, employer_rate_percent: 1 },
   napsa: { employee_rate_percent: 5, employer_rate_percent: 5, ceiling_amount: 30408.80 },
+  personalReliefMonthly: 0,
+  payeOnChargeableAfterNapsa: false,
 };
 
 describe("PAYE Calculation", () => {
@@ -95,6 +98,7 @@ describe("Full Payroll Calculation", () => {
     });
 
     expect(result.gross_pay).toBe(18500);
+    expect(result.paye_taxable_income).toBe(18500);
     expect(result.paye_tax).toBeCloseTo(4517.50, 0);
     expect(result.nhima_employee).toBe(185);
     expect(result.nhima_employer).toBe(185);
@@ -125,5 +129,28 @@ describe("Full Payroll Calculation", () => {
     expect(result.paye_tax).toBeCloseTo(1442.50, 0);
     expect(result.nhima_employee).toBe(103);
     expect(result.napsa_employee).toBe(515);
+  });
+
+  it("should use chargeable income after NAPSA and personal relief when configured", () => {
+    const cfg: TaxConfig = {
+      ...taxConfig,
+      personalReliefMonthly: 300,
+      payeOnChargeableAfterNapsa: true,
+    };
+    const result = calculatePayroll({
+      employee: {
+        id: "test-3",
+        full_name: "Test User",
+        salary: 15000,
+        housing_allowance: 2000,
+        transport_allowance: 1000,
+        lunch_allowance: 500,
+      },
+      taxConfig: cfg,
+    });
+    expect(result.gross_pay).toBe(18500);
+    expect(result.paye_taxable_income).toBeCloseTo(17575, 2);
+    expect(result.paye_tax).toBeGreaterThan(0);
+    expect(result.paye_tax).toBeLessThan(4517.5);
   });
 });

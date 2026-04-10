@@ -41,6 +41,9 @@ export interface PayrollCalculation {
   employee_id: string;
   employee_name: string;
 
+  /** Income on which PAYE was computed (gross or chargeable after NAPSA). */
+  paye_taxable_income: number;
+
   // Gross components
   basic_salary: number;
   housing_allowance: number;
@@ -74,6 +77,14 @@ export interface TaxConfig {
   payeBands: TaxBand[];
   nhima: StatutoryRate;
   napsa: StatutoryRate;
+  /** Monthly personal relief (Kwacha), subtracted from calculated PAYE (not from income). From payroll_tax_config. */
+  personalReliefMonthly?: number;
+  /**
+   * If true (default when loaded from DB), PAYE marginal bands apply to chargeable income =
+   * gross pay minus NAPSA employee contribution — common Zambian practice; confirm with ZRA guidance.
+   * If false, bands apply to full gross (legacy / comparison).
+   */
+  payeOnChargeableAfterNapsa?: boolean;
 }
 
 // ── Core Calculation Functions ─────────────────────────────
@@ -178,7 +189,29 @@ export async function fetchTaxConfig(): Promise<TaxConfig> {
       : 30408.80,
   };
 
-  return { payeBands, nhima, napsa };
+  const reliefRow = rows.find(
+    (r: any) =>
+      r.config_type === "general" &&
+      String(r.label || "").toLowerCase().includes("personal_relief"),
+  );
+  const personalReliefMonthly =
+    reliefRow?.ceiling_amount != null ? Number(reliefRow.ceiling_amount) : 300;
+
+  const chargeableRow = rows.find(
+    (r: any) =>
+      r.config_type === "general" &&
+      String(r.label || "").toLowerCase().includes("chargeable_after_napsa"),
+  );
+  const payeOnChargeableAfterNapsa =
+    chargeableRow == null ? true : Number(chargeableRow.band_min ?? 1) !== 0;
+
+  return {
+    payeBands,
+    nhima,
+    napsa,
+    personalReliefMonthly,
+    payeOnChargeableAfterNapsa,
+  };
 }
 
 // ── Full Payroll Calculator ────────────────────────────────
@@ -219,8 +252,7 @@ export function calculatePayroll(input: CalculatePayrollInput): PayrollCalculati
   // Gross pay
   const grossPay = basicSalary + housing + transport + lunch + otherAllow + commission + overtimePay;
 
-  // Statutory calculations
-  const paye = calculatePAYE(grossPay, taxConfig.payeBands);
+  // NAPSA / NHIMA on gross (NAPSA ceiling applied inside calculateNAPSA)
   const nhima = calculateNHIMA(
     grossPay,
     taxConfig.nhima.employee_rate_percent,
@@ -233,6 +265,16 @@ export function calculatePayroll(input: CalculatePayrollInput): PayrollCalculati
     taxConfig.napsa.ceiling_amount ?? 30408.80
   );
 
+  const useChargeable =
+    taxConfig.payeOnChargeableAfterNapsa !== false;
+  const payeTaxableIncome = useChargeable
+    ? Math.max(0, grossPay - napsa.employee)
+    : grossPay;
+
+  const rawPaye = calculatePAYE(payeTaxableIncome, taxConfig.payeBands);
+  const relief = taxConfig.personalReliefMonthly ?? 0;
+  const paye = Math.max(0, Math.round((rawPaye - relief) * 100) / 100);
+
   // Total deductions (employee side only)
   const totalDeductions =
     paye + nhima.employee + napsa.employee +
@@ -244,6 +286,7 @@ export function calculatePayroll(input: CalculatePayrollInput): PayrollCalculati
   return {
     employee_id: employee.id,
     employee_name: employee.full_name,
+    paye_taxable_income: Math.round(payeTaxableIncome * 100) / 100,
     basic_salary: basicSalary,
     housing_allowance: housing,
     transport_allowance: transport,

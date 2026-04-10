@@ -48,6 +48,7 @@ import {
 } from "@/utils/payrollCalculations";
 import PayslipDetailModal from "@/components/admin/PayslipDetailModal";
 import { generatePayslipPDF, generateAllPayslipsPDF } from "@/utils/payslipPdfGenerator";
+import { downloadPayrollRunCsv } from "@/utils/payrollRunCsvExport";
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
@@ -55,8 +56,10 @@ const currentMonth = new Date().getMonth() + 1;
 const AdminPayroll = () => {
   const { can } = usePermissions();
   const { user } = useAuth();
-  const canAccess = can("payroll", "view") || can("payroll", "manage");
+  const canAccess =
+    can("payroll", "view") || can("payroll", "manage") || can("payroll", "approve");
   const canMutate = can("payroll", "manage");
+  const canApproveOrPay = can("payroll", "approve") || can("payroll", "manage");
   const queryClient = useQueryClient();
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -98,7 +101,7 @@ const AdminPayroll = () => {
   const generateMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      if (!canMutate) throw new Error("You do not have permission to generate payroll.");
+      if (!canMutate) throw new Error("You do not have permission to generate payroll (requires payroll:manage).");
 
       // 1. Check if run already exists
       const { data: existing, error: existingErr } = await (supabase.from("payroll_runs") as any)
@@ -240,6 +243,7 @@ const AdminPayroll = () => {
   const approveMutation = useMutation({
     mutationFn: async (runId: string) => {
       if (!user) throw new Error("Not authenticated");
+      if (!canApproveOrPay) throw new Error("You do not have permission to approve payroll.");
       const { error } = await (supabase.from("payroll_runs") as any)
         .update({ status: "approved", approved_by: user.id, approved_at: new Date().toISOString() })
         .eq("id", runId)
@@ -260,6 +264,7 @@ const AdminPayroll = () => {
 
   const markPaidMutation = useMutation({
     mutationFn: async (runId: string) => {
+      if (!canApproveOrPay) throw new Error("You do not have permission to mark payroll as paid.");
       const now = new Date().toISOString();
       const { error } = await (supabase.from("payroll_runs") as any)
         .update({ status: "paid" })
@@ -461,7 +466,7 @@ const AdminPayroll = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => approveMutation.mutate(run.id)}
-                              disabled={!canMutate || approveMutation.isPending}
+                              disabled={!canApproveOrPay || approveMutation.isPending}
                             >
                               {approveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
                               Approve
@@ -471,7 +476,7 @@ const AdminPayroll = () => {
                             <Button
                               size="sm"
                               onClick={() => markPaidMutation.mutate(run.id)}
-                              disabled={!canMutate || markPaidMutation.isPending}
+                              disabled={!canApproveOrPay || markPaidMutation.isPending}
                             >
                               {markPaidMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <DollarSign size={14} className="mr-1" />}
                               Mark Paid
@@ -506,9 +511,22 @@ const AdminPayroll = () => {
         {/* Expanded Run Records */}
         {expandedRunId && expandedRun && (
           <Card>
-            <CardHeader>
-              <CardTitle>{getMonthName(expandedRun.payroll_month)} {expandedRun.payroll_year} — Employee Records</CardTitle>
-              <CardDescription>Individual payroll breakdowns. Click an employee to see full details.</CardDescription>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+              <div className="space-y-1.5">
+                <CardTitle>{getMonthName(expandedRun.payroll_month)} {expandedRun.payroll_year} — Employee Records</CardTitle>
+                <CardDescription>Individual payroll breakdowns. Click an employee to see full details.</CardDescription>
+              </div>
+              {runRecords.length > 0 && canAccess && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadPayrollRunCsv(expandedRun, runRecords)}
+                >
+                  <FileText size={14} className="mr-1" />
+                  Export CSV
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {recordsLoading ? (

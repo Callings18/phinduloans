@@ -86,7 +86,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "HR & payroll",
     items: [
-      { icon: Briefcase, label: "HR", path: "/admin/hr", perm: { module: "payroll", action: "view" } },
+      { icon: Briefcase, label: "HR", path: "/admin/hr", perm: { module: "hr", action: "view" } },
       { icon: Coins, label: "Payroll", path: "/admin/payroll", perm: { module: "payroll", action: "view" } },
     ],
   },
