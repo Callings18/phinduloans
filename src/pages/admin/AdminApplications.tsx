@@ -718,6 +718,33 @@ const AdminApplications = () => {
   // Workflow transition (verify_documents, finance_approve, approve, reject) — all via RPC
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
+      if (action === "approve" || action === "reject") {
+        const runRpc = async (withReason: boolean) =>
+          supabase.rpc(
+            "transition_loan_status",
+            withReason
+              ? { p_loan_id: id, p_action: action, p_reason: reason ?? null }
+              : { p_loan_id: id, p_action: action }
+          );
+
+        let { data, error } = await runRpc(true);
+        if (
+          error &&
+          String(error.message || "")
+            .toLowerCase()
+            .includes("function") &&
+          String(error.message || "").includes("transition_loan_status")
+        ) {
+          ({ data, error } = await runRpc(false));
+        }
+        if (error) throw error;
+        const result = data as { ok?: boolean; success?: boolean; error?: string };
+        if (result?.ok === false || result?.success === false) {
+          throw new Error(result?.error || "Transition failed");
+        }
+        return;
+      }
+
       const { data, error } = await supabase.rpc("transition_loan_status", {
         p_loan_id: id,
         p_action: action,
@@ -1128,6 +1155,31 @@ const AdminApplications = () => {
 
   /** Bulk workflow RPC: all actions go through the server-side RPC. */
   const assertBulkTransition = async (id: string, action: string, reason?: string) => {
+    if (action === "approve" || action === "reject") {
+      const runRpc = async (withReason: boolean) =>
+        supabase.rpc(
+          "transition_loan_status",
+          withReason
+            ? { p_loan_id: id, p_action: action, p_reason: reason ?? null }
+            : { p_loan_id: id, p_action: action }
+        );
+
+      let { data, error } = await runRpc(true);
+      if (
+        error &&
+        String(error.message || "")
+          .toLowerCase()
+          .includes("function") &&
+        String(error.message || "").includes("transition_loan_status")
+      ) {
+        ({ data, error } = await runRpc(false));
+      }
+      if (error) throw error;
+      const res = data as { ok?: boolean; success?: boolean; error?: string };
+      if (res?.ok === false || res?.success === false) throw new Error(res?.error || "Transition failed");
+      return;
+    }
+
     const { data, error } = await supabase.rpc("transition_loan_status", {
       p_loan_id: id,
       p_action: action,

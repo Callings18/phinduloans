@@ -225,20 +225,16 @@ const AdminLoans = () => {
     },
   });
 
-  // Move to defaulted mutation
+  // Move to defaulted mutation (server-side audit + loan_events)
   const moveToDefaultedMutation = useMutation({
-    mutationFn: async (loanId: string) => {
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: "defaulted" as any })
-        .eq("id", loanId);
-      if (error) throw error;
-      await logAudit({
-        action: "MOVE_TO_DEFAULTED",
-        entity_type: "loan_application",
-        entity_id: loanId,
-        module: "loans",
+    mutationFn: async ({ loanId, reason }: { loanId: string; reason: string }) => {
+      const { data, error } = await (supabase.rpc as any)("admin_mark_loan_defaulted", {
+        p_loan_id: loanId,
+        p_reason: reason,
       });
+      if (error) throw error;
+      const result = data as { success?: boolean; error?: string };
+      if (!result?.success) throw new Error(result?.error || "Failed to mark loan as defaulted");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
@@ -957,9 +953,16 @@ const AdminLoans = () => {
                                       <DropdownMenuItem
                                         className="text-destructive focus:text-destructive"
                                         onClick={() => {
-                                          if (confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) {
-                                            moveToDefaultedMutation.mutate(loan.id);
+                                          if (!confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) return;
+                                          const reason = window.prompt(
+                                            "Reason for marking as defaulted (required, min 3 characters):",
+                                            ""
+                                          );
+                                          if (!reason || reason.trim().length < 3) {
+                                            toast.error("A reason of at least 3 characters is required.");
+                                            return;
                                           }
+                                          moveToDefaultedMutation.mutate({ loanId: loan.id, reason: reason.trim() });
                                         }}
                                       >
                                         <XCircle size={14} className="mr-2" />

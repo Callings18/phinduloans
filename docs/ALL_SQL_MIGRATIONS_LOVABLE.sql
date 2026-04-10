@@ -1,13 +1,9 @@
-﻿-- PHINDU LOANS - ALL SQL MIGRATIONS (generated for Lovable / manual SQL runs)
--- Source of truth: supabase/migrations/*.sql in lexicographic order.
--- Prefer: supabase db push (CLI) against your linked project.
--- Generated: 2026-04-06T19:07:00.5774646+02:00
+-- AUTO-GENERATED: concatenated supabase migrations in filename order
+-- Generated at: 2026-04-07T08:39:59
 
-
-
-
--- ========== 20251220150928_836f93ae-56b3-4efc-ae04-556bee0ea696.sql ==========
-
+-- ===================================================================
+-- FILE: 20251220150928_836f93ae-56b3-4efc-ae04-556bee0ea696.sql
+-- ===================================================================
 -- Create app roles enum
 CREATE TYPE public.app_role AS ENUM ('admin', 'user', 'employer');
 
@@ -286,9 +282,9 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
-
--- ========== 20251220152035_a5e88813-725e-4fc7-887c-c58f82da2462.sql ==========
-
+-- ===================================================================
+-- FILE: 20251220152035_a5e88813-725e-4fc7-887c-c58f82da2462.sql
+-- ===================================================================
 -- Fix RLS policies - change RESTRICTIVE to PERMISSIVE
 
 -- Drop existing policies and recreate as PERMISSIVE
@@ -433,9 +429,9 @@ CREATE POLICY "Admins can delete disbursements"
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
-
--- ========== 20251220153807_b889731f-36a5-4b5e-8e8e-0315c2442c14.sql ==========
-
+-- ===================================================================
+-- FILE: 20251220153807_b889731f-36a5-4b5e-8e8e-0315c2442c14.sql
+-- ===================================================================
 -- Create settings table for storing payment gateway configuration
 CREATE TABLE public.payment_gateway_settings (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -482,9 +478,9 @@ CREATE TRIGGER update_payment_gateway_settings_updated_at
 INSERT INTO public.payment_gateway_settings (gateway_name, environment)
 VALUES ('lenco', 'sandbox');
 
-
--- ========== 20251221165218_6129b5da-98bd-4f26-859d-04f6acfbda31.sql ==========
-
+-- ===================================================================
+-- FILE: 20251221165218_6129b5da-98bd-4f26-859d-04f6acfbda31.sql
+-- ===================================================================
 -- Create loan_products table
 CREATE TABLE public.loan_products (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -545,9 +541,9 @@ INSERT INTO public.loan_products (name, description, min_amount, max_amount, min
 ('Business Loan', 'Grow your business with flexible financing', 5000, 100000, 6, 36, 18.00, 3.00, ARRAY['Valid NRC', 'Business registration', 'Financial statements', 'Business plan']),
 ('Emergency Loan', 'Fast emergency funding when you need it most', 100, 3000, 1, 6, 12.00, 1.00, ARRAY['Valid NRC', 'Proof of income']);
 
-
--- ========== 20251222202105_a532f447-4014-4582-82aa-f888c4d2eda2.sql ==========
-
+-- ===================================================================
+-- FILE: 20251222202105_a532f447-4014-4582-82aa-f888c4d2eda2.sql
+-- ===================================================================
 -- Update RLS policy to allow anyone to view active loan products (truly public)
 DROP POLICY IF EXISTS "Anyone can view active loan products" ON public.loan_products;
 
@@ -556,9 +552,9 @@ ON public.loan_products
 FOR SELECT 
 USING (is_active = true);
 
-
--- ========== 20251222203242_aa899278-2162-4ede-827f-12de8581a665.sql ==========
-
+-- ===================================================================
+-- FILE: 20251222203242_aa899278-2162-4ede-827f-12de8581a665.sql
+-- ===================================================================
 -- Add installment_number column to loan_repayments table
 ALTER TABLE public.loan_repayments 
 ADD COLUMN IF NOT EXISTS installment_number integer;
@@ -641,9 +637,9 @@ AFTER UPDATE ON public.disbursements
 FOR EACH ROW
 EXECUTE FUNCTION public.generate_repayment_schedule();
 
-
--- ========== 20251222204310_d1320c3d-5069-46fb-9232-c41d1e11e51c.sql ==========
-
+-- ===================================================================
+-- FILE: 20251222204310_d1320c3d-5069-46fb-9232-c41d1e11e51c.sql
+-- ===================================================================
 -- Create storage bucket for loan documents
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('loan-documents', 'loan-documents', false)
@@ -680,18 +676,18 @@ CREATE POLICY "Admins can delete applications"
 ON loan_applications FOR DELETE
 USING (has_role(auth.uid(), 'admin'::app_role));
 
-
--- ========== 20251222210143_2124c6ae-5bf2-410e-982c-a86c57808702.sql ==========
-
+-- ===================================================================
+-- FILE: 20251222210143_2124c6ae-5bf2-410e-982c-a86c57808702.sql
+-- ===================================================================
 -- Allow admins to delete profiles
 CREATE POLICY "Admins can delete profiles"
 ON public.profiles
 FOR DELETE
 USING (public.has_role(auth.uid(), 'admin'));
 
-
--- ========== 20251222221204_0183b7b3-dc3a-43bd-a4b5-082b10c75400.sql ==========
-
+-- ===================================================================
+-- FILE: 20251222221204_0183b7b3-dc3a-43bd-a4b5-082b10c75400.sql
+-- ===================================================================
 -- Allow users to upload their own documents
 CREATE POLICY "Users can upload their own documents"
 ON storage.objects
@@ -722,9 +718,9 @@ USING (
   )
 );
 
-
--- ========== 20251223154711_85016cc7-7323-4587-8c62-592385a24f3a.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223154711_85016cc7-7323-4587-8c62-592385a24f3a.sql
+-- ===================================================================
 -- Add new roles to app_role enum
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'super_admin';
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'loan_officer';
@@ -734,9 +730,9 @@ ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'collections_officer';
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'auditor';
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'support';
 
-
--- ========== 20251223154741_25b87651-46d3-48be-9262-df023007006e.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223154741_25b87651-46d3-48be-9262-df023007006e.sql
+-- ===================================================================
 -- 1. System Settings Table
 CREATE TABLE IF NOT EXISTS public.system_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -850,9 +846,9 @@ INSERT INTO public.system_settings (key, value, description) VALUES
 ('lending_rules', '{"default_interest_rate": 15.0, "max_loan_amount": 50000, "min_loan_amount": 500}'::jsonb, 'Global Lending Parameters')
 ON CONFLICT (key) DO NOTHING;
 
-
--- ========== 20251223160312_533e03f0-e33b-4917-9d07-8ee03d3b70dc.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223160312_533e03f0-e33b-4917-9d07-8ee03d3b70dc.sql
+-- ===================================================================
 -- 1. Allow Admins and Staff to manage all profiles
 CREATE POLICY "Admins and Staff can manage all profiles"
   ON public.profiles FOR ALL
@@ -889,9 +885,9 @@ CREATE POLICY "Staff and Admins can update all applications"
     public.has_role(auth.uid(), 'credit_officer')
   );
 
-
--- ========== 20251223165300_enhanced_lms_schema.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223165300_enhanced_lms_schema.sql
+-- ===================================================================
 -- 1. Enhance Roles (Add specific staff roles)
 -- We cannot execute ALTER TYPE inside a transaction block nicely in all environments, 
 -- but Supabase migrations usually run independently. 
@@ -1029,9 +1025,9 @@ INSERT INTO public.system_settings (key, value, description) VALUES
 ('company_info', '{"name": "LoanSphere Microfinance", "address": "Lusaka, Zambia", "support_email": "support@loansphere.com"}'::jsonb, 'Company Details');
 
 
-
--- ========== 20251223170406_8880dd62-ac54-4a08-9bcd-97a8cc6027a7.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223170406_8880dd62-ac54-4a08-9bcd-97a8cc6027a7.sql
+-- ===================================================================
 -- 1. Create collection_activities table for tracking collection efforts
 CREATE TABLE IF NOT EXISTS public.collection_activities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1159,9 +1155,9 @@ CREATE TRIGGER trigger_generate_repayment_schedule
   FOR EACH ROW
   EXECUTE FUNCTION public.generate_repayment_schedule();
 
-
--- ========== 20251223170500_add_assigned_to.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223170500_add_assigned_to.sql
+-- ===================================================================
 -- Add assigned_to column to loan_applications for staff assignment
 ALTER TABLE public.loan_applications 
 ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES auth.users(id);
@@ -1173,9 +1169,9 @@ ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES auth.users(id);
 CREATE INDEX IF NOT EXISTS idx_loan_applications_assigned_to ON public.loan_applications(assigned_to);
 
 
-
--- ========== 20251223171500_storage_setup.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223171500_storage_setup.sql
+-- ===================================================================
 -- Create a bucket for loan documents
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('loan_documents', 'loan_documents', false)
@@ -1207,9 +1203,9 @@ USING (
 );
 
 
-
--- ========== 20251223172500_audit_triggers.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223172500_audit_triggers.sql
+-- ===================================================================
 -- Function to log changes to audit_logs
 CREATE OR REPLACE FUNCTION public.log_loan_changes()
 RETURNS TRIGGER AS $$
@@ -1268,9 +1264,9 @@ FOR EACH ROW
 EXECUTE FUNCTION public.log_repayment_activity();
 
 
-
--- ========== 20251223173303_9a9100ca-0312-46d8-a5ef-4f3d2ffa379d.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223173303_9a9100ca-0312-46d8-a5ef-4f3d2ffa379d.sql
+-- ===================================================================
 -- Add columns for penalty tracking and payment allocation to loan_repayments
 ALTER TABLE public.loan_repayments 
 ADD COLUMN IF NOT EXISTS penalty_amount numeric DEFAULT 0,
@@ -1430,9 +1426,9 @@ BEGIN
 END;
 $$;
 
-
--- ========== 20251223174050_bf5f1909-cc0f-4e3c-8814-27c4ae88ecba.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223174050_bf5f1909-cc0f-4e3c-8814-27c4ae88ecba.sql
+-- ===================================================================
 -- Add escalation and assignment columns to collection_activities
 ALTER TABLE public.collection_activities
 ADD COLUMN IF NOT EXISTS escalation_level integer DEFAULT 1,
@@ -1607,9 +1603,9 @@ AND EXISTS (
   WHERE loan_id = la.id AND status = 'pending' AND due_date < CURRENT_DATE
 );
 
-
--- ========== 20251223174110_98d213cd-edd2-43f7-89a3-9107903147f4.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223174110_98d213cd-edd2-43f7-89a3-9107903147f4.sql
+-- ===================================================================
 -- Fix security definer view issue by dropping and recreating with SECURITY INVOKER
 DROP VIEW IF EXISTS public.overdue_loans_view;
 
@@ -1664,9 +1660,9 @@ AND EXISTS (
   WHERE loan_id = la.id AND status = 'pending' AND due_date < CURRENT_DATE
 );
 
-
--- ========== 20251223175000_fix_profile_rls.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223175000_fix_profile_rls.sql
+-- ===================================================================
 -- Allow Admins and Staff to manage all profiles
 CREATE POLICY "Admins and Staff can manage all profiles"
   ON public.profiles FOR ALL
@@ -1702,9 +1698,9 @@ CREATE POLICY "Staff and Admins can update all applications"
   );
 
 
-
--- ========== 20251223175018_5f115179-eea2-496e-a847-9599084453dc.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223175018_5f115179-eea2-496e-a847-9599084453dc.sql
+-- ===================================================================
 -- Create document checklist table for loan verification
 CREATE TABLE IF NOT EXISTS public.document_checklists (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1894,9 +1890,9 @@ BEFORE UPDATE ON public.loan_writeoffs
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
-
--- ========== 20251223181000_collection_activities.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223181000_collection_activities.sql
+-- ===================================================================
 -- Create Collections Activity Tracking
 CREATE TABLE IF NOT EXISTS public.collection_activities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1933,9 +1929,9 @@ CREATE POLICY "Relevant staff can view collection activities"
 CREATE INDEX IF NOT EXISTS idx_collection_activities_loan_id ON public.collection_activities(loan_id);
 
 
-
--- ========== 20251223184500_update_role_policies.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223184500_update_role_policies.sql
+-- ===================================================================
 -- 1. Update user_roles policies to allow Super Admins and Admins to manage roles
 DROP POLICY IF EXISTS "Admins can manage all roles" ON public.user_roles;
 CREATE POLICY "Admins and Super Admins can manage all roles"
@@ -1978,9 +1974,9 @@ AS $$
 $$;
 
 
-
--- ========== 20251223185500_add_product_to_loans.sql ==========
-
+-- ===================================================================
+-- FILE: 20251223185500_add_product_to_loans.sql
+-- ===================================================================
 -- Add product_id to loan_applications to track which product was used
 ALTER TABLE public.loan_applications ADD COLUMN IF NOT EXISTS product_id UUID REFERENCES public.loan_products(id);
 
@@ -1988,9 +1984,9 @@ ALTER TABLE public.loan_applications ADD COLUMN IF NOT EXISTS product_id UUID RE
 CREATE INDEX IF NOT EXISTS idx_loan_applications_product_id ON public.loan_applications(product_id);
 
 
-
--- ========== 20251225210230_ec4984d7-9668-49f1-9a1c-bd2de88c0138.sql ==========
-
+-- ===================================================================
+-- FILE: 20251225210230_ec4984d7-9668-49f1-9a1c-bd2de88c0138.sql
+-- ===================================================================
 -- Add policy to allow admins and staff to create loan applications for any user
 CREATE POLICY "Admins can create loan applications" 
 ON public.loan_applications 
@@ -2001,9 +1997,9 @@ WITH CHECK (
   has_role(auth.uid(), 'loan_officer'::app_role)
 );
 
-
--- ========== 20251228203815_d704ee8f-7ea0-4562-8ebc-ca0d7f9db1d6.sql ==========
-
+-- ===================================================================
+-- FILE: 20251228203815_d704ee8f-7ea0-4562-8ebc-ca0d7f9db1d6.sql
+-- ===================================================================
 -- Add enforcement/legal fee and penalty frequency to loan_products
 ALTER TABLE public.loan_products 
 ADD COLUMN IF NOT EXISTS enforcement_fee_percent numeric DEFAULT 0,
@@ -2028,15 +2024,15 @@ COMMENT ON COLUMN public.loan_products.interest_period IS 'Period for interest r
 COMMENT ON COLUMN public.loan_applications.source IS 'Where the application originated from: website, internal, or referral';
 COMMENT ON COLUMN public.profiles.is_blacklisted IS 'Whether borrower is blacklisted from future loans';
 
-
--- ========== 20251229094634_976bd5c2-0a15-4002-8a89-f5824a87a23f.sql ==========
-
+-- ===================================================================
+-- FILE: 20251229094634_976bd5c2-0a15-4002-8a89-f5824a87a23f.sql
+-- ===================================================================
 -- Enable realtime for loan_applications table
 ALTER PUBLICATION supabase_realtime ADD TABLE public.loan_applications;
 
-
--- ========== 20251229101844_a6d3400a-5bd5-4e0f-9f9c-12269cfb7197.sql ==========
-
+-- ===================================================================
+-- FILE: 20251229101844_a6d3400a-5bd5-4e0f-9f9c-12269cfb7197.sql
+-- ===================================================================
 -- Phase 1: Fix RLS Policies for loan_products
 -- Drop existing restrictive policies
 DROP POLICY IF EXISTS "Anyone can view active loan products" ON loan_products;
@@ -2125,18 +2121,18 @@ ALTER TABLE loan_products ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
 -- Add unique constraint for product_code (if not null)
 CREATE UNIQUE INDEX IF NOT EXISTS loan_products_product_code_unique ON loan_products(product_code) WHERE product_code IS NOT NULL;
 
-
--- ========== 20251229221616_238f9db5-94c0-41a2-9abb-b2a96cbbd700.sql ==========
-
+-- ===================================================================
+-- FILE: 20251229221616_238f9db5-94c0-41a2-9abb-b2a96cbbd700.sql
+-- ===================================================================
 -- Add new document and collateral columns for enhanced loan applications
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS collateral_image_url TEXT;
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS bank_statement_url TEXT;
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS payslip_2_url TEXT;
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS payslip_3_url TEXT;
 
-
--- ========== 20251230144125_ef935dee-06bb-40ac-99d1-2c8534c9da16.sql ==========
-
+-- ===================================================================
+-- FILE: 20251230144125_ef935dee-06bb-40ac-99d1-2c8534c9da16.sql
+-- ===================================================================
 -- Create CRB requests table to log all credit bureau interactions
 CREATE TABLE public.crb_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2266,9 +2262,9 @@ CREATE TRIGGER update_guarantees_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
-
--- ========== 20251230163201_515bd1b1-1225-4d5b-9b2f-6e47e0c9d5f1.sql ==========
-
+-- ===================================================================
+-- FILE: 20251230163201_515bd1b1-1225-4d5b-9b2f-6e47e0c9d5f1.sql
+-- ===================================================================
 -- PMIC (Payroll Management Integration Center) Tables
 
 -- 1. PMIC Config (Single row for lender settings)
@@ -2475,9 +2471,9 @@ CREATE TRIGGER update_pmic_exceptions_updated_at
 BEFORE UPDATE ON public.pmic_exceptions
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-
--- ========== 2026_01_03_loan_engine_enhancements.sql ==========
-
+-- ===================================================================
+-- FILE: 2026_01_03_loan_engine_enhancements.sql
+-- ===================================================================
 -- =====================================================
 -- LOAN ENGINE ENHANCEMENT - DATABASE MIGRATIONS
 -- Run these in your Supabase SQL Editor
@@ -2754,9 +2750,9 @@ LIMIT 50; -- Safety limit
 -- =====================================================
 
 
-
--- ========== 20260101161808_715ee19c-703b-470a-8e38-65d1338d3472.sql ==========
-
+-- ===================================================================
+-- FILE: 20260101161808_715ee19c-703b-470a-8e38-65d1338d3472.sql
+-- ===================================================================
 -- Create accounts table for capital management (bank accounts, wallets, etc.)
 CREATE TABLE public.accounts (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -2859,9 +2855,9 @@ CREATE TRIGGER update_expenses_updated_at
 BEFORE UPDATE ON public.expenses
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-
--- ========== 20260108_account_based_transactions.sql ==========
-
+-- ===================================================================
+-- FILE: 20260108_account_based_transactions.sql
+-- ===================================================================
 -- Migration: Account-Based Financial System
 -- Description: Link all financial transactions to specific accounts
 -- Created: 2026-01-08
@@ -3096,9 +3092,9 @@ COMMENT ON FUNCTION update_account_on_repayment() IS 'Automatically adds repayme
 COMMENT ON FUNCTION update_account_on_expense() IS 'Automatically deducts expense amount from account and records transaction';
 
 
-
--- ========== 20260108_notification_providers.sql ==========
-
+-- ===================================================================
+-- FILE: 20260108_notification_providers.sql
+-- ===================================================================
 -- Migration: Add notification provider settings and enhance notification_logs table
 -- Date: 2026-01-08
 -- Description: Adds support for multiple notification providers (Africa's Talking, Twilio, SendGrid, SMTP)
@@ -3249,17 +3245,17 @@ GRANT EXECUTE ON FUNCTION get_user_notifications TO authenticated;
 GRANT EXECUTE ON FUNCTION get_notification_delivery_rate TO authenticated;
 
 
-
--- ========== 20260108_remove_funding_pool_setting.sql ==========
-
+-- ===================================================================
+-- FILE: 20260108_remove_funding_pool_setting.sql
+-- ===================================================================
 -- Remove deprecated static funding_pool setting in favor of real account balances
 delete from system_settings where key = 'funding_pool';
 
 
 
-
--- ========== 20260108_wallet_and_court_system.sql ==========
-
+-- ===================================================================
+-- FILE: 20260108_wallet_and_court_system.sql
+-- ===================================================================
 -- Migration: Wallet/Account Management and Court Module
 -- Description: Add wallet accounts for tracking balances and court cases management
 -- Created: 2026-01-08
@@ -3760,9 +3756,9 @@ COMMENT ON TABLE court_cases IS 'Manages legal enforcement and court proceedings
 COMMENT ON TABLE payment_splits IS 'Tracks split/partial payments for loan repayments';
 
 
-
--- ========== 20260108171013_68fb6947-6cc4-4eb3-8e58-7d2d0511db79.sql ==========
-
+-- ===================================================================
+-- FILE: 20260108171013_68fb6947-6cc4-4eb3-8e58-7d2d0511db79.sql
+-- ===================================================================
 -- Create wallet_accounts table for borrower wallets
 CREATE TABLE public.wallet_accounts (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -3938,9 +3934,9 @@ CREATE TRIGGER update_push_subscriptions_updated_at
   BEFORE UPDATE ON public.push_subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-
--- ========== 20260109100148_f6e6ee77-64b0-4979-97a1-071c2d043aef.sql ==========
-
+-- ===================================================================
+-- FILE: 20260109100148_f6e6ee77-64b0-4979-97a1-071c2d043aef.sql
+-- ===================================================================
 -- Add term_unit column to loan_products table to support daily/weekly/monthly/yearly terms
 ALTER TABLE public.loan_products 
 ADD COLUMN IF NOT EXISTS term_unit text NOT NULL DEFAULT 'months';
@@ -3954,9 +3950,9 @@ ADD COLUMN IF NOT EXISTS term_unit text NOT NULL DEFAULT 'months';
 
 COMMENT ON COLUMN public.loan_applications.term_unit IS 'Unit for loan term: days, weeks, months, or years';
 
-
--- ========== 20260109230807_8a3ea80c-ff21-46d4-9d04-f2bbde29cd7d.sql ==========
-
+-- ===================================================================
+-- FILE: 20260109230807_8a3ea80c-ff21-46d4-9d04-f2bbde29cd7d.sql
+-- ===================================================================
 -- Add brevo_whatsapp_templates table for managing WhatsApp template mappings
 CREATE TABLE IF NOT EXISTS public.brevo_whatsapp_templates (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -3997,9 +3993,9 @@ INSERT INTO public.brevo_whatsapp_templates (event_type, template_id, template_n
   ('welcome', '', 'Welcome Message', 'Template for welcoming new users')
 ON CONFLICT (event_type) DO NOTHING;
 
-
--- ========== 20260110174344_9c2511f8-76c4-4421-b7bb-9a84f2ef7350.sql ==========
-
+-- ===================================================================
+-- FILE: 20260110174344_9c2511f8-76c4-4421-b7bb-9a84f2ef7350.sql
+-- ===================================================================
 -- 1. Add eligible_locations column to loan_products for location control
 ALTER TABLE public.loan_products 
 ADD COLUMN IF NOT EXISTS eligible_locations text[] DEFAULT NULL;
@@ -4030,9 +4026,9 @@ ADD COLUMN IF NOT EXISTS court_location text DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS next_hearing_date date DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS enforcement_status text DEFAULT 'pending';
 
-
--- ========== 20260112183357_f24f7235-69bb-4d65-86ca-f3f22fd1c07e.sql ==========
-
+-- ===================================================================
+-- FILE: 20260112183357_f24f7235-69bb-4d65-86ca-f3f22fd1c07e.sql
+-- ===================================================================
 -- Update loan products to set the 10% legal fee (platform_fee_percent)
 UPDATE public.loan_products 
 SET platform_fee_percent = 10 
@@ -4043,9 +4039,9 @@ UPDATE public.loan_products
 SET processing_fee_percent = 2.5 
 WHERE is_active = true AND (processing_fee_percent IS NULL OR processing_fee_percent = 0);
 
-
--- ========== 20260115_hr_payroll_system.sql ==========
-
+-- ===================================================================
+-- FILE: 20260115_hr_payroll_system.sql
+-- ===================================================================
 -- HR and Payroll System for Phindu Loans Internal Employees
 -- Date: 2026-01-15
 -- Description: Complete HR and Payroll system compliant with Zambian labor and tax standards
@@ -4456,9 +4452,9 @@ COMMENT ON COLUMN public.payroll_records.napsa_employee IS 'NAPSA employee contr
 COMMENT ON COLUMN public.payroll_records.napsa_employer IS 'NAPSA employer contribution (5% of gross)';
 
 
-
--- ========== 20260115_user_notification_preferences.sql ==========
-
+-- ===================================================================
+-- FILE: 20260115_user_notification_preferences.sql
+-- ===================================================================
 -- Migration: Add user notification preferences to profiles table
 -- Date: 2026-01-15
 -- Description: Adds notification preference columns to profiles table for user-specific notification settings
@@ -4477,9 +4473,9 @@ COMMENT ON COLUMN public.profiles.payment_alerts IS 'User preference for receivi
 COMMENT ON COLUMN public.profiles.marketing IS 'User preference for receiving marketing and promotional notifications';
 
 
-
--- ========== 20260116214243_81bc24eb-30cf-4300-8e30-65c3d8f7c606.sql ==========
-
+-- ===================================================================
+-- FILE: 20260116214243_81bc24eb-30cf-4300-8e30-65c3d8f7c606.sql
+-- ===================================================================
 -- Add notification preference columns to profiles table
 ALTER TABLE public.profiles 
 ADD COLUMN IF NOT EXISTS email_reminders boolean DEFAULT true,
@@ -4493,9 +4489,9 @@ COMMENT ON COLUMN public.profiles.sms_reminders IS 'User preference for receivin
 COMMENT ON COLUMN public.profiles.payment_alerts IS 'User preference for receiving payment confirmation alerts';
 COMMENT ON COLUMN public.profiles.marketing IS 'User preference for receiving marketing and promotional notifications';
 
-
--- ========== 20260117_auto_notifications_and_enhancements.sql ==========
-
+-- ===================================================================
+-- FILE: 20260117_auto_notifications_and_enhancements.sql
+-- ===================================================================
 -- Migration: Automatic notifications, multiple collateral images, and contract template enhancements
 -- Date: 2026-01-17
 -- Description: 
@@ -4877,9 +4873,9 @@ COMMENT ON FUNCTION notify_disbursement IS 'Automatically sends notifications wh
 COMMENT ON FUNCTION notify_payment_received IS 'Automatically sends notifications when payment is received';
 
 
-
--- ========== 20260117_fix_weekly_payments_and_deletions.sql ==========
-
+-- ===================================================================
+-- FILE: 20260117_fix_weekly_payments_and_deletions.sql
+-- ===================================================================
 -- Migration: Fix weekly payment schedules, interest calculations, and add deletion restrictions
 -- Date: 2026-01-17
 -- Description: 
@@ -5080,9 +5076,9 @@ COMMENT ON FUNCTION public.can_delete_borrower IS 'Checks if a borrower can be d
 COMMENT ON FUNCTION public.generate_repayment_schedule IS 'Generates repayment schedule for loans. Supports both weekly and monthly payment frequencies based on term_unit and interest_period.';
 
 
-
--- ========== 20260117_notification_queue_enhancements.sql ==========
-
+-- ===================================================================
+-- FILE: 20260117_notification_queue_enhancements.sql
+-- ===================================================================
 -- Migration: Notification Queue Processing Enhancements
 -- Date: 2026-01-17
 -- Description: Adds retry_count column and indexes for notification queue processing
@@ -5142,9 +5138,9 @@ COMMENT ON FUNCTION get_notification_queue_stats IS 'Returns statistics about th
 GRANT EXECUTE ON FUNCTION get_notification_queue_stats TO authenticated;
 
 
-
--- ========== 20260121104933_9a9ba221-80e9-469a-8296-eefbbbc778db.sql ==========
-
+-- ===================================================================
+-- FILE: 20260121104933_9a9ba221-80e9-469a-8296-eefbbbc778db.sql
+-- ===================================================================
 -- Migration: Automatic notifications, multiple collateral images, and contract template enhancements
 -- Date: 2026-01-21
 -- Description: 
@@ -5562,9 +5558,9 @@ COMMENT ON FUNCTION notify_loan_status_change IS 'Automatically sends notificati
 COMMENT ON FUNCTION notify_disbursement IS 'Automatically sends notifications when loan is disbursed';
 COMMENT ON FUNCTION notify_payment_received IS 'Automatically sends notifications when payment is received';
 
-
--- ========== 20260121105011_e7e9dee2-9ae7-425e-b2d7-4f4faf25b4f6.sql ==========
-
+-- ===================================================================
+-- FILE: 20260121105011_e7e9dee2-9ae7-425e-b2d7-4f4faf25b4f6.sql
+-- ===================================================================
 -- Fix security warnings: Set search_path on functions
 
 -- Fix send_notification_via_edge_function
@@ -5773,9 +5769,9 @@ BEGIN
 END;
 $$;
 
-
--- ========== 20260122_unified_application_documents.sql ==========
-
+-- ===================================================================
+-- FILE: 20260122_unified_application_documents.sql
+-- ===================================================================
 -- Migration: Unified Application Documents (Phase 1)
 -- Extends loan_application_documents for single-doc-model and admin visibility
 -- Date: 2026-01-22
@@ -5888,9 +5884,9 @@ CREATE POLICY "Admins can view borrower_documents" ON public.borrower_documents
 COMMENT ON TABLE public.borrower_documents IS 'Borrower document vault for NRC, proof of residence, etc.; reuse from vault on new applications';
 
 
-
--- ========== 20260126_twilio_notification_enhancements.sql ==========
-
+-- ===================================================================
+-- FILE: 20260126_twilio_notification_enhancements.sql
+-- ===================================================================
 -- Migration: Twilio Notification Enhancements
 -- Date: 2026-01-26
 -- Description: Adds new notification event triggers and Twilio-specific settings
@@ -6135,9 +6131,9 @@ GRANT SELECT ON notification_stats TO authenticated;
 COMMENT ON TABLE notification_logs IS 'Logs all notification attempts via Twilio (SMS, WhatsApp) and SendGrid (Email)';
 
 
-
--- ========== 20260130090915_5daea430-644f-4f1c-a37e-8a9cd5172162.sql ==========
-
+-- ===================================================================
+-- FILE: 20260130090915_5daea430-644f-4f1c-a37e-8a9cd5172162.sql
+-- ===================================================================
 -- Create table to store OTP codes
 CREATE TABLE public.otp_codes (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -6196,9 +6192,9 @@ BEGIN
 END;
 $$;
 
-
--- ========== 20260201185600_d260a2fe-efc3-4409-815e-11b567fb88e3.sql ==========
-
+-- ===================================================================
+-- FILE: 20260201185600_d260a2fe-efc3-4409-815e-11b567fb88e3.sql
+-- ===================================================================
 -- Add source_account_id to disbursements table for account deduction tracking
 ALTER TABLE public.disbursements 
 ADD COLUMN IF NOT EXISTS source_account_id uuid REFERENCES public.accounts(id);
@@ -6216,9 +6212,9 @@ CREATE INDEX IF NOT EXISTS idx_loan_applications_contract_signing
 ON public.loan_applications (borrower_signed, admin_signed) 
 WHERE status = 'approved';
 
-
--- ========== 20260202142123_f7e5a3cd-1d0e-4346-842d-8d2f7fbe57d0.sql ==========
-
+-- ===================================================================
+-- FILE: 20260202142123_f7e5a3cd-1d0e-4346-842d-8d2f7fbe57d0.sql
+-- ===================================================================
 -- Fix 1: Remove public access to otp_codes table - OTP verification must only happen via edge functions
 -- This prevents attackers from reading active OTP codes and hijacking accounts
 
@@ -6251,9 +6247,9 @@ USING (
   has_role(auth.uid(), 'super_admin'::app_role)
 );
 
-
--- ========== 20260202171314_0018d35b-fee8-4ed0-98ad-a15883d3b09d.sql ==========
-
+-- ===================================================================
+-- FILE: 20260202171314_0018d35b-fee8-4ed0-98ad-a15883d3b09d.sql
+-- ===================================================================
 -- Fix DEFINER_OR_RPC_BYPASS: Add authorization checks to SECURITY DEFINER functions
 
 -- 1. Update calculate_repayment_penalty with authorization
@@ -6465,9 +6461,9 @@ DELETE FROM storage.objects WHERE bucket_id = 'loan_documents';
 -- Remove the bucket itself
 DELETE FROM storage.buckets WHERE id = 'loan_documents';
 
-
--- ========== 20260204100000_fix_disbursement_account_trigger.sql ==========
-
+-- ===================================================================
+-- FILE: 20260204100000_fix_disbursement_account_trigger.sql
+-- ===================================================================
 -- Fix disbursement account trigger: single deduction when status = completed, balance check, balance_before, notes column
 -- Ensures account is deducted only once (when marking disbursement completed) and transaction row is valid.
 
@@ -6532,9 +6528,9 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION update_account_on_disbursement() IS 'Deducts from source account and records transaction only when disbursement status is completed (single deduction, balance check, correct columns)';
 
 
-
--- ========== 20260206_application_documents_system.sql ==========
-
+-- ===================================================================
+-- FILE: 20260206_application_documents_system.sql
+-- ===================================================================
 -- =====================================================
 -- PHINDU LOANS: Application Documents System
 -- Date: 2026-02-06
@@ -6776,9 +6772,9 @@ COMMENT ON TABLE public.borrower_document_vault IS 'Permanent document storage f
 COMMENT ON COLUMN public.loan_products.required_documents IS 'JSONB array of required documents for this loan product. Each element has: doc_type, doc_label, is_mandatory, display_order, allow_multiple (optional), max_count (optional).';
 
 
-
--- ========== 20260206142108_8fcb0863-eb0c-478a-916f-7689462bc405.sql ==========
-
+-- ===================================================================
+-- FILE: 20260206142108_8fcb0863-eb0c-478a-916f-7689462bc405.sql
+-- ===================================================================
 
 -- =====================================================
 -- PHINDU LOANS: Application Documents System
@@ -6985,9 +6981,9 @@ COMMENT ON TABLE public.borrower_document_vault IS 'Permanent document storage f
 COMMENT ON COLUMN public.loan_products.required_documents IS 'JSONB array of required documents for this loan product.';
 
 
-
--- ========== 20260209_blacklist_expires_at.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209_blacklist_expires_at.sql
+-- ===================================================================
 -- Optional blacklist duration: expiry date for temporary blacklist
 -- Date: 2026-02-09
 
@@ -6997,9 +6993,9 @@ ALTER TABLE public.profiles
 COMMENT ON COLUMN public.profiles.blacklist_expires_at IS 'When blacklist expires (null = permanent). If set and in the past, treat as not blacklisted.';
 
 
-
--- ========== 20260209_log_auth_events.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209_log_auth_events.sql
+-- ===================================================================
 -- Log login/signup to audit_logs with IP and optional device info
 -- Date: 2026-02-09
 
@@ -7035,9 +7031,9 @@ $$;
 COMMENT ON FUNCTION public.log_auth_event(TEXT, TEXT, JSONB) IS 'Records login/signup in audit_logs with IP and optional device info. Call after auth success.';
 
 
-
--- ========== 20260209_payment_claims.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209_payment_claims.sql
+-- ===================================================================
 -- Borrower payment claims: borrower reports payment with reference (and optional receipt) for admin verification.
 -- Admin records actual payment in loan_repayments and marks claim as verified.
 
@@ -7094,9 +7090,9 @@ create policy "Staff can update payment claims"
 comment on table public.payment_claims is 'Borrower-reported payments (reference + optional receipt) for admin verification before recording in loan_repayments.';
 
 
-
--- ========== 20260209_profile_verification_status.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209_profile_verification_status.sql
+-- ===================================================================
 -- Add verification timestamps to profiles for admin display
 -- Date: 2026-02-09
 
@@ -7108,9 +7104,9 @@ COMMENT ON COLUMN public.profiles.email_verified_at IS 'When email was verified 
 COMMENT ON COLUMN public.profiles.phone_verified_at IS 'When phone was verified (e.g. OTP sign-in)';
 
 
-
--- ========== 20260209_unique_nrc_phone_profiles.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209_unique_nrc_phone_profiles.sql
+-- ===================================================================
 -- Prevent duplicate NRC + phone combinations on profiles
 -- Date: 2026-02-09
 
@@ -7122,9 +7118,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_nrc_phone_unique
 COMMENT ON INDEX public.idx_profiles_nrc_phone_unique IS 'Ensures no two profiles share the same NRC number and phone combination.';
 
 
-
--- ========== 20260209084552_fbc11cb0-b520-4c72-9a12-6d32d684e984.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209084552_fbc11cb0-b520-4c72-9a12-6d32d684e984.sql
+-- ===================================================================
 
 -- Unique NRC + phone on profiles
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_nrc_phone_unique
@@ -7166,23 +7162,23 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS blacklist_expires_at TIMESTAMPTZ;
 
 
-
--- ========== 20260209090425_cdaf13bf-3de7-48f3-b29f-5f26cb9de016.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209090425_cdaf13bf-3de7-48f3-b29f-5f26cb9de016.sql
+-- ===================================================================
 -- Add contract_signing to the loan_status enum
 ALTER TYPE public.loan_status ADD VALUE IF NOT EXISTS 'contract_signing' AFTER 'approved';
 
-
--- ========== 20260209214050_f8199511-0675-4385-a6e5-3a1f22ae07c4.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209214050_f8199511-0675-4385-a6e5-3a1f22ae07c4.sql
+-- ===================================================================
 ALTER TABLE loan_applications
 ADD COLUMN IF NOT EXISTS contract_fully_signed_at timestamptz;
 
 COMMENT ON COLUMN loan_applications.contract_fully_signed_at IS 'Set when both borrower and admin have signed; optional audit field.';
 
-
--- ========== 20260209232412_99a8520f-6fc2-42f1-ab10-d83b05d5faef.sql ==========
-
+-- ===================================================================
+-- FILE: 20260209232412_99a8520f-6fc2-42f1-ab10-d83b05d5faef.sql
+-- ===================================================================
 
 -- =============================================================================
 -- 1. audit_logs module column
@@ -7520,9 +7516,9 @@ AS $$ WITH lb AS (
 FROM lb $$;
 
 
-
--- ========== 20260210_approval_workflow_and_loan_notes.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_approval_workflow_and_loan_notes.sql
+-- ===================================================================
 -- Phase 2.1: Multi-level approval workflow columns + loan_notes table
 -- loan_applications: document_verified_by, document_verified_at, finance_verified_by, finance_verified_at, disbursed_by, approval_stage
 -- loan_notes: id, loan_id, user_id, note, type (internal | borrower_visible), created_at
@@ -7597,9 +7593,9 @@ CREATE POLICY "Staff can delete loan notes"
 COMMENT ON TABLE public.loan_notes IS 'Internal and borrower-visible notes on loan applications; RLS restricts borrowers to borrower_visible only for their loans';
 
 
-
--- ========== 20260210_audit_logs_module.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_audit_logs_module.sql
+-- ===================================================================
 -- Add optional module column to audit_logs for RBAC/reporting
 -- Date: 2026-02-10
 
@@ -7609,9 +7605,9 @@ ALTER TABLE public.audit_logs
 COMMENT ON COLUMN public.audit_logs.module IS 'Module/category for the action (e.g. loans, disbursement, products). Can mirror entity_type.';
 
 
-
--- ========== 20260210_commission_calculations.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_commission_calculations.sql
+-- ===================================================================
 -- Phase 3.2: Commission calculations audit table
 -- Stores computed commission per employee per period for audit and payroll
 -- Date: 2026-02-10
@@ -7642,9 +7638,9 @@ CREATE POLICY "Admins can manage commission_calculations"
 COMMENT ON TABLE public.commission_calculations IS 'Audit of commission computed per employee per period; formula_used describes calculation (e.g. % of interest on loans processed)';
 
 
-
--- ========== 20260210_employees_commission_branch.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_employees_commission_branch.sql
+-- ===================================================================
 -- Phase 3.1: Add commission_percentage and branch to employees for payroll/commission linking
 -- Date: 2026-02-10
 
@@ -7656,9 +7652,9 @@ COMMENT ON COLUMN public.employees.commission_percentage IS 'Commission % on loa
 COMMENT ON COLUMN public.employees.branch IS 'Branch or location for reporting and filtering';
 
 
-
--- ========== 20260210_loan_applications_delete_policy.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_loan_applications_delete_policy.sql
+-- ===================================================================
 -- Phase 1.4: Delete policy for loan_applications
 -- Only allow delete when: (status is pending/rejected/under_review AND user has loans.delete)
 -- OR user is super_admin (with audit in app layer).
@@ -7679,9 +7675,9 @@ COMMENT ON POLICY "Staff can delete applications in early stages" ON public.loan
   'Delete allowed only for pending/rejected/under_review when user has loans.delete, or for super_admin on any row.';
 
 
-
--- ========== 20260210_officer_loan_stats_rpc.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_officer_loan_stats_rpc.sql
+-- ===================================================================
 -- Phase 4.1: Officer-level loan stats RPC for performance dashboards
 -- Returns per-officer (by assigned_to) metrics for a period
 -- Date: 2026-02-10
@@ -7806,9 +7802,9 @@ $$;
 COMMENT ON FUNCTION public.portfolio_at_risk(DATE) IS 'Portfolio at risk: total outstanding, overdue balance, PAR %';
 
 
-
--- ========== 20260210_rbac_repayments_collections_writeoffs_court.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_rbac_repayments_collections_writeoffs_court.sql
+-- ===================================================================
 -- Add permissions for repayments, collections, writeoffs, court (Phase 5 RBAC)
 INSERT INTO public.permissions (module, action, description) VALUES
   ('repayments', 'view', 'View repayment records'),
@@ -7857,12 +7853,17 @@ WHERE r.code = 'loan_officer'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 
-
--- ========== 20260210_rbac_roles_permissions.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_rbac_roles_permissions.sql
+-- ===================================================================
 -- RBAC: roles, permissions, role_permissions, has_permission
 -- Phase 1.1 - Run after app_role and user_roles exist
 -- Date: 2026-02-10
+--
+-- NOTE: If your database was already migrated with 20260209232412, tables use
+-- role_permissions(role_name, permission_id) and roles(name). This file's
+-- alternate shape is skipped by IF NOT EXISTS; apply 20260407120000_rbac_canonical_permission_functions.sql
+-- so has_permission / get_my_permissions match the role_name model.
 
 -- 1. roles table (display name + code matching app_role for join)
 CREATE TABLE IF NOT EXISTS public.roles (
@@ -8060,9 +8061,9 @@ CREATE TRIGGER update_roles_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
-
--- ========== 20260210_transition_loan_status_rpc.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210_transition_loan_status_rpc.sql
+-- ===================================================================
 -- Phase 2.2: RPC to transition loan status with permission checks
 -- transition_loan_status(loan_id, action) where action in ('verify_documents', 'finance_approve', 'approve')
 
@@ -8154,9 +8155,9 @@ $$;
 COMMENT ON FUNCTION public.transition_loan_status(UUID, TEXT) IS 'Transition loan workflow: verify_documents, finance_approve, or approve (with permission and stage checks)';
 
 
-
--- ========== 20260210000107_a4c2b2af-0d02-438d-9b06-89a3d111d371.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210000107_a4c2b2af-0d02-438d-9b06-89a3d111d371.sql
+-- ===================================================================
 
 -- Borrower payment claims table
 create table if not exists public.payment_claims (
@@ -8250,9 +8251,9 @@ WHERE r.name = 'loan_officer'
 ON CONFLICT (role_name, permission_id) DO NOTHING;
 
 
-
--- ========== 20260210021720_0f476d9b-2dd3-4772-8e9f-d4a883ff2878.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210021720_0f476d9b-2dd3-4772-8e9f-d4a883ff2878.sql
+-- ===================================================================
 -- Allow borrowers to update contract signing fields on their own loans
 DROP POLICY IF EXISTS "Borrowers can sign their own contracts" ON public.loan_applications;
 
@@ -8261,15 +8262,15 @@ CREATE POLICY "Borrowers can sign their own contracts"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
-
--- ========== 20260210030740_ec7cb523-e4cf-4503-a294-13290643697e.sql ==========
-
+-- ===================================================================
+-- FILE: 20260210030740_ec7cb523-e4cf-4503-a294-13290643697e.sql
+-- ===================================================================
 -- Add awaiting_disbursement to the loan_status enum
 ALTER TYPE loan_status ADD VALUE IF NOT EXISTS 'awaiting_disbursement' AFTER 'contract_signing';
 
-
--- ========== 20260211_compute_commission_rpc.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211_compute_commission_rpc.sql
+-- ===================================================================
 -- RPC to compute commission for a payroll period; returns per-employee commission (optionally write to commission_calculations via app)
 -- Uses employees.commission_percentage and loans processed (assigned_to) disbursed in period
 -- Date: 2026-02-11
@@ -8320,9 +8321,9 @@ $$;
 COMMENT ON FUNCTION public.compute_commission_for_period(DATE, DATE) IS 'Compute commission per employee for period from interest on loans (assigned_to) disbursed in period';
 
 
-
--- ========== 20260211_rbac_disbursements_products_rls.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211_rbac_disbursements_products_rls.sql
+-- ===================================================================
 -- RBAC: RLS policies for disbursements and loan_products using has_permission
 -- Ensures only users with correct permissions can view/create/update/delete
 -- Date: 2026-02-11
@@ -8401,9 +8402,9 @@ COMMENT ON POLICY "loan_products_select_policy" ON public.loan_products IS 'View
 COMMENT ON POLICY "loan_products_insert_policy" ON public.loan_products IS 'Create products with products.edit';
 
 
-
--- ========== 20260211_transition_loan_status_reject.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211_transition_loan_status_reject.sql
+-- ===================================================================
 -- Extend transition_loan_status to support 'reject' action with reason (audited)
 -- Date: 2026-02-11
 
@@ -8511,9 +8512,9 @@ $$;
 COMMENT ON FUNCTION public.transition_loan_status(UUID, TEXT, TEXT) IS 'Transition loan workflow: verify_documents, finance_approve, approve, reject (with optional reason). Permission-gated and audited.';
 
 
-
--- ========== 20260211055521_eaa9d1c3-41c8-4869-ab43-a0c9c7e1c5f1.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211055521_eaa9d1c3-41c8-4869-ab43-a0c9c7e1c5f1.sql
+-- ===================================================================
 
 -- Allow borrowers to insert their own KYC documents
 CREATE POLICY "Borrowers can insert own documents"
@@ -8530,9 +8531,9 @@ TO authenticated
 USING (auth.uid() = borrower_id);
 
 
-
--- ========== 20260211060303_4b6f00e8-0716-48ec-86c0-a1af17ee5e11.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211060303_4b6f00e8-0716-48ec-86c0-a1af17ee5e11.sql
+-- ===================================================================
 
 -- Borrower KYC information (financial, next of kin)
 CREATE TABLE public.borrower_kyc_info (
@@ -8670,9 +8671,9 @@ USING (
 );
 
 
-
--- ========== 20260211061257_468404ba-66e4-486e-bfb7-7cabde2f1c90.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211061257_468404ba-66e4-486e-bfb7-7cabde2f1c90.sql
+-- ===================================================================
 -- Drop the old conflicting ALL policy (uses 'public' role, not 'authenticated')
 DROP POLICY IF EXISTS "Borrowers can manage their vault" ON public.borrower_document_vault;
 
@@ -8699,9 +8700,9 @@ USING (
   )
 );
 
-
--- ========== 20260211073831_1642b75d-8330-43ad-8712-9a6ec7c6dc14.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211073831_1642b75d-8330-43ad-8712-9a6ec7c6dc14.sql
+-- ===================================================================
 
 -- 1. Add missing approval workflow columns to loan_applications
 ALTER TABLE public.loan_applications
@@ -8772,9 +8773,9 @@ CREATE POLICY "Borrowers can view visible notes on their loans"
   );
 
 
-
--- ========== 20260211075154_c7e9f624-fd1b-4310-83c3-5aa6a6f48b09.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211075154_c7e9f624-fd1b-4310-83c3-5aa6a6f48b09.sql
+-- ===================================================================
 
 -- ============================================================
 -- PAYROLL RECORDS: monthly payroll runs per employee
@@ -8991,9 +8992,9 @@ CREATE TRIGGER update_payroll_runs_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
-
--- ========== 20260211085246_252e1217-38f0-4ae9-b1e3-f2d225072ea4.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211085246_252e1217-38f0-4ae9-b1e3-f2d225072ea4.sql
+-- ===================================================================
 
 -- Add missing columns to employees table
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS first_name text;
@@ -9007,9 +9008,9 @@ ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS city text;
 
 
-
--- ========== 20260211180558_e43e750d-5a7d-4b50-be9c-fae941879794.sql ==========
-
+-- ===================================================================
+-- FILE: 20260211180558_e43e750d-5a7d-4b50-be9c-fae941879794.sql
+-- ===================================================================
 -- Allow admins and staff to update borrower_document_vault (approve/reject)
 CREATE POLICY "Staff can update vault documents"
 ON public.borrower_document_vault
@@ -9030,9 +9031,9 @@ USING (
   has_role(auth.uid(), 'credit_officer'::app_role)
 );
 
-
--- ========== 20260213053402_9716c0a1-b87f-49d6-9dfb-5fa3b558553b.sql ==========
-
+-- ===================================================================
+-- FILE: 20260213053402_9716c0a1-b87f-49d6-9dfb-5fa3b558553b.sql
+-- ===================================================================
 -- Fix: Allow loan_officer and credit_officer to view KYC documents in storage
 DROP POLICY IF EXISTS "Users can view KYC documents" ON storage.objects;
 CREATE POLICY "Users can view KYC documents" ON storage.objects
@@ -9075,9 +9076,9 @@ FOR ALL USING (
   )
 );
 
-
--- ========== 20260213054239_5c241bbb-1d52-44fe-be04-873e850056c9.sql ==========
-
+-- ===================================================================
+-- FILE: 20260213054239_5c241bbb-1d52-44fe-be04-873e850056c9.sql
+-- ===================================================================
 -- Fix: Convert INSERT policies on loan_applications from RESTRICTIVE to PERMISSIVE
 -- RESTRICTIVE policies require ALL to pass, and without a PERMISSIVE policy, nothing passes
 
@@ -9102,9 +9103,9 @@ WITH CHECK (
   OR has_role(auth.uid(), 'loan_officer'::app_role)
 );
 
-
--- ========== 20260213060637_9a9c2948-de1b-4e69-814c-85bb00ebffac.sql ==========
-
+-- ===================================================================
+-- FILE: 20260213060637_9a9c2948-de1b-4e69-814c-85bb00ebffac.sql
+-- ===================================================================
 -- Fix UPDATE policies on loan_applications: change from RESTRICTIVE to PERMISSIVE
 -- Drop existing restrictive UPDATE policies
 DROP POLICY IF EXISTS "Borrowers can sign their own contracts" ON public.loan_applications;
@@ -9136,9 +9137,9 @@ USING (
   has_role(auth.uid(), 'admin'::app_role)
 );
 
-
--- ========== 20260213061350_80a3a33a-192f-4abd-8378-0b347b80a9b2.sql ==========
-
+-- ===================================================================
+-- FILE: 20260213061350_80a3a33a-192f-4abd-8378-0b347b80a9b2.sql
+-- ===================================================================
 
 -- Fix the uploaded_by CHECK constraint to allow UUID values (actual user IDs)
 ALTER TABLE public.application_documents DROP CONSTRAINT IF EXISTS application_documents_uploaded_by_check;
@@ -9156,9 +9157,9 @@ WITH CHECK (
 );
 
 
-
--- ========== 20260213175828_b890f112-a970-4b39-9cd6-4bb1171c139a.sql ==========
-
+-- ===================================================================
+-- FILE: 20260213175828_b890f112-a970-4b39-9cd6-4bb1171c139a.sql
+-- ===================================================================
 -- Fix: Convert loan_applications UPDATE policies to PERMISSIVE
 -- Currently all 3 UPDATE policies are RESTRICTIVE (AND logic), which means
 -- admin must ALSO satisfy borrower-only policies, blocking rejection/approval.
@@ -9194,9 +9195,9 @@ TO authenticated
 USING (auth.uid() = user_id AND status = 'pending'::loan_status)
 WITH CHECK (auth.uid() = user_id AND status = 'pending'::loan_status);
 
-
--- ========== 20260216003253_da68dfd1-25e0-4e5a-983c-52f5ee36092c.sql ==========
-
+-- ===================================================================
+-- FILE: 20260216003253_da68dfd1-25e0-4e5a-983c-52f5ee36092c.sql
+-- ===================================================================
 -- Add KYC permanent detail fields to profiles table
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS employer_name text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS job_title text;
@@ -9204,9 +9205,9 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS employment_type text; -- pe
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS years_in_employment integer;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS net_income numeric;
 
-
--- ========== 20260216004253_6fa77773-2ce6-49c3-8898-a666eef03ef4.sql ==========
-
+-- ===================================================================
+-- FILE: 20260216004253_6fa77773-2ce6-49c3-8898-a666eef03ef4.sql
+-- ===================================================================
 
 -- Update disbursement trigger to SMS only
 CREATE OR REPLACE FUNCTION public.notify_disbursement()
@@ -9340,9 +9341,9 @@ END;
 $function$;
 
 
-
--- ========== 20260216005802_4653ff77-7a15-4715-a764-e0ae995bbc86.sql ==========
-
+-- ===================================================================
+-- FILE: 20260216005802_4653ff77-7a15-4715-a764-e0ae995bbc86.sql
+-- ===================================================================
 
 -- Allow staff to INSERT into borrower_document_vault on behalf of borrowers
 CREATE POLICY "Staff can insert vault documents"
@@ -9397,9 +9398,9 @@ USING (
 );
 
 
-
--- ========== 20260225151249_dabd08f0-6e7f-4219-8b42-8dce8a6989cd.sql ==========
-
+-- ===================================================================
+-- FILE: 20260225151249_dabd08f0-6e7f-4219-8b42-8dce8a6989cd.sql
+-- ===================================================================
 
 -- 1. Allow loan_officer to read system_settings (operational keys only)
 CREATE POLICY "Loan officers can read operational settings"
@@ -9440,9 +9441,9 @@ CREATE POLICY "Staff can view all repayments"
   );
 
 
-
--- ========== 20260305182326_81d4523d-91fc-4d6f-8e76-6114fdd39e4f.sql ==========
-
+-- ===================================================================
+-- FILE: 20260305182326_81d4523d-91fc-4d6f-8e76-6114fdd39e4f.sql
+-- ===================================================================
 -- Enable realtime for repayments and disbursements (loan_applications already enabled)
 DO $$
 BEGIN
@@ -9456,9 +9457,9 @@ BEGIN
   END;
 END $$;
 
-
--- ========== 20260305182346_289253f5-c264-41b5-81d7-dddd3c0002d2.sql ==========
-
+-- ===================================================================
+-- FILE: 20260305182346_289253f5-c264-41b5-81d7-dddd3c0002d2.sql
+-- ===================================================================
 -- Product Document Requirements table
 CREATE TABLE public.product_document_requirements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -9506,15 +9507,15 @@ CREATE TRIGGER update_product_doc_req_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
-
--- ========== 20260305182503_030eba0d-e7dd-4686-8676-ea7856d33e09.sql ==========
-
+-- ===================================================================
+-- FILE: 20260305182503_030eba0d-e7dd-4686-8676-ea7856d33e09.sql
+-- ===================================================================
 CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
 CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
-
--- ========== 20260317122250_cda91193-bb1d-421d-930d-4ffadd05ab61.sql ==========
-
+-- ===================================================================
+-- FILE: 20260317122250_cda91193-bb1d-421d-930d-4ffadd05ab61.sql
+-- ===================================================================
 
 -- Add parent_loan_id to loan_applications for reloan chaining
 ALTER TABLE public.loan_applications
@@ -9598,9 +9599,9 @@ CREATE INDEX idx_loan_events_event_type ON public.loan_events(event_type);
 CREATE INDEX idx_loan_events_new_loan_id ON public.loan_events(new_loan_id);
 
 
-
--- ========== 20260317184852_37d90ac2-f634-4cec-a83e-dc78cc473ea4.sql ==========
-
+-- ===================================================================
+-- FILE: 20260317184852_37d90ac2-f634-4cec-a83e-dc78cc473ea4.sql
+-- ===================================================================
 
 ALTER TABLE public.loan_applications
 ADD COLUMN IF NOT EXISTS product_specific_data JSONB DEFAULT '{}'::jsonb;
@@ -9609,9 +9610,9 @@ CREATE INDEX IF NOT EXISTS idx_loan_applications_product_data
 ON public.loan_applications USING gin (product_specific_data);
 
 
-
--- ========== 20260318080339_b359c698-a01f-41d8-8ab7-e894eb17817b.sql ==========
-
+-- ===================================================================
+-- FILE: 20260318080339_b359c698-a01f-41d8-8ab7-e894eb17817b.sql
+-- ===================================================================
 -- Fix penalty calculation: use loan principal (loan_amount) instead of installment amount
 CREATE OR REPLACE FUNCTION public.calculate_repayment_penalty(p_repayment_id uuid)
 RETURNS numeric
@@ -9677,9 +9678,9 @@ BEGIN
 END;
 $$;
 
-
--- ========== 20260318082511_160a740b-a1aa-4867-80fb-6a1d9805dfe6.sql ==========
-
+-- ===================================================================
+-- FILE: 20260318082511_160a740b-a1aa-4867-80fb-6a1d9805dfe6.sql
+-- ===================================================================
 -- Fix Business Loan required_documents: add proper document_type values
 UPDATE public.loan_products
 SET required_documents = '[
@@ -9722,9 +9723,9 @@ SET required_documents = '[
 ]'::jsonb
 WHERE name = 'Salary Advance Loan';
 
-
--- ========== 20260324054920_e9a0a9a5-d0c5-4060-ac3f-2f74ad5f00b5.sql ==========
-
+-- ===================================================================
+-- FILE: 20260324054920_e9a0a9a5-d0c5-4060-ac3f-2f74ad5f00b5.sql
+-- ===================================================================
 
 CREATE OR REPLACE FUNCTION public.cancel_repayments_on_loan_closure()
 RETURNS trigger
@@ -9776,9 +9777,9 @@ AND status = 'pending'
 AND title IN ('Overdue Payment Reminder', 'Payment Due Reminder', 'Payment Due Soon');
 
 
-
--- ========== 20260327071753_bc00083f-ce8c-4b2b-8301-272a27b07b15.sql ==========
-
+-- ===================================================================
+-- FILE: 20260327071753_bc00083f-ce8c-4b2b-8301-272a27b07b15.sql
+-- ===================================================================
 
 ALTER TABLE public.loan_applications 
   ADD COLUMN IF NOT EXISTS penalty_count integer DEFAULT 0,
@@ -9786,16 +9787,16 @@ ALTER TABLE public.loan_applications
   ADD COLUMN IF NOT EXISTS legal_referred_at timestamp with time zone;
 
 
-
--- ========== 20260401100607_3a020eb0-8c06-41a7-8300-55726f14fc6b.sql ==========
-
+-- ===================================================================
+-- FILE: 20260401100607_3a020eb0-8c06-41a7-8300-55726f14fc6b.sql
+-- ===================================================================
 ALTER TABLE public.loan_products
 ADD COLUMN IF NOT EXISTS flat_interest_mode text
 CHECK (flat_interest_mode IN ('recurring', 'one_time'));
 
-
--- ========== 20260401101329_d23f1e56-3ec9-45a7-8f0e-8f76d226df66.sql ==========
-
+-- ===================================================================
+-- FILE: 20260401101329_d23f1e56-3ec9-45a7-8f0e-8f76d226df66.sql
+-- ===================================================================
 
 -- 1) Prevent negative repayment amount
 ALTER TABLE public.loan_repayments
@@ -9821,9 +9822,9 @@ ALTER TABLE public.accounts
   CHECK (balance >= 0);
 
 
-
--- ========== 20260401120000_phase4_financial_hardening.sql ==========
-
+-- ===================================================================
+-- FILE: 20260401120000_phase4_financial_hardening.sql
+-- ===================================================================
 -- Phase 4 hardening: invariants + idempotency guards for critical financial operations.
 
 -- 1) Numeric safety constraints (added as NOT VALID to avoid blocking deployment on legacy rows).
@@ -9878,9 +9879,9 @@ CREATE INDEX IF NOT EXISTS idx_loan_notes_visibility
   ON public.loan_notes (loan_id, is_internal, created_at DESC);
 
 
-
--- ========== 20260406091500_phase1_workflow_backbone.sql ==========
-
+-- ===================================================================
+-- FILE: 20260406091500_phase1_workflow_backbone.sql
+-- ===================================================================
 -- Phase 1 workflow backbone
 -- Adds lifecycle transition audit table, timeline visibility, and payment claim review fields.
 
@@ -9976,9 +9977,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_claims_unique_pending
   WHERE status IN ('pending', 'pending_review', 'needs_more_info');
 
 
-
--- ========== 20260406104457_ed690046-699d-4cf3-b17f-535df865d820.sql ==========
-
+-- ===================================================================
+-- FILE: 20260406104457_ed690046-699d-4cf3-b17f-535df865d820.sql
+-- ===================================================================
 
 CREATE OR REPLACE FUNCTION public.enforce_loan_application_status_transition()
 RETURNS trigger
@@ -10066,18 +10067,18 @@ FOR EACH ROW
 EXECUTE FUNCTION public.enforce_payroll_run_status_transition();
 
 
-
--- ========== 20260406104506_3a65d6df-a962-4908-a642-46d5642dcf9d.sql ==========
-
+-- ===================================================================
+-- FILE: 20260406104506_3a65d6df-a962-4908-a642-46d5642dcf9d.sql
+-- ===================================================================
 
 ALTER FUNCTION public.enforce_loan_application_status_transition() SET search_path = public;
 ALTER FUNCTION public.enforce_disbursement_status_transition() SET search_path = public;
 ALTER FUNCTION public.enforce_payroll_run_status_transition() SET search_path = public;
 
 
-
--- ========== 20260406130000_workflow_transition_guards.sql ==========
-
+-- ===================================================================
+-- FILE: 20260406130000_workflow_transition_guards.sql
+-- ===================================================================
 -- Enforce server-side status transition integrity for critical workflows.
 -- Date: 2026-04-06
 
@@ -10167,9 +10168,9 @@ FOR EACH ROW
 EXECUTE FUNCTION public.enforce_payroll_run_status_transition();
 
 
-
--- ========== 20260407120000_rbac_canonical_permission_functions.sql ==========
-
+-- ===================================================================
+-- FILE: 20260407120000_rbac_canonical_permission_functions.sql
+-- ===================================================================
 -- Canonical RBAC functions for role_permissions(role_name, permission_id) + roles(name)
 -- Re-applies the 20260209 join model so UI get_my_permissions / has_permission stay aligned
 -- after any migration that may have replaced these with a code/role_id variant.
@@ -10208,4 +10209,444 @@ $$;
 
 COMMENT ON FUNCTION public.has_permission(UUID, TEXT, TEXT) IS 'True if user has permission via role_permissions.role_name matching user_roles.role';
 COMMENT ON FUNCTION public.get_my_permissions() IS 'Distinct (module, action) for current user via role_name RBAC model';
+
+
+-- ===================================================================
+-- FILE: 20260408120000_admin_expense_status_rpc.sql
+-- ===================================================================
+-- Atomic expense approve / reject / paid with ledger posting (single transaction)
+
+CREATE OR REPLACE FUNCTION public.admin_set_expense_status(
+  p_expense_id uuid,
+  p_new_status text,
+  p_reject_reason text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  e RECORD;
+  acc RECORD;
+  v_new_bal numeric;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
+  END IF;
+
+  IF p_new_status NOT IN ('approved', 'rejected', 'paid') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Invalid status');
+  END IF;
+
+  IF NOT public.has_permission(v_uid, 'expenses', 'approve') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Permission denied');
+  END IF;
+
+  SELECT * INTO e FROM public.expenses WHERE id = p_expense_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Expense not found');
+  END IF;
+
+  IF p_new_status = 'approved' AND e.status IS DISTINCT FROM 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only pending expenses can be approved');
+  END IF;
+  IF p_new_status = 'rejected' AND e.status IS DISTINCT FROM 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only pending expenses can be rejected');
+  END IF;
+  IF p_new_status = 'paid' AND e.status IS DISTINCT FROM 'approved' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only approved expenses can be marked paid');
+  END IF;
+
+  IF p_new_status = 'approved' THEN
+    UPDATE public.expenses
+    SET
+      status = 'approved',
+      approved_at = now(),
+      approved_by = v_uid,
+      updated_at = now()
+    WHERE id = p_expense_id;
+
+  ELSIF p_new_status = 'rejected' THEN
+    UPDATE public.expenses
+    SET
+      status = 'rejected',
+      updated_at = now(),
+      description = CASE
+        WHEN p_reject_reason IS NOT NULL AND length(trim(p_reject_reason)) > 0 THEN
+          concat_ws(E'\n', COALESCE(e.description, ''), concat('Rejected: ', trim(p_reject_reason)))
+        ELSE COALESCE(e.description, '')
+      END
+    WHERE id = p_expense_id;
+
+  ELSIF p_new_status = 'paid' THEN
+    IF e.account_id IS NOT NULL THEN
+      SELECT * INTO acc FROM public.accounts WHERE id = e.account_id FOR UPDATE;
+      IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Linked account not found');
+      END IF;
+      v_new_bal := acc.balance - e.amount;
+      IF v_new_bal < 0 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Insufficient balance in the linked account');
+      END IF;
+
+      UPDATE public.accounts
+      SET balance = v_new_bal, updated_at = now()
+      WHERE id = e.account_id;
+
+      INSERT INTO public.account_transactions (
+        account_id,
+        transaction_type,
+        amount,
+        balance_before,
+        balance_after,
+        destination,
+        reference_type,
+        reference_id,
+        notes
+      ) VALUES (
+        e.account_id,
+        'expense',
+        e.amount,
+        acc.balance,
+        v_new_bal,
+        e.vendor_payee,
+        'expense',
+        e.id,
+        format('Expense: %s - %s', e.expense_category, e.vendor_payee)
+      );
+    END IF;
+
+    UPDATE public.expenses
+    SET
+      status = 'paid',
+      paid_at = now(),
+      updated_at = now()
+    WHERE id = p_expense_id;
+  END IF;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+COMMENT ON FUNCTION public.admin_set_expense_status(uuid, text, text) IS 'Approve/reject/paid for expenses with optional account ledger in one transaction';
+
+GRANT EXECUTE ON FUNCTION public.admin_set_expense_status(uuid, text, text) TO authenticated;
+
+
+-- ===================================================================
+-- FILE: 20260408121000_admin_writeoff_rpcs.sql
+-- ===================================================================
+-- Atomic write-off approve / reject / recovery (audit + collection activity in one transaction)
+
+CREATE OR REPLACE FUNCTION public.admin_approve_loan_writeoff(p_writeoff_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  w RECORD;
+  v_borrower text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
+  END IF;
+  IF NOT public.has_permission(v_uid, 'writeoffs', 'manage') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Permission denied');
+  END IF;
+
+  SELECT * INTO w FROM public.loan_writeoffs WHERE id = p_writeoff_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Write-off not found');
+  END IF;
+  IF w.status IS DISTINCT FROM 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only pending write-offs can be approved');
+  END IF;
+
+  SELECT la.full_name INTO v_borrower FROM public.loan_applications la WHERE la.id = w.loan_id;
+
+  UPDATE public.loan_writeoffs
+  SET
+    status = 'approved',
+    approved_at = now(),
+    approved_by = v_uid,
+    updated_at = now()
+  WHERE id = p_writeoff_id;
+
+  UPDATE public.loan_applications
+  SET status = 'defaulted', updated_at = now()
+  WHERE id = w.loan_id;
+
+  INSERT INTO public.audit_logs (
+    user_id, action, entity_type, entity_id, details, module
+  ) VALUES (
+    v_uid,
+    'WRITEOFF_APPROVED',
+    'loan_writeoff',
+    p_writeoff_id,
+    jsonb_build_object(
+      'loan_id', w.loan_id,
+      'amount', w.writeoff_amount,
+      'borrower', v_borrower
+    ),
+    'writeoffs'
+  );
+
+  INSERT INTO public.collection_activities (
+    loan_id, activity_type, notes, outcome
+  ) VALUES (
+    w.loan_id,
+    'writeoff_approved',
+    format('Write-off approved. Amount: K%s', to_char(w.writeoff_amount, 'FM999,999,999,990.00')),
+    'Loan written off - marked as defaulted'
+  );
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.admin_reject_loan_writeoff(p_writeoff_id uuid, p_reason text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  w RECORD;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
+  END IF;
+  IF NOT public.has_permission(v_uid, 'writeoffs', 'manage') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Permission denied');
+  END IF;
+
+  SELECT * INTO w FROM public.loan_writeoffs WHERE id = p_writeoff_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Write-off not found');
+  END IF;
+  IF w.status IS DISTINCT FROM 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only pending write-offs can be rejected');
+  END IF;
+
+  UPDATE public.loan_writeoffs
+  SET
+    status = 'rejected',
+    recovery_notes = format('Rejected: %s', COALESCE(nullif(trim(p_reason), ''), 'no reason')),
+    updated_at = now()
+  WHERE id = p_writeoff_id;
+
+  INSERT INTO public.collection_activities (
+    loan_id, activity_type, notes, outcome
+  ) VALUES (
+    w.loan_id,
+    'writeoff_rejected',
+    format('Write-off rejected. Reason: %s', COALESCE(nullif(trim(p_reason), ''), 'n/a')),
+    'Continue collection efforts'
+  );
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.admin_record_writeoff_recovery(
+  p_writeoff_id uuid,
+  p_amount numeric,
+  p_notes text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  w RECORD;
+  v_new_recovery numeric;
+  v_line text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
+  END IF;
+  IF NOT public.has_permission(v_uid, 'writeoffs', 'manage') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Permission denied');
+  END IF;
+  IF p_amount IS NULL OR p_amount <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Invalid recovery amount');
+  END IF;
+
+  SELECT * INTO w FROM public.loan_writeoffs WHERE id = p_writeoff_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Write-off not found');
+  END IF;
+  IF w.status IS DISTINCT FROM 'approved' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Recovery only for approved write-offs');
+  END IF;
+
+  v_new_recovery := COALESCE(w.recovery_amount, 0) + p_amount;
+  v_line := format(E'\n[%s] Recovered K%s: %s',
+    to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD'),
+    to_char(p_amount, 'FM999,999,999,990.00'),
+    COALESCE(nullif(trim(p_notes), ''), '')
+  );
+
+  UPDATE public.loan_writeoffs
+  SET
+    recovery_amount = v_new_recovery,
+    recovery_notes = trim(both E'\n' from concat_ws(E'\n', COALESCE(w.recovery_notes, ''), v_line)),
+    updated_at = now()
+  WHERE id = p_writeoff_id;
+
+  INSERT INTO public.collection_activities (
+    loan_id, activity_type, notes, outcome
+  ) VALUES (
+    w.loan_id,
+    'recovery_recorded',
+    format('Recovery recorded: K%s. %s', to_char(p_amount, 'FM999,999,999,990.00'), COALESCE(nullif(trim(p_notes), ''), '')),
+    format('Total recovered: K%s', to_char(v_new_recovery, 'FM999,999,999,990.00'))
+  );
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+COMMENT ON FUNCTION public.admin_approve_loan_writeoff(uuid) IS 'Approve pending write-off, mark loan defaulted, audit + activity';
+COMMENT ON FUNCTION public.admin_reject_loan_writeoff(uuid, text) IS 'Reject pending write-off with reason';
+COMMENT ON FUNCTION public.admin_record_writeoff_recovery(uuid, numeric, text) IS 'Append recovery amount/notes on approved write-off';
+
+GRANT EXECUTE ON FUNCTION public.admin_approve_loan_writeoff(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_reject_loan_writeoff(uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_record_writeoff_recovery(uuid, numeric, text) TO authenticated;
+
+
+-- ===================================================================
+-- FILE: 20260408122000_admin_mark_loan_defaulted.sql
+-- ===================================================================
+-- Mark active/disbursed loan as defaulted (audited, single transaction)
+
+CREATE OR REPLACE FUNCTION public.admin_mark_loan_defaulted(
+  p_loan_id uuid,
+  p_reason text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  la RECORD;
+  v_prev_status text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
+  END IF;
+  IF NOT public.has_permission(v_uid, 'loans', 'edit') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Permission denied');
+  END IF;
+  IF p_reason IS NULL OR length(trim(p_reason)) < 3 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Reason is required (min 3 characters)');
+  END IF;
+
+  SELECT id, status INTO la FROM public.loan_applications WHERE id = p_loan_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Loan not found');
+  END IF;
+
+  v_prev_status := la.status::text;
+  IF la.status::text NOT IN ('active', 'disbursed') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only active or disbursed loans can be marked defaulted');
+  END IF;
+
+  UPDATE public.loan_applications
+  SET status = 'defaulted', updated_at = now()
+  WHERE id = p_loan_id;
+
+  INSERT INTO public.audit_logs (
+    user_id, action, entity_type, entity_id, module, details
+  ) VALUES (
+    v_uid,
+    'MOVE_TO_DEFAULTED',
+    'loan_application',
+    p_loan_id,
+    'loans',
+    jsonb_build_object('reason', trim(p_reason), 'previous_status', v_prev_status)
+  );
+
+  INSERT INTO public.loan_events (
+    loan_id, event_type, performed_by, reason, previous_values, new_values
+  ) VALUES (
+    p_loan_id,
+    'manual_default',
+    v_uid,
+    trim(p_reason),
+    jsonb_build_object('status', v_prev_status),
+    jsonb_build_object('status', 'defaulted')
+  );
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+COMMENT ON FUNCTION public.admin_mark_loan_defaulted(uuid, text) IS 'Move loan to defaulted with reason; audit + loan_events';
+
+GRANT EXECUTE ON FUNCTION public.admin_mark_loan_defaulted(uuid, text) TO authenticated;
+
+
+-- ===================================================================
+-- FILE: 20260408123000_crb_requests_rls_tighten.sql
+-- ===================================================================
+-- Tighten crb_requests policies to RBAC permissions (least privilege)
+
+DROP POLICY IF EXISTS "Staff can view CRB requests" ON public.crb_requests;
+CREATE POLICY "Staff can view CRB requests" ON public.crb_requests
+  FOR SELECT TO authenticated
+  USING (
+    public.has_permission(auth.uid(), 'loans', 'view')
+    OR public.has_permission(auth.uid(), 'loans', 'finance_approve')
+    OR public.has_role(auth.uid(), 'admin'::public.app_role)
+    OR public.has_role(auth.uid(), 'super_admin'::public.app_role)
+  );
+
+DROP POLICY IF EXISTS "Staff can insert CRB requests" ON public.crb_requests;
+CREATE POLICY "Staff can insert CRB requests" ON public.crb_requests
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.has_permission(auth.uid(), 'loans', 'view')
+    OR public.has_permission(auth.uid(), 'loans', 'finance_approve')
+    OR public.has_role(auth.uid(), 'admin'::public.app_role)
+    OR public.has_role(auth.uid(), 'super_admin'::public.app_role)
+  );
+
+DROP POLICY IF EXISTS "Staff can update CRB requests" ON public.crb_requests;
+CREATE POLICY "Staff can update CRB requests" ON public.crb_requests
+  FOR UPDATE TO authenticated
+  USING (
+    public.has_permission(auth.uid(), 'loans', 'finance_approve')
+    OR public.has_role(auth.uid(), 'admin'::public.app_role)
+    OR public.has_role(auth.uid(), 'super_admin'::public.app_role)
+  );
+
+
+-- ===================================================================
+-- FILE: 20260408124000_reports_query_indexes.sql
+-- ===================================================================
+-- Support admin report filters (date ranges, disbursement timeline, repayment schedules)
+
+CREATE INDEX IF NOT EXISTS idx_loan_applications_reports_created_at
+  ON public.loan_applications (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_loan_applications_reports_disbursed_at
+  ON public.loan_applications (disbursed_at DESC)
+  WHERE disbursed_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_loan_repayments_reports_due_date
+  ON public.loan_repayments (due_date);
+
+CREATE INDEX IF NOT EXISTS idx_loan_repayments_reports_loan_id
+  ON public.loan_repayments (loan_id);
 

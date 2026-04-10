@@ -9,4 +9,5 @@ function envBool(key: keyof ImportMetaEnv): boolean {
 
 export const apiFeatureFlags = {
   loanProducts: envBool("VITE_API_LOAN_PRODUCTS"),
+  phase1Workflow: envBool("VITE_API_PHASE1_WORKFLOW"),
 } as const;

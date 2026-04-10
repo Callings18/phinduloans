@@ -1,0 +1,61 @@
+# Phase 1 Smoke Tests
+
+Use these checks after enabling `VITE_API_PHASE1_WORKFLOW=true` and running `apps/api-next`.
+
+## Pre-req
+- API running on `http://localhost:3001`
+- Frontend running on `http://localhost:8080`
+- Borrower and admin test users available
+
+## Borrower flow
+1. Log in as borrower.
+2. Open dashboard payments.
+3. Submit a payment claim with reference.
+4. Expected:
+   - success toast
+   - row appears in borrower payment claims
+   - recent loan activity shows `payment_claim_submitted`
+
+## Admin flow
+1. Log in as admin.
+2. Open repayments.
+3. Verify and record the pending borrower claim.
+4. Expected:
+   - claim leaves pending queue
+   - repayment is recorded
+   - `payment_claim_reviewed` event exists
+
+## Status transition flow
+1. In admin applications, transition a loan status (e.g. `under_review` -> `approved`).
+2. Expected:
+   - transition accepted only when valid
+   - invalid transition returns clear error
+   - event appears in timeline
+   - `loan_status_transitions` row created
+
+## Notifications flow
+1. Submit claim and review claim.
+2. Expected:
+   - `notification_logs` entries inserted for borrower/admin recipients
+   - borrower notification center receives new rows
+
+## Idempotency check (review endpoint)
+1. Replay `POST /api/v1/payment-claims/:id/review` with same `Idempotency-Key`.
+2. Expected:
+   - second request returns cached success (no duplicate side effects)
+
+## Correlation logging check
+1. Trigger claim submit and status transition.
+2. Expected:
+   - API logs include `[phase1]` entries with `requestId`.
+
+## Playwright smoke automation
+- Run: `npm run test:e2e:smoke`
+- Optional headed run: `npm run test:e2e:headed`
+- Env vars used by automation:
+  - `E2E_BASE_URL` (default `http://127.0.0.1:8080`)
+  - `E2E_STAFF_LOW_EMAIL`, `E2E_STAFF_LOW_PASSWORD` (permission denial check)
+  - `E2E_FINANCE_EMAIL`, `E2E_FINANCE_PASSWORD` (expenses/write-off finance flow checks)
+- Notes:
+  - Tests auto-skip if credentials are not provided.
+  - Finance flow checks also auto-skip when no pending rows exist in the environment.

@@ -47,6 +47,14 @@ interface Props {
   userId: string;
   loans: any[];
   repayments: any[];
+  loanEvents?: Array<{
+    id: string;
+    loan_id: string;
+    event_type: string;
+    reason?: string | null;
+    created_at: string;
+    new_values?: Record<string, unknown> | null;
+  }>;
   onDownloadStatement: (loan: any) => void;
   onDownloadSchedule: (loan: any) => void;
   onSubmitPayment: (rep: any) => void;
@@ -58,6 +66,7 @@ export default function BorrowerLoansTab({
   userId,
   loans,
   repayments,
+  loanEvents = [],
   onDownloadStatement,
   onDownloadSchedule,
   onSubmitPayment,
@@ -69,6 +78,7 @@ export default function BorrowerLoansTab({
   const activeLoans = loans.filter((l) => ["active", "disbursed"].includes(l.status));
   const pendingApps = loans.filter((l) => ["pending", "under_review", "approved", "contract_signing", "awaiting_disbursement"].includes(l.status));
   const completedLoans = loans.filter((l) => l.status === "completed");
+  const recentEvents = loanEvents.slice(0, 5);
 
   const getRepaymentStatus = (rep: any) => {
     const today = startOfDay(new Date());
@@ -220,6 +230,23 @@ export default function BorrowerLoansTab({
   return (
     <div className="space-y-5">
       <h2 className="text-xl font-bold text-foreground">My Loans</h2>
+
+      {recentEvents.length > 0 && (
+        <Card className="border-border/60 shadow-card">
+          <CardContent className="p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-foreground">Recent Loan Activity</h3>
+            {recentEvents.map((ev) => (
+              <div key={ev.id} className="text-xs text-muted-foreground border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">{ev.event_type.replace(/_/g, " ")}</span>
+                  <span>{format(new Date(ev.created_at), "MMM dd, HH:mm")}</span>
+                </div>
+                {ev.reason && <p className="mt-0.5">{ev.reason}</p>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="grid w-full grid-cols-4 h-10 bg-secondary/70 border border-border/60">

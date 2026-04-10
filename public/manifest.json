@@ -34,7 +34,7 @@
     {
       "name": "Apply for Loan",
       "short_name": "Apply",
-      "description": "Start a new loan application",
+      "description": "Start a new loan application (opens in installed app)",
       "url": "/apply",
       "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
     },

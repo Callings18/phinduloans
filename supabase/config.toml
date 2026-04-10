@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.create-staff-user]
 verify_jwt = false
+
+[functions.send-web-push]
+verify_jwt = false

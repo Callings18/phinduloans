@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { ClipboardList, Loader2 } from "lucide-react";
+import { ClipboardList, Eye, EyeOff, Loader2 } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type CrbRow = {
   id: string;
@@ -31,6 +32,13 @@ type CrbRow = {
   request_type: string;
 };
 
+function maskNrc(nrc: string | null | undefined): string {
+  const s = (nrc ?? "").trim();
+  if (!s) return "—";
+  if (s.length <= 4) return "••••";
+  return `••••${s.slice(-4)}`;
+}
+
 const statusVariant = (s: string | null) => {
   const v = (s || "").toLowerCase();
   if (v.includes("fail") || v.includes("error")) return "destructive" as const;
@@ -40,6 +48,10 @@ const statusVariant = (s: string | null) => {
 };
 
 const AdminCRBQueue = () => {
+  const { can } = usePermissions();
+  const canRevealFullNrc = can("loans", "finance_approve");
+  const [revealedNrcById, setRevealedNrcById] = useState<Record<string, boolean>>({});
+
   const { data: rows = [], isLoading, error } = useQuery({
     queryKey: ["admin-crb-requests"],
     queryFn: async () => {
@@ -73,7 +85,8 @@ const AdminCRBQueue = () => {
             CRB request queue
           </h1>
           <p className="text-muted-foreground mt-1">
-            Audit trail of credit bureau checks. Link to an application for manual review when status is{" "}
+            Audit trail of credit bureau checks. NRC numbers are masked by default; full values are available only to
+            credit/finance approvers. Link to an application for manual review when status is{" "}
             <code className="text-xs bg-muted px-1 rounded">crb_failed</code> or pending.
           </p>
         </div>
@@ -128,7 +141,7 @@ const AdminCRBQueue = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>When</TableHead>
-                    <TableHead>NRC</TableHead>
+                    <TableHead className="min-w-[140px]">NRC</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Score</TableHead>
@@ -143,7 +156,33 @@ const AdminCRBQueue = () => {
                       <TableCell className="whitespace-nowrap text-sm">
                         {r.created_at ? format(new Date(r.created_at), "dd MMM yyyy HH:mm") : "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{r.nrc_number}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                          <span>
+                            {canRevealFullNrc && revealedNrcById[r.id]
+                              ? r.nrc_number
+                              : maskNrc(r.nrc_number)}
+                          </span>
+                          {canRevealFullNrc && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() =>
+                                setRevealedNrcById((prev) => ({ ...prev, [r.id]: !prev[r.id] }))
+                              }
+                              aria-label={revealedNrcById[r.id] ? "Hide NRC" : "Reveal full NRC"}
+                            >
+                              {revealedNrcById[r.id] ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-sm">{r.request_type}</TableCell>
                       <TableCell>
                         <Badge variant={statusVariant(r.status)}>{r.status || "unknown"}</Badge>

@@ -11,26 +11,44 @@ import { format, subDays, differenceInDays, subMonths } from "date-fns";
 import { Loader2, FileText, FileSpreadsheet } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { exportReportPDF, exportReportExcel, formatK } from "@/utils/reportExportEngine";
+import {
+  reportDateRangeError,
+  REPORT_PERF_MAX_LOANS,
+  REPORT_PERF_MAX_PAYROLL,
+  REPORT_PERF_MAX_REPAYMENTS,
+} from "@/utils/reportQueryGuards";
 
 interface Props {
   officers: { id: string; full_name: string | null }[];
+  canExport?: boolean;
 }
 
-const PerformanceReport = ({ officers }: Props) => {
+const PerformanceReport = ({ officers, canExport = true }: Props) => {
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 90), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [selectedOfficer, setSelectedOfficer] = useState("all");
 
+  const rangeError = reportDateRangeError(dateFrom, dateTo);
+
   const { data, isLoading } = useQuery({
     queryKey: ["performance-report", dateFrom, dateTo, selectedOfficer],
+    enabled: !rangeError,
     queryFn: async () => {
       const fromISO = new Date(dateFrom).toISOString();
       const toISO = new Date(dateTo + "T23:59:59").toISOString();
 
       const [loansRes, repaymentsRes, payrollRes] = await Promise.all([
-        supabase.from("loan_applications").select("id, loan_amount, status, created_at, approved_at, approved_by, disbursed_by, disbursed_at"),
-        supabase.from("loan_repayments").select("loan_id, status, due_date"),
-        supabase.from("payroll_records").select("employee_id, commission_amount, payroll_year, payroll_month").order("payroll_year", { ascending: false }).order("payroll_month", { ascending: false }),
+        supabase
+          .from("loan_applications")
+          .select("id, loan_amount, status, created_at, approved_at, approved_by, disbursed_by, disbursed_at")
+          .limit(REPORT_PERF_MAX_LOANS),
+        supabase.from("loan_repayments").select("loan_id, status, due_date").limit(REPORT_PERF_MAX_REPAYMENTS),
+        supabase
+          .from("payroll_records")
+          .select("employee_id, commission_amount, payroll_year, payroll_month")
+          .order("payroll_year", { ascending: false })
+          .order("payroll_month", { ascending: false })
+          .limit(REPORT_PERF_MAX_PAYROLL),
       ]);
       if (loansRes.error) throw loansRes.error;
       if (repaymentsRes.error) throw repaymentsRes.error;
@@ -108,7 +126,13 @@ const PerformanceReport = ({ officers }: Props) => {
         }
       }
 
-      return { officerStats, monthlyTrend };
+      return {
+        officerStats,
+        monthlyTrend,
+        truncatedLoans: loans.length >= REPORT_PERF_MAX_LOANS,
+        truncatedRepayments: repayments.length >= REPORT_PERF_MAX_REPAYMENTS,
+        truncatedPayroll: payroll.length >= REPORT_PERF_MAX_PAYROLL,
+      };
     },
   });
 
@@ -139,6 +163,26 @@ const PerformanceReport = ({ officers }: Props) => {
 
   return (
     <div className="space-y-4">
+      {rangeError && (
+        <p className="text-sm text-destructive" role="alert">
+          {rangeError}
+        </p>
+      )}
+      {data?.truncatedLoans && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          Loan sample capped at {REPORT_PERF_MAX_LOANS} rows — officer metrics may be incomplete on very large portfolios.
+        </p>
+      )}
+      {data?.truncatedRepayments && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          Repayment sample capped at {REPORT_PERF_MAX_REPAYMENTS} rows — overdue/portfolio quality may be understated.
+        </p>
+      )}
+      {data?.truncatedPayroll && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          Payroll rows capped at {REPORT_PERF_MAX_PAYROLL} — commission column may be incomplete.
+        </p>
+      )}
       <Card className="border-border/50 bg-card/80">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -152,8 +196,12 @@ const PerformanceReport = ({ officers }: Props) => {
               </Select>
             </div>
             <div className="flex gap-2 ml-auto">
-              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data}><FileText size={14} className="mr-1" /> PDF</Button>
-              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data}><FileSpreadsheet size={14} className="mr-1" /> Excel</Button>
+              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data || !canExport}>
+                <FileText size={14} className="mr-1" /> PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data || !canExport}>
+                <FileSpreadsheet size={14} className="mr-1" /> Excel
+              </Button>
             </div>
           </div>
         </CardContent>

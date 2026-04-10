@@ -10,20 +10,25 @@ import { format, subDays, eachDayOfInterval, eachWeekOfInterval, startOfWeek, en
 import { Loader2, FileText, FileSpreadsheet } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { exportReportPDF, exportReportExcel, formatK } from "@/utils/reportExportEngine";
+import { reportDateRangeError, REPORT_MAX_LOAN_ROWS } from "@/utils/reportQueryGuards";
 
 interface Props {
   products: { id: string; name: string }[];
   officers: { id: string; full_name: string | null }[];
+  canExport?: boolean;
 }
 
-const DisbursementReport = ({ products, officers }: Props) => {
+const DisbursementReport = ({ products, officers, canExport = true }: Props) => {
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [product, setProduct] = useState("all");
   const [officer, setOfficer] = useState("all");
 
+  const rangeError = reportDateRangeError(dateFrom, dateTo);
+
   const { data, isLoading } = useQuery({
     queryKey: ["disbursement-report", dateFrom, dateTo, product, officer],
+    enabled: !rangeError,
     queryFn: async () => {
       let query = supabase
         .from("loan_applications")
@@ -31,7 +36,8 @@ const DisbursementReport = ({ products, officers }: Props) => {
         .not("disbursed_at", "is", null)
         .gte("disbursed_at", new Date(dateFrom).toISOString())
         .lte("disbursed_at", new Date(dateTo + "T23:59:59").toISOString())
-        .order("disbursed_at", { ascending: false });
+        .order("disbursed_at", { ascending: false })
+        .limit(REPORT_MAX_LOAN_ROWS);
 
       if (product !== "all") query = query.eq("loan_product_id", product);
       if (officer !== "all") query = query.eq("disbursed_by", officer);
@@ -96,10 +102,16 @@ const DisbursementReport = ({ products, officers }: Props) => {
       });
 
       return {
-        rows, totalCount, totalValue, avgSize,
+        rows,
+        totalCount,
+        totalValue,
+        avgSize,
         byProduct: [...byProduct.entries()].map(([name, d]) => ({ name, ...d })),
         trendData,
-        byOfficer: [...byOfficer.entries()].map(([name, d]) => ({ name, ...d })).sort((a, b) => b.value - a.value),
+        byOfficer: [...byOfficer.entries()]
+          .map(([name, d]) => ({ name, ...d }))
+          .sort((a, b) => b.value - a.value),
+        truncatedLoans: (loans || []).length >= REPORT_MAX_LOAN_ROWS,
       };
     },
   });
@@ -128,6 +140,16 @@ const DisbursementReport = ({ products, officers }: Props) => {
 
   return (
     <div className="space-y-4">
+      {rangeError && (
+        <p className="text-sm text-destructive" role="alert">
+          {rangeError}
+        </p>
+      )}
+      {data?.truncatedLoans && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          Results capped at {REPORT_MAX_LOAN_ROWS} disbursements — narrow filters or shorten the date range.
+        </p>
+      )}
       <Card className="border-border/50 bg-card/80">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -148,8 +170,12 @@ const DisbursementReport = ({ products, officers }: Props) => {
               </Select>
             </div>
             <div className="flex gap-2 ml-auto">
-              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data}><FileText size={14} className="mr-1" /> PDF</Button>
-              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data}><FileSpreadsheet size={14} className="mr-1" /> Excel</Button>
+              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data || !canExport}>
+                <FileText size={14} className="mr-1" /> PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data || !canExport}>
+                <FileSpreadsheet size={14} className="mr-1" /> Excel
+              </Button>
             </div>
           </div>
         </CardContent>

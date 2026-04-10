@@ -64,7 +64,21 @@ This project is built with:
 
 The [`backend/`](backend/) folder contains a **NestJS + Prisma + PostgreSQL** service used to migrate off direct Supabase calls. See [`backend/README.md`](backend/README.md), [`docs/API_CONTRACTS.md`](docs/API_CONTRACTS.md), and [`docs/SUPABASE_AUDIT.md`](docs/SUPABASE_AUDIT.md).
 
-**Optional env (frontend):** `VITE_API_URL` and `VITE_API_LOAN_PRODUCTS=true` to read loan products from the API instead of Supabase (see `.env.example`).
+## Next.js API (Phase 1 workflow)
+
+The [`apps/api-next/`](apps/api-next/) folder contains the **Next.js route-handler API** for Phase 1 borrower/admin workflow backbone (status transitions, timeline, payment-claim handshake, notifications).
+
+**Optional env (frontend):**
+- `VITE_API_URL=http://localhost:3001`
+- `VITE_API_PHASE1_WORKFLOW=true`
+- `VITE_API_LOAN_PRODUCTS=true` (if also using API for loan product reads)
+
+See [`docs/PHASE1_SMOKE_TESTS.md`](docs/PHASE1_SMOKE_TESTS.md) for verification.
+
+**PWA / borrower install gate (optional env):**
+
+- `VITE_VAPID_PUBLIC_KEY` — Web Push (must pair with Edge Function secrets; see [`supabase/functions/send-web-push/README.md`](supabase/functions/send-web-push/README.md)).
+- `VITE_BORROWER_WEB_INSTALL_GATE` — `false` / `true` / unset (unset defaults to **on in production only**). See [`docs/SCOPE_ADDENDUM_PWA_PHASE.md`](docs/SCOPE_ADDENDUM_PWA_PHASE.md).
 
 ## How can I deploy this project?
 

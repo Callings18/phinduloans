@@ -3,12 +3,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FileText, Banknote, CreditCard, TrendingUp } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 import LoanBookReport from "@/components/admin/reports/LoanBookReport";
 import CollectionsReport from "@/components/admin/reports/CollectionsReport";
 import DisbursementReport from "@/components/admin/reports/DisbursementReport";
 import PerformanceReport from "@/components/admin/reports/PerformanceReport";
 
 const AdminReports = () => {
+  const { can } = usePermissions();
+  const canExport = can("reports", "export");
+
   // Shared data: products and officers used across tabs
   const { data: products = [] } = useQuery({
     queryKey: ["reports-products"],
@@ -38,6 +42,11 @@ const AdminReports = () => {
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Reports & Export</h1>
           <p className="text-muted-foreground mt-1">Generate, analyze, and export operational reports</p>
+          {!canExport && (
+            <p className="text-sm text-muted-foreground mt-2">
+              You can view reports. Export (PDF/Excel) requires <code className="text-xs">reports:export</code> permission.
+            </p>
+          )}
         </div>
 
         <Tabs defaultValue="loan-book" className="space-y-4">
@@ -57,16 +66,16 @@ const AdminReports = () => {
           </TabsList>
 
           <TabsContent value="loan-book">
-            <LoanBookReport products={products} officers={officers} />
+            <LoanBookReport products={products} officers={officers} canExport={canExport} />
           </TabsContent>
           <TabsContent value="collections">
-            <CollectionsReport products={products} />
+            <CollectionsReport products={products} canExport={canExport} />
           </TabsContent>
           <TabsContent value="disbursements">
-            <DisbursementReport products={products} officers={officers} />
+            <DisbursementReport products={products} officers={officers} canExport={canExport} />
           </TabsContent>
           <TabsContent value="performance">
-            <PerformanceReport officers={officers} />
+            <PerformanceReport officers={officers} canExport={canExport} />
           </TabsContent>
         </Tabs>
       </div>

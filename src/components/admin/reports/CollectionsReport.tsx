@@ -9,16 +9,18 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachWeekOfInt
 import { Loader2, FileText, FileSpreadsheet } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { exportReportPDF, exportReportExcel, formatK } from "@/utils/reportExportEngine";
+import { chunkIds, REPORT_IN_CHUNK, REPORT_MAX_REPAYMENT_ROWS } from "@/utils/reportQueryGuards";
 
 interface Props {
   products: { id: string; name: string }[];
+  canExport?: boolean;
 }
 
 const months = Array.from({ length: 12 }, (_, i) => ({ value: String(i), label: format(new Date(2025, i, 1), "MMMM") }));
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => String(currentYear - i));
 
-const CollectionsReport = ({ products }: Props) => {
+const CollectionsReport = ({ products, canExport = true }: Props) => {
   const [month, setMonth] = useState(String(new Date().getMonth()));
   const [year, setYear] = useState(String(currentYear));
   const [product, setProduct] = useState("all");
@@ -32,21 +34,26 @@ const CollectionsReport = ({ products }: Props) => {
       const startStr = format(periodStart, "yyyy-MM-dd");
       const endStr = format(periodEnd, "yyyy-MM-dd");
 
-      let repQuery = supabase
+      const repsRes = await supabase
         .from("loan_repayments")
         .select("id, loan_id, amount, status, due_date, paid_date")
         .gte("due_date", startStr)
-        .lte("due_date", endStr);
-
-      const [repsRes, loansRes] = await Promise.all([
-        repQuery,
-        supabase.from("loan_applications").select("id, full_name, loan_product_id, loan_amount"),
-      ]);
+        .lte("due_date", endStr)
+        .limit(REPORT_MAX_REPAYMENT_ROWS);
       if (repsRes.error) throw repsRes.error;
-      if (loansRes.error) throw loansRes.error;
 
       const reps = repsRes.data || [];
-      const loans = loansRes.data || [];
+      const loanIds = [...new Set(reps.map((r) => r.loan_id))];
+      const loans: { id: string; full_name: string | null; loan_product_id: string | null; loan_amount: number | null }[] = [];
+      for (const part of chunkIds(loanIds, REPORT_IN_CHUNK)) {
+        if (part.length === 0) continue;
+        const { data: batch, error: loansErr } = await supabase
+          .from("loan_applications")
+          .select("id, full_name, loan_product_id, loan_amount")
+          .in("id", part);
+        if (loansErr) throw loansErr;
+        loans.push(...(batch ?? []));
+      }
       const loanMap = new Map(loans.map((l) => [l.id, l]));
       const productMap = new Map(products.map((p) => [p.id, p.name]));
 
@@ -112,9 +119,15 @@ const CollectionsReport = ({ products }: Props) => {
       const bottom5 = [...borrowerOverdue.values()].sort((a, b) => b.amount - a.amount).slice(0, 5);
 
       return {
-        totalDue, totalCollected, outstanding, collectionRate,
+        totalDue,
+        totalCollected,
+        outstanding,
+        collectionRate,
         byProduct: [...byProduct.entries()].map(([name, d]) => ({ name, ...d })),
-        weeklyData, top5, bottom5,
+        weeklyData,
+        top5,
+        bottom5,
+        truncatedRepayments: reps.length >= REPORT_MAX_REPAYMENT_ROWS,
       };
     },
   });
@@ -171,8 +184,12 @@ const CollectionsReport = ({ products }: Props) => {
               </Select>
             </div>
             <div className="flex gap-2 ml-auto">
-              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data}><FileText size={14} className="mr-1" /> PDF</Button>
-              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data}><FileSpreadsheet size={14} className="mr-1" /> Excel</Button>
+              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data || !canExport}>
+                <FileText size={14} className="mr-1" /> PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data || !canExport}>
+                <FileSpreadsheet size={14} className="mr-1" /> Excel
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -182,6 +199,11 @@ const CollectionsReport = ({ products }: Props) => {
         <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading…</div>
       ) : data ? (
         <>
+          {data.truncatedRepayments && (
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              Repayment rows capped at {REPORT_MAX_REPAYMENT_ROWS} for this month — totals may be incomplete.
+            </p>
+          )}
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card className="border-border/50 bg-card/80"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Due</p><p className="text-2xl font-bold text-foreground">K{data.totalDue.toLocaleString()}</p></CardContent></Card>

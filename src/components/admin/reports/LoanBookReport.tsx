@@ -8,44 +8,68 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays, differenceInDays } from "date-fns";
-import { Loader2, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { Loader2, FileText, FileSpreadsheet } from "lucide-react";
 import { exportReportPDF, exportReportExcel, formatK } from "@/utils/reportExportEngine";
+import {
+  chunkIds,
+  reportDateRangeError,
+  REPORT_IN_CHUNK,
+  REPORT_MAX_LOAN_ROWS,
+  REPORT_MAX_REPAYMENT_ROWS,
+} from "@/utils/reportQueryGuards";
 
 interface Props {
   products: { id: string; name: string }[];
   officers: { id: string; full_name: string | null }[];
+  canExport?: boolean;
 }
 
-const LoanBookReport = ({ products, officers }: Props) => {
+const LoanBookReport = ({ products, officers, canExport = true }: Props) => {
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 90), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [product, setProduct] = useState("all");
   const [status, setStatus] = useState("all");
   const [officer, setOfficer] = useState("all");
 
-  const { data, isLoading } = useQuery({
+  const rangeError = reportDateRangeError(dateFrom, dateTo);
+
+  const { data, isLoading, error } = useQuery({
     queryKey: ["loan-book-report", dateFrom, dateTo, product, status, officer],
+    enabled: !rangeError,
     queryFn: async () => {
       let query = supabase
         .from("loan_applications")
         .select("id, full_name, loan_amount, status, disbursed_at, created_at, approved_by, loan_product_id, total_repayment")
         .gte("created_at", new Date(dateFrom).toISOString())
         .lte("created_at", new Date(dateTo + "T23:59:59").toISOString())
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(REPORT_MAX_LOAN_ROWS);
 
       if (product !== "all") query = query.eq("loan_product_id", product);
       if (status !== "all") query = query.eq("status", status as any);
       if (officer !== "all") query = query.or(`approved_by.eq.${officer},assigned_to.eq.${officer}`);
 
-      const [loansRes, repaymentsRes] = await Promise.all([
-        query,
-        supabase.from("loan_repayments").select("loan_id, amount, status, due_date"),
-      ]);
+      const loansRes = await query;
       if (loansRes.error) throw loansRes.error;
-      if (repaymentsRes.error) throw repaymentsRes.error;
 
       const loans = loansRes.data || [];
-      const repayments = repaymentsRes.data || [];
+      const loanIds = loans.map((l) => l.id);
+      const repayments: { loan_id: string; amount: number | null; status: string | null; due_date: string | null }[] = [];
+      let repaymentCount = 0;
+      for (const part of chunkIds(loanIds, REPORT_IN_CHUNK)) {
+        if (part.length === 0) continue;
+        const { data: rpart, error: rErr } = await supabase
+          .from("loan_repayments")
+          .select("loan_id, amount, status, due_date")
+          .in("loan_id", part);
+        if (rErr) throw rErr;
+        for (const r of rpart ?? []) {
+          repayments.push(r);
+          repaymentCount++;
+          if (repaymentCount >= REPORT_MAX_REPAYMENT_ROWS) break;
+        }
+        if (repaymentCount >= REPORT_MAX_REPAYMENT_ROWS) break;
+      }
       const today = new Date();
       const todayStr = format(today, "yyyy-MM-dd");
 
@@ -88,7 +112,15 @@ const LoanBookReport = ({ products, officers }: Props) => {
         else { aging.d90plus.count++; aging.d90plus.value += r.amount; }
       });
 
-      return { rows, aging, totalLoans: rows.length, totalValue: rows.reduce((s, r) => s + r.amount, 0), totalOverdue: rows.reduce((s, r) => s + r.overdueAmount, 0) };
+      return {
+        rows,
+        aging,
+        totalLoans: rows.length,
+        totalValue: rows.reduce((s, r) => s + r.amount, 0),
+        totalOverdue: rows.reduce((s, r) => s + r.overdueAmount, 0),
+        truncatedLoans: loans.length >= REPORT_MAX_LOAN_ROWS,
+        truncatedRepayments: repaymentCount >= REPORT_MAX_REPAYMENT_ROWS,
+      };
     },
   });
 
@@ -129,8 +161,25 @@ const LoanBookReport = ({ products, officers }: Props) => {
     return <Badge variant="outline" className={styles[s] || ""}>{s.replace("_", " ")}</Badge>;
   };
 
+  const queryError = rangeError || (error as Error | null)?.message || null;
+
   return (
     <div className="space-y-4">
+      {queryError && (
+        <p className="text-sm text-destructive" role="alert">
+          {queryError}
+        </p>
+      )}
+      {data?.truncatedLoans && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          Results capped at {REPORT_MAX_LOAN_ROWS} loans for this period — narrow filters or shorten the date range.
+        </p>
+      )}
+      {data?.truncatedRepayments && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          Repayment rows capped at {REPORT_MAX_REPAYMENT_ROWS} — totals may be incomplete.
+        </p>
+      )}
       {/* Filters */}
       <Card className="border-border/50 bg-card/80">
         <CardContent className="p-4">
@@ -177,10 +226,10 @@ const LoanBookReport = ({ products, officers }: Props) => {
               </Select>
             </div>
             <div className="flex gap-2 ml-auto">
-              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data}>
+              <Button variant="outline" size="sm" onClick={() => doExport("pdf")} disabled={!data || !canExport}>
                 <FileText size={14} className="mr-1" /> PDF
               </Button>
-              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data}>
+              <Button variant="outline" size="sm" onClick={() => doExport("excel")} disabled={!data || !canExport}>
                 <FileSpreadsheet size={14} className="mr-1" /> Excel
               </Button>
             </div>

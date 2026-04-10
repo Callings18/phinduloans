@@ -199,7 +199,7 @@ const AdminExpenses = () => {
       if (status === "approved" || status === "rejected" || status === "paid") {
         if (!canApproveExpense) throw new Error("Permission denied: expenses approve");
       }
-      
+
       if (status === "approved" || status === "rejected" || status === "paid") {
         const { data, error } = await supabase.rpc("admin_set_expense_status", {
           p_expense_id: id,
@@ -207,15 +207,12 @@ const AdminExpenses = () => {
           p_reject_reason: rejectReason ?? null,
         });
         if (error) throw error;
-        const result = data as any;
+        const result = data as { success?: boolean; error?: string };
         if (result && !result.success) {
           throw new Error(result.error || "Operation failed");
         }
       } else {
-        const { error } = await supabase
-          .from('expenses')
-          .update({ status })
-          .eq('id', id);
+        const { error } = await supabase.from("expenses").update({ status }).eq("id", id);
         if (error) throw error;
       }
     },

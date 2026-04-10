@@ -101,7 +101,7 @@ const NotificationCenter: React.FC = () => {
             }
         };
         checkPushStatus();
-    }, []);
+    }, [user?.id]);
 
     // Subscribe to realtime notifications
     useEffect(() => {
@@ -172,7 +172,15 @@ const NotificationCenter: React.FC = () => {
         if (permission === 'granted') {
             await pushNotificationManager.init();
             if (user?.id) {
-                await pushNotificationManager.subscribe(user.id);
+                const sub = await pushNotificationManager.subscribe(user.id);
+                if (!sub) {
+                    toast({
+                        title: "Push setup incomplete",
+                        description: "Could not save this device for push. Check VITE_VAPID_PUBLIC_KEY and database migration.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
             }
             setPushEnabled(true);
             setShowPushPrompt(false);

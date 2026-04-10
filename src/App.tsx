@@ -2,12 +2,14 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";
+import PermissionRoute from "./components/admin/PermissionRoute";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
+import { BorrowerInstallGate } from "@/components/common/BorrowerInstallGate";
 import { AuthProvider } from "@/hooks/useAuth";
 
 import Index from "./pages/Index";
@@ -129,43 +131,318 @@ function App() {
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/apply" element={<Apply />} />
+                  <Route
+                    path="/apply"
+                    element={
+                      <BorrowerInstallGate>
+                        <Apply />
+                      </BorrowerInstallGate>
+                    }
+                  />
                   <Route path="/calculator" element={<Calculator />} />
-                  <Route path="/pre-qualify" element={<Apply />} />
+                  <Route
+                    path="/pre-qualify"
+                    element={
+                      <BorrowerInstallGate>
+                        <Apply />
+                      </BorrowerInstallGate>
+                    }
+                  />
                   <Route path="/about" element={<About />} />
                   <Route path="/about-us" element={<About />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/login" element={<Auth />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route
+                    path="/auth"
+                    element={
+                      <BorrowerInstallGate variant="signup-only">
+                        <Auth />
+                      </BorrowerInstallGate>
+                    }
+                  />
+                  <Route
+                    path="/login"
+                    element={
+                      <BorrowerInstallGate variant="signup-only">
+                        <Auth />
+                      </BorrowerInstallGate>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <BorrowerInstallGate>
+                        <Dashboard />
+                      </BorrowerInstallGate>
+                    }
+                  />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/admin" element={<AdminRoute />}>
                     <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
-                    <Route path="applications" element={<ErrorBoundary><AdminApplications /></ErrorBoundary>} />
-                    <Route path="borrowers" element={<ErrorBoundary><AdminBorrowers /></ErrorBoundary>} />
-                    <Route path="settings" element={<ErrorBoundary><AdminSettings /></ErrorBoundary>} />
-                    <Route path="employers" element={<ErrorBoundary><AdminEmployers /></ErrorBoundary>} />
-                    <Route path="disbursements" element={<ErrorBoundary><AdminDisbursements /></ErrorBoundary>} />
-                    <Route path="reports" element={<ErrorBoundary><AdminReports /></ErrorBoundary>} />
-                    <Route path="loan-products" element={<ErrorBoundary><AdminLoanProducts /></ErrorBoundary>} />
-                    <Route path="loans" element={<ErrorBoundary><AdminLoans /></ErrorBoundary>} />
-                    <Route path="repayments" element={<ErrorBoundary><AdminRepayments /></ErrorBoundary>} />
-                    <Route path="collections" element={<ErrorBoundary><AdminCollections /></ErrorBoundary>} />
-                    <Route path="staff" element={<ErrorBoundary><AdminStaff /></ErrorBoundary>} />
-                    <Route path="audit-logs" element={<ErrorBoundary><AdminAuditLogs /></ErrorBoundary>} />
-                    <Route path="write-offs" element={<ErrorBoundary><AdminWriteOffs /></ErrorBoundary>} />
-                    <Route path="bulk-repayments" element={<ErrorBoundary><AdminBulkRepayments /></ErrorBoundary>} />
-                    <Route path="contract-templates" element={<ErrorBoundary><AdminContractTemplates /></ErrorBoundary>} />
-                    <Route path="pmic" element={<ErrorBoundary><AdminPMIC /></ErrorBoundary>} />
-                    <Route path="accounts" element={<ErrorBoundary><AdminAccounts /></ErrorBoundary>} />
-                    <Route path="expenses" element={<ErrorBoundary><AdminExpenses /></ErrorBoundary>} />
-                    <Route path="court-cases" element={<ErrorBoundary><AdminCourtCases /></ErrorBoundary>} />
-                    <Route path="wallets" element={<ErrorBoundary><AdminWallets /></ErrorBoundary>} />
-                    <Route path="hr" element={<ErrorBoundary><AdminHR /></ErrorBoundary>} />
-                    <Route path="payroll" element={<ErrorBoundary><AdminPayroll /></ErrorBoundary>} />
-                    <Route path="email-log" element={<ErrorBoundary><AdminEmailLog /></ErrorBoundary>} />
+                    <Route
+                      path="applications"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminApplications />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="borrowers"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "borrowers", action: "view" }}>
+                            <AdminBorrowers />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="settings"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "settings", action: "manage" }}>
+                            <AdminSettings />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="employers"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "borrowers", action: "view" }}>
+                            <AdminEmployers />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="disbursements"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "disbursement", action: "view" }}>
+                            <AdminDisbursements />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="reports"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "reports", action: "view" },
+                              { module: "reports", action: "export" },
+                            ]}
+                          >
+                            <AdminReports />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="loan-products"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "products", action: "view" }}>
+                            <AdminLoanProducts />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="loans"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminLoans />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="repayments"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "repayments", action: "view" }}>
+                            <AdminRepayments />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="collections"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "collections", action: "view" }}>
+                            <AdminCollections />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="staff"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "settings", action: "manage" }}>
+                            <AdminStaff />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="audit-logs"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "audit", action: "view" }}>
+                            <AdminAuditLogs />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="write-offs"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "writeoffs", action: "view" }}>
+                            <AdminWriteOffs />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="bulk-repayments"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "repayments", action: "view" }}>
+                            <AdminBulkRepayments />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="contract-templates"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminContractTemplates />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="pmic"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminPMIC />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="accounts"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "disbursement", action: "view" }}>
+                            <AdminAccounts />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="expenses"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "expenses", action: "view" }}>
+                            <AdminExpenses />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="court-cases"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "court", action: "view" }}>
+                            <AdminCourtCases />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="wallets"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "wallets", action: "view" }}>
+                            <AdminWallets />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="hr"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "payroll", action: "view" }}>
+                            <AdminHR />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="payroll"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "payroll", action: "view" },
+                              { module: "payroll", action: "manage" },
+                            ]}
+                          >
+                            <AdminPayroll />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="email-log"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminEmailLog />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
                     <Route path="user-guide" element={<ErrorBoundary><AdminUserGuide /></ErrorBoundary>} />
-                    <Route path="roles-permissions" element={<ErrorBoundary><AdminRolesPermissions /></ErrorBoundary>} />
-                    <Route path="crb-queue" element={<ErrorBoundary><AdminCRBQueue /></ErrorBoundary>} />
+                    <Route
+                      path="roles-permissions"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminRolesPermissions />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="crb-queue"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "loans", action: "view" },
+                              { module: "loans", action: "finance_approve" },
+                            ]}
+                          >
+                            <AdminCRBQueue />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
                   </Route>
                   <Route path="*" element={<NotFound />} />
                 </Routes>

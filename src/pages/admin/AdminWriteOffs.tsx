@@ -104,7 +104,7 @@ const AdminWriteOffs = () => {
         p_writeoff_id: writeOffId,
       });
       if (error) throw error;
-      const result = data as any;
+      const result = data as { success?: boolean; error?: string };
       if (result && !result.success) throw new Error(result.error || "Operation failed");
     },
     onSuccess: () => {
@@ -127,7 +127,7 @@ const AdminWriteOffs = () => {
         p_reason: reason,
       });
       if (error) throw error;
-      const result = data as any;
+      const result = data as { success?: boolean; error?: string };
       if (result && !result.success) throw new Error(result.error || "Operation failed");
     },
     onSuccess: () => {
@@ -152,7 +152,7 @@ const AdminWriteOffs = () => {
         p_notes: notes,
       });
       if (error) throw error;
-      const result = data as any;
+      const result = data as { success?: boolean; error?: string };
       if (result && !result.success) throw new Error(result.error || "Operation failed");
     },
     onSuccess: () => {

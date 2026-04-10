@@ -68,43 +68,59 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Push notification event
+// Push notification event (payload JSON: { title?, body?, url? } or plain text)
 self.addEventListener('push', (event) => {
+  let title = 'Phindu Credit';
+  let body = 'You have a new notification';
+  let targetUrl = '/dashboard';
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      if (parsed.title) title = String(parsed.title);
+      if (parsed.body) body = String(parsed.body);
+      if (parsed.url && typeof parsed.url === 'string') targetUrl = parsed.url;
+    } catch {
+      body = event.data.text() || body;
+    }
+  }
+
   const options = {
-    body: event.data ? event.data.text() : 'New notification from Phindu Credit',
+    body,
     icon: '/favicon.png',
     badge: '/favicon.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
-      primaryKey: 1
+      url: targetUrl
     },
     actions: [
-      {
-        action: 'explore',
-        title: 'View Details',
-        icon: '/favicon.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/favicon.png'
-      }
+      { action: 'explore', title: 'View Details', icon: '/favicon.png' },
+      { action: 'close', title: 'Close', icon: '/favicon.png' }
     ]
   };
 
-  event.waitUntil(
-    self.registration.showNotification('Phindu Credit', options)
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 // Notification click event
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/dashboard';
 
-  if (event.action === 'explore') {
-    event.waitUntil(
-      clients.openWindow('/dashboard')
-    );
+  if (event.action === 'close') {
+    return;
   }
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+    })
+  );
 });

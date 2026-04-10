@@ -341,10 +341,16 @@ const Auth = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsLogin(!isLogin);
+                    const nextLogin = !isLogin;
+                    setIsLogin(nextLogin);
                     setLoginMode("password");
                     setErrors({});
                     setOtpSentTo(null);
+                    if (nextLogin) {
+                      navigate("/auth", { replace: true });
+                    } else {
+                      navigate("/auth?mode=signup", { replace: true });
+                    }
                   }}
                   className="ml-2 text-primary hover:text-primary/80 font-medium transition-colors"
                 >
