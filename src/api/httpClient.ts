@@ -1,9 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 
-/** Base URL for API (no trailing slash). */
+/** Base URL for API (no trailing slash). Default matches apps/api-next dev port. */
 export function getApiBaseUrl(): string {
   const raw = import.meta.env.VITE_API_URL as string | undefined;
-  const base = (raw ?? "http://localhost:3000").replace(/\/$/, "");
+  const base = (raw ?? "http://localhost:3001").replace(/\/$/, "");
   return base;
 }
 
@@ -25,9 +25,19 @@ export async function apiGet<T>(path: string): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+    throw parseApiError(res.status, text, res.statusText);
   }
   return res.json() as Promise<T>;
+}
+
+function parseApiError(status: number, body: string, statusText: string): Error {
+  try {
+    const j = JSON.parse(body) as { error?: { message?: string; code?: string }; message?: string };
+    const msg = j.error?.message ?? j.message ?? j.error?.code ?? body;
+    return new Error(`API ${status}: ${msg}`);
+  } catch {
+    return new Error(`API ${status}: ${body || statusText}`);
+  }
 }
 
 export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
@@ -46,7 +56,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+    throw parseApiError(res.status, text, res.statusText);
   }
   return res.json() as Promise<T>;
 }

@@ -55,7 +55,8 @@ const currentMonth = new Date().getMonth() + 1;
 const AdminPayroll = () => {
   const { can } = usePermissions();
   const { user } = useAuth();
-  const canManage = can("payroll", "manage") || can("payroll", "view");
+  const canAccess = can("payroll", "view") || can("payroll", "manage");
+  const canMutate = can("payroll", "manage");
   const queryClient = useQueryClient();
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -75,7 +76,7 @@ const AdminPayroll = () => {
       if (error) throw error;
       return data || [];
     },
-    enabled: canManage,
+    enabled: canAccess,
   });
 
   const { data: runRecords = [], isLoading: recordsLoading } = useQuery({
@@ -97,6 +98,7 @@ const AdminPayroll = () => {
   const generateMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
+      if (!canMutate) throw new Error("You do not have permission to generate payroll.");
 
       // 1. Check if run already exists
       const { data: existing, error: existingErr } = await (supabase.from("payroll_runs") as any)
@@ -117,21 +119,36 @@ const AdminPayroll = () => {
       // 3. Fetch tax config
       const taxConfig = await fetchTaxConfig();
 
-      // 4. Calculate commission from loans processed
+      // 4. Calculate commission from loans processed (single query + in-memory split)
       const commissionByEmployee: Record<string, number> = {};
-      for (const emp of employees) {
-        if (!emp.user_id || !emp.commission_percentage) continue;
-        const { data: loans, error: loansErr } = await (supabase.from("loan_applications") as any)
-          .select("loan_amount")
-          .or(`approved_by.eq.${emp.user_id},disbursed_by.eq.${emp.user_id}`)
-          .gte("approved_at", `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`)
-          .lt("approved_at", selectedMonth === 12
-            ? `${selectedYear + 1}-01-01`
-            : `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`
-          );
+      const commissionStaffIds = employees
+        .filter((e: any) => e.user_id && e.commission_percentage)
+        .map((e: any) => e.user_id as string);
+      const periodStart = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+      const periodEnd =
+        selectedMonth === 12
+          ? `${selectedYear + 1}-01-01`
+          : `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`;
+
+      if (commissionStaffIds.length > 0) {
+        const orFilter = commissionStaffIds
+          .flatMap((uid: string) => [`approved_by.eq.${uid}`, `disbursed_by.eq.${uid}`])
+          .join(",");
+        const { data: periodLoans, error: loansErr } = await (supabase.from("loan_applications") as any)
+          .select("loan_amount, approved_by, disbursed_by")
+          .or(orFilter)
+          .gte("approved_at", periodStart)
+          .lt("approved_at", periodEnd);
         if (loansErr) throw loansErr;
-        if (loans?.length) {
-          const totalDisbursed = loans.reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
+
+        for (const emp of employees as any[]) {
+          if (!emp.user_id || !emp.commission_percentage) continue;
+          const uid = emp.user_id as string;
+          const loansForEmp = (periodLoans ?? []).filter(
+            (l: any) => l.approved_by === uid || l.disbursed_by === uid,
+          );
+          if (loansForEmp.length === 0) continue;
+          const totalDisbursed = loansForEmp.reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
           commissionByEmployee[emp.id] = Math.round(totalDisbursed * (emp.commission_percentage / 100) * 100) / 100;
         }
       }
@@ -264,7 +281,7 @@ const AdminPayroll = () => {
 
   // ── Permission Guard ─────────────────────────────────────
 
-  if (!canManage) {
+  if (!canAccess) {
     return (
       <AdminLayout>
         <div className="space-y-6">
@@ -382,7 +399,7 @@ const AdminPayroll = () => {
               </div>
               <Button
                 onClick={() => generateMutation.mutate()}
-                disabled={generateMutation.isPending}
+                disabled={!canMutate || generateMutation.isPending}
               >
                 {generateMutation.isPending ? (
                   <Loader2 size={16} className="animate-spin mr-2" />
@@ -444,7 +461,7 @@ const AdminPayroll = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => approveMutation.mutate(run.id)}
-                              disabled={approveMutation.isPending}
+                              disabled={!canMutate || approveMutation.isPending}
                             >
                               {approveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle size={14} className="mr-1" />}
                               Approve
@@ -454,7 +471,7 @@ const AdminPayroll = () => {
                             <Button
                               size="sm"
                               onClick={() => markPaidMutation.mutate(run.id)}
-                              disabled={markPaidMutation.isPending}
+                              disabled={!canMutate || markPaidMutation.isPending}
                             >
                               {markPaidMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1" /> : <DollarSign size={14} className="mr-1" />}
                               Mark Paid

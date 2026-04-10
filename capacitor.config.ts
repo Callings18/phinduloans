@@ -1,13 +1,23 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+/**
+ * Borrower shell: ship `dist/` as the app. Optional CAPACITOR_SERVER_URL for dev
+ * (e.g. http://192.168.1.x:5173) to load the Vite dev server; omit in production.
+ */
+const devServerUrl = process.env.CAPACITOR_SERVER_URL?.trim();
+
 const config: CapacitorConfig = {
-  appId: 'app.lovable.3b99a541bce94eef8bae953aa680f471',
-  appName: 'loan-kindly-flow',
+  appId: 'com.phindu.loans.borrower',
+  appName: 'Phindu Loans',
   webDir: 'dist',
-  server: {
-    url: 'https://3b99a541-bce9-4eef-8bae-953aa680f471.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
-  },
+  ...(devServerUrl
+    ? {
+        server: {
+          url: devServerUrl,
+          cleartext: devServerUrl.startsWith('http://'),
+        },
+      }
+    : {}),
 };
 
 export default config;

@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { supabase } from "@/integrations/supabase/client";
+import { apiGet, apiPost } from "@/api/httpClient";
+import { apiFeatureFlags } from "@/config/apiMode";
 
 export interface LoanEvent {
   id: string;
@@ -17,25 +18,54 @@ export interface PaymentClaimInput {
   receiptUrl?: string | null;
 }
 
+function assertRpcOk(data: unknown) {
+  if (data == null) return;
+  if (typeof data === "object" && data !== null && "ok" in data) {
+    const result = data as { ok?: boolean; error?: string };
+    if (result.ok === false) {
+      throw new Error(result.error || "Transition failed");
+    }
+  }
+}
+
 export async function submitPaymentClaim(
   repaymentId: string,
   payload: PaymentClaimInput,
   fallbackData?: { loanId: string; userId: string },
 ) {
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiPost<{ ok?: boolean; data?: unknown }>(
+      `/api/v1/repayments/${repaymentId}/payment-claims`,
+      {
+        amount: payload.amount,
+        reference: payload.reference,
+        receiptUrl: payload.receiptUrl ?? null,
+      },
+    );
+    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+      throw new Error("Failed to submit payment claim");
+    }
+    return (res as { data?: unknown })?.data;
+  }
+
   if (fallbackData) {
-    const { data, error } = await supabase.from("payment_claims").insert({
-      repayment_id: repaymentId,
-      loan_id: fallbackData.loanId,
-      user_id: fallbackData.userId,
-      amount: payload.amount,
-      reference: payload.reference,
-      receipt_url: payload.receiptUrl ?? null,
-      status: "pending",
-    }).select().single();
+    const { data, error } = await supabase
+      .from("payment_claims")
+      .insert({
+        repayment_id: repaymentId,
+        loan_id: fallbackData.loanId,
+        user_id: fallbackData.userId,
+        amount: payload.amount,
+        reference: payload.reference,
+        receipt_url: payload.receiptUrl ?? null,
+        status: "pending",
+      })
+      .select()
+      .single();
     if (error) throw error;
     return data;
   }
-  throw new Error("Workflow API mode is not available. Provide fallbackData.");
+  throw new Error("Configure VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL, or provide fallbackData for direct insert.");
 }
 
 export async function fetchBorrowerLoanEvents(loanId: string): Promise<LoanEvent[]> {
@@ -50,6 +80,13 @@ export async function fetchBorrowerLoanEvents(loanId: string): Promise<LoanEvent
 }
 
 export async function fetchAdminPaymentClaims(status = "pending_review") {
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiGet<{ ok?: boolean; data?: unknown[] }>(
+      `/api/v1/admin/payment-claims?status=${encodeURIComponent(status)}`,
+    );
+    return (res?.data ?? []) as Record<string, unknown>[];
+  }
+
   const { data, error } = await supabase
     .from("payment_claims")
     .select("*")
@@ -65,6 +102,18 @@ export async function reviewPaymentClaim(input: {
   reviewComment?: string;
   decisionReasonCode?: string;
 }) {
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiPost<{ ok?: boolean }>(`/api/v1/payment-claims/${input.claimId}/review`, {
+      decision: input.decision,
+      reviewComment: input.reviewComment ?? null,
+      decisionReasonCode: input.decisionReasonCode ?? null,
+    });
+    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+      throw new Error("Failed to review payment claim");
+    }
+    return;
+  }
+
   const { error } = await supabase
     .from("payment_claims")
     .update({
@@ -82,14 +131,48 @@ export async function transitionLoanStatus(input: {
   reasonCode?: string;
   reasonText?: string;
 }) {
-  const { error } = await supabase.from("loan_status_transitions").insert({
-    loan_id: input.loanId,
-    from_status: "",
-    to_status: input.toStatus,
-    actor_type: "admin",
-    actor_id: (await supabase.auth.getUser()).data.user?.id,
-    reason_code: input.reasonCode ?? null,
-    reason_text: input.reasonText ?? null,
-  });
-  if (error) throw error;
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiPost<{ ok?: boolean; error?: { message?: string } }>(
+      `/api/v1/loans/${input.loanId}/transitions`,
+      {
+        toStatus: input.toStatus,
+        reasonCode: input.reasonCode,
+        reasonText: input.reasonText,
+      },
+    );
+    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+      throw new Error(res.error?.message ?? "Loan transition failed");
+    }
+    return;
+  }
+
+  if (input.toStatus === "disbursed") {
+    const { data, error } = await supabase.rpc("transition_loan_status", {
+      p_loan_id: input.loanId,
+      p_action: "disburse",
+      p_reason: input.reasonText ?? null,
+    });
+    if (error) throw error;
+    assertRpcOk(data);
+    return;
+  }
+
+  if (input.toStatus === "under_review") {
+    const { data: sessionData } = await supabase.auth.getUser();
+    const uid = sessionData.user?.id ?? null;
+    const { error } = await supabase
+      .from("loan_applications")
+      .update({
+        status: "under_review",
+        reviewed_by: uid,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", input.loanId);
+    if (error) throw error;
+    return;
+  }
+
+  throw new Error(
+    `transitionLoanStatus: cannot move to "${input.toStatus}" without API workflow (set VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL).`,
+  );
 }

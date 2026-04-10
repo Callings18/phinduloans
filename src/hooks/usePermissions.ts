@@ -14,7 +14,7 @@ function permKey(module: string, action: string): PermissionKey {
 }
 
 export function usePermissions() {
-  const { user, isLoading: authLoading, isAdmin } = useAuth();
+  const { user, isLoading: authLoading, hasRole: authHasRole } = useAuth();
   const [permissionSet, setPermissionSet] = useState<Set<PermissionKey>>(new Set());
   const [loading, setLoading] = useState(true);
   const [rpcError, setRpcError] = useState<string | null>(null);
@@ -59,17 +59,17 @@ export function usePermissions() {
   const can = useCallback(
     (module: string, action: string) => {
       if (authLoading || loading) return false;
-      if (permissionSet.size === 0 && isAdmin) return true;
+      if (authHasRole("super_admin")) return true;
       return permissionSet.has(permKey(module, action));
     },
-    [permissionSet, authLoading, loading, isAdmin]
+    [permissionSet, authLoading, loading, authHasRole]
   );
 
   /** Check by "module:action" string, e.g. hasPermission("loans:approve") */
   const hasPermission = useCallback(
     (permissionName: string) => {
       if (authLoading || loading) return false;
-      if (permissionSet.size === 0 && isAdmin) return true;
+      if (authHasRole("super_admin")) return true;
       // Support both "module:action" and "module_action" formats
       if (permissionSet.has(permissionName)) return true;
       const parts = permissionName.includes(":") ? permissionName.split(":") : permissionName.split("_");
@@ -80,17 +80,13 @@ export function usePermissions() {
       }
       return false;
     },
-    [permissionSet, authLoading, loading, isAdmin]
+    [permissionSet, authLoading, loading, authHasRole]
   );
 
-  /** Check if user has a specific role name */
+  /** Prefer useAuth().hasRole for exact checks; exposed for legacy callers */
   const hasRole = useCallback(
-    (roleName: string) => {
-      if (isAdmin && (roleName === "admin" || roleName === "super_admin")) return true;
-      // Role check is approximated via permissions; for exact role check use useAuth
-      return false;
-    },
-    [isAdmin]
+    (roleName: string) => authHasRole(roleName),
+    [authHasRole]
   );
 
   const isLoading = authLoading || loading;

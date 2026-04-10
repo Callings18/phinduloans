@@ -24,7 +24,7 @@ export default function PermissionRoute({
   permission,
   anyOf,
 }: PermissionRouteProps) {
-  const { isLoading: authLoading, isAdmin } = useAuth();
+  const { isLoading: authLoading, hasRole } = useAuth();
   const { can, isLoading: permLoading, rpcError } = usePermissions();
 
   if (authLoading || permLoading) {
@@ -36,13 +36,13 @@ export default function PermissionRoute({
   }
 
   if (adminOnly) {
-    if (!isAdmin) {
+    if (!hasRole("admin") && !hasRole("super_admin")) {
       return <Navigate to="/admin" replace />;
     }
     return <>{children}</>;
   }
 
-  if (rpcError && !isAdmin) {
+  if (rpcError && !hasRole("super_admin")) {
     return (
       <div className="max-w-lg mx-auto mt-8 p-4 rounded-lg border border-destructive/50 bg-destructive/10 text-sm">
         Permissions could not be verified. You cannot access this page until{" "}
@@ -51,7 +51,7 @@ export default function PermissionRoute({
     );
   }
 
-  if (isAdmin) {
+  if (hasRole("super_admin")) {
     return <>{children}</>;
   }
 

@@ -841,6 +841,8 @@ const handler = async (req: Request): Promise<Response> => {
     const token = authHeader.replace("Bearer ", "");
     // Allow service role key or anon key (used by internal function-to-function calls via supabase.functions.invoke)
     const isInternalCall = token === supabaseKey || token === supabaseAnonKey;
+    let jwtUserId: string | undefined;
+    let callerIsBorrowerOnly = false;
     if (!isInternalCall) {
       // Validate the JWT by calling getUser with the token
       const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -852,11 +854,21 @@ const handler = async (req: Request): Promise<Response> => {
           status: 401, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
-      const userId = userData.user.id;
+      jwtUserId = userData.user.id;
       const adminClient = createClient(supabaseUrl, supabaseKey);
-      const { data: roles } = await adminClient.from("user_roles").select("role").eq("user_id", userId);
-      const isAuthorized = roles?.some((r: any) => ["admin", "super_admin", "loan_officer", "finance_officer", "collections_officer", "credit_officer", "user"].includes(r.role));
-      if (!isAuthorized) {
+      const { data: roles } = await adminClient.from("user_roles").select("role").eq("user_id", jwtUserId);
+      const roleList = (roles ?? []).map((r: { role: string }) => r.role);
+      if (roleList.length === 0) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+      const isStaff = roleList.some((r) =>
+        ["admin", "super_admin", "loan_officer", "finance_officer", "collections_officer", "credit_officer", "auditor", "support"].includes(r),
+      );
+      const canSendNotifications = isStaff || roleList.includes("user") || roleList.includes("employer");
+      callerIsBorrowerOnly = !isStaff && (roleList.includes("user") || roleList.includes("employer"));
+      if (!canSendNotifications) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
@@ -866,6 +878,12 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const request: NotificationRequest = await req.json();
+
+    if (!isInternalCall && callerIsBorrowerOnly && request.userId && jwtUserId && request.userId !== jwtUserId) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
     const { type, to, message, subject, title, userId, htmlContent, eventType, mediaUrl } = request;
 
     const settings = await getNotificationSettings(supabase);
