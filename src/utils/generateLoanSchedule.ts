@@ -15,6 +15,10 @@ interface LoanScheduleData {
   totalRepayment: number;
   disbursementDate: string;
   firstRepaymentDate: string;
+  /** e.g. "12 weeks" — defaults to "N months" from termMonths when omitted */
+  termSummaryLabel?: string;
+  /** PDF column above installment amount — defaults to MONTHLY PAYMENT */
+  paymentColumnTitle?: string;
   repayments: Array<{
     installmentNumber: number;
     dueDate: string;
@@ -87,13 +91,15 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
+  const paymentCol = data.paymentColumnTitle || 'MONTHLY PAYMENT';
   doc.text('TERM', 15 + (pageWidth - 30) / 6, 113, { align: 'center' });
-  doc.text('MONTHLY PAYMENT', 15 + (pageWidth - 30) / 2, 113, { align: 'center' });
+  doc.text(paymentCol, 15 + (pageWidth - 30) / 2, 113, { align: 'center' });
   doc.text('TOTAL REPAYMENT', 15 + 5 * (pageWidth - 30) / 6, 113, { align: 'center' });
 
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${data.termMonths} Months`, 15 + (pageWidth - 30) / 6, 124, { align: 'center' });
+  const termSummary = data.termSummaryLabel || `${data.termMonths} Months`;
+  doc.text(termSummary, 15 + (pageWidth - 30) / 6, 124, { align: 'center' });
   doc.text(`K${data.monthlyPayment.toLocaleString()}`, 15 + (pageWidth - 30) / 2, 124, { align: 'center' });
   doc.text(`K${data.totalRepayment.toLocaleString()}`, 15 + 5 * (pageWidth - 30) / 6, 124, { align: 'center' });
 

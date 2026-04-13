@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
 import { useToast } from "@/hooks/use-toast";
+import { LOAN_APPLICATION_IDENTITY_DOC_TYPES } from "@/constants/borrowerKycDocs";
 
 interface LoanProduct {
   id: string;
@@ -229,7 +230,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     })).sort((a: RequiredDoc, b: RequiredDoc) => a.display_order - b.display_order);
   }, [selectedProduct]);
 
-  const identityDocTypes = ["nrc_front", "nrc_back", "selfie_holding_nrc"];
+  const identityDocTypes = [...LOAN_APPLICATION_IDENTITY_DOC_TYPES];
 
   const isProfileComplete = !!(profile?.full_name && profile?.phone && profile?.nrc_number);
   const productName = selectedProduct?.name || "";

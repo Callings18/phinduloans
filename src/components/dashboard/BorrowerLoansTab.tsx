@@ -29,6 +29,18 @@ import {
 import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import { ApplicationStatusTracker } from "./ApplicationStatusTracker";
 import DocumentChecklist from "./DocumentChecklist";
+import { borrowerInstallmentLabel, borrowerTermShortLabel } from "@/utils/repaymentFrequencyLabels";
+import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
+
+function loanFrequencySource(loan: { term_unit?: string | null; loan_term_months?: number | null; loan_products?: { repayment_frequency?: string | null; interest_period?: string | null } | null }) {
+  const p = loan.loan_products ?? {};
+  return {
+    term_unit: loan.term_unit,
+    loan_term_months: loan.loan_term_months,
+    repayment_frequency: p.repayment_frequency,
+    interest_period: p.interest_period,
+  };
+}
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "Submitted", color: "bg-warning/20 text-warning border-warning/30", icon: Clock },
@@ -45,7 +57,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 
 interface Props {
   userId: string;
-  loans: any[];
+  loans: BorrowerDashboardLoan[];
   repayments: any[];
   loanEvents?: Array<{
     id: string;
@@ -120,7 +132,10 @@ export default function BorrowerLoansTab({
                 </div>
                 <div>
                   <h4 className="font-semibold text-foreground text-sm">K{Number(loan.loan_amount).toLocaleString()}</h4>
-                  <p className="text-muted-foreground text-xs">{loan.loan_purpose} • {loan.loan_term_months}mo</p>
+                  <p className="text-muted-foreground text-xs">
+                    {loan.loan_purpose} • {borrowerTermShortLabel(loanFrequencySource(loan))} •{" "}
+                    {borrowerInstallmentLabel(loanFrequencySource(loan))}
+                  </p>
                   <Badge className={`${config.color} border text-[10px] mt-1`}>{config.label}</Badge>
                 </div>
               </div>

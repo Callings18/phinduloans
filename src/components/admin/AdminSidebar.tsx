@@ -20,6 +20,8 @@ import {
 import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
 import { adminMenuGroups, type SidebarMenuItem } from "./adminSidebarConfig";
+import { isBetaModule } from "@/config/featureRollout";
+import { BetaBadge } from "@/components/admin/BetaBadge";
 
 const AdminSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -57,8 +59,12 @@ const AdminSidebar = () => {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
-  const pathActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(`${path}/`);
+  const pathActive = (path: string) => {
+    if (path === "/admin/loans") {
+      return location.pathname === "/admin/loans" || location.pathname.startsWith("/admin/loans/");
+    }
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
 
   const isActiveGroup = (group: (typeof filteredMenuGroups)[0]) =>
     group.items.some((item) => pathActive(item.path));
@@ -165,7 +171,10 @@ const AdminSidebar = () => {
                       )}
                     >
                       <item.icon size={18} />
-                      <span className="font-medium text-sm">{item.label}</span>
+                      <span className="font-medium text-sm inline-flex items-center flex-wrap gap-x-1">
+                        {item.label}
+                        {item.betaKey && isBetaModule(item.betaKey) ? <BetaBadge /> : null}
+                      </span>
                     </Link>
                   );
                 })}

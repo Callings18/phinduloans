@@ -26,7 +26,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { format, differenceInDays, startOfDay } from "date-fns";
 import { useAdminDashboardStats, useAdminUpcomingPayments } from "@/hooks/useAdminDashboardStats";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
-import { anyBetaModuleActive } from "@/config/featureRollout";
+import { anyBetaModuleActive, isBetaModule } from "@/config/featureRollout";
+import { BetaBadge } from "@/components/admin/BetaBadge";
 
 export type AdminDashboardContentProps = {
   loanProductId: string | null;
@@ -511,7 +512,10 @@ const AdminDashboard = () => {
       loanProductId={selectedProductId}
       title="Dashboard"
       productFilterSlot={
-        <LoanProductFilterSelect value={selectedProductId} onChange={setSelectedProductId} id="admin-dash-product" />
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:gap-3">
+          <LoanProductFilterSelect value={selectedProductId} onChange={setSelectedProductId} id="admin-dash-product" />
+          {isBetaModule("loans_by_product") ? <BetaBadge className="self-start sm:mb-1" /> : null}
+        </div>
       }
     />
   );

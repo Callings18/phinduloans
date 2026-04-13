@@ -3,21 +3,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ShieldCheck, Clock, AlertTriangle, CheckCircle, XCircle, Upload } from "lucide-react";
 import { differenceInHours } from "date-fns";
+import {
+  BORROWER_SELFIE_VAULT_ALIASES,
+  BORROWER_VAULT_KYC_DOC_TYPES,
+} from "@/constants/borrowerKycDocs";
 
-const KYC_DOC_TYPES = [
-  { type: "nrc_front", label: "NRC (Front)" },
-  { type: "nrc_back", label: "NRC (Back)" },
-  { type: "selfie", label: "Selfie Holding NRC" },
-];
+const KYC_DOC_TYPES = BORROWER_VAULT_KYC_DOC_TYPES.map(({ type, label }) => ({ type, label }));
 
 interface KYCStatusWidgetProps {
   userId: string;
 }
 
 export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
+  const [searchParams] = useSearchParams();
+  const profileDocumentsHref = (() => {
+    const v = searchParams.get("view");
+    const qs = new URLSearchParams();
+    qs.set("tab", "documents");
+    if (v) qs.set("view", v);
+    return `/profile?${qs.toString()}`;
+  })();
+
   const { data: vaultDocs = [] } = useQuery({
     queryKey: ["borrower-kyc-vault", userId],
     queryFn: async () => {
@@ -33,17 +42,27 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
   });
 
   // Map by type (most recent)
-  const docsByType: Record<string, typeof vaultDocs[0]> = {};
+  const docsByType: Record<string, (typeof vaultDocs)[0]> = {};
   vaultDocs.forEach((d) => {
     if (!docsByType[d.doc_type]) docsByType[d.doc_type] = d;
   });
 
-  const verifiedCount = KYC_DOC_TYPES.filter((t) => docsByType[t.type]?.is_verified).length;
+  const docForSlot = (slotType: string) => {
+    if (slotType === "selfie") {
+      for (const alias of BORROWER_SELFIE_VAULT_ALIASES) {
+        if (docsByType[alias]) return docsByType[alias];
+      }
+      return undefined;
+    }
+    return docsByType[slotType];
+  };
+
+  const verifiedCount = KYC_DOC_TYPES.filter((t) => docForSlot(t.type)?.is_verified).length;
   const allVerified = verifiedCount === KYC_DOC_TYPES.length;
-  const uploadedCount = KYC_DOC_TYPES.filter((t) => !!docsByType[t.type]).length;
-  const pendingDocs = KYC_DOC_TYPES
-    .map((t) => docsByType[t.type])
-    .filter((doc) => doc && !doc.is_verified && !(doc.verified_at && doc.notes?.startsWith("Rejected:")));
+  const uploadedCount = KYC_DOC_TYPES.filter((t) => !!docForSlot(t.type)).length;
+  const pendingDocs = KYC_DOC_TYPES.map((t) => docForSlot(t.type)).filter(
+    (doc) => doc && !doc.is_verified && !(doc.verified_at && doc.notes?.startsWith("Rejected:")),
+  );
   const oldestPendingHours = pendingDocs.reduce((max, doc) => {
     if (!doc?.uploaded_at) return max;
     return Math.max(max, differenceInHours(new Date(), new Date(doc.uploaded_at)));
@@ -78,7 +97,7 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
       <CardContent className="p-4 pt-0">
         <div className="space-y-2">
           {KYC_DOC_TYPES.map((t) => {
-            const doc = docsByType[t.type];
+            const doc = docForSlot(t.type);
             const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
 
             return (
@@ -113,7 +132,7 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
         </div>
         {uploadedCount < KYC_DOC_TYPES.length && (
           <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
-            <Link to="/profile">
+            <Link to={profileDocumentsHref}>
               <Upload size={14} className="mr-2" />
               Upload Missing Documents
             </Link>

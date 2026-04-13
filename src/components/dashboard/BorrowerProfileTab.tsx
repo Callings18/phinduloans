@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,42 @@ interface Props {
   onSignOut: () => void;
 }
 
+function buildProfileHref(path: string, viewToken: string | null) {
+  const u = new URL(path, "http://local.invalid");
+  if (viewToken) u.searchParams.set("view", viewToken);
+  return `${u.pathname}${u.search}`;
+}
+
 export default function BorrowerProfileTab({ user, profile, kycVerified, onSignOut }: Props) {
+  const [searchParams] = useSearchParams();
+  const viewToken = searchParams.get("view");
+
+  const menuItems = useMemo(
+    () =>
+      [
+        { icon: User, label: "Personal Information", to: buildProfileHref("/profile", viewToken), desc: "Name, NRC, phone number, address" },
+        {
+          icon: FileText,
+          label: "My Documents",
+          to: buildProfileHref("/profile?tab=documents", viewToken),
+          desc: "KYC uploads & document vault",
+        },
+        {
+          icon: Shield,
+          label: "Security",
+          to: buildProfileHref("/profile?tab=security", viewToken),
+          desc: "Password & active sessions",
+        },
+        {
+          icon: Bell,
+          label: "Notifications",
+          to: buildProfileHref("/profile?tab=notifications", viewToken),
+          desc: "Alert & notification preferences",
+        },
+      ] as const,
+    [viewToken],
+  );
+
   const profileCompletion = (() => {
     let score = 35;
     if (profile?.full_name) score += 20;
@@ -32,13 +68,6 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onSignO
     if (kycVerified) score += 20;
     return Math.min(100, score);
   })();
-
-  const menuItems = [
-    { icon: User, label: "Personal Information", to: "/profile", desc: "Name, NRC, phone number, address" },
-    { icon: FileText, label: "My Documents", to: "/profile?tab=documents", desc: "KYC uploads & document vault" },
-    { icon: Shield, label: "Security", to: "/profile?tab=security", desc: "Password & active sessions" },
-    { icon: Bell, label: "Notifications", to: "/profile?tab=notifications", desc: "Alert & notification preferences" },
-  ];
 
   return (
     <div className="space-y-6">

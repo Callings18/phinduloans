@@ -16,6 +16,7 @@ import {
   ListOrdered,
   Link2,
   BarChart3,
+  LayoutGrid,
   ScrollText,
   Scale,
   Ban,
@@ -35,6 +36,8 @@ export interface SidebarMenuItem {
   perm?: { module: string; action: string };
   /** Restrict to admin / super_admin only (e.g. settings). */
   adminOnly?: boolean;
+  /** When set and VITE_BETA_MODULES contains this key, sidebar shows a Beta badge. */
+  betaKey?: string;
 }
 
 export interface SidebarMenuGroup {
@@ -54,7 +57,14 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", perm: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employers", path: "/admin/employers", perm: { module: "borrowers", action: "view" } },
       { icon: Package, label: "Loan Products", path: "/admin/loan-products", perm: { module: "products", action: "view" } },
-      { icon: CreditCard, label: "Loans", path: "/admin/loans", perm: { module: "loans", action: "view" } },
+      { icon: CreditCard, label: "Loans", path: "/admin/loans", perm: { module: "loans", action: "view" }, betaKey: "loans_by_product" },
+      {
+        icon: LayoutGrid,
+        label: "Loan product dashboards",
+        path: "/admin/loan-product-dashboards",
+        perm: { module: "loans", action: "view" },
+        betaKey: "product_dashboards",
+      },
     ],
   },
   {

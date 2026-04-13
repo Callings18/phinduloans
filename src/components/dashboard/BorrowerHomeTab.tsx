@@ -17,6 +17,7 @@ import PaymentReminder from "./PaymentReminder";
 import WalletWidget from "./WalletWidget";
 import type { BorrowerTab } from "./BorrowerBottomNav";
 import type { LucideIcon } from "lucide-react";
+import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
 
 type HomeNextStep = {
   title: string;
@@ -32,9 +33,9 @@ interface BorrowerHomeTabProps {
   user: any;
   profile: any;
   kycInfo?: any;
-  loans: any[];
+  loans: BorrowerDashboardLoan[];
   repayments: any[];
-  activeLoans: any[];
+  activeLoans: BorrowerDashboardLoan[];
   kycVerified: boolean;
   isStaff: boolean;
   onTabChange: (tab: BorrowerTab) => void;
@@ -176,8 +177,11 @@ export default function BorrowerHomeTab({
           </div>
 
           <div className="text-center space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Wallet Balance</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Repayments posted (paid)</p>
             <p className="text-3xl font-bold">K{walletBalance.toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground px-2">
+              Total you have already paid toward installments. For disbursements and outstanding balance, see the card below.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -196,7 +200,7 @@ export default function BorrowerHomeTab({
           </div>
 
           <div className="rounded-2xl bg-secondary/70 border border-border/60 p-3">
-            <p className="text-xs text-muted-foreground mb-2">Your Wallet</p>
+            <p className="text-xs text-muted-foreground mb-2">Disbursements & balance</p>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold border border-primary/30">
                 ZMW

@@ -42,7 +42,16 @@ import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 import phinduLogo from "@/assets/phindu-logo-white.png";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
-import { submitPaymentClaim } from "@/services/repositories/workflowRepository";
+import {
+  fetchBorrowerPaymentClaims,
+  submitPaymentClaim,
+} from "@/services/repositories/workflowRepository";
+import { borrowerIdentityKycSatisfiedFromVault } from "@/constants/borrowerKycDocs";
+import {
+  borrowerInterestPeriodLabel,
+  borrowerSchedulePaymentColumnTitle,
+  borrowerTermSummaryLabel,
+} from "@/utils/repaymentFrequencyLabels";
 
 import type { BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
 export type { BorrowerTab };
@@ -101,7 +110,7 @@ const Dashboard = () => {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from('loan_applications')
-        .select('*')
+        .select('*, loan_products(repayment_frequency, interest_period)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -141,13 +150,7 @@ const Dashboard = () => {
     queryKey: ["user-payment-claims", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const { data, error } = await supabase
-        .from("payment_claims")
-        .select("id, repayment_id, amount, reference, status, created_at, verified_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      return fetchBorrowerPaymentClaims(user.id);
     },
     enabled: !!user?.id,
   });
@@ -238,12 +241,7 @@ const Dashboard = () => {
 
   const kycVerified = useMemo(() => {
     if (kycInfo?.is_verified === true) return true;
-    const KYC_TYPES = ["nrc_front", "nrc_back", "selfie"];
-    const docsByType: Record<string, boolean> = {};
-    kycVaultDocs.forEach((d) => {
-      if (!docsByType.hasOwnProperty(d.doc_type)) docsByType[d.doc_type] = !!d.is_verified;
-    });
-    return KYC_TYPES.every((t) => docsByType[t] === true);
+    return borrowerIdentityKycSatisfiedFromVault(kycVaultDocs);
   }, [kycVaultDocs, kycInfo]);
 
   const activeLoans = useMemo(() => loans.filter(l => ['active', 'disbursed'].includes(l.status)), [loans]);
@@ -284,6 +282,13 @@ const Dashboard = () => {
     setIsGenerating(`schedule-${loan.id}`);
     try {
       const loanRepayments = repayments.filter(r => r.loan_id === loan.id);
+      const product = loan.loan_products ?? {};
+      const freqLoan = {
+        term_unit: loan.term_unit,
+        loan_term_months: loan.loan_term_months,
+        repayment_frequency: product.repayment_frequency,
+        interest_period: product.interest_period,
+      };
       downloadLoanSchedule({
         borrowerName: loan.full_name,
         borrowerPhone: loan.phone || '',
@@ -291,12 +296,14 @@ const Dashboard = () => {
         loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
         loanAmount: loan.loan_amount,
         interestRate: loan.interest_rate || 15,
-        interestPeriod: 'monthly',
+        interestPeriod: borrowerInterestPeriodLabel(freqLoan),
         termMonths: loan.loan_term_months,
         monthlyPayment: loan.monthly_payment || 0,
         totalRepayment: loan.total_repayment || 0,
         disbursementDate: loan.created_at,
         firstRepaymentDate: loanRepayments[0]?.due_date || loan.created_at,
+        termSummaryLabel: borrowerTermSummaryLabel(freqLoan),
+        paymentColumnTitle: borrowerSchedulePaymentColumnTitle(freqLoan),
         repayments: loanRepayments.map((r: any) => ({
           installmentNumber: r.installment_number || 1,
           dueDate: r.due_date,
@@ -382,6 +389,14 @@ const Dashboard = () => {
       setShowApplicationForm(false);
     }
   }, [handleStartApplication]);
+
+  const openBorrowerKycDocuments = useCallback(() => {
+    const v = searchParams.get("view");
+    const qs = new URLSearchParams();
+    qs.set("tab", "documents");
+    if (v) qs.set("view", v);
+    navigate(`/profile?${qs.toString()}`);
+  }, [navigate, searchParams]);
 
   if (isLoading) {
     return (
@@ -544,7 +559,7 @@ const Dashboard = () => {
                     kycVerified={kycVerified}
                     isStaff={isStaff}
                     onTabChange={handleTabChange}
-                    onOpenKycDocuments={() => navigate("/profile?tab=documents")}
+                    onOpenKycDocuments={openBorrowerKycDocuments}
                   />
                 )}
                 {activeTab === "loans" && (

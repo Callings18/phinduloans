@@ -4,6 +4,8 @@
  * and penalty calculations across the entire application.
  */
 
+import { calculateMarketeerLoan, parseMarketeerTiers } from "@/lib/marketeerCalculations";
+
 export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type InterestType = 'flat' | 'reducing';
 export type PenaltyFrequency = 'daily' | 'weekly' | 'monthly' | 'one_time';
@@ -11,6 +13,8 @@ export type TermUnit = 'days' | 'weeks' | 'months' | 'years';
 
 export interface LoanProduct {
   product_name?: string | null;
+  product_code?: string | null;
+  pricing_tiers?: unknown;
   interest_rate: number;
   interest_period?: InterestPeriod | null;
   interest_type?: InterestType | null;
@@ -45,8 +49,9 @@ export interface LoanCalculationResult {
   totalRepayment: number;
   monthlyPayment: number;
   weeklyPayment?: number; // NEW: For weekly loans
+  dailyPayment?: number;
   effectiveAnnualRate: number;
-  paymentFrequency?: 'weekly' | 'monthly'; // NEW: Payment frequency
+  paymentFrequency?: 'weekly' | 'monthly' | 'daily';
 }
 
 export interface RepaymentScheduleItem {
@@ -154,6 +159,38 @@ export function calculateLoan(
   product: LoanProduct,
   termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
 ): LoanCalculationResult {
+  if (product.product_code === "MARKETEER") {
+    let tiers = parseMarketeerTiers(product.pricing_tiers);
+    if (!tiers.length) {
+      tiers = parseMarketeerTiers([
+        { minPrincipal: 1000, maxPrincipal: 5000, interestPercent: 30, durationDays: 10 },
+        { minPrincipal: 5001, maxPrincipal: 10000, interestPercent: 20, durationDays: 15 },
+      ]);
+    }
+    const m = calculateMarketeerLoan(principal, tiers);
+    if (m) {
+      const monthlyRate = normalizeToMonthlyRate(product.interest_rate || 0, "daily");
+      return {
+        principal,
+        monthlyInterestRate: monthlyRate,
+        totalInterest: m.totalInterest,
+        processingFee: 0,
+        enforcementFee: 0,
+        insuranceFee: 0,
+        vatAmount: 0,
+        platformFee: 0,
+        totalFees: 0,
+        feesDeductedUpfront: 0,
+        disbursementAmount: principal,
+        totalRepayment: m.totalRepayment,
+        monthlyPayment: m.dailyInstallment,
+        dailyPayment: m.dailyInstallment,
+        effectiveAnnualRate: Math.round(monthlyToAnnualRate(monthlyRate) * 100) / 100,
+        paymentFrequency: "daily",
+      };
+    }
+  }
+
   const normalizedProductName = (product.product_name || "").trim().toLowerCase();
   const isBusinessShortTerm =
     normalizedProductName === "business loan - short term" ||

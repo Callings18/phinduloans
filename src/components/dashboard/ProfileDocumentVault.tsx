@@ -10,12 +10,9 @@ import {
   FileText, Upload, Eye, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BORROWER_VAULT_KYC_DOC_TYPES, borrowerVaultCoreSlotsUploaded } from "@/constants/borrowerKycDocs";
 
-const KYC_DOC_TYPES = [
-  { type: "nrc_front", label: "NRC (Front)", accept: "image/*", capture: true },
-  { type: "nrc_back", label: "NRC (Back)", accept: "image/*", capture: true },
-  { type: "selfie", label: "Selfie Holding NRC", accept: "image/*", capture: true },
-];
+const KYC_DOC_TYPES = [...BORROWER_VAULT_KYC_DOC_TYPES];
 
 interface Props {
   userId: string;
@@ -95,8 +92,8 @@ export default function ProfileDocumentVault({ userId }: Props) {
           .from("borrower_document_vault")
           .select("doc_type")
           .eq("borrower_id", userId);
-        const uploadedTypes = new Set(allDocs?.map(d => d.doc_type) || []);
-        const allUploaded = KYC_DOC_TYPES.every(t => uploadedTypes.has(t.type));
+        const uploadedTypes = new Set(allDocs?.map((d) => d.doc_type) || []);
+        const allUploaded = borrowerVaultCoreSlotsUploaded(uploadedTypes);
         if (allUploaded) {
           // Get borrower name for the notification
           const { data: profile } = await supabase

@@ -18,10 +18,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  isPaymentClaimApprovedStatus,
+  isPaymentClaimPendingStatus,
+} from "@/constants/paymentClaims";
+import { borrowerInstallmentLabel } from "@/utils/repaymentFrequencyLabels";
+import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
 
 interface Props {
   repayments: any[];
-  loans: any[];
+  loans: BorrowerDashboardLoan[];
   paymentClaims: any[];
   onSubmitPayment: (rep: any) => void;
 }
@@ -62,6 +68,16 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
     return loan ? `K${Number(loan.loan_amount).toLocaleString()}` : "Loan";
   };
 
+  const loanFrequencySource = (loan: BorrowerDashboardLoan) => {
+    const p = loan.loan_products ?? {};
+    return {
+      term_unit: loan.term_unit,
+      loan_term_months: loan.loan_term_months,
+      repayment_frequency: p.repayment_frequency,
+      interest_period: p.interest_period,
+    };
+  };
+
   const claimsByRepaymentId = new Map<string, any>();
   paymentClaims.forEach((claim) => {
     if (!claimsByRepaymentId.has(claim.repayment_id)) {
@@ -71,13 +87,19 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
 
   const getClaimStatus = (claim?: any) => {
     if (!claim) return null;
-    if (claim.status === "verified" || claim.status === "approved") {
+    if (isPaymentClaimApprovedStatus(claim.status)) {
       return { label: "Claim verified", color: "bg-success/20 text-success border-success/30" };
     }
     if (claim.status === "rejected") {
       return { label: "Claim rejected", color: "bg-destructive/20 text-destructive border-destructive/30" };
     }
-    return { label: "Claim pending", color: "bg-info/20 text-info border-info/30" };
+    if (claim.status === "needs_more_info") {
+      return { label: "More info needed", color: "bg-warning/20 text-warning border-warning/30" };
+    }
+    if (isPaymentClaimPendingStatus(claim.status)) {
+      return { label: "Claim pending review", color: "bg-info/20 text-info border-info/30" };
+    }
+    return { label: `Claim: ${claim.status}`, color: "bg-muted/20 text-muted-foreground border-muted/30" };
   };
 
   return (
@@ -129,6 +151,7 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
               const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
               const claim = claimsByRepaymentId.get(rep.id);
               const claimStatus = getClaimStatus(claim);
+              const loanRow = loans.find((l) => l.id === rep.loan_id);
               return (
                 <Card key={rep.id} className="border-border/60 shadow-card">
                   <CardContent className="p-3 space-y-2">
@@ -140,6 +163,11 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         <p className="text-xs text-muted-foreground">
                           Installment #{rep.installment_number} • {getLoanRef(rep.loan_id)}
                         </p>
+                        {loanRow && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {borrowerInstallmentLabel(loanFrequencySource(loanRow))}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Due {format(new Date(rep.due_date), "MMM dd, yyyy")}
                         </p>
@@ -191,11 +219,19 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                   const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
                   const claim = claimsByRepaymentId.get(rep.id);
                   const claimStatus = getClaimStatus(claim);
+                  const loanRow = loans.find((l) => l.id === rep.loan_id);
                   return (
                     <TableRow key={rep.id}>
                       <TableCell className="font-medium text-muted-foreground">{rep.installment_number}</TableCell>
                       <TableCell className="font-semibold">K{Number(rep.original_amount || rep.amount).toLocaleString()}</TableCell>
-                      <TableCell className="text-muted-foreground">{getLoanRef(rep.loan_id)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <div>{getLoanRef(rep.loan_id)}</div>
+                        {loanRow && (
+                          <div className="text-[10px] text-muted-foreground/90 mt-0.5">
+                            {borrowerInstallmentLabel(loanFrequencySource(loanRow))}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{format(new Date(rep.due_date), "MMM dd, yyyy")}</TableCell>
                       <TableCell>{rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy") : "—"}</TableCell>
                       <TableCell>

@@ -592,14 +592,10 @@ const Profile = () => {
                                     <Separator />
 
                                     <div className="space-y-4">
-                                        <h4 className="font-medium text-foreground">Recent Activity</h4>
+                                        <h4 className="font-medium text-foreground">Account</h4>
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between text-sm">
-                                                <span className="text-muted-foreground">Last Login</span>
-                                                <span className="text-foreground">{format(new Date(), 'MMM dd, yyyy HH:mm')}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between text-sm">
-                                                <span className="text-muted-foreground">Account Created</span>
+                                                <span className="text-muted-foreground">Member since</span>
                                                 <span className="text-foreground">
                                                     {profile?.created_at ? format(new Date(profile.created_at), 'MMM dd, yyyy') : 'N/A'}
                                                 </span>

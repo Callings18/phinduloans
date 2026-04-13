@@ -25,6 +25,14 @@ async function login(page: Page, creds: Creds) {
   await page.getByRole("button", { name: "Sign In" }).click();
 }
 
+test.describe("borrower portal smoke", () => {
+  test("unauthenticated profile deep-link redirects to auth", async ({ page }) => {
+    await page.goto("/profile?tab=documents");
+    await page.waitForURL(/\/auth/, { timeout: 15_000 });
+    expect(page.url()).toMatch(/\/auth/);
+  });
+});
+
 test.describe("admin hardening smoke", () => {
   test("route denial for low-privileged staff on settings", async ({ page }) => {
     test.skip(!lowStaffCreds, "Set E2E_STAFF_LOW_EMAIL and E2E_STAFF_LOW_PASSWORD");

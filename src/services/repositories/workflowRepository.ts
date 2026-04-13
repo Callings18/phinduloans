@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { apiGet, apiPost } from "@/api/httpClient";
+import { apiGet, apiPost, getApiBaseUrl } from "@/api/httpClient";
 import { apiFeatureFlags } from "@/config/apiMode";
 
 export interface LoanEvent {
@@ -34,16 +34,25 @@ export async function submitPaymentClaim(
   fallbackData?: { loanId: string; userId: string },
 ) {
   if (apiFeatureFlags.phase1Workflow) {
-    const res = await apiPost<{ ok?: boolean; data?: unknown }>(
-      `/api/v1/repayments/${repaymentId}/payment-claims`,
-      {
-        amount: payload.amount,
-        reference: payload.reference,
-        receiptUrl: payload.receiptUrl ?? null,
-      },
-    );
+    const res = await apiPost<{
+      ok?: boolean;
+      data?: unknown;
+      error?: string | { message?: string; code?: string };
+      message?: string;
+    }>(`/api/v1/repayments/${repaymentId}/payment-claims`, {
+      amount: payload.amount,
+      reference: payload.reference,
+      receiptUrl: payload.receiptUrl ?? null,
+    });
     if (res && typeof res === "object" && "ok" in res && res.ok === false) {
-      throw new Error("Failed to submit payment claim");
+      const errPart = res.error;
+      const msg =
+        typeof errPart === "string"
+          ? errPart
+          : errPart && typeof errPart === "object"
+            ? errPart.message || errPart.code
+            : res.message;
+      throw new Error(msg || "Failed to submit payment claim");
     }
     return (res as { data?: unknown })?.data;
   }
@@ -58,14 +67,28 @@ export async function submitPaymentClaim(
         amount: payload.amount,
         reference: payload.reference,
         receipt_url: payload.receiptUrl ?? null,
-        status: "pending",
+        // Match apps/api-next POST so admin queues and borrower UI stay aligned
+        status: "pending_review",
       })
       .select()
       .single();
     if (error) throw error;
     return data;
   }
-  throw new Error("Configure VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL, or provide fallbackData for direct insert.");
+  throw new Error(
+    `Payment claims: set VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL (API base is ${getApiBaseUrl()}), or set VITE_API_PHASE1_WORKFLOW=false for direct Supabase inserts.`,
+  );
+}
+
+/** Borrower-visible payment claims (same table whether created via API or Supabase). */
+export async function fetchBorrowerPaymentClaims(userId: string) {
+  const { data, error } = await supabase
+    .from("payment_claims")
+    .select("id, repayment_id, amount, reference, status, created_at, verified_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function fetchBorrowerLoanEvents(loanId: string): Promise<LoanEvent[]> {

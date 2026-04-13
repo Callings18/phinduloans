@@ -99,6 +99,7 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
 import { ZAMBIAN_CITIES_LIST } from "@/constants/zambianLocations";
@@ -168,6 +169,7 @@ interface LoanProduct {
   max_guarantee_percent: number | null;
   guarantee_fee_percent: number | null;
   required_documents?: { document_type: string; document_name: string; is_mandatory: boolean; display_order: number }[] | null;
+  pricing_tiers?: Json | null;
 }
 
 export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string; category: string }[] = [
@@ -191,6 +193,13 @@ export const REQUIRED_DOC_TYPE_OPTIONS: { value: string; label: string; category
   { value: "shareholders_details", label: "Shareholders Details", category: "Business Documents" },
   { value: "proof_of_business", label: "Proof of Place of Business", category: "Business Documents" },
   { value: "financial_statement", label: "Financial Statement", category: "Business Documents" },
+  { value: "pacra_certificate", label: "PACRA Certificate", category: "Business Documents" },
+  { value: "tax_clearance", label: "Tax Clearance", category: "Business Documents" },
+  { value: "vehicle_photos", label: "Vehicle Photos", category: "Collateral" },
+  { value: "sketch_map_residence", label: "Sketch Map to Residence", category: "Proof & Employment" },
+  { value: "video_business_stock", label: "Video — Business with Stock", category: "Proof & Employment" },
+  { value: "video_residence", label: "Video — Residence", category: "Proof & Employment" },
+  { value: "video_contract_signing", label: "Video — Signing Contract", category: "Proof & Employment" },
   // Collateral
   { value: "collateral_details", label: "Collateral Full Details", category: "Collateral" },
   { value: "collateral_images", label: "Collateral Pictures", category: "Collateral" },
@@ -328,6 +337,8 @@ const AdminLoanProducts = () => {
 
     const result = calculateLoan(principal, termMonths, {
       product_name: formData.name,
+      product_code: formData.product_code || null,
+      pricing_tiers: editingProduct ? (editingProduct as { pricing_tiers?: unknown }).pricing_tiers : null,
       interest_rate: formData.interest_rate,
       interest_period: formData.interest_period as any,
       interest_type: formData.interest_type as any,
@@ -373,6 +384,8 @@ const AdminLoanProducts = () => {
     formData.insurance_percent,
     formData.vat_percent,
     formData.platform_fee_percent,
+    formData.product_code,
+    editingProduct,
     isDialogOpen
   ]);
 

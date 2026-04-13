@@ -48,6 +48,8 @@ import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
+import AdminLoanProductDashboards from "./pages/admin/AdminLoanProductDashboards";
+import AdminLoanProductScopedDashboard from "./pages/admin/AdminLoanProductScopedDashboard";
 
 // Inline Theme - no external module
 type Theme = "dark" | "light" | "system";
@@ -253,11 +255,31 @@ function App() {
                       }
                     />
                     <Route
+                      path="loans/products/:productId/dashboard"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminLoanProductScopedDashboard />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
                       path="loans"
                       element={
                         <ErrorBoundary>
                           <PermissionRoute permission={{ module: "loans", action: "view" }}>
                             <AdminLoans />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="loan-product-dashboards"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminLoanProductDashboards />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

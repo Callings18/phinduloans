@@ -27,6 +27,7 @@ import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { BORROWER_SELFIE_VAULT_ALIASES, latestVerifiedByVaultDocType } from "@/constants/borrowerKycDocs";
 import {
   Banknote,
   Plus,
@@ -168,14 +169,11 @@ const AdminDisbursements = () => {
         .eq("borrower_id", selectedLoanData.user_id)
         .order("uploaded_at", { ascending: false });
       if (error) throw error;
-      const required = ["nrc_front", "nrc_back", "selfie"];
-      const latestByType = new Map<string, { is_verified: boolean | null }>();
-      (data ?? []).forEach((doc) => {
-        if (!latestByType.has(doc.doc_type)) {
-          latestByType.set(doc.doc_type, { is_verified: doc.is_verified });
-        }
-      });
-      const verifiedRequiredDocs = required.filter((type) => latestByType.get(type)?.is_verified === true).length;
+      const m = latestVerifiedByVaultDocType(data ?? []);
+      let verifiedRequiredDocs = 0;
+      if (m.nrc_front) verifiedRequiredDocs += 1;
+      if (m.nrc_back) verifiedRequiredDocs += 1;
+      if (BORROWER_SELFIE_VAULT_ALIASES.some((t) => m[t])) verifiedRequiredDocs += 1;
       return { verifiedRequiredDocs };
     },
     enabled: !!selectedLoanData?.user_id,
