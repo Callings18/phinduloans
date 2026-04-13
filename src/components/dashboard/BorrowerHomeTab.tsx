@@ -16,6 +16,17 @@ import ContractSigningWidget from "./ContractSigningWidget";
 import PaymentReminder from "./PaymentReminder";
 import WalletWidget from "./WalletWidget";
 import type { BorrowerTab } from "./BorrowerBottomNav";
+import type { LucideIcon } from "lucide-react";
+
+type HomeNextStep = {
+  title: string;
+  description: string;
+  cta: string;
+  tab: BorrowerTab;
+  icon: LucideIcon;
+  /** When set (e.g. KYC incomplete), primary CTA uses this instead of dashboard tab change. */
+  navigate?: () => void;
+};
 
 interface BorrowerHomeTabProps {
   user: any;
@@ -27,6 +38,8 @@ interface BorrowerHomeTabProps {
   kycVerified: boolean;
   isStaff: boolean;
   onTabChange: (tab: BorrowerTab) => void;
+  /** Opens full Profile page on Documents / KYC tab (NRC, bank, next of kin). */
+  onOpenKycDocuments?: () => void;
 }
 
 export default function BorrowerHomeTab({
@@ -39,8 +52,8 @@ export default function BorrowerHomeTab({
   kycVerified,
   isStaff,
   onTabChange,
+  onOpenKycDocuments,
 }: BorrowerHomeTabProps) {
-  void loans;
   void isStaff;
 
   const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
@@ -104,13 +117,14 @@ export default function BorrowerHomeTab({
     };
   })();
 
-  const nextStep = (() => {
+  const nextStep: HomeNextStep = (() => {
     if (!kycVerified) {
       return {
         title: "Complete KYC verification",
-        description: "Verify your NRC and selfie to unlock faster approvals and disbursement.",
-        cta: "Go to profile",
+        description: "Upload NRC, selfie, and payout details to unlock faster approvals and disbursement.",
+        cta: "Open KYC & documents",
         tab: "profile" as BorrowerTab,
+        navigate: onOpenKycDocuments,
         icon: ShieldAlert,
       };
     }
@@ -198,7 +212,7 @@ export default function BorrowerHomeTab({
                 <button
                   type="button"
                   className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => onTabChange("profile")}
+                  onClick={() => (onOpenKycDocuments ? onOpenKycDocuments() : onTabChange("profile"))}
                 >
                   Add payout details
                 </button>
@@ -233,7 +247,10 @@ export default function BorrowerHomeTab({
           <Button
             size="sm"
             className="gradient-primary text-primary-foreground hover:opacity-90 h-8 px-3 text-xs shrink-0"
-            onClick={() => onTabChange(nextStep.tab)}
+            onClick={() => {
+              if (nextStep.navigate) nextStep.navigate();
+              else onTabChange(nextStep.tab);
+            }}
           >
             {nextStep.cta}
           </Button>

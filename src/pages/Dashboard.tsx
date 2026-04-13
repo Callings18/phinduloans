@@ -164,7 +164,7 @@ const Dashboard = () => {
   });
 
   const { data: kycVaultDocs = [] } = useQuery({
-    queryKey: ["borrower-kyc-vault-status", user?.id],
+    queryKey: ["borrower-kyc-vault", user?.id, "dashboard-doc-status"],
     queryFn: async () => {
       if (!user?.id) return [];
       const { data, error } = await supabase
@@ -179,12 +179,14 @@ const Dashboard = () => {
   });
 
   const { data: kycInfo } = useQuery({
-    queryKey: ["borrower-kyc-info-status", user?.id],
+    queryKey: ["borrower-kyc-info", user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from("borrower_kyc_info")
-        .select("is_verified")
+        .select(
+          "is_verified, bank_name, bank_account_number, airtel_money_number, mtn_mobile_money_number, zamtel_kwacha_number",
+        )
         .eq("borrower_id", user.id)
         .maybeSingle();
       if (error) throw error;
@@ -372,8 +374,6 @@ const Dashboard = () => {
     enabled: !!user?.id && loans.length > 0,
   });
 
-  void borrowerLoanEvents;
-
   const handleTabChange = useCallback((tab: BorrowerTab) => {
     if (tab === "apply") {
       handleStartApplication();
@@ -544,6 +544,7 @@ const Dashboard = () => {
                     kycVerified={kycVerified}
                     isStaff={isStaff}
                     onTabChange={handleTabChange}
+                    onOpenKycDocuments={() => navigate("/profile?tab=documents")}
                   />
                 )}
                 {activeTab === "loans" && (
@@ -551,6 +552,7 @@ const Dashboard = () => {
                     userId={user.id}
                     loans={loans}
                     repayments={repayments}
+                    loanEvents={borrowerLoanEvents}
                     onDownloadStatement={downloadStatement}
                     onDownloadSchedule={downloadSchedule}
                     onSubmitPayment={handleSubmitPayment}

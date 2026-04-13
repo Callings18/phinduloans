@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { LoanProductFilterSelect } from "@/components/admin/LoanProductFilterSelect";
+import { BetaBadge } from "@/components/admin/BetaBadge";
+import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
+import { isBetaModule } from "@/config/featureRollout";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
@@ -161,16 +165,21 @@ const AdminLoans = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { can } = usePermissions();
+  const { selectedProductId, setSelectedProductId } = useLoanProductFilter();
 
   // Fetch only post-disbursement loans
   const { data: loans, isLoading } = useQuery({
-    queryKey: ["admin-portfolio-loans"],
+    queryKey: ["admin-portfolio-loans", selectedProductId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("loan_applications")
         .select("*")
         .in("status", ["awaiting_disbursement", "approved", "active", "disbursed", "completed", "defaulted"])
         .order("created_at", { ascending: false });
+      if (selectedProductId) {
+        q = q.eq("loan_product_id", selectedProductId);
+      }
+      const { data, error } = await q;
 
       if (error) throw error;
       return data as Loan[];
@@ -681,7 +690,7 @@ const AdminLoans = () => {
   const paginatedLoans = filteredLoans.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Reset page on filter change
-  useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm]);
+  useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm, selectedProductId]);
 
   // Real-time subscription
   useEffect(() => {
@@ -722,9 +731,13 @@ const AdminLoans = () => {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Loan Portfolio</h1>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2 flex-wrap">
+            Loan Portfolio
+            {isBetaModule("loans_by_product") ? <BetaBadge /> : null}
+          </h1>
           <p className="text-muted-foreground mt-1">
             Monitor active, completed, and defaulted loans
+            {selectedProductId ? " — filtered by loan product." : ""}
           </p>
         </div>
 
@@ -788,7 +801,13 @@ const AdminLoans = () => {
           {/* Filters */}
           <Card className="border-border/50 bg-card/50 mt-4">
             <CardContent className="p-4">
-              <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex flex-col md:flex-row gap-4 md:items-end">
+                <LoanProductFilterSelect
+                  value={selectedProductId}
+                  onChange={setSelectedProductId}
+                  id="admin-loans-product"
+                  className="w-full md:w-56"
+                />
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                   <Input

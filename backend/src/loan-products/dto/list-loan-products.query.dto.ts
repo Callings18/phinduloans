@@ -7,7 +7,11 @@ export class ListLoanProductsQueryDto {
   @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === "") return true;
-    if (value === "false" || value === false) return false;
+    if (value === false || value === 0) return false;
+    if (typeof value === "string") {
+      const v = value.trim().toLowerCase();
+      if (v === "false" || v === "0" || v === "no" || v === "off") return false;
+    }
     return true;
   })
   @IsBoolean()

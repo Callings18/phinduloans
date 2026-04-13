@@ -10,7 +10,7 @@ import {
   Eye,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo-white.png";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -31,13 +31,16 @@ const AdminSidebar = () => {
   const { signOut, isAdmin } = useAuth();
   const { can, isLoading: permsLoading } = usePermissions();
 
-  const visibleItem = (item: SidebarMenuItem): boolean => {
-    if (item.adminOnly && !isAdmin) return false;
-    if (!item.perm) return true;
-    if (permsLoading) return false;
-    if (isAdmin) return true;
-    return can(item.perm.module, item.perm.action);
-  };
+  const visibleItem = useCallback(
+    (item: SidebarMenuItem): boolean => {
+      if (item.adminOnly && !isAdmin) return false;
+      if (!item.perm) return true;
+      if (permsLoading) return false;
+      if (isAdmin) return true;
+      return can(item.perm.module, item.perm.action);
+    },
+    [isAdmin, permsLoading, can],
+  );
 
   const filteredMenuGroups = useMemo(
     () =>
@@ -47,7 +50,7 @@ const AdminSidebar = () => {
           items: group.items.filter(visibleItem),
         }))
         .filter((g) => g.items.length > 0),
-    [isAdmin, permsLoading, can]
+    [visibleItem],
   );
 
   const toggleGroup = (label: string) => {

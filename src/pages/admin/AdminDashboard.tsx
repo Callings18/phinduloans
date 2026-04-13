@@ -1,14 +1,14 @@
+import type { ReactNode } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import QuickActions from "@/components/admin/QuickActions";
+import { LoanProductFilterSelect } from "@/components/admin/LoanProductFilterSelect";
 import {
   FileText,
   Users,
   Clock,
-  CheckCircle,
-  XCircle,
   ArrowUpRight,
   Wallet,
   Banknote,
@@ -16,83 +16,33 @@ import {
   TrendingUp,
   Calendar,
   AlertTriangle,
-  Receipt,
   User,
-  Loader2,
   Wrench,
+  FlaskConical,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { format, differenceInDays, startOfDay } from "date-fns";
+import { useAdminDashboardStats, useAdminUpcomingPayments } from "@/hooks/useAdminDashboardStats";
+import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
+import { anyBetaModuleActive } from "@/config/featureRollout";
 
-const AdminDashboard = () => {
+export type AdminDashboardContentProps = {
+  loanProductId: string | null;
+  title: ReactNode;
+  productFilterSlot?: ReactNode;
+  backLink?: ReactNode;
+};
+
+export function AdminDashboardContent({ loanProductId, title, productFilterSlot, backLink }: AdminDashboardContentProps) {
   const navigate = useNavigate();
   const developerWhatsappLink =
     import.meta.env.VITE_DEV_SUPPORT_WHATSAPP ||
     "https://wa.me/260000000000?text=Hello%20Developer%2C%20I%20need%20help%20with%20the%20admin%20system.";
 
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['admin-stats'],
-    queryFn: async () => {
-      const [applications, profiles, disbursements, repayments] = await Promise.all([
-        supabase.from('loan_applications').select('id, full_name, phone, loan_amount, status, total_repayment, created_at, user_id').order('created_at', { ascending: false }).limit(1000),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('disbursements').select('amount').eq('status', 'completed'),
-        supabase.from('loan_repayments').select('id, loan_id, amount, due_date, status, principal_paid, original_amount, penalty_amount, penalty_paid'),
-      ]);
-
-      if (applications.error) throw applications.error;
-      if (disbursements.error) throw disbursements.error;
-      if (repayments.error) throw repayments.error;
-
-      const loans = applications.data || [];
-      const allRepayments = repayments.data || [];
-      const completedDisbursements = disbursements.data || [];
-      
-      const totalDisbursed = completedDisbursements.reduce((sum, d) => sum + Number(d.amount), 0);
-      const activeLoans = loans.filter(l => l.status === 'active');
-      const paidRepayments = allRepayments.filter(r => r.status === 'paid');
-      const amountRecovered = paidRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-      const pendingRepayments = allRepayments.filter(r => r.status === 'pending');
-      const outstandingBalance = pendingRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-      
-      const today = startOfDay(new Date());
-      const overdueRepayments = pendingRepayments.filter(r => new Date(r.due_date) < today);
-      const overdueAmount = overdueRepayments.reduce((sum, r) => sum + Number(r.amount), 0);
-
-      return {
-        totalApplications: loans.length,
-        pendingApplications: loans.filter(l => l.status === 'pending').length,
-        approvedApplications: loans.filter(l => l.status === 'approved').length,
-        activeLoans: activeLoans.length,
-        completedLoans: loans.filter(l => l.status === 'completed').length,
-        totalBorrowers: profiles.count || 0,
-        totalDisbursed,
-        amountRecovered,
-        outstandingBalance,
-        overdueAmount,
-        overdueCount: overdueRepayments.length,
-        recentApplications: loans.slice(0, 6),
-      };
-    },
-  });
-
-  const { data: upcomingPayments } = useQuery({
-    queryKey: ['upcoming-payments'],
-    queryFn: async () => {
-      const today = new Date();
-      const { data, error } = await supabase
-        .from('loan_repayments')
-        .select(`*, loan:loan_applications (id, full_name, phone, loan_amount)`)
-        .eq('status', 'pending')
-        .gte('due_date', format(today, 'yyyy-MM-dd'))
-        .order('due_date', { ascending: true })
-        .limit(5);
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: stats, isLoading: statsLoading } = useAdminDashboardStats(loanProductId);
+  const { data: upcomingPayments } = useAdminUpcomingPayments(loanProductId);
 
   const { data: operationalRisk } = useQuery({
     queryKey: ["admin-operational-risk"],
@@ -142,24 +92,35 @@ const AdminDashboard = () => {
     return styles[status] || "bg-muted text-muted-foreground";
   };
 
+  const openLoan = (loanId: string) => {
+    const qp = new URLSearchParams();
+    if (loanProductId) qp.set("productId", loanProductId);
+    qp.set("id", loanId);
+    navigate(`/admin/loans?${qp.toString()}`);
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground mt-1 flex items-center gap-2">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="space-y-1">
+            {backLink}
+            <h1 className="text-3xl font-bold text-foreground tracking-tight">{title}</h1>
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Calendar size={14} />
-              {format(new Date(), 'EEEE, MMMM d, yyyy')}
+              {format(new Date(), "EEEE, MMMM d, yyyy")}
+              {statsLoading && loanProductId ? <span className="text-xs">(loading…)</span> : null}
             </p>
           </div>
-          <Button asChild className="gradient-primary shadow-button">
-            <Link to="/admin/applications">
-              View Applications
-              <ArrowUpRight size={16} className="ml-2" />
-            </Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">
+            {productFilterSlot}
+            <Button asChild className="gradient-primary shadow-button self-start sm:self-end">
+              <Link to="/admin/applications">
+                View Applications
+                <ArrowUpRight size={16} className="ml-2" />
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <Card className="border-warning/40 bg-warning/10">
@@ -205,14 +166,43 @@ const AdminDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
+        {anyBetaModuleActive() ? (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="py-2 px-0">
+              <div className="marquee-wrap">
+                <div className="marquee-track">
+                  <div className="inline-flex items-center gap-3 px-4">
+                    <Badge className="bg-primary/15 text-primary border-primary/30 border">
+                      <FlaskConical size={12} className="mr-1" />
+                      Beta features on
+                    </Badge>
+                    <span className="text-sm text-foreground">
+                      Modules listed with a Beta label are still under testing. Set VITE_BETA_MODULES in .env to control
+                      which items show the badge.
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-3 px-4" aria-hidden="true">
+                    <Badge className="bg-primary/15 text-primary border-primary/30 border">
+                      <FlaskConical size={12} className="mr-1" />
+                      Beta features on
+                    </Badge>
+                    <span className="text-sm text-foreground">
+                      Modules listed with a Beta label are still under testing.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <QuickActions />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="border-border/50 bg-card/80">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Operational Risk Strip</CardTitle>
-              <CardDescription>Realtime blockers requiring action</CardDescription>
+              <CardDescription>Realtime blockers requiring action (organisation-wide)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -273,7 +263,6 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Key Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="relative overflow-hidden border-border/50 bg-gradient-to-br from-primary/10 via-card to-card hover:border-primary/50 transition-all duration-300">
             <CardContent className="p-6">
@@ -309,7 +298,9 @@ const AdminDashboard = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-muted-foreground text-sm font-medium">Total Borrowers</p>
+                  <p className="text-muted-foreground text-sm font-medium">
+                    {loanProductId ? "Borrowers (this product)" : "Total Borrowers"}
+                  </p>
                   <p className="text-4xl font-bold text-foreground">{stats?.totalBorrowers || 0}</p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-success to-success/70 flex items-center justify-center shadow-lg">
@@ -317,7 +308,7 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <p className="text-sm text-success mt-3 flex items-center gap-1">
-                <TrendingUp size={14} /> Active portfolio
+                <TrendingUp size={14} /> {loanProductId ? "Distinct applicants in view" : "Active portfolio"}
               </p>
             </CardContent>
           </Card>
@@ -340,7 +331,6 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Financial Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
@@ -369,7 +359,6 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Upcoming Payments */}
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -391,34 +380,40 @@ const AdminDashboard = () => {
           <CardContent>
             {upcomingPayments && upcomingPayments.length > 0 ? (
               <div className="space-y-3">
-                {upcomingPayments.map((payment: any) => {
+                {upcomingPayments.map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
                   const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
-                  const urgencyClass = daysUntil === 0 ? 'text-destructive bg-destructive/10 border-destructive/30' :
-                    daysUntil <= 3 ? 'text-warning bg-warning/10 border-warning/30' :
-                    'text-success bg-success/10 border-success/30';
-                  
+                  const urgencyClass =
+                    daysUntil === 0
+                      ? "text-destructive bg-destructive/10 border-destructive/30"
+                      : daysUntil <= 3
+                        ? "text-warning bg-warning/10 border-warning/30"
+                        : "text-success bg-success/10 border-success/30";
+
                   return (
                     <div
                       key={payment.id}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") openLoan(payment.loan_id);
+                      }}
                       className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/admin/loans?id=${payment.loan_id}`)}
+                      onClick={() => openLoan(payment.loan_id)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
                           <User size={18} className="text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{payment.loan?.full_name || 'Unknown'}</p>
+                          <p className="font-medium text-foreground">{payment.loan?.full_name || "Unknown"}</p>
                           <p className="text-xs text-muted-foreground">K{Number(payment.amount).toLocaleString()}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <Badge variant="outline" className={urgencyClass}>
-                          {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`}
+                          {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`}
                         </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(payment.due_date), 'MMM d')}
-                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">{format(new Date(payment.due_date), "MMM d")}</p>
                       </div>
                     </div>
                   );
@@ -433,7 +428,6 @@ const AdminDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Applications */}
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
@@ -470,7 +464,7 @@ const AdminDashboard = () => {
                       </td>
                     </tr>
                   ) : (
-                    stats?.recentApplications?.map((app: any) => (
+                    stats?.recentApplications?.map((app: { id: string; full_name: string; phone: string; loan_amount: number; status: string; created_at: string }) => (
                       <tr key={app.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
                         <td className="py-4 px-4">
                           <div>
@@ -483,13 +477,11 @@ const AdminDashboard = () => {
                         </td>
                         <td className="py-4 px-4">
                           <Badge variant="outline" className={`${getStatusBadge(app.status)} capitalize`}>
-                            {app.status.replace('_', ' ')}
+                            {app.status.replace("_", " ")}
                           </Badge>
                         </td>
                         <td className="py-4 px-4">
-                          <span className="text-muted-foreground text-sm">
-                            {format(new Date(app.created_at), 'MMM d, yyyy')}
-                          </span>
+                          <span className="text-muted-foreground text-sm">{format(new Date(app.created_at), "MMM d, yyyy")}</span>
                         </td>
                         <td className="py-4 px-4 text-right">
                           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
@@ -508,6 +500,20 @@ const AdminDashboard = () => {
         </Card>
       </div>
     </AdminLayout>
+  );
+}
+
+const AdminDashboard = () => {
+  const { selectedProductId, setSelectedProductId } = useLoanProductFilter();
+
+  return (
+    <AdminDashboardContent
+      loanProductId={selectedProductId}
+      title="Dashboard"
+      productFilterSlot={
+        <LoanProductFilterSelect value={selectedProductId} onChange={setSelectedProductId} id="admin-dash-product" />
+      }
+    />
   );
 };
 

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
@@ -64,9 +64,13 @@ interface Profile {
     created_at: string;
 }
 
+const PROFILE_TABS = ["personal", "documents", "security", "notifications"] as const;
+type ProfileSettingsTab = (typeof PROFILE_TABS)[number];
+
 const Profile = () => {
-    const { user, isLoading: authLoading } = useAuth();
+    const { user, isLoading: authLoading, isStaff } = useAuth();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -99,11 +103,32 @@ const Profile = () => {
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+    const profileTab = useMemo((): ProfileSettingsTab => {
+        const raw = searchParams.get("tab");
+        return PROFILE_TABS.includes(raw as ProfileSettingsTab) ? (raw as ProfileSettingsTab) : "personal";
+    }, [searchParams]);
+
+    const setProfileTab = useCallback(
+        (value: string) => {
+            const next = new URLSearchParams(searchParams);
+            if (value === "personal") next.delete("tab");
+            else next.set("tab", value);
+            setSearchParams(next, { replace: true });
+        },
+        [searchParams, setSearchParams],
+    );
+
     useEffect(() => {
         if (!authLoading && !user) {
             navigate('/auth');
         }
     }, [user, authLoading, navigate]);
+
+    useEffect(() => {
+        if (!authLoading && user && isStaff && !searchParams.has("view")) {
+            navigate("/admin", { replace: true });
+        }
+    }, [user, authLoading, isStaff, navigate, searchParams]);
 
     // Fetch profile
     const { data: profile, isLoading: profileLoading } = useQuery({
@@ -160,6 +185,9 @@ const Profile = () => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['profile'] });
+            if (user?.id) {
+                queryClient.invalidateQueries({ queryKey: ['user-profile', user.id] });
+            }
             setIsEditing(false);
             toast({
                 title: "Profile Updated",
@@ -320,8 +348,8 @@ const Profile = () => {
                         </CardContent>
                     </Card>
 
-                    {/* Tabs */}
-                    <Tabs defaultValue="personal" className="space-y-6">
+                    {/* Tabs — `?tab=documents|security|notifications` matches dashboard profile links */}
+                    <Tabs value={profileTab} onValueChange={setProfileTab} className="space-y-6">
                         <TabsList className="grid w-full grid-cols-4">
                             <TabsTrigger value="personal" className="flex items-center gap-2">
                                 <User size={16} />
@@ -687,6 +715,7 @@ const Profile = () => {
                                                     if (error) throw error;
                                                     
                                                     queryClient.invalidateQueries({ queryKey: ['profile'] });
+                                                    queryClient.invalidateQueries({ queryKey: ['user-profile', user.id] });
                                                     toast({
                                                         title: "Preferences Saved",
                                                         description: "Your notification preferences have been updated successfully.",
