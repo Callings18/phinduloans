@@ -1127,6 +1127,92 @@ export type Database = {
           },
         ]
       }
+      employee_salary_structure: {
+        Row: {
+          basic_salary: number
+          created_at: string | null
+          effective_from: string | null
+          effective_to: string | null
+          employee_id: string
+          gross_salary: number | null
+          housing_allowance: number | null
+          id: string
+          is_active: boolean | null
+          loan_deductions: number | null
+          meal_allowance: number | null
+          medical_allowance: number | null
+          napsa_employee: number | null
+          napsa_employer: number | null
+          net_salary: number | null
+          nhima_employee: number | null
+          nhima_employer: number | null
+          other_allowances: number | null
+          other_deductions: number | null
+          paye: number | null
+          transport_allowance: number | null
+          union_dues: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          basic_salary?: number
+          created_at?: string | null
+          effective_from?: string | null
+          effective_to?: string | null
+          employee_id: string
+          gross_salary?: number | null
+          housing_allowance?: number | null
+          id?: string
+          is_active?: boolean | null
+          loan_deductions?: number | null
+          meal_allowance?: number | null
+          medical_allowance?: number | null
+          napsa_employee?: number | null
+          napsa_employer?: number | null
+          net_salary?: number | null
+          nhima_employee?: number | null
+          nhima_employer?: number | null
+          other_allowances?: number | null
+          other_deductions?: number | null
+          paye?: number | null
+          transport_allowance?: number | null
+          union_dues?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          basic_salary?: number
+          created_at?: string | null
+          effective_from?: string | null
+          effective_to?: string | null
+          employee_id?: string
+          gross_salary?: number | null
+          housing_allowance?: number | null
+          id?: string
+          is_active?: boolean | null
+          loan_deductions?: number | null
+          meal_allowance?: number | null
+          medical_allowance?: number | null
+          napsa_employee?: number | null
+          napsa_employer?: number | null
+          net_salary?: number | null
+          nhima_employee?: number | null
+          nhima_employer?: number | null
+          other_allowances?: number | null
+          other_deductions?: number | null
+          paye?: number | null
+          transport_allowance?: number | null
+          union_dues?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_salary_structure_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           address: string | null
