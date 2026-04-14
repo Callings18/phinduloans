@@ -75,6 +75,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
           { icon: LayoutGrid, label: "Loan Product Dashboards", path: "/admin/loan-product-dashboards", perm: { module: "loans", action: "view" }, betaKey: "product_dashboards" },
         ],
       },
+      { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
     ],
   },
   {
