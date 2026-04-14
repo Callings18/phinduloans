@@ -739,7 +739,7 @@ const AdminRepayments = () => {
   useEffect(() => { setCurrentPage(1); }, [statusFilter, searchTerm]);
 
   // Paginate
-  const paginatedRepayments = filteredRepayments?.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedRepayments = filteredRepayments;
 
   return (
     <AdminLayout>
@@ -1037,7 +1037,7 @@ const AdminRepayments = () => {
           {(filteredRepayments?.length || 0) > 0 && (
             <PaginationControls
               currentPage={currentPage}
-              totalItems={filteredRepayments?.length || 0}
+              totalItems={totalCount}
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
