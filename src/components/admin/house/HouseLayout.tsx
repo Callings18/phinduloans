@@ -3,6 +3,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { useHouseProduct } from "@/hooks/useHouseData";
 import { useProductAccess } from "@/hooks/useProductAccess";
 import { Badge } from "@/components/ui/badge";
+import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Button } from "@/components/ui/button";
 import { Home, Users, CreditCard, ClipboardCheck, Banknote, AlertTriangle, BarChart3 } from "lucide-react";
 
@@ -37,7 +38,10 @@ export default function HouseLayout() {
             <h1 className="text-3xl font-bold text-foreground">{product?.name || productCode}</h1>
             <p className="text-muted-foreground text-sm">Product house workspace</p>
           </div>
-          <Badge variant="outline">{productCode}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{productCode}</Badge>
+            <BetaBadge />
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
