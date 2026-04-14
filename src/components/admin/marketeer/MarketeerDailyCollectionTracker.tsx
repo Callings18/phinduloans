@@ -135,7 +135,7 @@ export default function MarketeerDailyCollectionTracker() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <h2 className="text-xl font-bold">Daily Collection Tracker</h2>
-        <BetaBadge featureKey="marketeer_daily_tracker" />
+        <BetaBadge />
       </div>
 
       {/* Summary cards */}

@@ -12,7 +12,7 @@ export default function MarketeerTierBreakdown() {
     <Card>
       <CardHeader className="flex flex-row items-center gap-2">
         <CardTitle className="text-base">Pricing Tiers</CardTitle>
-        <BetaBadge featureKey="marketeer_tiers" />
+        <BetaBadge />
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
