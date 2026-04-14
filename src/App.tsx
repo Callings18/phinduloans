@@ -57,6 +57,7 @@ import AdminCreateBusinessLoan from "./pages/admin/AdminCreateBusinessLoan";
 import AdminCreateMotorVehicleLoan from "./pages/admin/AdminCreateMotorVehicleLoan";
 import AdminCreateMarketeerLoan from "./pages/admin/AdminCreateMarketeerLoan";
 import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
+import MarketeerHouseDashboard from "./pages/admin/houses/MarketeerHouseDashboard";
 import HouseLayout from "./components/admin/house/HouseLayout";
 import HouseDashboardPage from "./pages/admin/houses/HouseDashboardPage";
 import HouseBorrowersPage from "./pages/admin/houses/HouseBorrowersPage";
