@@ -167,26 +167,44 @@ const AdminLoans = () => {
   const { can } = usePermissions();
   const { selectedProductId, setSelectedProductId } = useLoanProductFilter();
 
-  // Fetch only post-disbursement loans
-  const { data: loans, isLoading } = useQuery({
-    queryKey: ["admin-portfolio-loans", selectedProductId],
+  // Determine status filter for current tab
+  const tabStatuses: Record<string, string[]> = {
+    awaiting_disbursement: ["awaiting_disbursement", "approved"],
+    active: ["active", "disbursed"],
+    completed: ["completed"],
+    defaulted: ["defaulted"],
+  };
+
+  const effectiveStatuses = statusFilter !== "all"
+    ? [statusFilter]
+    : tabStatuses[activeTab] || ["awaiting_disbursement", "approved", "active", "disbursed", "completed", "defaulted"];
+
+  // Server-side paginated query
+  const { data: loansResult, isLoading } = useQuery({
+    queryKey: ["admin-portfolio-loans", selectedProductId, effectiveStatuses, searchTerm, currentPage, pageSize],
     queryFn: async () => {
       let q = supabase
         .from("loan_applications")
-        .select("*")
-        .in("status", ["awaiting_disbursement", "approved", "active", "disbursed", "completed", "defaulted"])
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" })
+        .in("status", effectiveStatuses)
+        .order("created_at", { ascending: false })
+        .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
       if (selectedProductId) {
         q = q.eq("loan_product_id", selectedProductId);
       }
-      const { data, error } = await q;
-
+      if (searchTerm) {
+        q = q.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,nrc_number.ilike.%${searchTerm}%`);
+      }
+      const { data, error, count } = await q;
       if (error) throw error;
-      return data as Loan[];
+      return { data: data as Loan[], count: count ?? 0 };
     },
     refetchOnWindowFocus: true,
     staleTime: 10000,
   });
+
+  const loans = loansResult?.data ?? [];
+  const totalCount = loansResult?.count ?? 0;
 
   // Fetch next due dates for active loans
   const { data: loanDueDates } = useQuery({
