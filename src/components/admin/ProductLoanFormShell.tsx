@@ -38,6 +38,8 @@ interface ProductLoanFormShellProps {
   description: string;
   termUnit: "days" | "weeks" | "months";
   defaultTermValue: number;
+  showChecklist?: boolean;
+  successRedirectPath?: string;
 }
 
 export default function ProductLoanFormShell({
@@ -46,6 +48,8 @@ export default function ProductLoanFormShell({
   description,
   termUnit,
   defaultTermValue,
+  showChecklist = true,
+  successRedirectPath = "/admin/applications",
 }: ProductLoanFormShellProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -71,8 +75,8 @@ export default function ProductLoanFormShell({
   const { data: product } = useQuery({
     queryKey: ["product-by-code", productCode],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loan_products")
+      const fromAny = (supabase.from as any);
+      const { data, error } = await fromAny("loan_products")
         .select("id, name, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit, pricing_tiers")
         .eq("product_code", productCode)
         .maybeSingle();
@@ -222,7 +226,7 @@ export default function ProductLoanFormShell({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       toast({ title: `${title} application created`, description: "Loan moved to pending review." });
-      navigate("/admin/applications");
+      navigate(successRedirectPath);
     },
     onError: (error: Error) => {
       toast({ title: "Unable to create loan", description: error.message, variant: "destructive" });
@@ -237,25 +241,27 @@ export default function ProductLoanFormShell({
           <p className="text-muted-foreground mt-1">{description}</p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Product checklist</CardTitle>
-            <CardDescription>Capture and confirm all required requirements before submit.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {rules.checklist.map((item) => (
-              <div key={item} className="flex items-center gap-3">
-                <Checkbox
-                  checked={Boolean(uploadedDocMap[item])}
-                  onCheckedChange={(checked) =>
-                    setUploadedDocMap((prev) => ({ ...prev, [item]: Boolean(checked) }))
-                  }
-                />
-                <Label className="font-normal">{item}</Label>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        {showChecklist ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Product checklist</CardTitle>
+              <CardDescription>Capture and confirm all required requirements before submit.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {rules.checklist.map((item) => (
+                <div key={item} className="flex items-center gap-3">
+                  <Checkbox
+                    checked={Boolean(uploadedDocMap[item])}
+                    onCheckedChange={(checked) =>
+                      setUploadedDocMap((prev) => ({ ...prev, [item]: Boolean(checked) }))
+                    }
+                  />
+                  <Label className="font-normal">{item}</Label>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>

@@ -7,6 +7,12 @@ Use this document whenever code is pushed to `main` and Lovable needs DB changes
 Run these migrations in timestamp order:
 
 1. `supabase/migrations/20260413130000_loan_products_extensions_and_phindu_catalog.sql`
+2. `supabase/migrations/20260414010000_product_house_access_core.sql`
+3. `supabase/migrations/20260414020000_rbac_house_permissions.sql`
+4. `supabase/migrations/20260414030000_has_product_access_function.sql`
+5. `supabase/migrations/20260414040000_house_rls_policies.sql`
+6. `supabase/migrations/20260414050000_house_indexes_and_views.sql`
+7. `supabase/migrations/20260414060000_house_review_stage_defaults.sql`
 
 ## 2) Purpose summary
 
@@ -19,6 +25,24 @@ Run these migrations in timestamp order:
   - `physical_collateral_collection`
 - Updates existing products with stable `product_code` and richer product rules.
 - Inserts missing products including `PAYDAY_SOFT`, `MOTOR_VEHICLE`, and `MARKETEER`.
+
+### `20260414010000_product_house_access_core.sql`
+- Creates `user_product_access` and seeds admin/super_admin all-product access.
+
+### `20260414020000_rbac_house_permissions.sql`
+- Adds canonical `house.*` permissions and role mappings for product-house workflows.
+
+### `20260414030000_has_product_access_function.sql`
+- Adds `has_product_access(p_user, p_product_code)` used by frontend and RLS.
+
+### `20260414040000_house_rls_policies.sql`
+- Adds product-aware SELECT policies for house-scoped data tables.
+
+### `20260414050000_house_indexes_and_views.sql`
+- Adds house query indexes and report view `v_house_report_summary`.
+
+### `20260414060000_house_review_stage_defaults.sql`
+- Backfills staged approval defaults for stable house review queue behavior.
 
 ## 3) Validation SQL (post-migration)
 
@@ -57,6 +81,24 @@ select
   pricing_tiers
 from public.loan_products
 where product_code = 'MARKETEER';
+
+-- Product access mappings exist
+select product_code, count(*) as assigned_users
+from public.user_product_access
+where is_active = true
+group by product_code
+order by product_code;
+
+-- House permissions seeded
+select module, action
+from public.permissions
+where module = 'house'
+order by action;
+
+-- Product report view returns rows
+select *
+from public.v_house_report_summary
+order by product_code;
 ```
 
 ## 4) Rollback guidance

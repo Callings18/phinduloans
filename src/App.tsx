@@ -56,6 +56,18 @@ import AdminCreateCollateralLoan from "./pages/admin/AdminCreateCollateralLoan";
 import AdminCreateBusinessLoan from "./pages/admin/AdminCreateBusinessLoan";
 import AdminCreateMotorVehicleLoan from "./pages/admin/AdminCreateMotorVehicleLoan";
 import AdminCreateMarketeerLoan from "./pages/admin/AdminCreateMarketeerLoan";
+import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
+import HouseLayout from "./components/admin/house/HouseLayout";
+import HouseDashboardPage from "./pages/admin/houses/HouseDashboardPage";
+import HouseBorrowersPage from "./pages/admin/houses/HouseBorrowersPage";
+import HouseBorrowerDetailPage from "./pages/admin/houses/HouseBorrowerDetailPage";
+import HouseLoansPage from "./pages/admin/houses/HouseLoansPage";
+import HouseLoanCreatePage from "./pages/admin/houses/HouseLoanCreatePage";
+import HouseLoanDetailPage from "./pages/admin/houses/HouseLoanDetailPage";
+import HouseReviewPage from "./pages/admin/houses/HouseReviewPage";
+import HouseDisbursementsPage from "./pages/admin/houses/HouseDisbursementsPage";
+import HouseCollectionsPage from "./pages/admin/houses/HouseCollectionsPage";
+import HouseReportsPage from "./pages/admin/houses/HouseReportsPage";
 
 // Inline Theme - no external module
 type Theme = "dark" | "light" | "system";
@@ -296,6 +308,37 @@ function App() {
                     <Route path="loans/create/business" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateBusinessLoan /></PermissionRoute></ErrorBoundary>} />
                     <Route path="loans/create/motor-vehicle" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateMotorVehicleLoan /></PermissionRoute></ErrorBoundary>} />
                     <Route path="loans/create/marketeer" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateMarketeerLoan /></PermissionRoute></ErrorBoundary>} />
+                    <Route
+                      path="houses"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminHousesIndex />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="houses/:productCode"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <HouseLayout />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    >
+                      <Route index element={<HouseDashboardPage />} />
+                      <Route path="borrowers" element={<HouseBorrowersPage />} />
+                      <Route path="borrowers/:borrowerId" element={<HouseBorrowerDetailPage />} />
+                      <Route path="loans" element={<HouseLoansPage />} />
+                      <Route path="loans/create" element={<HouseLoanCreatePage />} />
+                      <Route path="loans/:loanId" element={<HouseLoanDetailPage />} />
+                      <Route path="review" element={<HouseReviewPage />} />
+                      <Route path="disbursements" element={<HouseDisbursementsPage />} />
+                      <Route path="collections" element={<HouseCollectionsPage />} />
+                      <Route path="reports" element={<HouseReportsPage />} />
+                    </Route>
                     <Route
                       path="repayments"
                       element={

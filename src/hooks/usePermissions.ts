@@ -16,12 +16,14 @@ function permKey(module: string, action: string): PermissionKey {
 export function usePermissions() {
   const { user, isLoading: authLoading, hasRole: authHasRole } = useAuth();
   const [permissionSet, setPermissionSet] = useState<Set<PermissionKey>>(new Set());
+  const [productAccessSet, setProductAccessSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [rpcError, setRpcError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
       setPermissionSet(new Set());
+      setProductAccessSet(new Set());
       setRpcError(null);
       setLoading(false);
       return;
@@ -45,6 +47,19 @@ export function usePermissions() {
           set.add(permKey(row.module, row.action));
         });
         setPermissionSet(set);
+
+        try {
+          const fromAny = (supabase.from as any);
+          const { data: productAccessData } = await fromAny("user_product_access")
+            .select("product_code")
+            .eq("user_id", user.id)
+            .eq("is_active", true);
+          const productSet = new Set<string>((productAccessData ?? []).map((row: { product_code: string }) => row.product_code));
+          setProductAccessSet(productSet);
+        } catch {
+          // Table may not exist yet in staged rollout.
+          setProductAccessSet(new Set());
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,18 +104,31 @@ export function usePermissions() {
     [authHasRole]
   );
 
+  const canInProduct = useCallback(
+    (module: string, action: string, productCode: string) => {
+      if (authLoading || loading) return false;
+      if (authHasRole("super_admin") || authHasRole("admin")) return true;
+      if (!permissionSet.has(permKey(module, action))) return false;
+      if (productAccessSet.size === 0) return true;
+      return productAccessSet.has(productCode);
+    },
+    [authLoading, loading, authHasRole, permissionSet, productAccessSet]
+  );
+
   const isLoading = authLoading || loading;
 
   return useMemo(
     () => ({
       can,
+      canInProduct,
       hasPermission,
       hasRole,
       permissions: permissionSet,
+      productAccess: productAccessSet,
       isLoading,
       rpcError,
     }),
-    [can, hasPermission, hasRole, permissionSet, isLoading, rpcError]
+    [can, canInProduct, hasPermission, hasRole, permissionSet, productAccessSet, isLoading, rpcError]
   );
 }
 
