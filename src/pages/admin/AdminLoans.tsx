@@ -992,7 +992,7 @@ const AdminLoans = () => {
                 </Card>
                 <PaginationControls
                   currentPage={currentPage}
-                  totalItems={filteredLoans.length}
+                  totalItems={totalCount}
                   pageSize={pageSize}
                   onPageChange={setCurrentPage}
                   onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
