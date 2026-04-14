@@ -3642,6 +3642,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_product_access: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          product_code: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          product_code: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          product_code?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -3772,6 +3796,16 @@ export type Database = {
         }
         Relationships: []
       }
+      v_house_report_summary: {
+        Row: {
+          active_loans: number | null
+          product_code: string | null
+          product_name: string | null
+          total_disbursed: number | null
+          total_loans: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_approve_loan_writeoff: {
@@ -3825,12 +3859,20 @@ export type Database = {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
       }
+      has_product_access: {
+        Args: { p_product_code: string; p_user: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      loan_product_code_for_loan: {
+        Args: { p_loan_id: string }
+        Returns: string
       }
       log_auth_event: {
         Args: { p_action: string; p_device_info?: Json; p_ip_address?: string }
