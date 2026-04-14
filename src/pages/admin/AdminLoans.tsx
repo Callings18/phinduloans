@@ -186,7 +186,7 @@ const AdminLoans = () => {
       let q = supabase
         .from("loan_applications")
         .select("*", { count: "exact" })
-        .in("status", effectiveStatuses)
+        .in("status", effectiveStatuses as any)
         .order("created_at", { ascending: false })
         .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
       if (selectedProductId) {
