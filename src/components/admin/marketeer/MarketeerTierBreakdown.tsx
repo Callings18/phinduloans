@@ -1,13 +1,43 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BetaBadge } from "@/components/admin/BetaBadge";
-
-const TIERS = [
-  { label: "Tier 1", range: "K1,000 – K5,000", interest: "30%", duration: "10 days", lateFee: "K30/day" },
-  { label: "Tier 2", range: "K5,001 – K10,000", interest: "20%", duration: "15 days", lateFee: "K30/day" },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { parseMarketeerTiers } from "@/lib/marketeerCalculations";
 
 export default function MarketeerTierBreakdown() {
+  const { data: tiers, isLoading } = useQuery({
+    queryKey: ["marketeer-pricing-tiers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("pricing_tiers, late_payment_penalty_percent, late_fee_fixed_amount")
+        .eq("product_code", "MARKETEER")
+        .maybeSingle();
+      if (error) throw error;
+      const parsed = parseMarketeerTiers(data?.pricing_tiers as unknown[]);
+      return parsed.map((t, i) => ({
+        label: `Tier ${i + 1}`,
+        range: `K${t.minPrincipal.toLocaleString()} – K${t.maxPrincipal.toLocaleString()}`,
+        interest: `${t.interestPercent}%`,
+        duration: `${t.durationDays} days`,
+        lateFee: data?.late_fee_fixed_amount
+          ? `K${Number(data.late_fee_fixed_amount).toLocaleString()}/day`
+          : `${data?.late_payment_penalty_percent ?? 5}%`,
+      }));
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader><CardTitle className="text-base">Pricing Tiers</CardTitle></CardHeader>
+        <CardContent><Skeleton className="h-24 w-full" /></CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center gap-2">
@@ -16,7 +46,7 @@ export default function MarketeerTierBreakdown() {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {TIERS.map((tier) => (
+          {(tiers ?? []).map((tier) => (
             <div key={tier.label} className="border rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold">{tier.label}</span>
@@ -38,6 +68,9 @@ export default function MarketeerTierBreakdown() {
               </div>
             </div>
           ))}
+          {(tiers ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground col-span-2">No pricing tiers configured for this product.</p>
+          )}
         </div>
       </CardContent>
     </Card>
