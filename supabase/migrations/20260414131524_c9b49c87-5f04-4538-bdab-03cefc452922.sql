@@ -1,0 +1,1 @@
+UPDATE public.loan_products SET is_active = true, status = 'active' WHERE product_code = 'MARKETEER';
