@@ -28,6 +28,7 @@ const AdminSidebar = () => {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     adminMenuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
+  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
@@ -49,7 +50,10 @@ const AdminSidebar = () => {
       adminMenuGroups
         .map((group) => ({
           ...group,
-          items: group.items.filter(visibleItem),
+          items: group.items.filter(visibleItem).map((item) => ({
+            ...item,
+            children: item.children?.filter(visibleItem),
+          })),
         }))
         .filter((g) => g.items.length > 0),
     [visibleItem],
@@ -59,15 +63,22 @@ const AdminSidebar = () => {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
+  const toggleSubMenu = (path: string) => {
+    setOpenSubMenus((prev) => ({ ...prev, [path]: !prev[path] }));
+  };
+
   const pathActive = (path: string) => {
     if (path === "/admin/loans") {
-      return location.pathname === "/admin/loans" || location.pathname.startsWith("/admin/loans/");
+      return location.pathname === "/admin/loans";
     }
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
+  const isChildActive = (item: SidebarMenuItem) =>
+    item.children?.some((child) => pathActive(child.path)) ?? false;
+
   const isActiveGroup = (group: (typeof filteredMenuGroups)[0]) =>
-    group.items.some((item) => pathActive(item.path));
+    group.items.some((item) => pathActive(item.path) || isChildActive(item));
 
   return (
     <aside
@@ -159,6 +170,76 @@ const AdminSidebar = () => {
               <CollapsibleContent className="space-y-1 mt-1">
                 {group.items.map((item) => {
                   const isActive = pathActive(item.path);
+                  const hasChildren = item.children && item.children.length > 0;
+                  const childActive = isChildActive(item);
+                  const subOpen = openSubMenus[item.path] ?? childActive;
+
+                  if (hasChildren) {
+                    return (
+                      <Collapsible
+                        key={item.path}
+                        open={subOpen}
+                        onOpenChange={() => toggleSubMenu(item.path)}
+                      >
+                        <div className="ml-2">
+                          <div className="flex items-center">
+                            <Link
+                              to={item.path}
+                              className={cn(
+                                "flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                                isActive
+                                  ? "gradient-primary text-primary-foreground shadow-button"
+                                  : childActive
+                                    ? "text-primary"
+                                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                              )}
+                            >
+                              <item.icon size={18} />
+                              <span className="font-medium text-sm inline-flex items-center flex-wrap gap-x-1">
+                                {item.label}
+                                {item.betaKey && isBetaModule(item.betaKey) ? <BetaBadge /> : null}
+                              </span>
+                            </Link>
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                              >
+                                <ChevronDown
+                                  size={14}
+                                  className={cn(
+                                    "transition-transform duration-200",
+                                    subOpen && "rotate-180"
+                                  )}
+                                />
+                              </button>
+                            </CollapsibleTrigger>
+                          </div>
+                          <CollapsibleContent className="space-y-0.5 mt-0.5 ml-4 border-l border-sidebar-border pl-2">
+                            {item.children!.map((child) => {
+                              const isChildItemActive = pathActive(child.path);
+                              return (
+                                <Link
+                                  key={child.path}
+                                  to={child.path}
+                                  className={cn(
+                                    "flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-200 text-sm",
+                                    isChildItemActive
+                                      ? "gradient-primary text-primary-foreground shadow-button"
+                                      : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                  )}
+                                >
+                                  <child.icon size={15} />
+                                  <span className="font-medium">{child.label}</span>
+                                </Link>
+                              );
+                            })}
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    );
+                  }
+
                   return (
                     <Link
                       key={item.path}
