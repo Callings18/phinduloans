@@ -583,22 +583,12 @@ const AdminRepayments = () => {
     return { status: "pending", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
   };
 
-  const filteredRepayments = repayments?.filter((rep) => {
-    const matchesSearch =
-      rep.loan_applications?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rep.transaction_reference?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const today = new Date();
-    const dueDate = new Date(rep.due_date);
-    const isOverdue = rep.status === "pending" && isAfter(today, dueDate);
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      rep.status === statusFilter ||
-      (statusFilter === "overdue" && isOverdue);
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredRepayments = searchTerm
+    ? repayments.filter((rep) =>
+        rep.loan_applications?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        rep.transaction_reference?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : repayments;
 
   // Toggle all selected repayments
   const toggleSelectAll = () => {
