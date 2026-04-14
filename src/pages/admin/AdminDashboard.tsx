@@ -34,9 +34,10 @@ export type AdminDashboardContentProps = {
   title: ReactNode;
   productFilterSlot?: ReactNode;
   backLink?: ReactNode;
+  afterContent?: ReactNode;
 };
 
-export function AdminDashboardContent({ loanProductId, title, productFilterSlot, backLink }: AdminDashboardContentProps) {
+export function AdminDashboardContent({ loanProductId, title, productFilterSlot, backLink, afterContent }: AdminDashboardContentProps) {
   const navigate = useNavigate();
   const developerWhatsappLink =
     import.meta.env.VITE_DEV_SUPPORT_WHATSAPP ||
@@ -499,6 +500,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
             </div>
           </CardContent>
         </Card>
+        {afterContent}
       </div>
     </AdminLayout>
   );

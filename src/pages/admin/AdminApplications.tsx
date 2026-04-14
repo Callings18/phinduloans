@@ -83,6 +83,7 @@ import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-warning/20 text-warning border-warning/30" },
@@ -136,6 +137,7 @@ const AdminApplications = () => {
   const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
   const [addLoanTab, setAddLoanTab] = useState("borrower");
   const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
+  const [reviewComment, setReviewComment] = useState("");
 
   const tourSteps: Step[] = [
     {
@@ -202,6 +204,7 @@ const AdminApplications = () => {
   const canRecommendForApproval = can("loans", "assign");
   const canApproveApplication = can("loans", "approve") || can("loans", "finance_approve");
   const canDisburseApplication = can("disbursement", "disburse");
+  const reviewChecklist = useLoanReviewChecklist(selectedApp);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -512,6 +515,60 @@ const AdminApplications = () => {
         description: handled ? undefined : (error as Error).message,
         variant: "destructive",
       });
+    },
+  });
+
+  const stagedReviewMutation = useMutation({
+    mutationFn: async (stage: "loan_officer" | "finance" | "manager") => {
+      if (!selectedApp?.id || !user?.id) throw new Error("Application context missing.");
+      const now = new Date().toISOString();
+
+      if (stage === "manager") {
+        await transitionLoanStatus({
+          loanId: selectedApp.id,
+          toStatus: "approved",
+          reasonCode: "manager_approved",
+          reasonText: reviewComment || "Manager approved after staged review.",
+        });
+        const { error } = await supabase
+          .from("loan_applications")
+          .update({
+            approval_stage: "manager_approved",
+            approved_by: user.id,
+            approved_at: now,
+          })
+          .eq("id", selectedApp.id);
+        if (error) throw error;
+        return;
+      }
+
+      const updateData: Record<string, unknown> =
+        stage === "loan_officer"
+          ? {
+              approval_stage: "loan_officer_approved",
+              reviewed_by: user.id,
+              reviewed_at: now,
+              status: "under_review",
+            }
+          : {
+              approval_stage: "finance_approved",
+              finance_verified_by: user.id,
+              finance_verified_at: now,
+              status: "under_review",
+            };
+
+      const { error } = await supabase.from("loan_applications").update(updateData).eq("id", selectedApp.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, stage) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      const label =
+        stage === "loan_officer" ? "Loan officer review saved" : stage === "finance" ? "Finance review saved" : "Manager approved";
+      toast({ title: label });
+      setReviewComment("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Review update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -2249,6 +2306,58 @@ const AdminApplications = () => {
                 </Card>
 
                 {/* Recommend / Approve / Reject */}
+                <Card className="bg-secondary/30 border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Shield size={16} />
+                      Product review checklist
+                    </CardTitle>
+                    <CardDescription>
+                      {reviewChecklist.completed}/{reviewChecklist.total} checklist items complete
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-2">
+                      {reviewChecklist.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{item.label}</span>
+                          <Badge variant="outline" className={item.done ? "bg-success/10 text-success border-success/30" : "bg-muted/40"}>
+                            {item.done ? "Done" : "Pending"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                    <Textarea
+                      placeholder="Review comment (shared between loan officer, finance, manager)"
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={2}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => stagedReviewMutation.mutate("loan_officer")}
+                        disabled={stagedReviewMutation.isPending}
+                      >
+                        Loan Officer Approve
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => stagedReviewMutation.mutate("finance")}
+                        disabled={stagedReviewMutation.isPending}
+                      >
+                        Finance Approve
+                      </Button>
+                      <Button
+                        onClick={() => stagedReviewMutation.mutate("manager")}
+                        disabled={stagedReviewMutation.isPending}
+                      >
+                        Manager Approve
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {APPROVABLE_STATUSES.includes(selectedApp.status as (typeof APPROVABLE_STATUSES)[number]) && (
                   <Card className="bg-secondary/30 border-border/50">
                     <CardContent className="p-4 space-y-4">

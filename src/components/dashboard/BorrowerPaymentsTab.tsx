@@ -69,12 +69,12 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
   };
 
   const loanFrequencySource = (loan: BorrowerDashboardLoan) => {
-    const p = loan.loan_products ?? {};
+    const p = loan.loan_products;
     return {
       term_unit: loan.term_unit,
       loan_term_months: loan.loan_term_months,
-      repayment_frequency: p.repayment_frequency,
-      interest_period: p.interest_period,
+      repayment_frequency: p?.repayment_frequency ?? null,
+      interest_period: p?.interest_period ?? null,
     };
   };
 

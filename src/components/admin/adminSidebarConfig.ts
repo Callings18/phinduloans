@@ -58,6 +58,12 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: Building2, label: "Employers", path: "/admin/employers", perm: { module: "borrowers", action: "view" } },
       { icon: Package, label: "Loan Products", path: "/admin/loan-products", perm: { module: "products", action: "view" } },
       { icon: CreditCard, label: "Loans", path: "/admin/loans", perm: { module: "loans", action: "view" }, betaKey: "loans_by_product" },
+      { icon: FileText, label: "Create Salary Advance", path: "/admin/loans/create/salary-advance", perm: { module: "loans", action: "view" }, betaKey: "loan_create_salary_advance" },
+      { icon: FileText, label: "Create Payday Soft", path: "/admin/loans/create/payday-soft", perm: { module: "loans", action: "view" }, betaKey: "loan_create_payday_soft" },
+      { icon: FileText, label: "Create Collateral Loan", path: "/admin/loans/create/collateral", perm: { module: "loans", action: "view" }, betaKey: "loan_create_collateral" },
+      { icon: FileText, label: "Create Business Loan", path: "/admin/loans/create/business", perm: { module: "loans", action: "view" }, betaKey: "loan_create_business" },
+      { icon: FileText, label: "Create Motor Vehicle", path: "/admin/loans/create/motor-vehicle", perm: { module: "loans", action: "view" }, betaKey: "loan_create_motor_vehicle" },
+      { icon: FileText, label: "Create Marketeer", path: "/admin/loans/create/marketeer", perm: { module: "loans", action: "view" }, betaKey: "marketeer" },
       {
         icon: LayoutGrid,
         label: "Loan product dashboards",
