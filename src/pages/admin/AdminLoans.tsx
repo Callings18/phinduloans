@@ -677,35 +677,9 @@ const AdminLoans = () => {
     );
   };
 
-  // Filter loans based on active tab
-  const getFilteredLoans = () => {
-    let filtered = loans || [];
-    if (activeTab === "awaiting_disbursement") {
-      filtered = filtered.filter(l => ["awaiting_disbursement", "approved"].includes(l.status));
-    } else if (activeTab === "active") {
-      filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
-    } else if (activeTab === "completed") {
-      filtered = filtered.filter(l => l.status === "completed");
-    } else if (activeTab === "defaulted") {
-      filtered = filtered.filter(l => l.status === "defaulted");
-    }
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(l => l.status === statusFilter);
-    }
-    if (searchTerm) {
-      filtered = filtered.filter(l =>
-        l.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.nrc_number?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    return filtered;
-  };
-
-  const filteredLoans = getFilteredLoans();
-
-  // Paginate filtered loans
-  const paginatedLoans = filteredLoans.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Loans are now server-side filtered and paginated
+  const filteredLoans = loans;
+  const paginatedLoans = loans;
 
   // Reset page on filter change
   useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm, selectedProductId]);
