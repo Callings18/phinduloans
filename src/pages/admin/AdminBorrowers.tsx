@@ -67,12 +67,25 @@ interface BorrowerForm {
   nrc_number: string;
   address: string;
   city: string;
+  loan_product_id?: string;
+  principal_amount?: string;
+  interest_amount?: string;
+  daily_repayment?: string;
+  loan_start_date?: string;
 }
 
 interface BlacklistData {
   reason: string;
   duration?: string; // "permanent" | number of days as string
   blacklist_expires_at?: string | null;
+}
+
+interface MarketeerBorrowerSeed {
+  full_name: string;
+  principal: number;
+  interest: number;
+  total: number;
+  daily: number;
 }
 
 const emptyForm: BorrowerForm = {
@@ -82,7 +95,21 @@ const emptyForm: BorrowerForm = {
   nrc_number: "",
   address: "",
   city: "Lusaka",
+  loan_product_id: "none",
+  principal_amount: "",
+  interest_amount: "",
+  daily_repayment: "",
+  loan_start_date: new Date().toISOString().slice(0, 10),
 };
+
+const MARKETEER_BORROWERS: MarketeerBorrowerSeed[] = [
+  { full_name: "Shambweka Ireen", principal: 1000, interest: 300, total: 1300, daily: 50 },
+  { full_name: "Kapepe Ireen", principal: 2500, interest: 750, total: 3250, daily: 125 },
+  { full_name: "Rose Bwalya", principal: 2000, interest: 600, total: 2600, daily: 100 },
+  { full_name: "Tikambenji Tembo", principal: 200, interest: 60, total: 260, daily: 10 },
+  { full_name: "Munyinda Sauka Febb", principal: 1000, interest: 300, total: 1300, daily: 50 },
+  { full_name: "Chisenga Lucy", principal: 1500, interest: 450, total: 1950, daily: 75 },
+];
 
 const zambianCities = [
   "Lusaka", "Kitwe", "Ndola", "Kabwe", "Chingola", "Mufulira", "Luanshya",
@@ -104,6 +131,7 @@ const AdminBorrowers = () => {
   const [runTour, setRunTour] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selectedProductView, setSelectedProductView] = useState<string>("all");
 
   const tourSteps: Step[] = [
     {
@@ -158,6 +186,38 @@ const AdminBorrowers = () => {
         counts[loan.user_id] = (counts[loan.user_id] || 0) + 1;
       });
       return counts;
+    },
+  });
+
+  const { data: loanProducts = [] } = useQuery({
+    queryKey: ["loan-products-for-borrowers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("id, name, is_active")
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: borrowerProductMap = {} } = useQuery({
+    queryKey: ["borrower-product-map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("user_id, loan_product_id, created_at")
+        .not("loan_product_id", "is", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const map: Record<string, { latestProductId?: string; productIds: Set<string> }> = {};
+      (data ?? []).forEach((r) => {
+        if (!map[r.user_id]) map[r.user_id] = { latestProductId: undefined, productIds: new Set<string>() };
+        if (!map[r.user_id].latestProductId && r.loan_product_id) map[r.user_id].latestProductId = r.loan_product_id;
+        if (r.loan_product_id) map[r.user_id].productIds.add(r.loan_product_id);
+      });
+      return map;
     },
   });
 
@@ -225,6 +285,14 @@ const AdminBorrowers = () => {
     };
   }, [queryClient, selectedBorrower?.id]);
 
+  const getDefaultMarketeersProductId = () => {
+    const marketeer = loanProducts.find((p) => /marketeer/i.test(p.name));
+    if (marketeer) return marketeer.id;
+    const business = loanProducts.find((p) => /business/i.test(p.name));
+    if (business) return business.id;
+    return loanProducts[0]?.id;
+  };
+
   // Create borrower mutation - Uses edge function to create auth user
   const createMutation = useMutation({
     mutationFn: async (data: BorrowerForm) => {
@@ -247,10 +315,52 @@ const AdminBorrowers = () => {
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.error);
 
-      return response.data;
+      const created = response.data;
+      if (!created?.user_id) return created;
+
+      const principal = Number(data.principal_amount || 0);
+      const interest = Number(data.interest_amount || 0);
+      const dailyRepayment = Number(data.daily_repayment || 0);
+      const selectedLoanProductId =
+        data.loan_product_id && data.loan_product_id !== "none" ? data.loan_product_id : null;
+
+      if (selectedLoanProductId && principal > 0) {
+        const totalRepayment = principal + Math.max(0, interest);
+        const termDays = dailyRepayment > 0 ? Math.max(1, Math.round(totalRepayment / dailyRepayment)) : 26;
+        const monthlyPayment = dailyRepayment > 0 ? dailyRepayment : Math.round(totalRepayment / termDays);
+        const startDate = data.loan_start_date || new Date().toISOString().slice(0, 10);
+        const { error: loanError } = await supabase.from("loan_applications").insert({
+          user_id: created.user_id,
+          loan_product_id: selectedLoanProductId,
+          full_name: data.full_name,
+          email: data.email,
+          phone: data.phone || "",
+          nrc_number: data.nrc_number || "N/A",
+          address: data.address || "",
+          city: data.city || "",
+          employment_type: "employed",
+          employer_name: "Marketeers",
+          monthly_income: Math.max(principal * 2, 500),
+          loan_amount: principal,
+          loan_purpose: "Marketeers starter loan",
+          loan_term_months: termDays,
+          term_unit: "days",
+          interest_rate: principal > 0 ? (Math.max(0, interest) / principal) * 100 : 0,
+          monthly_payment: monthlyPayment,
+          total_repayment: totalRepayment,
+          status: "approved",
+          approved_at: `${startDate}T08:00:00.000Z`,
+          source: "admin_borrowers",
+        });
+        if (loanError) throw loanError;
+      }
+
+      return created;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-borrowers'] });
+      queryClient.invalidateQueries({ queryKey: ['borrower-loan-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['borrower-product-map'] });
       toast({ 
         title: data?.existing ? "Borrower already existed" : "Borrower created successfully",
         description: data?.message,
@@ -260,6 +370,74 @@ const AdminBorrowers = () => {
     },
     onError: (error: any) => {
       toast({ title: "Error creating borrower", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const importMarketeersMutation = useMutation({
+    mutationFn: async () => {
+      const targetProductId = getDefaultMarketeersProductId();
+      if (!targetProductId) {
+        throw new Error("No active loan product found. Create or activate a product first.");
+      }
+
+      let createdCount = 0;
+      for (const item of MARKETEER_BORROWERS) {
+        const safeEmail = `${item.full_name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")}@marketeers.local`;
+        const { data: response, error: responseError } = await supabase.functions.invoke("create-borrower", {
+          body: {
+            email: safeEmail,
+            full_name: item.full_name,
+            phone: null,
+            nrc_number: null,
+            address: null,
+            city: "Lusaka",
+          },
+        });
+        if (responseError) throw responseError;
+        if (response?.error) throw new Error(response.error);
+        const userId = response?.user_id;
+        if (!userId) continue;
+
+        const { error: loanError } = await supabase.from("loan_applications").insert({
+          user_id: userId,
+          loan_product_id: targetProductId,
+          full_name: item.full_name,
+          email: safeEmail,
+          phone: "",
+          nrc_number: "N/A",
+          address: "",
+          city: "Lusaka",
+          employment_type: "employed",
+          employer_name: "Marketeers",
+          monthly_income: Math.max(item.principal * 2, 500),
+          loan_amount: item.principal,
+          loan_purpose: "Marketeers starter loan",
+          loan_term_months: 26,
+          term_unit: "days",
+          interest_rate: item.principal > 0 ? (item.interest / item.principal) * 100 : 0,
+          monthly_payment: item.daily,
+          total_repayment: item.total,
+          status: "approved",
+          approved_at: new Date().toISOString(),
+          source: "admin_marketeers_batch",
+        });
+        if (loanError) throw loanError;
+        createdCount += 1;
+      }
+
+      return { count: createdCount, productId: targetProductId };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-borrowers"] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-loan-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-product-map"] });
+      toast({
+        title: "Marketeers borrowers added",
+        description: `${result.count} borrower(s) added with approved starter loans.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Batch import failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -405,15 +583,21 @@ const AdminBorrowers = () => {
     setIsViewOpen(true);
   };
 
-  const filteredBorrowers = borrowers?.filter(borrower =>
-    borrower.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    borrower.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    borrower.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredBorrowers = borrowers?.filter((borrower) => {
+    const matchesSearch =
+      borrower.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      borrower.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      borrower.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+    if (selectedProductView === "all") return true;
+    const productData = borrowerProductMap[borrower.id];
+    return !!productData?.productIds?.has(selectedProductView);
+  });
 
   // Reset page on search change
-  useEffect(() => { setCurrentPage(1); }, [searchQuery]);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, selectedProductView]);
 
   // Paginate
   const paginatedBorrowers = filteredBorrowers?.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -427,6 +611,8 @@ const AdminBorrowers = () => {
     completed: { label: "Completed", color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
     defaulted: { label: "Defaulted", color: "bg-red-600/20 text-red-500 border-red-600/30" },
   };
+
+  const productNameById = new Map(loanProducts.map((p) => [p.id, p.name]));
 
   return (
     <AdminLayout>
@@ -454,11 +640,69 @@ const AdminBorrowers = () => {
               </Button>
             </div>
           </div>
-          <Button onClick={() => { setFormData(emptyForm); setIsAddOpen(true); }} className="gap-2 tour-borrowers-add">
-            <Plus size={16} />
-            Add Borrower
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => importMarketeersMutation.mutate()}
+              disabled={importMarketeersMutation.isPending}
+            >
+              <FileText size={16} className="mr-2" />
+              {importMarketeersMutation.isPending ? "Adding..." : "Import Marketeers Batch"}
+            </Button>
+            <Button
+              onClick={() => {
+                setFormData({
+                  ...emptyForm,
+                  loan_product_id: selectedProductView === "all" ? "none" : selectedProductView,
+                });
+                setIsAddOpen(true);
+              }}
+              className="gap-2 tour-borrowers-add"
+            >
+              <Plus size={16} />
+              Add Borrower
+            </Button>
+          </div>
         </div>
+
+        <Card className="glass border-border/50">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">Borrower screens by loan product</p>
+              <Badge variant="outline">{selectedProductView === "all" ? "Viewing all products" : "Product screen active"}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={selectedProductView === "all" ? "default" : "outline"}
+                onClick={() => setSelectedProductView("all")}
+              >
+                All Borrowers
+              </Button>
+              {loanProducts.map((product) => (
+                <Button
+                  key={product.id}
+                  size="sm"
+                  variant={selectedProductView === product.id ? "default" : "outline"}
+                  onClick={() => setSelectedProductView(product.id)}
+                >
+                  {product.name}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {loanProducts.slice(0, 4).map((product) => {
+                const count = borrowers?.filter((b) => borrowerProductMap[b.id]?.productIds?.has(product.id)).length || 0;
+                return (
+                  <div key={product.id} className="rounded-md border border-border/60 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground truncate">{product.name}</p>
+                    <p className="text-lg font-semibold text-foreground">{count}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -561,6 +805,19 @@ const AdminBorrowers = () => {
                           return null;
                         })()}
                       </div>
+                      {borrowerProductMap[borrower.id]?.productIds?.size ? (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {Array.from(borrowerProductMap[borrower.id].productIds)
+                            .slice(0, 3)
+                            .map((pid) => (
+                              <Badge key={pid} variant="outline" className="text-[10px]">
+                                {productNameById.get(pid) || "Product"}
+                              </Badge>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[10px] text-muted-foreground">No product-linked loans yet</p>
+                      )}
                     </div>
                   </div>
 
@@ -622,7 +879,15 @@ const AdminBorrowers = () => {
             <CardContent className="p-12 text-center">
               <User className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">No borrowers found</p>
-              <Button onClick={() => { setFormData(emptyForm); setIsAddOpen(true); }}>
+              <Button
+                onClick={() => {
+                  setFormData({
+                    ...emptyForm,
+                    loan_product_id: selectedProductView === "all" ? "none" : selectedProductView,
+                  });
+                  setIsAddOpen(true);
+                }}
+              >
                 <Plus size={16} className="mr-2" />
                 Add First Borrower
               </Button>
@@ -697,6 +962,63 @@ const AdminBorrowers = () => {
                 placeholder="Full address..."
                 rows={2}
               />
+            </div>
+            <div className="border border-border/60 rounded-lg p-3 space-y-3 bg-secondary/20">
+              <p className="text-sm font-medium text-foreground">Loan Product Onboarding (optional)</p>
+              <div className="space-y-2">
+                <Label>Loan Product</Label>
+                <Select
+                  value={formData.loan_product_id || "none"}
+                  onValueChange={(value) => setFormData({ ...formData, loan_product_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select loan product" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No loan yet</SelectItem>
+                    {loanProducts.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Principal</Label>
+                  <Input
+                    type="number"
+                    value={formData.principal_amount}
+                    onChange={(e) => setFormData({ ...formData, principal_amount: e.target.value })}
+                    placeholder="1000"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Interest</Label>
+                  <Input
+                    type="number"
+                    value={formData.interest_amount}
+                    onChange={(e) => setFormData({ ...formData, interest_amount: e.target.value })}
+                    placeholder="300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Daily repay</Label>
+                  <Input
+                    type="number"
+                    value={formData.daily_repayment}
+                    onChange={(e) => setFormData({ ...formData, daily_repayment: e.target.value })}
+                    placeholder="50"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Start date</Label>
+                <Input
+                  type="date"
+                  value={formData.loan_start_date}
+                  onChange={(e) => setFormData({ ...formData, loan_start_date: e.target.value })}
+                />
+              </div>
             </div>
           </div>
 

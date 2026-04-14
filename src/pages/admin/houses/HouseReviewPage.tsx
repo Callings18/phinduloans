@@ -2,9 +2,9 @@ import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useHouseLoans } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
+import { houseStageReview } from "@/services/repositories/houseWorkflowRepository";
 
 export default function HouseReviewPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
@@ -14,14 +14,8 @@ export default function HouseReviewPage() {
   const pendingLoans = (loans ?? []).filter((l: any) => l.status === "pending" || l.status === "under_review");
 
   const stageMutation = useMutation({
-    mutationFn: async ({ loanId, stage }: { loanId: string; stage: "loan_officer" | "finance" | "manager" }) => {
-      const { data, error } = await (supabase.rpc as any)("house_stage_review", {
-        p_loan_id: loanId,
-        p_stage: stage,
-      });
-      if (error) throw error;
-      if (data?.ok === false) throw new Error(data.error || "Review action failed");
-    },
+    mutationFn: ({ loanId, stage }: { loanId: string; stage: "loan_officer" | "finance" | "manager" }) =>
+      houseStageReview(loanId, stage),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
       toast({ title: "Review stage recorded" });

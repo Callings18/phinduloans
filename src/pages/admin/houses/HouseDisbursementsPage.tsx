@@ -2,9 +2,9 @@ import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useHouseDisbursements } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
+import { houseMarkDisbursementCompleted } from "@/services/repositories/houseWorkflowRepository";
 
 export default function HouseDisbursementsPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
@@ -13,13 +13,7 @@ export default function HouseDisbursementsPage() {
   const { toast } = useToast();
 
   const disburseMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await (supabase.rpc as any)("house_mark_disbursement_completed", {
-        p_disbursement_id: id,
-      });
-      if (error) throw error;
-      if (data?.ok === false) throw new Error(data.error || "Disbursement action failed");
-    },
+    mutationFn: (id: string) => houseMarkDisbursementCompleted(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-disbursements", productCode] });
       toast({ title: "Disbursement marked completed" });

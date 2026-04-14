@@ -2,9 +2,9 @@ import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useHouseRepayments } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
+import { houseMarkRepaymentPaid } from "@/services/repositories/houseWorkflowRepository";
 
 export default function HouseCollectionsPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
@@ -15,13 +15,7 @@ export default function HouseCollectionsPage() {
   const overdue = (repayments ?? []).filter((r: any) => r.status !== "paid" && new Date(r.due_date) < new Date());
 
   const markPaidMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await (supabase.rpc as any)("house_mark_repayment_paid", {
-        p_repayment_id: id,
-      });
-      if (error) throw error;
-      if (data?.ok === false) throw new Error(data.error || "Collection action failed");
-    },
+    mutationFn: (id: string) => houseMarkRepaymentPaid(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-repayments", productCode] });
       toast({ title: "Repayment marked paid" });

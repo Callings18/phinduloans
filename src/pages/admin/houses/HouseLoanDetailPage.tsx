@@ -3,9 +3,9 @@ import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useHouseLoans } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
+import { houseSetLoanStatus } from "@/services/repositories/houseWorkflowRepository";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
@@ -15,14 +15,7 @@ export default function HouseLoanDetailPage() {
   const { toast } = useToast();
 
   const statusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      const { data, error } = await (supabase.rpc as any)("house_set_loan_status", {
-        p_loan_id: loanId,
-        p_status: status,
-      });
-      if (error) throw error;
-      if (data?.ok === false) throw new Error(data.error || "Unable to update loan status");
-    },
+    mutationFn: (status: string) => houseSetLoanStatus(loanId, status),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
       toast({ title: "Loan updated" });
