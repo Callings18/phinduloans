@@ -167,26 +167,44 @@ const AdminLoans = () => {
   const { can } = usePermissions();
   const { selectedProductId, setSelectedProductId } = useLoanProductFilter();
 
-  // Fetch only post-disbursement loans
-  const { data: loans, isLoading } = useQuery({
-    queryKey: ["admin-portfolio-loans", selectedProductId],
+  // Determine status filter for current tab
+  const tabStatuses: Record<string, string[]> = {
+    awaiting_disbursement: ["awaiting_disbursement", "approved"],
+    active: ["active", "disbursed"],
+    completed: ["completed"],
+    defaulted: ["defaulted"],
+  };
+
+  const effectiveStatuses = statusFilter !== "all"
+    ? [statusFilter]
+    : tabStatuses[activeTab] || ["awaiting_disbursement", "approved", "active", "disbursed", "completed", "defaulted"];
+
+  // Server-side paginated query
+  const { data: loansResult, isLoading } = useQuery({
+    queryKey: ["admin-portfolio-loans", selectedProductId, effectiveStatuses, searchTerm, currentPage, pageSize],
     queryFn: async () => {
       let q = supabase
         .from("loan_applications")
-        .select("*")
-        .in("status", ["awaiting_disbursement", "approved", "active", "disbursed", "completed", "defaulted"])
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" })
+        .in("status", effectiveStatuses as any)
+        .order("created_at", { ascending: false })
+        .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
       if (selectedProductId) {
         q = q.eq("loan_product_id", selectedProductId);
       }
-      const { data, error } = await q;
-
+      if (searchTerm) {
+        q = q.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,nrc_number.ilike.%${searchTerm}%`);
+      }
+      const { data, error, count } = await q;
       if (error) throw error;
-      return data as Loan[];
+      return { data: data as Loan[], count: count ?? 0 };
     },
     refetchOnWindowFocus: true,
     staleTime: 10000,
   });
+
+  const loans = loansResult?.data ?? [];
+  const totalCount = loansResult?.count ?? 0;
 
   // Fetch next due dates for active loans
   const { data: loanDueDates } = useQuery({
@@ -659,35 +677,9 @@ const AdminLoans = () => {
     );
   };
 
-  // Filter loans based on active tab
-  const getFilteredLoans = () => {
-    let filtered = loans || [];
-    if (activeTab === "awaiting_disbursement") {
-      filtered = filtered.filter(l => ["awaiting_disbursement", "approved"].includes(l.status));
-    } else if (activeTab === "active") {
-      filtered = filtered.filter(l => ["active", "disbursed"].includes(l.status));
-    } else if (activeTab === "completed") {
-      filtered = filtered.filter(l => l.status === "completed");
-    } else if (activeTab === "defaulted") {
-      filtered = filtered.filter(l => l.status === "defaulted");
-    }
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(l => l.status === statusFilter);
-    }
-    if (searchTerm) {
-      filtered = filtered.filter(l =>
-        l.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.nrc_number?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    return filtered;
-  };
-
-  const filteredLoans = getFilteredLoans();
-
-  // Paginate filtered loans
-  const paginatedLoans = filteredLoans.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Loans are now server-side filtered and paginated
+  const filteredLoans = loans;
+  const paginatedLoans = loans;
 
   // Reset page on filter change
   useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm, selectedProductId]);
@@ -1000,7 +992,7 @@ const AdminLoans = () => {
                 </Card>
                 <PaginationControls
                   currentPage={currentPage}
-                  totalItems={filteredLoans.length}
+                  totalItems={totalCount}
                   pageSize={pageSize}
                   onPageChange={setCurrentPage}
                   onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}

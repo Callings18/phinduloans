@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
+import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
+import ProductMixChart from "@/components/admin/ProductMixChart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -500,6 +503,13 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
             </div>
           </CardContent>
         </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DisbursementTrendsChart />
+          <RepaymentPerformanceChart />
+        </div>
+
+        <ProductMixChart />
+
         {afterContent}
       </div>
     </AdminLayout>

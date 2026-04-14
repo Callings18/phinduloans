@@ -138,11 +138,11 @@ const AdminRepayments = () => {
     },
   });
 
-  // Fetch all repayments
-  const { data: repayments, isLoading } = useQuery({
-    queryKey: ["admin-repayments"],
+  // Fetch repayments with server-side pagination
+  const { data: repaymentsResult, isLoading } = useQuery({
+    queryKey: ["admin-repayments", statusFilter, searchTerm, currentPage, pageSize],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("loan_repayments")
         .select(`
           *,
@@ -152,13 +152,23 @@ const AdminRepayments = () => {
             phone,
             loan_amount
           )
-        `)
+        `, { count: "exact" })
         .order("due_date", { ascending: true });
 
+      if (statusFilter !== "all") {
+        q = q.eq("status", statusFilter);
+      }
+
+      q = q.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+
+      const { data, error, count } = await q;
       if (error) throw error;
-      return data as Repayment[];
+      return { data: data as Repayment[], count: count ?? 0 };
     },
   });
+
+  const repayments = repaymentsResult?.data ?? [];
+  const totalCount = repaymentsResult?.count ?? 0;
 
   // Pending borrower payment claims (for "Verify & record")
   const { data: paymentClaims = [] } = useQuery({
@@ -573,22 +583,12 @@ const AdminRepayments = () => {
     return { status: "pending", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
   };
 
-  const filteredRepayments = repayments?.filter((rep) => {
-    const matchesSearch =
-      rep.loan_applications?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rep.transaction_reference?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const today = new Date();
-    const dueDate = new Date(rep.due_date);
-    const isOverdue = rep.status === "pending" && isAfter(today, dueDate);
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      rep.status === statusFilter ||
-      (statusFilter === "overdue" && isOverdue);
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredRepayments = searchTerm
+    ? repayments.filter((rep) =>
+        rep.loan_applications?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        rep.transaction_reference?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : repayments;
 
   // Toggle all selected repayments
   const toggleSelectAll = () => {
@@ -739,7 +739,7 @@ const AdminRepayments = () => {
   useEffect(() => { setCurrentPage(1); }, [statusFilter, searchTerm]);
 
   // Paginate
-  const paginatedRepayments = filteredRepayments?.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedRepayments = filteredRepayments;
 
   return (
     <AdminLayout>
@@ -1037,7 +1037,7 @@ const AdminRepayments = () => {
           {(filteredRepayments?.length || 0) > 0 && (
             <PaginationControls
               currentPage={currentPage}
-              totalItems={filteredRepayments?.length || 0}
+              totalItems={totalCount}
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
