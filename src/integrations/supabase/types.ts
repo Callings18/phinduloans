@@ -2107,6 +2107,7 @@ export type Database = {
           guarantee_fee_percent: number | null
           guarantee_provider: string | null
           guarantee_required: boolean | null
+          home_verification_required: boolean | null
           id: string
           installment_structure: string | null
           insurance_percent: number | null
@@ -2115,6 +2116,7 @@ export type Database = {
           interest_rate: number
           interest_type: string | null
           is_active: boolean | null
+          late_fee_fixed_amount: number | null
           late_payment_penalty_percent: number | null
           legal_escalation_days: number | null
           max_age: number | null
@@ -2134,10 +2136,13 @@ export type Database = {
           parent_product_id: string | null
           partial_disbursement: boolean | null
           penalty_frequency: string | null
+          physical_collateral_collection: boolean | null
           platform_fee_percent: number | null
           platform_fee_type: string | null
+          pricing_tiers: Json | null
           processing_fee_percent: number | null
           product_code: string | null
+          repayment_anchor_rule: string | null
           repayment_frequency: string | null
           repayment_methods: string[] | null
           required_documents: Json | null
@@ -2174,6 +2179,7 @@ export type Database = {
           guarantee_fee_percent?: number | null
           guarantee_provider?: string | null
           guarantee_required?: boolean | null
+          home_verification_required?: boolean | null
           id?: string
           installment_structure?: string | null
           insurance_percent?: number | null
@@ -2182,6 +2188,7 @@ export type Database = {
           interest_rate?: number
           interest_type?: string | null
           is_active?: boolean | null
+          late_fee_fixed_amount?: number | null
           late_payment_penalty_percent?: number | null
           legal_escalation_days?: number | null
           max_age?: number | null
@@ -2201,10 +2208,13 @@ export type Database = {
           parent_product_id?: string | null
           partial_disbursement?: boolean | null
           penalty_frequency?: string | null
+          physical_collateral_collection?: boolean | null
           platform_fee_percent?: number | null
           platform_fee_type?: string | null
+          pricing_tiers?: Json | null
           processing_fee_percent?: number | null
           product_code?: string | null
+          repayment_anchor_rule?: string | null
           repayment_frequency?: string | null
           repayment_methods?: string[] | null
           required_documents?: Json | null
@@ -2241,6 +2251,7 @@ export type Database = {
           guarantee_fee_percent?: number | null
           guarantee_provider?: string | null
           guarantee_required?: boolean | null
+          home_verification_required?: boolean | null
           id?: string
           installment_structure?: string | null
           insurance_percent?: number | null
@@ -2249,6 +2260,7 @@ export type Database = {
           interest_rate?: number
           interest_type?: string | null
           is_active?: boolean | null
+          late_fee_fixed_amount?: number | null
           late_payment_penalty_percent?: number | null
           legal_escalation_days?: number | null
           max_age?: number | null
@@ -2268,10 +2280,13 @@ export type Database = {
           parent_product_id?: string | null
           partial_disbursement?: boolean | null
           penalty_frequency?: string | null
+          physical_collateral_collection?: boolean | null
           platform_fee_percent?: number | null
           platform_fee_type?: string | null
+          pricing_tiers?: Json | null
           processing_fee_percent?: number | null
           product_code?: string | null
+          repayment_anchor_rule?: string | null
           repayment_frequency?: string | null
           repayment_methods?: string[] | null
           required_documents?: Json | null
