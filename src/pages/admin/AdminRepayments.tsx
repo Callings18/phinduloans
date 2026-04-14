@@ -138,11 +138,11 @@ const AdminRepayments = () => {
     },
   });
 
-  // Fetch all repayments
-  const { data: repayments, isLoading } = useQuery({
-    queryKey: ["admin-repayments"],
+  // Fetch repayments with server-side pagination
+  const { data: repaymentsResult, isLoading } = useQuery({
+    queryKey: ["admin-repayments", statusFilter, searchTerm, currentPage, pageSize],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("loan_repayments")
         .select(`
           *,
@@ -152,13 +152,23 @@ const AdminRepayments = () => {
             phone,
             loan_amount
           )
-        `)
+        `, { count: "exact" })
         .order("due_date", { ascending: true });
 
+      if (statusFilter !== "all") {
+        q = q.eq("status", statusFilter);
+      }
+
+      q = q.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+
+      const { data, error, count } = await q;
       if (error) throw error;
-      return data as Repayment[];
+      return { data: data as Repayment[], count: count ?? 0 };
     },
   });
+
+  const repayments = repaymentsResult?.data ?? [];
+  const totalCount = repaymentsResult?.count ?? 0;
 
   // Pending borrower payment claims (for "Verify & record")
   const { data: paymentClaims = [] } = useQuery({
