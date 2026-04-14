@@ -13,6 +13,7 @@ Run these migrations in timestamp order:
 5. `supabase/migrations/20260414040000_house_rls_policies.sql`
 6. `supabase/migrations/20260414050000_house_indexes_and_views.sql`
 7. `supabase/migrations/20260414060000_house_review_stage_defaults.sql`
+8. `supabase/migrations/20260414070000_house_workflow_rpc_and_write_policies.sql`
 
 ## 2) Purpose summary
 
@@ -43,6 +44,9 @@ Run these migrations in timestamp order:
 
 ### `20260414060000_house_review_stage_defaults.sql`
 - Backfills staged approval defaults for stable house review queue behavior.
+
+### `20260414070000_house_workflow_rpc_and_write_policies.sql`
+- Adds house RPC endpoints for review/disbursement/collections/status updates and product-scoped write policies.
 
 ## 3) Validation SQL (post-migration)
 
@@ -99,6 +103,17 @@ order by action;
 select *
 from public.v_house_report_summary
 order by product_code;
+
+-- House workflow RPCs available
+select proname
+from pg_proc
+where proname in (
+  'house_stage_review',
+  'house_set_loan_status',
+  'house_mark_disbursement_completed',
+  'house_mark_repayment_paid'
+)
+order by proname;
 ```
 
 ## 4) Rollback guidance

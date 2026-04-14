@@ -16,8 +16,12 @@ export default function HouseLoanDetailPage() {
 
   const statusMutation = useMutation({
     mutationFn: async (status: string) => {
-      const { error } = await supabase.from("loan_applications").update({ status: status as any }).eq("id", loanId);
+      const { data, error } = await (supabase.rpc as any)("house_set_loan_status", {
+        p_loan_id: loanId,
+        p_status: status,
+      });
       if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error || "Unable to update loan status");
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });

@@ -15,18 +15,12 @@ export default function HouseReviewPage() {
 
   const stageMutation = useMutation({
     mutationFn: async ({ loanId, stage }: { loanId: string; stage: "loan_officer" | "finance" | "manager" }) => {
-      const { error } = await (supabase.rpc as any)("log_audit", {
-        p_action: "house_stage_approval",
-        p_entity_type: "loan_application",
-        p_entity_id: loanId,
-        p_metadata: { product_code: productCode, stage },
+      const { data, error } = await (supabase.rpc as any)("house_stage_review", {
+        p_loan_id: loanId,
+        p_stage: stage,
       });
       if (error) throw error;
-      const { error: updateError } = await supabase
-        .from("loan_applications")
-        .update({ status: stage === "manager" ? "approved" : "under_review" })
-        .eq("id", loanId);
-      if (updateError) throw updateError;
+      if (data?.ok === false) throw new Error(data.error || "Review action failed");
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });

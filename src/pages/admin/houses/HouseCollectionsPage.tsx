@@ -16,8 +16,11 @@ export default function HouseCollectionsPage() {
 
   const markPaidMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("loan_repayments").update({ status: "paid" }).eq("id", id);
+      const { data, error } = await (supabase.rpc as any)("house_mark_repayment_paid", {
+        p_repayment_id: id,
+      });
       if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error || "Collection action failed");
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-repayments", productCode] });

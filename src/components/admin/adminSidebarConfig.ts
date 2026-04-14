@@ -32,14 +32,13 @@ export interface SidebarMenuItem {
   icon: LucideIcon;
   label: string;
   path: string;
+  children?: SidebarMenuItem[];
   /** If set, require this permission (or isAdmin in sidebar). */
   perm?: { module: string; action: string };
   /** Restrict to admin / super_admin only (e.g. settings). */
   adminOnly?: boolean;
   /** When set and VITE_BETA_MODULES contains this key, sidebar shows a Beta badge. */
   betaKey?: string;
-  /** Nested sub-items shown as a collapsible sub-menu. */
-  children?: SidebarMenuItem[];
 }
 
 export interface SidebarMenuGroup {
@@ -66,13 +65,14 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
         perm: { module: "loans", action: "view" },
         betaKey: "loans_by_product",
         children: [
-          { icon: FileText, label: "Create Salary Advance", path: "/admin/loans/create/salary-advance", perm: { module: "loans", action: "view" } },
-          { icon: FileText, label: "Create Payday Soft", path: "/admin/loans/create/payday-soft", perm: { module: "loans", action: "view" } },
-          { icon: FileText, label: "Create Collateral Loan", path: "/admin/loans/create/collateral", perm: { module: "loans", action: "view" } },
-          { icon: FileText, label: "Create Business Loan", path: "/admin/loans/create/business", perm: { module: "loans", action: "view" } },
-          { icon: FileText, label: "Create Motor Vehicle", path: "/admin/loans/create/motor-vehicle", perm: { module: "loans", action: "view" } },
-          { icon: FileText, label: "Create Marketeer", path: "/admin/loans/create/marketeer", perm: { module: "loans", action: "view" } },
-          { icon: LayoutGrid, label: "Loan Product Dashboards", path: "/admin/loan-product-dashboards", perm: { module: "loans", action: "view" } },
+          { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
+          { icon: FileText, label: "Create Salary Advance", path: "/admin/loans/create/salary-advance", perm: { module: "loans", action: "view" }, betaKey: "loan_create_salary_advance" },
+          { icon: FileText, label: "Create Payday Soft", path: "/admin/loans/create/payday-soft", perm: { module: "loans", action: "view" }, betaKey: "loan_create_payday_soft" },
+          { icon: FileText, label: "Create Collateral Loan", path: "/admin/loans/create/collateral", perm: { module: "loans", action: "view" }, betaKey: "loan_create_collateral" },
+          { icon: FileText, label: "Create Business Loan", path: "/admin/loans/create/business", perm: { module: "loans", action: "view" }, betaKey: "loan_create_business" },
+          { icon: FileText, label: "Create Motor Vehicle", path: "/admin/loans/create/motor-vehicle", perm: { module: "loans", action: "view" }, betaKey: "loan_create_motor_vehicle" },
+          { icon: FileText, label: "Create Marketeer", path: "/admin/loans/create/marketeer", perm: { module: "loans", action: "view" }, betaKey: "marketeer" },
+          { icon: LayoutGrid, label: "Loan Product Dashboards", path: "/admin/loan-product-dashboards", perm: { module: "loans", action: "view" }, betaKey: "product_dashboards" },
         ],
       },
     ],

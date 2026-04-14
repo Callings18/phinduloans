@@ -14,8 +14,11 @@ export default function HouseDisbursementsPage() {
 
   const disburseMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("disbursements").update({ status: "completed" }).eq("id", id);
+      const { data, error } = await (supabase.rpc as any)("house_mark_disbursement_completed", {
+        p_disbursement_id: id,
+      });
       if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error || "Disbursement action failed");
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-disbursements", productCode] });
