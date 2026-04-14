@@ -28,6 +28,7 @@ const AdminSidebar = () => {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     adminMenuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
+  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
@@ -49,7 +50,10 @@ const AdminSidebar = () => {
       adminMenuGroups
         .map((group) => ({
           ...group,
-          items: group.items.filter(visibleItem),
+          items: group.items.filter(visibleItem).map((item) => ({
+            ...item,
+            children: item.children?.filter(visibleItem),
+          })),
         }))
         .filter((g) => g.items.length > 0),
     [visibleItem],
@@ -59,15 +63,22 @@ const AdminSidebar = () => {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
+  const toggleSubMenu = (path: string) => {
+    setOpenSubMenus((prev) => ({ ...prev, [path]: !prev[path] }));
+  };
+
   const pathActive = (path: string) => {
     if (path === "/admin/loans") {
-      return location.pathname === "/admin/loans" || location.pathname.startsWith("/admin/loans/");
+      return location.pathname === "/admin/loans";
     }
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
+  const isChildActive = (item: SidebarMenuItem) =>
+    item.children?.some((child) => pathActive(child.path)) ?? false;
+
   const isActiveGroup = (group: (typeof filteredMenuGroups)[0]) =>
-    group.items.some((item) => pathActive(item.path));
+    group.items.some((item) => pathActive(item.path) || isChildActive(item));
 
   return (
     <aside
