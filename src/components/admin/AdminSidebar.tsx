@@ -170,6 +170,76 @@ const AdminSidebar = () => {
               <CollapsibleContent className="space-y-1 mt-1">
                 {group.items.map((item) => {
                   const isActive = pathActive(item.path);
+                  const hasChildren = item.children && item.children.length > 0;
+                  const childActive = isChildActive(item);
+                  const subOpen = openSubMenus[item.path] ?? childActive;
+
+                  if (hasChildren) {
+                    return (
+                      <Collapsible
+                        key={item.path}
+                        open={subOpen}
+                        onOpenChange={() => toggleSubMenu(item.path)}
+                      >
+                        <div className="ml-2">
+                          <div className="flex items-center">
+                            <Link
+                              to={item.path}
+                              className={cn(
+                                "flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                                isActive
+                                  ? "gradient-primary text-primary-foreground shadow-button"
+                                  : childActive
+                                    ? "text-primary"
+                                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                              )}
+                            >
+                              <item.icon size={18} />
+                              <span className="font-medium text-sm inline-flex items-center flex-wrap gap-x-1">
+                                {item.label}
+                                {item.betaKey && isBetaModule(item.betaKey) ? <BetaBadge /> : null}
+                              </span>
+                            </Link>
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                              >
+                                <ChevronDown
+                                  size={14}
+                                  className={cn(
+                                    "transition-transform duration-200",
+                                    subOpen && "rotate-180"
+                                  )}
+                                />
+                              </button>
+                            </CollapsibleTrigger>
+                          </div>
+                          <CollapsibleContent className="space-y-0.5 mt-0.5 ml-4 border-l border-sidebar-border pl-2">
+                            {item.children!.map((child) => {
+                              const isChildItemActive = pathActive(child.path);
+                              return (
+                                <Link
+                                  key={child.path}
+                                  to={child.path}
+                                  className={cn(
+                                    "flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-200 text-sm",
+                                    isChildItemActive
+                                      ? "gradient-primary text-primary-foreground shadow-button"
+                                      : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                  )}
+                                >
+                                  <child.icon size={15} />
+                                  <span className="font-medium">{child.label}</span>
+                                </Link>
+                              );
+                            })}
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    );
+                  }
+
                   return (
                     <Link
                       key={item.path}
