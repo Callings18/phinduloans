@@ -21,7 +21,7 @@ export default function MarketeerTierBreakdown() {
         label: `Tier ${i + 1}`,
         range: `K${t.minPrincipal.toLocaleString()} – K${t.maxPrincipal.toLocaleString()}`,
         interest: `${t.interestPercent}%`,
-        duration: `${t.durationDays} days`,
+        duration: `${t.durationDays} business days`,
         lateFee: data?.late_fee_fixed_amount
           ? `K${Number(data.late_fee_fixed_amount).toLocaleString()}/day`
           : `${data?.late_payment_penalty_percent ?? 5}%`,
