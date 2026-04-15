@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle2, Clock, AlertTriangle, Banknote, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, Banknote, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, isPast } from "date-fns";
 import { BetaBadge } from "@/components/admin/BetaBadge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
+import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 
 interface MarketeerLoan {
   id: string;
@@ -40,6 +42,22 @@ export default function MarketeerDailyCollectionTracker() {
   const queryClient = useQueryClient();
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [selectedAccount, setSelectedAccount] = useState<string>("");
+
+  // Fetch accounts for payment recording
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, account_type")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const { data: loans = [] } = useQuery({
     queryKey: ["marketeer-active-loans"],
@@ -110,43 +128,71 @@ export default function MarketeerDailyCollectionTracker() {
     });
   }, [loans, repayments, todayStr]);
 
-  const recordPayment = useMutation({
+  const handlePaymentSuccess = (receipt: PaymentReceiptData) => {
+    queryClient.invalidateQueries({ queryKey: ["marketeer-repayments"] });
+    queryClient.invalidateQueries({ queryKey: ["marketeer-active-loans"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["house-report-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+
+    toast({
+      title: receipt.loan_completed ? "🎉 Loan fully paid!" : "✅ Payment recorded",
+      description: `K${receipt.repayment_amount?.toLocaleString()} from ${receipt.borrower_name}. Receipt: ${receipt.receipt_no}`,
+    });
+
+    // Auto-download receipt
+    if (receipt.receipt_no) {
+      downloadRepaymentReceipt({
+        borrowerName: receipt.borrower_name || "",
+        borrowerPhone: receipt.borrower_phone || "",
+        borrowerEmail: receipt.borrower_email || "",
+        loanReference: receipt.loan_id?.slice(0, 8) || "",
+        loanAmount: receipt.loan_amount || 0,
+        repaymentAmount: receipt.repayment_amount || 0,
+        paymentDate: new Date().toISOString(),
+        paymentMethod: receipt.payment_method || "cash",
+        transactionReference: receipt.receipt_no || "",
+        installmentNumber: receipt.installment_number || 0,
+        totalInstallments: receipt.total_installments || 0,
+        totalPaid: receipt.total_paid || 0,
+        outstandingBalance: receipt.outstanding_balance || 0,
+      });
+    }
+  };
+
+  const recordPaymentMutation = useMutation({
     mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
-      const { error } = await supabase
-        .from("loan_repayments")
-        .update({ status: "paid", principal_paid: amount, paid_date: new Date().toISOString() })
-        .eq("id", repaymentId);
-      if (error) throw error;
+      return recordLoanPayment({
+        repaymentId,
+        amount,
+        paymentMethod,
+        accountId: selectedAccount || null,
+      });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["marketeer-repayments"] });
-      queryClient.invalidateQueries({ queryKey: ["marketeer-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
-      toast({ title: "Payment recorded", description: "Daily collection marked as paid." });
-    },
+    onSuccess: handlePaymentSuccess,
     onError: (e: Error) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Payment failed", description: e.message, variant: "destructive" });
     },
   });
 
   const recordBulkOverdue = useMutation({
-    mutationFn: async ({ repaymentIds, amount }: { repaymentIds: string[]; amount: number }) => {
-      for (const id of repaymentIds) {
-        const { error } = await supabase
-          .from("loan_repayments")
-          .update({ status: "paid", principal_paid: amount, paid_date: new Date().toISOString() })
-          .eq("id", id);
-        if (error) throw error;
+    mutationFn: async ({ items }: { items: { id: string; amount: number }[] }) => {
+      let lastReceipt: PaymentReceiptData | null = null;
+      for (const item of items) {
+        lastReceipt = await recordLoanPayment({
+          repaymentId: item.id,
+          amount: item.amount,
+          paymentMethod,
+          accountId: selectedAccount || null,
+        });
       }
+      return lastReceipt;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["marketeer-repayments"] });
-      queryClient.invalidateQueries({ queryKey: ["marketeer-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
-      toast({ title: "Overdue payments recorded", description: "All selected overdue installments marked as paid." });
+    onSuccess: (receipt) => {
+      if (receipt) handlePaymentSuccess(receipt);
     },
     onError: (e: Error) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Bulk payment failed", description: e.message, variant: "destructive" });
     },
   });
 
@@ -210,6 +256,36 @@ export default function MarketeerDailyCollectionTracker() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Payment method and account selection */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Method:</span>
+          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+            <SelectTrigger className="w-32 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">Cash</SelectItem>
+              <SelectItem value="mobile_money">Mobile Money</SelectItem>
+              <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Credit to:</span>
+          <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+            <SelectTrigger className="w-44 h-8 text-xs">
+              <SelectValue placeholder="Select account" />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.map((a: any) => (
+                <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card>
@@ -286,9 +362,9 @@ export default function MarketeerDailyCollectionTracker() {
                             size="sm"
                             variant="default"
                             className="h-7 text-xs"
-                            disabled={recordPayment.isPending}
+                            disabled={recordPaymentMutation.isPending}
                             onClick={() =>
-                              recordPayment.mutate({
+                              recordPaymentMutation.mutate({
                                 repaymentId: loan.todayDue!.id,
                                 amount: Number(payAmounts[loan.todayDue!.id] || loan.todayDue!.amount),
                               })
@@ -317,8 +393,7 @@ export default function MarketeerDailyCollectionTracker() {
                               disabled={recordBulkOverdue.isPending}
                               onClick={() =>
                                 recordBulkOverdue.mutate({
-                                  repaymentIds: loan.overdueItems.map((r) => r.id),
-                                  amount: loan.overdueItems[0]?.amount ?? 0,
+                                  items: loan.overdueItems.map((r) => ({ id: r.id, amount: Number(r.amount) })),
                                 })
                               }
                             >
@@ -336,8 +411,8 @@ export default function MarketeerDailyCollectionTracker() {
                                   size="sm"
                                   variant="outline"
                                   className="h-6 text-xs px-2"
-                                  disabled={recordPayment.isPending}
-                                  onClick={() => recordPayment.mutate({ repaymentId: r.id, amount: Number(r.amount) })}
+                                  disabled={recordPaymentMutation.isPending}
+                                  onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: Number(r.amount) })}
                                 >
                                   Pay
                                 </Button>
