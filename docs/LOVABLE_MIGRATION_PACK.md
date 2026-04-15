@@ -14,6 +14,7 @@ Run these migrations in timestamp order:
 6. `supabase/migrations/20260414050000_house_indexes_and_views.sql`
 7. `supabase/migrations/20260414060000_house_review_stage_defaults.sql`
 8. `supabase/migrations/20260414070000_house_workflow_rpc_and_write_policies.sql`
+9. `supabase/migrations/20260414080000_marketeer_fixed_terms.sql`
 
 ## 2) Purpose summary
 
@@ -47,6 +48,9 @@ Run these migrations in timestamp order:
 
 ### `20260414070000_house_workflow_rpc_and_write_policies.sql`
 - Adds house RPC endpoints for review/disbursement/collections/status updates and product-scoped write policies.
+
+### `20260414080000_marketeer_fixed_terms.sql`
+- Enforces fixed Marketeer defaults: 30% interest, 26 collection days, Sundays excluded via repayment anchor rule.
 
 ## 3) Validation SQL (post-migration)
 
@@ -114,6 +118,16 @@ where proname in (
   'house_mark_repayment_paid'
 )
 order by proname;
+
+-- Marketeer fixed defaults (30% over 26 days, Sundays excluded)
+select
+  product_code,
+  interest_rate,
+  term_unit,
+  repayment_anchor_rule,
+  pricing_tiers
+from public.loan_products
+where product_code = 'MARKETEER';
 ```
 
 ## 4) Rollback guidance

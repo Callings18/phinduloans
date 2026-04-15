@@ -5,6 +5,18 @@ export interface MarketeerTier {
   durationDays: number;
 }
 
+export const MARKETEER_FIXED_INTEREST_PERCENT = 30;
+export const MARKETEER_COLLECTION_DAYS = 26;
+
+export const MARKETEER_DEFAULT_TIERS: MarketeerTier[] = [
+  {
+    minPrincipal: 1000,
+    maxPrincipal: 1000000000,
+    interestPercent: MARKETEER_FIXED_INTEREST_PERCENT,
+    durationDays: MARKETEER_COLLECTION_DAYS,
+  },
+];
+
 export function parseMarketeerTiers(raw: unknown): MarketeerTier[] {
   if (!raw || !Array.isArray(raw)) return [];
   const out: MarketeerTier[] = [];
@@ -36,6 +48,26 @@ export interface MarketeerCalculationResult {
   totalRepayment: number;
   dailyInstallment: number;
   durationDays: number;
+}
+
+export function getMarketeerTiersOrDefault(raw: unknown): MarketeerTier[] {
+  const parsed = parseMarketeerTiers(raw);
+  return parsed.length > 0 ? parsed : MARKETEER_DEFAULT_TIERS;
+}
+
+export function generateMarketeerCollectionDates(startDate: Date, collectionDays: number): Date[] {
+  const dates: Date[] = [];
+  const cursor = new Date(startDate);
+
+  while (dates.length < collectionDays) {
+    const dayOfWeek = cursor.getDay();
+    if (dayOfWeek !== 0) {
+      dates.push(new Date(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
 }
 
 /**

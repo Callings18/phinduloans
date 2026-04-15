@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { calculateLoan } from "@/utils/loanCalculations";
 import { useProductLoanRules } from "@/hooks/useProductLoanRules";
 import type { LoanProductCode } from "@/config/loanProductModules";
-import { calculateMarketeerLoan, parseMarketeerTiers } from "@/lib/marketeerCalculations";
+import { calculateMarketeerLoan, getMarketeerTiersOrDefault } from "@/lib/marketeerCalculations";
 
 type Borrower = {
   id: string;
@@ -123,12 +123,12 @@ export default function ProductLoanFormShell({
     if (principal <= 0) return null;
 
     if (productCode === "MARKETEER") {
-      const tiers = parseMarketeerTiers((product as unknown as { pricing_tiers?: unknown }).pricing_tiers) || [];
+      const tiers = getMarketeerTiersOrDefault((product as unknown as { pricing_tiers?: unknown }).pricing_tiers);
       const result = calculateMarketeerLoan(principal, tiers);
       if (!result) return null;
       return {
         repayment: result.totalRepayment,
-        installmentLabel: `Daily installment (${result.durationDays} days)`,
+        installmentLabel: `Daily installment (${result.durationDays} collection days, Sundays excluded)`,
         installment: result.dailyInstallment,
       };
     }

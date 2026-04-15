@@ -111,6 +111,9 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
       if (values.loanAmount < 1000 || values.loanAmount > 10000) {
         errors.push("Marketeer loan amount must be between K1,000 and K10,000.");
       }
+      if (values.termValue !== 26) {
+        errors.push("Marketeer term is fixed at 26 collection days (Sundays excluded).");
+      }
       return errors;
     },
   },

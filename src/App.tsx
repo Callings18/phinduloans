@@ -267,7 +267,7 @@ function App() {
                       path="loan-products"
                       element={
                         <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "products", action: "view" }}>
+                          <PermissionRoute adminOnly>
                             <AdminLoanProducts />
                           </PermissionRoute>
                         </ErrorBoundary>

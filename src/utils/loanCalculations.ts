@@ -4,7 +4,7 @@
  * and penalty calculations across the entire application.
  */
 
-import { calculateMarketeerLoan, parseMarketeerTiers } from "@/lib/marketeerCalculations";
+import { calculateMarketeerLoan, getMarketeerTiersOrDefault } from "@/lib/marketeerCalculations";
 
 export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type InterestType = 'flat' | 'reducing';
@@ -160,13 +160,7 @@ export function calculateLoan(
   termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
 ): LoanCalculationResult {
   if (product.product_code === "MARKETEER") {
-    let tiers = parseMarketeerTiers(product.pricing_tiers);
-    if (!tiers.length) {
-      tiers = parseMarketeerTiers([
-        { minPrincipal: 1000, maxPrincipal: 5000, interestPercent: 30, durationDays: 10 },
-        { minPrincipal: 5001, maxPrincipal: 10000, interestPercent: 20, durationDays: 15 },
-      ]);
-    }
+    const tiers = getMarketeerTiersOrDefault(product.pricing_tiers);
     const m = calculateMarketeerLoan(principal, tiers);
     if (m) {
       const monthlyRate = normalizeToMonthlyRate(product.interest_rate || 0, "daily");

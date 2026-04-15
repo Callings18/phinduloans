@@ -5,9 +5,9 @@ export default function AdminCreateMarketeerLoan() {
     <ProductLoanFormShell
       productCode="MARKETEER"
       title="Create Marketeer Loan"
-      description="Daily-collection marketeer flow with tiered pricing and compliance checks."
+      description="Fixed daily-collection Marketeer flow at 30% over 26 days (Sundays excluded)."
       termUnit="days"
-      defaultTermValue={10}
+      defaultTermValue={26}
     />
   );
 }

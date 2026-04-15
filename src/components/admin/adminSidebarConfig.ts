@@ -4,7 +4,6 @@ import {
   FileText,
   Users,
   CreditCard,
-  Package,
   Banknote,
   Wallet,
   FileSignature,
@@ -57,7 +56,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: FileText, label: "Applications", path: "/admin/applications", perm: { module: "loans", action: "view" } },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", perm: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employers", path: "/admin/employers", perm: { module: "borrowers", action: "view" } },
-      { icon: Package, label: "Loan Products", path: "/admin/loan-products", perm: { module: "products", action: "view" } },
       {
         icon: CreditCard,
         label: "Loans",
@@ -75,7 +73,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
           { icon: LayoutGrid, label: "Loan Product Dashboards", path: "/admin/loan-product-dashboards", perm: { module: "loans", action: "view" }, betaKey: "product_dashboards" },
         ],
       },
-      { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
     ],
   },
   {
