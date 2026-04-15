@@ -55,13 +55,17 @@ export function getMarketeerTiersOrDefault(raw: unknown): MarketeerTier[] {
   return parsed.length > 0 ? parsed : MARKETEER_DEFAULT_TIERS;
 }
 
+/**
+ * Generate collection dates excluding Saturdays (6) and Sundays (0).
+ * Marketeer loans collect Monday–Friday only.
+ */
 export function generateMarketeerCollectionDates(startDate: Date, collectionDays: number): Date[] {
   const dates: Date[] = [];
   const cursor = new Date(startDate);
 
   while (dates.length < collectionDays) {
     const dayOfWeek = cursor.getDay();
-    if (dayOfWeek !== 0) {
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
       dates.push(new Date(cursor));
     }
     cursor.setDate(cursor.getDate() + 1);
