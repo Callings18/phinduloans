@@ -50,12 +50,6 @@ import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 import AdminLoanProductDashboards from "./pages/admin/AdminLoanProductDashboards";
 import AdminLoanProductScopedDashboard from "./pages/admin/AdminLoanProductScopedDashboard";
-import AdminCreateSalaryAdvanceLoan from "./pages/admin/AdminCreateSalaryAdvanceLoan";
-import AdminCreatePaydaySoftLoan from "./pages/admin/AdminCreatePaydaySoftLoan";
-import AdminCreateCollateralLoan from "./pages/admin/AdminCreateCollateralLoan";
-import AdminCreateBusinessLoan from "./pages/admin/AdminCreateBusinessLoan";
-import AdminCreateMotorVehicleLoan from "./pages/admin/AdminCreateMotorVehicleLoan";
-import AdminCreateMarketeerLoan from "./pages/admin/AdminCreateMarketeerLoan";
 import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
 import MarketeerHouseDashboard from "./pages/admin/houses/MarketeerHouseDashboard";
 import HouseLayout from "./components/admin/house/HouseLayout";
@@ -303,12 +297,6 @@ function App() {
                         </ErrorBoundary>
                       }
                     />
-                    <Route path="loans/create/salary-advance" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateSalaryAdvanceLoan /></PermissionRoute></ErrorBoundary>} />
-                    <Route path="loans/create/payday-soft" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreatePaydaySoftLoan /></PermissionRoute></ErrorBoundary>} />
-                    <Route path="loans/create/collateral" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateCollateralLoan /></PermissionRoute></ErrorBoundary>} />
-                    <Route path="loans/create/business" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateBusinessLoan /></PermissionRoute></ErrorBoundary>} />
-                    <Route path="loans/create/motor-vehicle" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateMotorVehicleLoan /></PermissionRoute></ErrorBoundary>} />
-                    <Route path="loans/create/marketeer" element={<ErrorBoundary><PermissionRoute permission={{ module: "loans", action: "view" }}><AdminCreateMarketeerLoan /></PermissionRoute></ErrorBoundary>} />
                     <Route
                       path="houses"
                       element={
