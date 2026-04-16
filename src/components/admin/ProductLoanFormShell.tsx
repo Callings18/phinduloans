@@ -237,7 +237,8 @@ export default function ProductLoanFormShell({
     for (const [label, file] of Object.entries(docFiles)) {
       if (!file) continue;
       const ext = file.name.split(".").pop() || "jpg";
-      const path = `loan-docs/${borrowerId}/${loanId}/${label.replace(/\s+/g, "_").toLowerCase()}.${ext}`;
+      const sanitizedLabel = label.replace(/\s+/g, "_").toLowerCase();
+      const path = `loan-docs/${borrowerId}/${loanId}/${sanitizedLabel}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("loan-documents")
         .upload(path, file, { upsert: true });
@@ -246,11 +247,52 @@ export default function ProductLoanFormShell({
         continue;
       }
       uploaded[label] = path;
+
+      // Save to permanent borrower vault (persists across loans)
+      await supabase.from("borrower_document_vault").insert({
+        borrower_id: borrowerId,
+        doc_type: sanitizedLabel,
+        doc_label: label,
+        file_url: path,
+        file_name: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+      }).then(({ error }) => { if (error) console.warn("Vault insert:", error); });
+
+      // Save to application_documents (per-loan, visible to admin)
+      await supabase.from("application_documents").insert({
+        application_id: loanId,
+        borrower_id: borrowerId,
+        doc_type: sanitizedLabel,
+        doc_label: label,
+        file_url: path,
+        file_name: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+      }).then(({ error }) => { if (error) console.warn("App doc insert:", error); });
     }
+
+    // Also link any vault docs that weren't re-uploaded (reused from previous loans)
+    for (const [label, vDoc] of Object.entries(vaultDocs)) {
+      if (uploaded[label]) continue; // already uploaded fresh
+      // Link vault doc to this application
+      await supabase.from("application_documents").insert({
+        application_id: loanId,
+        borrower_id: borrowerId,
+        doc_type: label.replace(/\s+/g, "_").toLowerCase(),
+        doc_label: label,
+        file_url: vDoc.file_url,
+        file_name: vDoc.file_name,
+        mime_type: "image/jpeg",
+        file_size: 0,
+      }).then(({ error }) => { if (error) console.warn("Vault link:", error); });
+      uploaded[label] = vDoc.file_url;
+    }
+
     return uploaded;
   };
 
-  const allDocsProvided = rules.checklist.every((item) => docFiles[item]);
+  const allDocsProvided = rules.checklist.every((item) => docFiles[item] || vaultDocs[item]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
