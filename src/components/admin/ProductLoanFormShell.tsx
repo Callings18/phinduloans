@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +21,7 @@ import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCo
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X } from "lucide-react";
 
 type Borrower = {
   id: string;
@@ -88,8 +88,10 @@ export default function ProductLoanFormShell({
   const [maritalStatus, setMaritalStatus] = useState("");
   const [contactNumber, setContactNumber] = useState("");
 
-  // --- Document checklist ---
-  const [uploadedDocMap, setUploadedDocMap] = useState<Record<string, boolean>>({});
+  // --- Document uploads ---
+  const [docFiles, setDocFiles] = useState<Record<string, File | null>>({});
+  const [docUploading, setDocUploading] = useState(false);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
 
   const { data: product } = useQuery({
@@ -123,7 +125,6 @@ export default function ProductLoanFormShell({
     [borrowers, borrowerId]
   );
 
-  // Auto-fill from selected borrower
   useEffect(() => {
     if (selectedBorrower) {
       if (selectedBorrower.phone) setContactNumber(selectedBorrower.phone);
@@ -133,9 +134,7 @@ export default function ProductLoanFormShell({
       if (selectedBorrower.employer_name) setEmployerName(selectedBorrower.employer_name);
       if (selectedBorrower.job_title) setJobTitle(selectedBorrower.job_title);
       if (selectedBorrower.net_income) setMonthlyIncome(String(selectedBorrower.net_income));
-      if (selectedBorrower.employment_type) {
-        setEmploymentType(selectedBorrower.employment_type as any);
-      }
+      if (selectedBorrower.employment_type) setEmploymentType(selectedBorrower.employment_type as any);
     }
   }, [selectedBorrower]);
 
@@ -177,7 +176,7 @@ export default function ProductLoanFormShell({
       return {
         repayment: marketeerResult.totalRepayment,
         interest: marketeerResult.totalInterest,
-        installmentLabel: `Daily installment (${marketeerResult.durationDays} business days, Mon–Fri)`,
+        installmentLabel: `Daily installment (${marketeerResult.durationDays} days, Mon–Fri)`,
         installment: marketeerResult.dailyInstallment,
         dailyRate: `${(marketeerResult.tier.interestPercent / marketeerResult.durationDays).toFixed(3)}%`,
       };
@@ -207,6 +206,30 @@ export default function ProductLoanFormShell({
       dailyRate: null,
     };
   }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, marketeerResult]);
+
+  const handleFileSelect = (docLabel: string, file: File | null) => {
+    setDocFiles((prev) => ({ ...prev, [docLabel]: file }));
+  };
+
+  const uploadDocuments = async (loanId: string, borrowerId: string): Promise<Record<string, string>> => {
+    const uploaded: Record<string, string> = {};
+    for (const [label, file] of Object.entries(docFiles)) {
+      if (!file) continue;
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `loan-docs/${borrowerId}/${loanId}/${label.replace(/\s+/g, "_").toLowerCase()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("loan-documents")
+        .upload(path, file, { upsert: true });
+      if (uploadError) {
+        console.error(`Upload failed for ${label}:`, uploadError);
+        continue;
+      }
+      uploaded[label] = path;
+    }
+    return uploaded;
+  };
+
+  const allDocsProvided = rules.checklist.every((item) => docFiles[item]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -280,7 +303,7 @@ export default function ProductLoanFormShell({
           gender,
           marital_status: maritalStatus,
           contact_number: contactNumber,
-          uploaded_docs: uploadedDocMap,
+          uploaded_docs: {} as Record<string, string>,
           approvals: {
             loan_officer: { status: "pending" },
             finance: { status: "pending" },
@@ -289,8 +312,33 @@ export default function ProductLoanFormShell({
         },
       };
 
-      const { error } = await supabase.from("loan_applications").insert(payload);
+      const { data: inserted, error } = await supabase
+        .from("loan_applications")
+        .insert(payload)
+        .select("id")
+        .single();
       if (error) throw error;
+
+      // Upload documents to storage after loan is created
+      if (inserted?.id) {
+        setDocUploading(true);
+        try {
+          const uploadedPaths = await uploadDocuments(inserted.id, selectedBorrower.id);
+          if (Object.keys(uploadedPaths).length > 0) {
+            await supabase
+              .from("loan_applications")
+              .update({
+                product_specific_data: {
+                  ...payload.product_specific_data,
+                  uploaded_docs: uploadedPaths,
+                },
+              })
+              .eq("id", inserted.id);
+          }
+        } finally {
+          setDocUploading(false);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
@@ -302,433 +350,476 @@ export default function ProductLoanFormShell({
     },
   });
 
-  const allDocsChecked = rules.checklist.every((item) => uploadedDocMap[item]);
-
   return (
     <AdminLayout>
-      <div className="space-y-6 max-w-5xl">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <div className="max-w-5xl">
+        {/* Compact Header */}
+        <div className="flex items-center justify-between mb-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-foreground">{title}</h1>
+              <h1 className="text-2xl font-bold text-foreground">{title}</h1>
               <BetaBadge />
             </div>
-            <p className="text-muted-foreground mt-1">{description}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           <Badge variant="outline" className="text-sm">{productCode}</Badge>
         </div>
 
-        {/* === SECTION 1: Customer Information === */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <CardTitle>Customer Information</CardTitle>
-            </div>
-            <CardDescription>Select an existing borrower or fill in customer details.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label>Borrower *</Label>
-                <Select value={borrowerId} onValueChange={setBorrowerId}>
-                  <SelectTrigger><SelectValue placeholder="Search and select borrower..." /></SelectTrigger>
-                  <SelectContent>
-                    {(borrowers || []).map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {(b.full_name || b.email) + (b.nrc_number ? ` — ${b.nrc_number}` : "") + (b.phone ? ` — ${b.phone}` : "")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedBorrower && (
-                <div className="md:col-span-2 bg-muted/50 rounded-lg p-3 text-sm space-y-1">
-                  <p><span className="text-muted-foreground">Name:</span> <strong>{selectedBorrower.full_name}</strong></p>
-                  <p><span className="text-muted-foreground">Phone:</span> {selectedBorrower.phone || "—"}</p>
-                  <p><span className="text-muted-foreground">NRC:</span> {selectedBorrower.nrc_number || "—"}</p>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>Contact Number *</Label>
-                <Input value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="0971234567" />
-              </div>
-              <div className="space-y-2">
-                <Label>ID Type</Label>
-                <Select value={idType} onValueChange={setIdType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NRC">NRC</SelectItem>
-                    <SelectItem value="Passport">Passport</SelectItem>
-                    <SelectItem value="Driver License">Driver License</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>ID Number *</Label>
-                <Input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="123456/78/9" />
-              </div>
-              <div className="space-y-2">
-                <Label>Gender</Label>
-                <Select value={gender} onValueChange={setGender}>
-                  <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Marital Status</Label>
-                <Select value={maritalStatus} onValueChange={setMaritalStatus}>
-                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Single">Single</SelectItem>
-                    <SelectItem value="Married">Married</SelectItem>
-                    <SelectItem value="Divorced">Divorced</SelectItem>
-                    <SelectItem value="Widowed">Widowed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* === SECTION 2: Address & Location === */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              <CardTitle>Address & Location</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {isMarketeer && (
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Business Address *</Label>
-                  <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} placeholder="Market stall location / stand number" />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Residential Address</Label>
-                <Input value={residentialAddress} onChange={(e) => setResidentialAddress(e.target.value)} placeholder="House number, area, compound" />
-              </div>
-              <div className="space-y-2">
-                <Label>City / Town</Label>
-                <Input value={city} onChange={(e) => setCity(e.target.value)} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* === SECTION 3: Employment / Business === */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-primary" />
-              <CardTitle>{isMarketeer ? "Business Information" : "Employment Details"}</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Employment Type *</Label>
-                <Select value={employmentType} onValueChange={(v: any) => setEmploymentType(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employed">Employed</SelectItem>
-                    <SelectItem value="self_employed">Self-employed / Business Owner</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>{isMarketeer ? "Monthly Business Income (K)" : "Monthly Income (K)"} *</Label>
-                <Input type="number" value={monthlyIncome} onChange={(e) => setMonthlyIncome(e.target.value)} />
-              </div>
-              {!isMarketeer && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Employer Name</Label>
-                    <Input value={employerName} onChange={(e) => setEmployerName(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Job Title</Label>
-                    <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
-                  </div>
-                </>
-              )}
-              {isMarketeer && (
-                <div className="space-y-2">
-                  <Label>Business Age (months) *</Label>
-                  <Input type="number" value={businessMonths} onChange={(e) => setBusinessMonths(e.target.value)} min={0} />
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* === SECTION 4: Eligibility Checks (Marketeer) === */}
-        {isMarketeer && (
-          <Card className="border-primary/20">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-primary" />
-                <CardTitle>Eligibility Checks</CardTitle>
-                <BetaBadge />
-              </div>
-              <CardDescription>All criteria must be met before the loan can proceed.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={employmentType === "self_employed"}
-                  onCheckedChange={() => setEmploymentType("self_employed")}
-                />
-                <Label className="font-normal">Borrower is a business owner</Label>
-                {employmentType === "self_employed" && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-              </div>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={hasLocalAuthorityCompliance}
-                  onCheckedChange={(v) => setHasLocalAuthorityCompliance(Boolean(v))}
-                />
-                <Label className="font-normal">Complies with local authority requirements</Label>
-                {hasLocalAuthorityCompliance && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-              </div>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={Number(businessMonths) >= 6}
-                  disabled
-                />
-                <Label className="font-normal">Business exists for at least 6 months ({businessMonths} months entered)</Label>
-                {Number(businessMonths) >= 6 && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* === SECTION 5: Salary Advance civil servant check === */}
-        {productCode === "SALARY_ADVANCE" && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Checkbox checked={isCivilServantConfirmed} onCheckedChange={(v) => setIsCivilServantConfirmed(Boolean(v))} />
-                <Label className="font-normal">Confirmed borrower is a civil servant</Label>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* === SECTION 6: Loan Details === */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              <CardTitle>Loan Details</CardTitle>
-            </div>
-            {isMarketeer && (
-              <CardDescription>
-                Interest: 30% flat · Duration: 26 business days (Mon–Fri) · Daily collection · Range: K1,000 – K10,000
-              </CardDescription>
+        {/* Tabbed Form - compact, no excessive spacing */}
+        <Tabs defaultValue="customer" className="space-y-3">
+          <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
+            <TabsTrigger value="customer" className="text-xs">
+              <User className="h-3.5 w-3.5 mr-1" /> Customer
+            </TabsTrigger>
+            <TabsTrigger value="loan" className="text-xs">
+              <CalendarDays className="h-3.5 w-3.5 mr-1" /> Loan Details
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs">
+              <FileText className="h-3.5 w-3.5 mr-1" /> Documents
+              {allDocsProvided && <CheckCircle2 className="h-3 w-3 ml-1 text-green-600" />}
+            </TabsTrigger>
+            {isMarketeer && collectionDates.length > 0 && (
+              <TabsTrigger value="schedule" className="text-xs">
+                <CalendarDays className="h-3.5 w-3.5 mr-1" /> Schedule
+              </TabsTrigger>
             )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Loan Amount (K) *</Label>
-                <Input
-                  type="number"
-                  value={loanAmount}
-                  onChange={(e) => setLoanAmount(e.target.value)}
-                  min={isMarketeer ? 1000 : 0}
-                  max={isMarketeer ? 10000 : undefined}
-                  placeholder={isMarketeer ? "K1,000 – K10,000" : "Enter amount"}
-                />
-                {isMarketeer && loanAmount && (Number(loanAmount) < 1000 || Number(loanAmount) > 10000) && (
-                  <p className="text-xs text-destructive flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> Marketeer loans must be between K1,000 and K10,000
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Tenure ({termUnit}) {isMarketeer && <span className="text-muted-foreground text-xs">(Fixed: 26 days)</span>}</Label>
-                <Input
-                  type="number"
-                  value={termValue}
-                  onChange={(e) => setTermValue(e.target.value)}
-                  disabled={isMarketeer}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Purpose *</Label>
-                <Input
-                  value={loanPurpose}
-                  onChange={(e) => setLoanPurpose(e.target.value)}
-                  placeholder={isMarketeer ? "e.g. Stock purchase, working capital" : "Enter loan purpose"}
-                />
-              </div>
-            </div>
+          </TabsList>
 
-            {/* Loan Preview */}
-            {preview ? (
-              <Card className="bg-primary/5 border-primary/20">
-                <CardContent className="pt-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Principal</p>
-                      <p className="font-bold text-lg">K{Number(loanAmount).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Interest</p>
-                      <p className="font-bold text-lg">K{Number(preview.interest).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Total Repayment</p>
-                      <p className="font-bold text-lg text-primary">K{Number(preview.repayment).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">{preview.installmentLabel}</p>
-                      <p className="font-bold text-lg">K{Number(preview.installment).toLocaleString()}</p>
-                    </div>
+          {/* ===== TAB 1: Customer Info + Address + Employment ===== */}
+          <TabsContent value="customer" className="space-y-3 mt-0">
+            {/* Borrower Select */}
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs font-semibold">Borrower *</Label>
+                    <Select value={borrowerId} onValueChange={setBorrowerId}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Search and select borrower..." /></SelectTrigger>
+                      <SelectContent>
+                        {(borrowers || []).map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {(b.full_name || b.email) + (b.nrc_number ? ` — ${b.nrc_number}` : "") + (b.phone ? ` — ${b.phone}` : "")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {preview.dailyRate && (
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      Daily interest rate: {preview.dailyRate}/day
-                    </p>
+
+                  {selectedBorrower && (
+                    <div className="md:col-span-2 bg-muted/30 rounded-md px-3 py-2 text-xs flex gap-4 flex-wrap">
+                      <span><span className="text-muted-foreground">Name:</span> <strong>{selectedBorrower.full_name}</strong></span>
+                      <span><span className="text-muted-foreground">Phone:</span> {selectedBorrower.phone || "—"}</span>
+                      <span><span className="text-muted-foreground">NRC:</span> {selectedBorrower.nrc_number || "—"}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Contact Number *</Label>
+                    <Input className="h-9" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="0971234567" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">ID Type</Label>
+                    <Select value={idType} onValueChange={setIdType}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NRC">NRC</SelectItem>
+                        <SelectItem value="Passport">Passport</SelectItem>
+                        <SelectItem value="Driver License">Driver License</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">ID Number *</Label>
+                    <Input className="h-9" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="123456/78/9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Gender</Label>
+                    <Select value={gender} onValueChange={setGender}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Marital Status</Label>
+                    <Select value={maritalStatus} onValueChange={setMaritalStatus}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Single">Single</SelectItem>
+                        <SelectItem value="Married">Married</SelectItem>
+                        <SelectItem value="Divorced">Divorced</SelectItem>
+                        <SelectItem value="Widowed">Widowed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Address & Employment side by side */}
+            <div className="grid md:grid-cols-2 gap-3">
+              {/* Address */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-sm">Address & Location</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 px-4 pb-4">
+                  {isMarketeer && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Business Address *</Label>
+                      <Input className="h-9" value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} placeholder="Market stall / stand number" />
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Residential Address</Label>
+                    <Input className="h-9" value={residentialAddress} onChange={(e) => setResidentialAddress(e.target.value)} placeholder="House number, area" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">City / Town</Label>
+                    <Input className="h-9" value={city} onChange={(e) => setCity(e.target.value)} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Employment / Business */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <div className="flex items-center gap-1.5">
+                    <Briefcase className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-sm">{isMarketeer ? "Business Info" : "Employment"}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 px-4 pb-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Employment Type *</Label>
+                    <Select value={employmentType} onValueChange={(v: any) => setEmploymentType(v)}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="employed">Employed</SelectItem>
+                        <SelectItem value="self_employed">Self-employed / Business Owner</SelectItem>
+                        <SelectItem value="contract">Contract</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{isMarketeer ? "Monthly Business Income (K)" : "Monthly Income (K)"} *</Label>
+                    <Input className="h-9" type="number" value={monthlyIncome} onChange={(e) => setMonthlyIncome(e.target.value)} />
+                  </div>
+                  {!isMarketeer && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Employer Name</Label>
+                        <Input className="h-9" value={employerName} onChange={(e) => setEmployerName(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Job Title</Label>
+                        <Input className="h-9" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+                      </div>
+                    </>
+                  )}
+                  {isMarketeer && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Business Age (months) *</Label>
+                      <Input className="h-9" type="number" value={businessMonths} onChange={(e) => setBusinessMonths(e.target.value)} min={0} />
+                    </div>
                   )}
                 </CardContent>
               </Card>
-            ) : null}
-
-            {/* Schedule Preview (Marketeer) */}
-            {isMarketeer && collectionDates.length > 0 && (
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mb-2"
-                  onClick={() => setShowSchedulePreview(!showSchedulePreview)}
-                >
-                  <CalendarDays className="h-4 w-4 mr-1" />
-                  {showSchedulePreview ? "Hide" : "Preview"} Collection Schedule ({collectionDates.length} days)
-                </Button>
-                {showSchedulePreview && marketeerResult && (
-                  <Card>
-                    <CardContent className="pt-4 max-h-80 overflow-y-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-12">Day</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Day of Week</TableHead>
-                            <TableHead className="text-right">Amount (K)</TableHead>
-                            <TableHead className="text-right">Running Total (K)</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {collectionDates.map((date, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-medium">{i + 1}</TableCell>
-                              <TableCell>{format(date, "dd MMM yyyy")}</TableCell>
-                              <TableCell className="text-muted-foreground">{format(date, "EEEE")}</TableCell>
-                              <TableCell className="text-right">K{marketeerResult.dailyInstallment.toLocaleString()}</TableCell>
-                              <TableCell className="text-right font-medium">
-                                K{((i + 1) * marketeerResult.dailyInstallment).toLocaleString()}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* === SECTION 7: Document Checklist === */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <CardTitle>Required Documents</CardTitle>
-              <BetaBadge />
             </div>
-            <CardDescription>
-              Check off each document as it's received. All items must be confirmed before submission.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {rules.checklist.map((item) => (
-              <div key={item} className="flex items-center gap-3">
-                <Checkbox
-                  checked={Boolean(uploadedDocMap[item])}
-                  onCheckedChange={(checked) =>
-                    setUploadedDocMap((prev) => ({ ...prev, [item]: Boolean(checked) }))
-                  }
-                />
-                <Label className="font-normal">{item}</Label>
-                {uploadedDocMap[item] && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-              </div>
-            ))}
-            {allDocsChecked && (
-              <Badge variant="outline" className="border-green-600/40 text-green-600 mt-2">
-                All documents confirmed ✓
-              </Badge>
+
+            {/* Eligibility Checks inline */}
+            {isMarketeer && (
+              <Card className="border-primary/20">
+                <CardContent className="pt-3 pb-3">
+                  <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Eligibility Checks
+                  </p>
+                  <div className="grid md:grid-cols-3 gap-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={employmentType === "self_employed"} onCheckedChange={() => setEmploymentType("self_employed")} />
+                      <span className="text-xs">Business owner</span>
+                      {employmentType === "self_employed" && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={hasLocalAuthorityCompliance} onCheckedChange={(v) => setHasLocalAuthorityCompliance(Boolean(v))} />
+                      <span className="text-xs">Local authority compliance</span>
+                      {hasLocalAuthorityCompliance && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={Number(businessMonths) >= 6} disabled />
+                      <span className="text-xs">6+ months ({businessMonths}m)</span>
+                      {Number(businessMonths) >= 6 && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
 
-        {/* === SECTION 8: Notes === */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Admin Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={adminNotes}
-              onChange={(e) => setAdminNotes(e.target.value)}
-              placeholder="Internal notes about this application..."
-              rows={3}
-            />
-          </CardContent>
-        </Card>
+            {productCode === "SALARY_ADVANCE" && (
+              <Card>
+                <CardContent className="pt-3 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={isCivilServantConfirmed} onCheckedChange={(v) => setIsCivilServantConfirmed(Boolean(v))} />
+                    <span className="text-xs">Confirmed borrower is a civil servant</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
-        {/* === Validation Errors === */}
-        {validationErrors.length > 0 && (
-          <Card className="border-destructive/30">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  {validationErrors.map((e) => (
-                    <p key={e} className="text-sm text-destructive">{e}</p>
-                  ))}
+          {/* ===== TAB 2: Loan Details ===== */}
+          <TabsContent value="loan" className="space-y-3 mt-0">
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                {isMarketeer && (
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Interest: 30% flat · Duration: 26 business days (Mon–Fri) · Daily collection · Range: K1,000 – K10,000
+                  </p>
+                )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Loan Amount (K) *</Label>
+                    <Input
+                      className="h-9"
+                      type="number"
+                      value={loanAmount}
+                      onChange={(e) => setLoanAmount(e.target.value)}
+                      min={isMarketeer ? 1000 : 0}
+                      max={isMarketeer ? 10000 : undefined}
+                      placeholder={isMarketeer ? "K1,000 – K10,000" : "Enter amount"}
+                    />
+                    {isMarketeer && loanAmount && (Number(loanAmount) < 1000 || Number(loanAmount) > 10000) && (
+                      <p className="text-[10px] text-destructive flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Must be K1,000 – K10,000
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">
+                      Tenure ({termUnit})
+                      {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed)</span>}
+                    </Label>
+                    <Input className="h-9" type="number" value={termValue} onChange={(e) => setTermValue(e.target.value)} disabled={isMarketeer} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Purpose *</Label>
+                    <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
+                  </div>
+                </div>
+
+                {/* Loan Preview */}
+                {preview && (
+                  <div className="mt-3 bg-primary/5 border border-primary/20 rounded-lg p-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">Principal</p>
+                        <p className="font-bold text-sm">K{Number(loanAmount).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">Interest</p>
+                        <p className="font-bold text-sm">K{Number(preview.interest).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">Total Repayment</p>
+                        <p className="font-bold text-sm text-primary">K{Number(preview.repayment).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">{preview.installmentLabel}</p>
+                        <p className="font-bold text-sm">K{Number(preview.installment).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    {preview.dailyRate && (
+                      <p className="text-[10px] text-muted-foreground text-center mt-1">Daily rate: {preview.dailyRate}/day</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Admin Notes */}
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <Label className="text-xs font-semibold">Admin Notes</Label>
+                <Textarea
+                  className="mt-1.5"
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Internal notes about this application..."
+                  rows={2}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Validation errors */}
+            {validationErrors.length > 0 && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    {validationErrors.map((e) => (
+                      <p key={e} className="text-xs text-destructive">{e}</p>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
 
-        {/* === Submit === */}
-        <div className="flex items-center justify-between">
-          <Button variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
-          <Button
-            size="lg"
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || validationErrors.length > 0}
-          >
-            {createMutation.isPending ? "Creating..." : "Create Loan Application"}
-          </Button>
-        </div>
+            {/* Submit */}
+            <div className="flex items-center justify-between pt-1">
+              <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
+              <Button
+                onClick={() => createMutation.mutate()}
+                disabled={createMutation.isPending || docUploading || validationErrors.length > 0}
+              >
+                {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* ===== TAB 3: Documents (file uploads) ===== */}
+          <TabsContent value="documents" className="mt-0">
+            <Card>
+              <CardHeader className="pb-2 pt-3 px-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-sm">Required Documents</CardTitle>
+                  <BetaBadge />
+                </div>
+                <CardDescription className="text-xs">
+                  Upload each required document. Photos can be captured directly from camera or selected from files.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="grid md:grid-cols-2 gap-3">
+                  {rules.checklist.map((item) => (
+                    <div
+                      key={item}
+                      className={`border rounded-lg p-3 transition-colors ${
+                        docFiles[item] ? "border-green-600/40 bg-green-600/5" : "border-border"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium">{item}</span>
+                        {docFiles[item] && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                      </div>
+                      {docFiles[item] ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground truncate flex-1">
+                            {docFiles[item]!.name}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleFileSelect(item, null)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-1.5">
+                          <input
+                            ref={(el) => { fileInputRefs.current[item] = el; }}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0] || null;
+                              handleFileSelect(item, f);
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[10px] flex-1"
+                            onClick={() => fileInputRefs.current[item]?.click()}
+                          >
+                            <Upload className="h-3 w-3 mr-1" /> Upload
+                          </Button>
+                          <input
+                            ref={(el) => { fileInputRefs.current[`${item}_camera`] = el; }}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0] || null;
+                              handleFileSelect(item, f);
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[10px]"
+                            onClick={() => fileInputRefs.current[`${item}_camera`]?.click()}
+                          >
+                            <Camera className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {Object.values(docFiles).filter(Boolean).length} / {rules.checklist.length} documents attached
+                  </p>
+                  {allDocsProvided && (
+                    <Badge variant="outline" className="border-green-600/40 text-green-600 text-xs">
+                      All documents attached ✓
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ===== TAB 4: Collection Schedule (Marketeer) ===== */}
+          {isMarketeer && collectionDates.length > 0 && (
+            <TabsContent value="schedule" className="mt-0">
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    Collection Schedule ({collectionDates.length} business days)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10 text-xs">Day</TableHead>
+                        <TableHead className="text-xs">Date</TableHead>
+                        <TableHead className="text-xs">Day</TableHead>
+                        <TableHead className="text-xs text-right">Amount (K)</TableHead>
+                        <TableHead className="text-xs text-right">Running Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {marketeerResult && collectionDates.map((date, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs font-medium py-1.5">{i + 1}</TableCell>
+                          <TableCell className="text-xs py-1.5">{format(date, "dd MMM yyyy")}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground py-1.5">{format(date, "EEE")}</TableCell>
+                          <TableCell className="text-xs text-right py-1.5">K{marketeerResult.dailyInstallment.toLocaleString()}</TableCell>
+                          <TableCell className="text-xs text-right font-medium py-1.5">
+                            K{((i + 1) * marketeerResult.dailyInstallment).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+        </Tabs>
       </div>
     </AdminLayout>
   );
