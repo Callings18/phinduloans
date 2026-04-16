@@ -5,6 +5,7 @@ import { useProductAccess } from "@/hooks/useProductAccess";
 import { Badge } from "@/components/ui/badge";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Home, Users, CreditCard, ClipboardCheck, Banknote, AlertTriangle, BarChart3 } from "lucide-react";
 
 const houseTabs = [
@@ -21,13 +22,25 @@ export default function HouseLayout() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const location = useLocation();
   const { data: product, isLoading } = useHouseProduct(productCode);
-  const { data: hasAccess, isLoading: accessLoading } = useProductAccess(productCode);
+  const { data: hasAccess, isLoading: accessLoading, isError: accessError } = useProductAccess(productCode);
 
   if (!isLoading && !product) {
     return <Navigate to="/admin" replace />;
   }
-  if (!accessLoading && hasAccess === false) {
-    return <Navigate to="/admin" replace />;
+  if (!accessLoading && (hasAccess === false || accessError)) {
+    return (
+      <AdminLayout>
+        <Card>
+          <CardHeader>
+            <CardTitle>Access denied</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>You do not have access to this loan product house.</p>
+            <p>Ask an administrator to grant product access in `user_product_access`.</p>
+          </CardContent>
+        </Card>
+      </AdminLayout>
+    );
   }
 
   return (

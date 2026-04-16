@@ -80,6 +80,51 @@ export default function AdminLoanProductScopedDashboard() {
         };
       }
 
+      if (productCode === "PAYDAY_SOFT") {
+        const { data, error } = await supabase
+          .from("loan_applications")
+          .select("id, city, status")
+          .eq("loan_product_id", pid);
+        if (error) throw error;
+        const lusaka = (data || []).filter((l: any) => String(l.city || "").toLowerCase() === "lusaka").length;
+        return {
+          titleA: "Lusaka Applications",
+          valueA: String(lusaka),
+          titleB: "Outside Lusaka",
+          valueB: String((data || []).length - lusaka),
+        };
+      }
+
+      if (productCode === "COLLATERAL") {
+        const { data, error } = await supabase
+          .from("loan_applications")
+          .select("id, status")
+          .eq("loan_product_id", pid);
+        if (error) throw error;
+        const approvedOrDisbursed = (data || []).filter((l: any) => ["approved", "disbursed", "active"].includes(l.status)).length;
+        return {
+          titleA: "Secured Active/Approved",
+          valueA: String(approvedOrDisbursed),
+          titleB: "Collateral Pipeline",
+          valueB: String((data || []).length),
+        };
+      }
+
+      if (productCode === "BUSINESS") {
+        const { data, error } = await supabase
+          .from("loan_applications")
+          .select("id, employment_type, status")
+          .eq("loan_product_id", pid);
+        if (error) throw error;
+        const ownerCaptured = (data || []).filter((l: any) => ["self_employed", "contract"].includes(l.employment_type)).length;
+        return {
+          titleA: "Business-owner Profiles",
+          valueA: String(ownerCaptured),
+          titleB: "Business Loan Pipeline",
+          valueB: String((data || []).length),
+        };
+      }
+
       return null;
     },
     enabled: !!pid && !!product,

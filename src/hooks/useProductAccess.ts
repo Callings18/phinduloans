@@ -19,10 +19,7 @@ export function useProductAccess(productCode: string | null | undefined) {
         .eq("product_code", productCode)
         .eq("is_active", true)
         .maybeSingle();
-      if (error) {
-        // During rollout, fail open for staff if mapping table not yet deployed.
-        return true;
-      }
+      if (error) throw error;
       return Boolean(data);
     },
   });

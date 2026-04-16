@@ -9,7 +9,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
-import { BorrowerInstallGate } from "@/components/common/BorrowerInstallGate";
 import { AuthProvider } from "@/hooks/useAuth";
 
 import Index from "./pages/Index";
@@ -148,46 +147,26 @@ function App() {
                   <Route path="/" element={<Index />} />
                   <Route
                     path="/apply"
-                    element={
-                      <BorrowerInstallGate>
-                        <Apply />
-                      </BorrowerInstallGate>
-                    }
+                    element={<Apply />}
                   />
                   <Route path="/calculator" element={<Calculator />} />
                   <Route
                     path="/pre-qualify"
-                    element={
-                      <BorrowerInstallGate>
-                        <Apply />
-                      </BorrowerInstallGate>
-                    }
+                    element={<Apply />}
                   />
                   <Route path="/about" element={<About />} />
                   <Route path="/about-us" element={<About />} />
                   <Route
                     path="/auth"
-                    element={
-                      <BorrowerInstallGate variant="signup-only">
-                        <Auth />
-                      </BorrowerInstallGate>
-                    }
+                    element={<Auth />}
                   />
                   <Route
                     path="/login"
-                    element={
-                      <BorrowerInstallGate variant="signup-only">
-                        <Auth />
-                      </BorrowerInstallGate>
-                    }
+                    element={<Auth />}
                   />
                   <Route
                     path="/dashboard"
-                    element={
-                      <BorrowerInstallGate>
-                        <Dashboard />
-                      </BorrowerInstallGate>
-                    }
+                    element={<Dashboard />}
                   />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/admin" element={<AdminRoute />}>
@@ -311,22 +290,98 @@ function App() {
                       path="houses/:productCode"
                       element={
                         <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                          <PermissionRoute permission={{ module: "house", action: "dashboard_view" }}>
                             <HouseLayout />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
                     >
-                      <Route index element={<HouseDashboardPage />} />
-                      <Route path="borrowers" element={<HouseBorrowersPage />} />
-                      <Route path="borrowers/:borrowerId" element={<HouseBorrowerDetailPage />} />
-                      <Route path="loans" element={<HouseLoansPage />} />
-                      <Route path="loans/create" element={<HouseLoanCreatePage />} />
-                      <Route path="loans/:loanId" element={<HouseLoanDetailPage />} />
-                      <Route path="review" element={<HouseReviewPage />} />
-                      <Route path="disbursements" element={<HouseDisbursementsPage />} />
-                      <Route path="collections" element={<HouseCollectionsPage />} />
-                      <Route path="reports" element={<HouseReportsPage />} />
+                      <Route
+                        index
+                        element={<PermissionRoute permission={{ module: "house", action: "dashboard_view" }}><HouseDashboardPage /></PermissionRoute>}
+                      />
+                      <Route
+                        path="borrowers"
+                        element={<PermissionRoute permission={{ module: "house", action: "borrowers_view" }}><HouseBorrowersPage /></PermissionRoute>}
+                      />
+                      <Route
+                        path="borrowers/:borrowerId"
+                        element={<PermissionRoute permission={{ module: "house", action: "borrowers_view" }}><HouseBorrowerDetailPage /></PermissionRoute>}
+                      />
+                      <Route
+                        path="loans"
+                        element={<PermissionRoute permission={{ module: "house", action: "loans_view" }}><HouseLoansPage /></PermissionRoute>}
+                      />
+                      <Route
+                        path="loans/create"
+                        element={<PermissionRoute permission={{ module: "house", action: "loans_create" }}><HouseLoanCreatePage /></PermissionRoute>}
+                      />
+                      <Route
+                        path="loans/:loanId"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "loans_view" },
+                              { module: "house", action: "loans_update" },
+                            ]}
+                          >
+                            <HouseLoanDetailPage />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route
+                        path="review"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "review_officer_approve" },
+                              { module: "house", action: "review_finance_approve" },
+                              { module: "house", action: "review_manager_approve" },
+                            ]}
+                          >
+                            <HouseReviewPage />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route
+                        path="disbursements"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "disbursement_view" },
+                              { module: "house", action: "disbursement_disburse" },
+                            ]}
+                          >
+                            <HouseDisbursementsPage />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route
+                        path="collections"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "collections_view" },
+                              { module: "house", action: "collections_manage" },
+                            ]}
+                          >
+                            <HouseCollectionsPage />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route
+                        path="reports"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "reports_view" },
+                              { module: "house", action: "reports_export" },
+                            ]}
+                          >
+                            <HouseReportsPage />
+                          </PermissionRoute>
+                        }
+                      />
                     </Route>
                     <Route
                       path="repayments"

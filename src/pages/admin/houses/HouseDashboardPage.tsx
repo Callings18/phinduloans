@@ -63,6 +63,14 @@ export default function HouseDashboardPage() {
     { label: "Overdue items", value: data?.overdue ?? 0, icon: AlertTriangle },
     { label: "Total disbursed", value: `K${Number(data?.totalDisbursed ?? 0).toLocaleString()}`, icon: Banknote },
   ];
+  const extraCards =
+    productCode === "PAYDAY_SOFT"
+      ? [{ label: "Policy", value: "Lusaka / 30 days" }]
+      : productCode === "COLLATERAL"
+        ? [{ label: "Collateral", value: "Required" }]
+        : productCode === "BUSINESS"
+          ? [{ label: "Business Owner Focus", value: "Enabled" }]
+          : [];
 
   return (
     <div className="space-y-6">
@@ -79,6 +87,16 @@ export default function HouseDashboardPage() {
           </Card>
         ))}
       </div>
+      {extraCards.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {extraCards.map((c) => (
+            <Card key={c.label}>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">{c.label}</CardTitle></CardHeader>
+              <CardContent><p className="text-xl font-semibold">{c.value}</p></CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
 
       {/* Collection summary for non-Marketeer products */}
       {productCode !== "MARKETEER" && repaymentStats && (
