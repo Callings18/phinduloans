@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -309,9 +309,9 @@ export default function MarketeerDailyCollectionTracker() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loanSummaries.map((loan) => (
-                <>
-                  <TableRow key={loan.id}>
+            {loanSummaries.map((loan) => (
+                <React.Fragment key={loan.id}>
+                  <TableRow>
                     <TableCell className="w-8">
                       {loan.overdueCount > 0 && (
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(loan.id)}>
@@ -423,7 +423,7 @@ export default function MarketeerDailyCollectionTracker() {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               ))}
               {loanSummaries.length === 0 && (
                 <TableRow>
