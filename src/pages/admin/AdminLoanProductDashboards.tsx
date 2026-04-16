@@ -1,12 +1,14 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart3, ArrowUpRight } from "lucide-react";
 import { isBetaModule } from "@/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
+import { AdminDashboardContent } from "@/pages/admin/AdminDashboard";
+import { LoanProductFilterSelect } from "@/components/admin/LoanProductFilterSelect";
 
 export default function AdminLoanProductDashboards() {
   const showBeta = isBetaModule("product_dashboards");
@@ -23,18 +25,34 @@ export default function AdminLoanProductDashboards() {
       return data as { id: string; name: string; product_code: string | null; is_active: boolean | null }[];
     },
   });
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const selectedProduct = useMemo(
+    () => (products ?? []).find((p) => p.id === selectedProductId) ?? null,
+    [products, selectedProductId],
+  );
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
+    <AdminDashboardContent
+      loanProductId={selectedProductId}
+      title={selectedProduct ? `${selectedProduct.name} dashboard` : "Loan product dashboards"}
+      productFilterSlot={
+        <div className="flex flex-col gap-2">
+          <LoanProductFilterSelect value={selectedProductId} onChange={setSelectedProductId} id="admin-product-dash-mode" />
+          {!selectedProductId ? (
+            <p className="text-xs text-muted-foreground">Select a product to load full scoped dashboard visuals.</p>
+          ) : null}
+        </div>
+      }
+      afterContent={
+        <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
-              Loan product dashboards
+            <h2 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
+              Product dashboard hub
               {showBeta ? <BetaBadge /> : null}
-            </h1>
+            </h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Open a scoped KPI view for each active loan product (same metrics as the main dashboard, filtered).
+              No redirect mode: choose a product and the full main dashboard visuals load on this page.
             </p>
           </div>
           <Button variant="outline" asChild>
@@ -51,7 +69,7 @@ export default function AdminLoanProductDashboards() {
               <BarChart3 className="h-5 w-5 text-primary" />
               Products
             </CardTitle>
-            <CardDescription>Choose a product to open its dashboard</CardDescription>
+            <CardDescription>Choose a product to load dashboard here</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -62,16 +80,18 @@ export default function AdminLoanProductDashboards() {
               <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {products.map((p) => (
                   <li key={p.id}>
-                    <Button variant="secondary" className="w-full h-auto py-4 justify-between" asChild>
-                      <Link to={`/admin/loans/products/${p.id}/dashboard`}>
-                        <span className="text-left">
-                          <span className="font-medium block">{p.name}</span>
-                          {p.product_code ? (
-                            <span className="text-xs font-mono text-muted-foreground">{p.product_code}</span>
-                          ) : null}
-                        </span>
-                        <ArrowUpRight className="h-4 w-4 shrink-0 opacity-70" />
-                      </Link>
+                    <Button
+                      variant={selectedProductId === p.id ? "default" : "secondary"}
+                      className="w-full h-auto py-4 justify-between"
+                      onClick={() => setSelectedProductId(p.id)}
+                    >
+                      <span className="text-left">
+                        <span className="font-medium block">{p.name}</span>
+                        {p.product_code ? (
+                          <span className="text-xs font-mono text-muted-foreground">{p.product_code}</span>
+                        ) : null}
+                      </span>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 opacity-70" />
                     </Button>
                   </li>
                 ))}
@@ -80,6 +100,7 @@ export default function AdminLoanProductDashboards() {
           </CardContent>
         </Card>
       </div>
-    </AdminLayout>
+      }
+    />
   );
 }

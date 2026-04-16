@@ -2,14 +2,18 @@ import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useHouseReportSummary, useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
+import { useHouseReportSummary, useHouseLoans, useHouseRepayments, useHouseProduct } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Banknote, TrendingUp, AlertTriangle, CheckCircle2, Download, PieChart } from "lucide-react";
 import { isPast, format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function HouseReportsPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
+  const { user } = useAuth();
+  const { data: product } = useHouseProduct(productCode);
   const { data } = useHouseReportSummary(productCode);
   const { data: loans } = useHouseLoans(productCode);
   const { data: repayments } = useHouseRepayments(productCode);
@@ -33,7 +37,7 @@ export default function HouseReportsPage() {
     return Object.entries(map).sort(([, a], [, b]) => b - a);
   }, [loans]);
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     const headers = ["metric", "value"];
     const rows = [
       ["total_loans", data?.totalLoans ?? 0],
@@ -66,6 +70,27 @@ export default function HouseReportsPage() {
     a.download = `${productCode.toLowerCase()}-house-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    if (user?.id) {
+      await (supabase.from as any)("product_house_report_posts").insert({
+        product_code: productCode,
+        product_name: product?.name ?? productCode,
+        report_type: "house_summary",
+        posted_by: user.id,
+        report_payload: {
+          metrics: {
+            total_loans: data?.totalLoans ?? 0,
+            active_loans: data?.activeLoans ?? 0,
+            overdue_installments: repaymentStats.overdueCount,
+            total_disbursed: data?.totalDisbursed ?? 0,
+            total_collected: repaymentStats.totalPaid,
+            total_outstanding: repaymentStats.totalDue,
+            collected_this_month: repaymentStats.collectedThisMonth,
+            repayment_rate_percent: repaymentStats.repaymentRate,
+          },
+        },
+        csv_content: csvContent,
+      });
+    }
     toast({ title: "Report exported" });
   };
 
@@ -73,7 +98,7 @@ export default function HouseReportsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">Reports</h2>
-        <Button size="sm" onClick={exportCsv}><Download size={14} className="mr-1" /> Export CSV</Button>
+        <Button size="sm" onClick={() => void exportCsv()}><Download size={14} className="mr-1" /> Export + Post</Button>
       </div>
 
       {/* Summary cards */}
