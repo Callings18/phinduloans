@@ -107,19 +107,19 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div className="space-y-1">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1">
             {backLink}
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">{title}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
             <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Calendar size={14} />
               {format(new Date(), "EEEE, MMMM d, yyyy")}
               {statsLoading && loanProductId ? <span className="text-xs">(loading…)</span> : null}
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">
+          <div className="flex w-full shrink-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
             {productFilterSlot}
-            <Button asChild className="gradient-primary shadow-button self-start sm:self-end">
+            <Button asChild className="gradient-primary shadow-button w-full self-start sm:w-auto sm:self-end">
               <Link to="/admin/applications">
                 View Applications
                 <ArrowUpRight size={16} className="ml-2" />
@@ -366,15 +366,15 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-foreground text-lg flex items-center gap-2">
-                  <Calendar size={18} className="text-primary" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                  <Calendar size={18} className="shrink-0 text-primary" />
                   Upcoming Payments
                 </CardTitle>
                 <CardDescription>Next payments due</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary">
+              <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
                 <Link to="/admin/repayments">
                   View All
                   <ArrowUpRight size={14} className="ml-1" />
@@ -402,23 +402,23 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") openLoan(payment.loan_id);
                       }}
-                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="flex cursor-pointer flex-col gap-3 rounded-lg border border-border/50 p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
                       onClick={() => openLoan(payment.loan_id)}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
                           <User size={18} className="text-muted-foreground" />
                         </div>
-                        <div>
-                          <p className="font-medium text-foreground">{payment.loan?.full_name || "Unknown"}</p>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{payment.loan?.full_name || "Unknown"}</p>
                           <p className="text-xs text-muted-foreground">K{Number(payment.amount).toLocaleString()}</p>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="flex shrink-0 flex-row items-center justify-between gap-2 sm:flex-col sm:items-end sm:text-right">
                         <Badge variant="outline" className={urgencyClass}>
                           {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`}
                         </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">{format(new Date(payment.due_date), "MMM d")}</p>
+                        <p className="text-xs text-muted-foreground sm:mt-1">{format(new Date(payment.due_date), "MMM d")}</p>
                       </div>
                     </div>
                   );
@@ -435,12 +435,12 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-foreground text-xl">Recent Applications</CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="text-xl text-foreground">Recent Applications</CardTitle>
                 <CardDescription>Latest loan applications</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary">
+              <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
                 <Link to="/admin/applications">
                   View All
                   <ArrowUpRight size={14} className="ml-1" />
@@ -448,9 +448,9 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+          <CardContent className="min-w-0">
+            <div className="overflow-x-auto rounded-md border border-border/40">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-border/50">
                     <th className="text-left py-3 px-4 text-muted-foreground font-medium text-sm">Applicant</th>

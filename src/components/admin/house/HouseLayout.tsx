@@ -46,26 +46,36 @@ export default function HouseLayout() {
   return (
     <AdminLayout>
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">{product?.name || productCode}</h1>
-            <p className="text-muted-foreground text-sm">Product house workspace</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              {product?.name || productCode}
+            </h1>
+            <p className="text-sm text-muted-foreground">Product house workspace</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{productCode}</Badge>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Badge variant="outline" className="max-w-full truncate">
+              {productCode}
+            </Badge>
             <BetaBadge />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
           {houseTabs.map((tab) => {
             const path = tab.path ? `/admin/houses/${productCode}/${tab.path}` : `/admin/houses/${productCode}`;
             const active = location.pathname === path || location.pathname.startsWith(`${path}/`);
             const Icon = tab.icon;
             return (
-              <Button key={tab.key} variant={active ? "default" : "outline"} size="sm" asChild>
+              <Button
+                key={tab.key}
+                variant={active ? "default" : "outline"}
+                size="sm"
+                className="shrink-0"
+                asChild
+              >
                 <Link to={path}>
-                  <Icon className="h-4 w-4 mr-1" />
+                  <Icon className="mr-1 h-4 w-4 shrink-0" />
                   {tab.label}
                 </Link>
               </Button>

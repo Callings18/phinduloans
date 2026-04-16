@@ -5,6 +5,7 @@
  */
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { AdminShellProvider } from "@/contexts/AdminShellContext";
 
 export default function AdminRoute() {
   const { user, isLoading, isStaff } = useAuth();
@@ -25,5 +26,9 @@ export default function AdminRoute() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <AdminShellProvider>
+      <Outlet />
+    </AdminShellProvider>
+  );
 }

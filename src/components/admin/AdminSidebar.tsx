@@ -8,10 +8,13 @@ import {
   ChevronRight,
   ChevronDown,
   Eye,
+  X,
 } from "lucide-react";
 import phinduLogo from "@/assets/phindu-logo-white.png";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAdminShell } from "@/contexts/AdminShellContext";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   Collapsible,
   CollapsibleContent,
@@ -24,7 +27,9 @@ import { isBetaModule } from "@/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 
 const AdminSidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const { sidebarCollapsed, setSidebarCollapsed, mobileNavOpen, closeMobileNav } = useAdminShell();
+  const isLg = useMediaQuery("(min-width: 1024px)");
+  const showCollapsedNav = sidebarCollapsed && isLg;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     adminMenuGroups.reduce((acc, group) => ({ ...acc, [group.label]: true }), {})
   );
@@ -80,57 +85,75 @@ const AdminSidebar = () => {
   const isActiveGroup = (group: (typeof filteredMenuGroups)[0]) =>
     group.items.some((item) => pathActive(item.path) || isChildActive(item));
 
+  useEffect(() => {
+    closeMobileNav();
+  }, [location.pathname, closeMobileNav]);
+
   return (
     <aside
+      id="admin-sidebar-nav"
       className={cn(
-        "fixed left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border z-50 transition-all duration-300 flex flex-col",
-        collapsed ? "w-20" : "w-64"
+        "fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar shadow-xl transition-transform duration-300 ease-out lg:shadow-none lg:transition-[transform,width] lg:duration-300",
+        sidebarCollapsed ? "w-64 lg:w-20" : "w-64",
+        mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       )}
     >
-      <div className="h-20 flex items-center justify-between px-4 border-b border-sidebar-border shrink-0">
-        {!collapsed && (
-          <div className="flex items-center gap-3">
-            <img
-              src={phinduLogo}
-              alt="Phindu Credit"
-              className="h-10 object-contain invert dark:invert-0"
-            />
-          </div>
-        )}
-        {collapsed && (
+      <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-3 lg:h-20 lg:px-4">
+        {showCollapsedNav ? (
           <img
             src={phinduLogo}
             alt="Phindu"
-            className="h-8 w-8 object-contain mx-auto rounded invert dark:invert-0"
+            className="mx-auto h-8 w-8 rounded object-contain invert dark:invert-0"
           />
+        ) : (
+          <div className="flex w-full min-w-0 items-center justify-between gap-2">
+            <img
+              src={phinduLogo}
+              alt="Phindu Credit"
+              className="h-9 max-h-10 shrink-0 object-contain invert dark:invert-0 lg:h-10"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 text-sidebar-foreground lg:hidden"
+              aria-label="Close menu"
+              onClick={closeMobileNav}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
         )}
       </div>
 
       <button
         type="button"
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-24 w-6 h-6 rounded-full bg-sidebar border border-sidebar-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        onClick={() => setSidebarCollapsed((c) => !c)}
+        className={cn(
+          "absolute -right-3 top-24 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-muted-foreground transition-colors hover:text-foreground",
+          !isLg && "hidden",
+        )}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
       <div
         className={cn(
-          "px-4 py-3 border-b border-sidebar-border flex gap-2 shrink-0",
-          collapsed ? "justify-center" : "justify-start"
+          "flex shrink-0 gap-2 border-b border-sidebar-border px-3 py-3 lg:px-4",
+          showCollapsedNav ? "justify-center" : "justify-start",
         )}
       >
-        <ThemeToggle variant={collapsed ? "minimal" : "default"} />
-        {!collapsed && <NotificationCenter />}
+        <ThemeToggle variant={showCollapsedNav ? "minimal" : "default"} />
+        {!showCollapsedNav && <NotificationCenter />}
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+      <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-3 lg:p-4">
         {filteredMenuGroups.map((group) => {
           const isOpen = openGroups[group.label];
           const hasActiveItem = isActiveGroup(group);
 
-          if (collapsed) {
+          if (showCollapsedNav) {
             return group.items.map((item) => {
               const isActive = pathActive(item.path);
               return (
@@ -270,24 +293,24 @@ const AdminSidebar = () => {
           variant="outline"
           onClick={() => navigate("/dashboard?view=borrower")}
           className={cn(
-            "w-full justify-start text-primary border-primary/30 hover:bg-primary/10",
-            collapsed && "justify-center"
+            "w-full justify-start border-primary/30 text-primary hover:bg-primary/10",
+            showCollapsedNav && "justify-center",
           )}
           title="View Borrower Dashboard"
         >
           <Eye size={20} />
-          {!collapsed && <span className="ml-3">View as Borrower</span>}
+          {!showCollapsedNav && <span className="ml-3">View as Borrower</span>}
         </Button>
         <Button
           variant="ghost"
           onClick={signOut}
           className={cn(
             "w-full justify-start text-muted-foreground hover:text-destructive",
-            collapsed && "justify-center"
+            showCollapsedNav && "justify-center",
           )}
         >
           <LogOut size={20} />
-          {!collapsed && <span className="ml-3">Logout</span>}
+          {!showCollapsedNav && <span className="ml-3">Logout</span>}
         </Button>
       </div>
     </aside>

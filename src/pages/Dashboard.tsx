@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ const Dashboard = () => {
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<BorrowerTab>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Payment claim state
   const [submitPaymentRepayment, setSubmitPaymentRepayment] = useState<any>(null);
@@ -382,6 +384,7 @@ const Dashboard = () => {
   });
 
   const handleTabChange = useCallback((tab: BorrowerTab) => {
+    setMobileSidebarOpen(false);
     if (tab === "apply") {
       handleStartApplication();
     } else {
@@ -475,38 +478,43 @@ const Dashboard = () => {
       {/* ── Main Area ───────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 bg-card/95 backdrop-blur-lg border-b border-border">
-          <div className="flex items-center justify-between h-16 px-6">
-            <div className="flex items-center gap-4">
-              {/* Mobile menu button */}
+        <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-lg">
+          <div className="flex h-16 items-center justify-between gap-2 px-3 sm:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
               <button
-                className="md:hidden p-2 rounded-lg hover:bg-muted/50"
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                type="button"
+                className="shrink-0 rounded-lg p-2 hover:bg-muted/50 md:hidden"
+                aria-label="Open menu"
+                onClick={() => setMobileSidebarOpen(true)}
               >
                 <Menu size={20} />
               </button>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
                   {showApplicationForm ? "Apply for Loan" : tabTitle[activeTab]}
                 </h1>
-                <p className="text-xs text-muted-foreground">
+                <p className="truncate text-xs text-muted-foreground">
                   Welcome back, {profile?.full_name || "Customer"}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <ThemeToggle variant="minimal" />
               <NotificationCenter />
               {isStaff && (
-                <Button size="sm" variant="outline" className="text-xs" asChild>
-                  <Link to="/admin"><Eye size={14} className="mr-1.5" />Admin Panel</Link>
+                <Button size="sm" variant="outline" className="h-9 shrink-0 px-2 text-xs sm:px-3" asChild>
+                  <Link to="/admin" className="inline-flex items-center gap-1 sm:gap-1.5">
+                    <Eye size={14} className="shrink-0" />
+                    <span className="hidden sm:inline">Admin Panel</span>
+                    <span className="sm:hidden">Admin</span>
+                  </Link>
                 </Button>
               )}
-              <div className="hidden sm:flex items-center gap-2 ml-2 pl-2 border-l border-border">
-                <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+              <div className="ml-1 hidden items-center gap-2 border-l border-border pl-2 sm:flex">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full gradient-primary text-sm font-semibold text-primary-foreground">
                   {(profile?.full_name || "U").charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm font-medium text-foreground hidden lg:inline">
+                <span className="hidden max-w-[8rem] truncate text-sm font-medium text-foreground lg:inline">
                   {profile?.full_name || "User"}
                 </span>
               </div>
@@ -515,8 +523,8 @@ const Dashboard = () => {
         </header>
 
         {/* Mobile Bottom Nav */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border">
-          <div className="flex items-center justify-around h-14 px-2">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden">
+          <div className="flex h-14 items-center justify-around px-1">
             {sidebarItems.map((item) => {
               const isActive = showApplicationForm ? item.id === "apply" : activeTab === item.id;
               return (
@@ -537,8 +545,8 @@ const Dashboard = () => {
         </nav>
 
         {/* Content */}
-        <main className="flex-1 p-6 pb-20 md:pb-6 overflow-y-auto">
-          <div className="max-w-6xl mx-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6">
+          <div className="mx-auto max-w-6xl">
             {showApplicationForm ? (
               <LoanApplicationForm
                 initialProductId={applyProductId}
@@ -598,6 +606,36 @@ const Dashboard = () => {
       </div>
 
       {/* Payment Claim Dialog */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="flex w-[min(100vw-1rem,20rem)] flex-col gap-0 p-0 sm:max-w-xs">
+          <SheetHeader className="space-y-0 border-b border-border px-4 py-4 text-left">
+            <SheetTitle className="sr-only">Dashboard navigation</SheetTitle>
+            <img src={phinduLogo} alt="Phindu" className="h-9 w-auto object-contain" />
+          </SheetHeader>
+          <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dashboard sections">
+            {sidebarItems.map((item) => {
+              const isActive = showApplicationForm ? item.id === "apply" : activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleTabChange(item.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                    isActive
+                      ? "border border-primary/20 bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  )}
+                >
+                  <item.icon size={20} className="shrink-0" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </SheetContent>
+      </Sheet>
+
       <Dialog open={!!submitPaymentRepayment} onOpenChange={(open) => { if (!open) { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
