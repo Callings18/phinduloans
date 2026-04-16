@@ -423,7 +423,7 @@ export default function MarketeerDailyCollectionTracker() {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               ))}
               {loanSummaries.length === 0 && (
                 <TableRow>
