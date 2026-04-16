@@ -93,6 +93,27 @@ export default function ProductLoanFormShell({
   const [docUploading, setDocUploading] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
+  const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
+
+  // Pre-populate docs from borrower's permanent vault
+  useEffect(() => {
+    if (!borrowerId) { setVaultDocs({}); return; }
+    (async () => {
+      const { data } = await supabase
+        .from("borrower_document_vault")
+        .select("doc_type, doc_label, file_url, file_name")
+        .eq("borrower_id", borrowerId)
+        .order("uploaded_at", { ascending: false });
+      if (!data) return;
+      const map: Record<string, { file_url: string; file_name: string }> = {};
+      data.forEach((d) => {
+        // Map vault doc_type to checklist label
+        const label = d.doc_label || d.doc_type;
+        if (!map[label]) map[label] = { file_url: d.file_url, file_name: d.file_name };
+      });
+      setVaultDocs(map);
+    })();
+  }, [borrowerId]);
 
   const { data: product } = useQuery({
     queryKey: ["product-by-code", productCode],
