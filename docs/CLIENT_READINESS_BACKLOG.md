@@ -3,7 +3,7 @@
 Use this as the **single planning list** between “feature complete” and “client go-live.”  
 **Assumption:** target **2–4 weeks** to production; client uses **LMS (loans)** plus **internal HR/payroll** for staff.
 
-**Related:** [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) · [ENTERPRISE_READINESS_CHECKLIST.md](./ENTERPRISE_READINESS_CHECKLIST.md) · [MIGRATIONS_FOR_DEPLOY.md](./MIGRATIONS_FOR_DEPLOY.md) · [PRODUCTION_RELEASE_CHECKLIST_3DAY.md](./PRODUCTION_RELEASE_CHECKLIST_3DAY.md)
+**Related:** [CLIENT_UAT_CHECKLIST_10.md](./CLIENT_UAT_CHECKLIST_10.md) (pilot smoke, 10 rows) · [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) · [ENTERPRISE_READINESS_CHECKLIST.md](./ENTERPRISE_READINESS_CHECKLIST.md) · [MIGRATIONS_FOR_DEPLOY.md](./MIGRATIONS_FOR_DEPLOY.md) · [PRODUCTION_RELEASE_CHECKLIST_3DAY.md](./PRODUCTION_RELEASE_CHECKLIST_3DAY.md)
 
 ---
 
