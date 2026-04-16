@@ -53,7 +53,7 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
     },
   },
   COLLATERAL: {
-    checklist: ["NRC", "Selfie holding NRC", "Collateral details (physical collection required)"],
+    checklist: ["NRC", "Selfie holding NRC", "Collateral photos (physical collection required)"],
     validate() {
       return [];
     },
@@ -95,9 +95,9 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
     checklist: [
       "NRC",
       "Selfie holding NRC",
-      "Video of business with stock",
-      "Video of residence",
-      "Video signing contract",
+      "Photo of business with stock",
+      "Photo of residence",
+      "Photo signing contract",
       "Sketch map to location",
       "Local authority compliance confirmation",
       "Business exists for at least 6 months",
