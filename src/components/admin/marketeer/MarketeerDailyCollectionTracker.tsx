@@ -309,9 +309,9 @@ export default function MarketeerDailyCollectionTracker() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loanSummaries.map((loan) => (
-                <>
-                  <TableRow key={loan.id}>
+            {loanSummaries.map((loan) => (
+                <React.Fragment key={loan.id}>
+                  <TableRow>
                     <TableCell className="w-8">
                       {loan.overdueCount > 0 && (
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(loan.id)}>
