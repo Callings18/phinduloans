@@ -24,6 +24,7 @@ import {
   Coins,
   Receipt,
   ClipboardList,
+  Percent,
 } from "lucide-react";
 
 /** Optional permission gate: item visible if can(module, action) or admin fallback handled in sidebar. */
@@ -100,6 +101,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
     items: [
       { icon: Briefcase, label: "HR", path: "/admin/hr", perm: { module: "hr", action: "view" } },
       { icon: Coins, label: "Payroll", path: "/admin/payroll", perm: { module: "payroll", action: "view" } },
+      { icon: Percent, label: "Payroll tax config", path: "/admin/payroll-tax-config", perm: { module: "payroll", action: "view" } },
     ],
   },
   {

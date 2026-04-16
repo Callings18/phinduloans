@@ -43,6 +43,7 @@ import AdminCourtCases from "./pages/admin/AdminCourtCases";
 import AdminWallets from "./pages/admin/AdminWallets";
 import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
+import AdminPayrollTaxConfig from "./pages/admin/AdminPayrollTaxConfig";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
@@ -530,6 +531,22 @@ function App() {
                             ]}
                           >
                             <AdminPayroll />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="payroll-tax-config"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "payroll", action: "view" },
+                              { module: "payroll", action: "manage" },
+                              { module: "payroll", action: "approve" },
+                            ]}
+                          >
+                            <AdminPayrollTaxConfig />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

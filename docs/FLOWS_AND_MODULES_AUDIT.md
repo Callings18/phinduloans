@@ -153,10 +153,10 @@ All under `/admin/*`, protected by AdminLayout (user + isStaff).
 - **Issue:** Navbar showed “Admin Dashboard” only when `isAdmin`. Staff (e.g. loan_officer) saw only “My Dashboard” but could access `/admin` (AdminLayout uses `isStaff`).
 - **Fix applied:** Navbar now uses `isStaff` for the main dashboard link: when user is staff, the link label is “Admin” and href is `/admin`; otherwise “My Dashboard” and `/dashboard`. Staff can reach admin in one click. Staff who are also borrowers can still open `/dashboard` via URL or bookmark.
 
-### 6.2 Route-level guard (optional)
+### 6.2 Route-level guard (implemented)
 
-- **Issue:** Admin protection is only inside AdminLayout; there is no central “protected admin route” in the router.
-- **Recommendation:** Optionally add a wrapper component (e.g. `AdminRoute`) that checks `user` and `isStaff` and redirects before rendering admin routes, for clarity and to avoid any flash of admin content.
+- **`AdminRoute`** wraps all `/admin/*` routes in `src/App.tsx`: requires `user` + **`isStaff`** before rendering `<Outlet />`, with loading spinner and redirects to `/auth?next=/admin` or `/dashboard`. See `src/components/admin/AdminRoute.tsx`.
+- Nested routes still use **`PermissionRoute`** for module-level RBAC and **`AdminLayout`** for staff-only layout.
 
 ### 6.3 Borrower flow
 

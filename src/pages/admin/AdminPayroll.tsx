@@ -49,6 +49,8 @@ import {
 import PayslipDetailModal from "@/components/admin/PayslipDetailModal";
 import { generatePayslipPDF, generateAllPayslipsPDF } from "@/utils/payslipPdfGenerator";
 import { downloadPayrollRunCsv } from "@/utils/payrollRunCsvExport";
+import { mapSupabaseError } from "@/utils/mapSupabaseError";
+import { Link } from "react-router-dom";
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
@@ -235,7 +237,7 @@ const AdminPayroll = () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
       toast.success(`Payroll generated for ${getMonthName(selectedMonth)} ${selectedYear} — ${count} employees`);
     },
-    onError: (err: any) => toast.error(err.message || "Failed to generate payroll"),
+    onError: (err: unknown) => toast.error(mapSupabaseError(err, "Failed to generate payroll")),
   });
 
   // ── Approve / Pay Mutations ──────────────────────────────
@@ -259,7 +261,7 @@ const AdminPayroll = () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-run-records"] });
       toast.success("Payroll approved");
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: unknown) => toast.error(mapSupabaseError(err, "Failed to approve payroll")),
   });
 
   const markPaidMutation = useMutation({
@@ -281,7 +283,7 @@ const AdminPayroll = () => {
       queryClient.invalidateQueries({ queryKey: ["payroll-run-records"] });
       toast.success("Payroll marked as paid");
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: unknown) => toast.error(mapSupabaseError(err, "Failed to mark payroll as paid")),
   });
 
   // ── Permission Guard ─────────────────────────────────────
@@ -319,9 +321,14 @@ const AdminPayroll = () => {
     <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
-          <p className="text-muted-foreground">Generate, approve, and manage monthly payroll with Zambian statutory deductions</p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
+            <p className="text-muted-foreground">Generate, approve, and manage monthly payroll with Zambian statutory deductions</p>
+          </div>
+          <Button variant="outline" size="sm" asChild className="shrink-0">
+            <Link to="/admin/payroll-tax-config">Tax bands &amp; relief</Link>
+          </Button>
         </div>
 
         {/* Summary Cards */}

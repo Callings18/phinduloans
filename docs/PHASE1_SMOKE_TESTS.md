@@ -54,8 +54,11 @@ Use these checks after enabling `VITE_API_PHASE1_WORKFLOW=true` and running `app
 - Optional headed run: `npm run test:e2e:headed`
 - Env vars used by automation:
   - `E2E_BASE_URL` (default `http://127.0.0.1:8080`)
-  - `E2E_STAFF_LOW_EMAIL`, `E2E_STAFF_LOW_PASSWORD` (permission denial check)
-  - `E2E_FINANCE_EMAIL`, `E2E_FINANCE_PASSWORD` (expenses/write-off finance flow checks)
+  - `E2E_STAFF_LOW_EMAIL`, `E2E_STAFF_LOW_PASSWORD` (low-privileged staff: settings redirect)
+  - `E2E_FINANCE_EMAIL`, `E2E_FINANCE_PASSWORD` (finance flows + **houses hub** smoke — user must have `loans:view`, e.g. `finance_officer`)
+- Optional client monitoring (not required for smoke):
+  - `VITE_SENTRY_DSN` — when set, `@sentry/react` is initialized in `src/main.tsx` and `errorHandler` forwards captured errors to Sentry.
 - Notes:
   - Tests auto-skip if credentials are not provided.
+  - Start the Vite dev server on the same host/port as `E2E_BASE_URL` before running Playwright locally.
   - Finance flow checks also auto-skip when no pending rows exist in the environment.

@@ -3,7 +3,7 @@
 Use this as the **single planning list** between “feature complete” and “client go-live.”  
 **Assumption:** target **2–4 weeks** to production; client uses **LMS (loans)** plus **internal HR/payroll** for staff.
 
-**Related:** [CLIENT_UAT_CHECKLIST_10.md](./CLIENT_UAT_CHECKLIST_10.md) (pilot smoke, 10 rows) · [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) · [ENTERPRISE_READINESS_CHECKLIST.md](./ENTERPRISE_READINESS_CHECKLIST.md) · [MIGRATIONS_FOR_DEPLOY.md](./MIGRATIONS_FOR_DEPLOY.md) · [PRODUCTION_RELEASE_CHECKLIST_3DAY.md](./PRODUCTION_RELEASE_CHECKLIST_3DAY.md)
+**Related:** [CLIENT_UAT_CHECKLIST_10.md](./CLIENT_UAT_CHECKLIST_10.md) (pilot smoke, 10 rows) · [RLS_UI_MATRIX.md](./RLS_UI_MATRIX.md) (M5: role × route matrix) · [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) · [ENTERPRISE_READINESS_CHECKLIST.md](./ENTERPRISE_READINESS_CHECKLIST.md) · [MIGRATIONS_FOR_DEPLOY.md](./MIGRATIONS_FOR_DEPLOY.md) · [PRODUCTION_RELEASE_CHECKLIST_3DAY.md](./PRODUCTION_RELEASE_CHECKLIST_3DAY.md)
 
 ---
 
@@ -35,7 +35,7 @@ gh issue create --title "<title>" --body "See docs/CLIENT_READINESS_BACKLOG.md �
 
 | # | Suggested issue title | Why | Done when |
 |---|------------------------|-----|-------------|
-| S1 | **Admin UI: edit `payroll_tax_config` (effective dates, relief, PAYE mode)** | Clients change bands; developers should not edit DB by hand each year. | CRUD restricted to `payroll:manage` or super_admin; validation + read-only history or `updated_at` visible. |
+| S1 | **Admin UI: edit `payroll_tax_config` (effective dates, relief, PAYE mode)** | Clients change bands; developers should not edit DB by hand each year. | **UI:** `/admin/payroll-tax-config` (sidebar **Payroll tax config**). View with `payroll:view`; edits require `payroll:manage`. Validate rows in staging against accountant expectations; `updated_at` visible on rows in DB. |
 | S2 | **User-visible errors when RLS denies (payroll / HR)** | Reduces “it’s broken” calls. | Toast or inline message maps common Postgres/RLS failures to “no permission” / “contact admin.” |
 | S3 | **Ops runbook: payroll lifecycle + roles (1–2 pages)** | Handover and training. | PDF or `docs/` page: generate → review CSV → approve → mark paid → bank file; who holds `payroll:approve`. |
 | S4 | **Extend QA checklist: payroll migration id + accountant line** | Keeps sign-off in one place. | [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) references `20260411120000` and accountant parallel run. |

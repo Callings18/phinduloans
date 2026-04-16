@@ -1,4 +1,5 @@
 import { toast } from "@/hooks/use-toast";
+import * as Sentry from "@sentry/react";
 
 /**
  * Enhanced error handling utility
@@ -136,23 +137,13 @@ class ErrorHandler {
    * Track error to external service (Sentry, LogRocket, etc.)
    */
   private trackError(error: Error, context?: ErrorContext) {
-    // TODO: Integrate with error tracking service
-    // Example for Sentry:
-    // if (window.Sentry) {
-    //   window.Sentry.captureException(error, {
-    //     contexts: {
-    //       custom: context,
-    //     },
-    //   });
-    // }
-
-    // For now, log to console with structured data
-    if (import.meta.env.PROD) {
-      // In production, you could send to your logging endpoint
-      // fetch('/api/log-error', {
-      //   method: 'POST',
-      //   body: JSON.stringify({ error: error.message, stack: error.stack, context }),
-      // });
+    const dsn = import.meta.env.VITE_SENTRY_DSN;
+    if (dsn) {
+      Sentry.captureException(error, {
+        extra: (context ?? {}) as Record<string, unknown>,
+      });
+    } else if (import.meta.env.PROD) {
+      // Optional: ship to your own endpoint when Sentry is not configured
     }
   }
 

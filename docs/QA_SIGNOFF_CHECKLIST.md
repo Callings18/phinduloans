@@ -7,6 +7,7 @@ For **per–loan-product** demo acceptance (golden path and house reports), use 
 ## Environment
 
 - [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set for staging/production.
+- [ ] Optional: `VITE_SENTRY_DSN` for client error reporting (`@sentry/react` in `main.tsx`).
 - [ ] Optional: `VITE_API_URL` points to deployed **apps/api-next** (default local dev: `http://localhost:3001`).
 - [ ] Optional: `VITE_API_PHASE1_WORKFLOW=true` when api-next is live so loan transitions and payment claims use the API layer.
 - [ ] Supabase migrations applied through **`20260410120000_restore_transition_loan_status_full.sql`** (restores full `transition_loan_status` workflow).

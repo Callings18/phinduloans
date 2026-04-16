@@ -9,4 +9,6 @@ interface ImportMetaEnv {
   readonly VITE_DEV_SUPPORT_WHATSAPP?: string;
   /** Comma-separated beta module keys (e.g. loans_by_product,product_dashboards,marketeer) */
   readonly VITE_BETA_MODULES?: string;
+  /** Optional Sentry DSN for client error reporting (`@sentry/react`). */
+  readonly VITE_SENTRY_DSN?: string;
 }

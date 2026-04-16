@@ -34,6 +34,14 @@ test.describe("borrower portal smoke", () => {
 });
 
 test.describe("admin hardening smoke", () => {
+  test("finance staff can open loan product houses hub", async ({ page }) => {
+    test.skip(!financeCreds, "Set E2E_FINANCE_EMAIL and E2E_FINANCE_PASSWORD (role should include loans:view)");
+    await login(page, financeCreds!);
+    await page.goto("/admin/houses");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Loan Product Houses" })).toBeVisible();
+  });
+
   test("route denial for low-privileged staff on settings", async ({ page }) => {
     test.skip(!lowStaffCreds, "Set E2E_STAFF_LOW_EMAIL and E2E_STAFF_LOW_PASSWORD");
     await login(page, lowStaffCreds!);

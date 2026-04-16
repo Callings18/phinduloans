@@ -16,7 +16,7 @@ Use this doc during **stabilization** to track defects with clear repro steps an
 
 | Item | Area | Notes |
 |------|------|--------|
-| Error tracking not wired | integrations | [`src/utils/errorHandler.ts`](../src/utils/errorHandler.ts) — TODO for Sentry or similar. |
+| Error tracking optional | integrations | Set `VITE_SENTRY_DSN` to enable `@sentry/react` in [`src/main.tsx`](../src/main.tsx) and [`src/utils/errorHandler.ts`](../src/utils/errorHandler.ts). |
 | Phase 1 API / migrations | integrations | Requires env flags and DB migrations applied; see [`docs/PHASE1_SMOKE_TESTS.md`](PHASE1_SMOKE_TESTS.md). |
 | E2E smoke skips | other | Playwright skips without `E2E_*` credentials; see smoke doc. |
 | iOS PWA / push | pwa | Test install + push on real iOS; behavior differs from Android Chrome. |

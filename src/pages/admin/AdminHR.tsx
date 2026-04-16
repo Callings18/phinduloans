@@ -36,6 +36,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getMonthName } from "@/utils/payrollCalculations";
+import { mapSupabaseError } from "@/utils/mapSupabaseError";
 
 const AdminHR = () => {
   const { can } = usePermissions();
@@ -449,8 +450,8 @@ function AddEditEmployeeForm({
       queryClient.invalidateQueries({ queryKey: ["admin-hr-employees"] });
       onSuccess();
     },
-    onError: (e) => {
-      toast({ title: "Error", description: (e as Error).message, variant: "destructive" });
+    onError: (e: unknown) => {
+      toast({ title: "Could not save employee", description: mapSupabaseError(e), variant: "destructive" });
     },
   });
 
