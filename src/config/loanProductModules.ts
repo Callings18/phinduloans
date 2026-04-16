@@ -1,5 +1,6 @@
 export type LoanProductCode =
   | "SALARY_ADVANCE"
+  | "SALARY_ADVANCE_STAFF"
   | "PAYDAY_SOFT"
   | "COLLATERAL"
   | "BUSINESS"
@@ -18,42 +19,49 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
   {
     code: "SALARY_ADVANCE",
     name: "Salary Advance",
-    createPath: "/admin/loans/create/salary-advance",
+    createPath: "/admin/houses/SALARY_ADVANCE/loans/create",
     housePath: "/admin/houses/SALARY_ADVANCE",
     betaKey: "loan_create_salary_advance",
   },
   {
+    code: "SALARY_ADVANCE_STAFF",
+    name: "Staff Salary Advance",
+    createPath: "/admin/houses/SALARY_ADVANCE_STAFF/loans/create",
+    housePath: "/admin/houses/SALARY_ADVANCE_STAFF",
+    betaKey: "loan_create_salary_advance_staff",
+  },
+  {
     code: "PAYDAY_SOFT",
     name: "Payday Soft",
-    createPath: "/admin/loans/create/payday-soft",
+    createPath: "/admin/houses/PAYDAY_SOFT/loans/create",
     housePath: "/admin/houses/PAYDAY_SOFT",
     betaKey: "loan_create_payday_soft",
   },
   {
     code: "COLLATERAL",
     name: "Collateral Loan",
-    createPath: "/admin/loans/create/collateral",
+    createPath: "/admin/houses/COLLATERAL/loans/create",
     housePath: "/admin/houses/COLLATERAL",
     betaKey: "loan_create_collateral",
   },
   {
     code: "BUSINESS",
     name: "Business Loan",
-    createPath: "/admin/loans/create/business",
+    createPath: "/admin/houses/BUSINESS/loans/create",
     housePath: "/admin/houses/BUSINESS",
     betaKey: "loan_create_business",
   },
   {
     code: "MOTOR_VEHICLE",
     name: "Motor Vehicle Loan",
-    createPath: "/admin/loans/create/motor-vehicle",
+    createPath: "/admin/houses/MOTOR_VEHICLE/loans/create",
     housePath: "/admin/houses/MOTOR_VEHICLE",
     betaKey: "loan_create_motor_vehicle",
   },
   {
     code: "MARKETEER",
     name: "Marketeer Loan",
-    createPath: "/admin/loans/create/marketeer",
+    createPath: "/admin/houses/MARKETEER/loans/create",
     housePath: "/admin/houses/MARKETEER",
     betaKey: "marketeer",
   },

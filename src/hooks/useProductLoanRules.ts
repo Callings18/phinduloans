@@ -34,6 +34,24 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
       return errors;
     },
   },
+  SALARY_ADVANCE_STAFF: {
+    checklist: [
+      "NRC",
+      "3 months bank statements",
+      "3 months payslips",
+      "Proof of residence / utility bill",
+      "Selfie holding NRC",
+      "Eligible staff member confirmation",
+    ],
+    validate(values) {
+      const errors: string[] = [];
+      if (!values.isCivilServantConfirmed) errors.push("Staff eligibility confirmation is required.");
+      if (!["employed", "contract"].includes(values.employmentType)) {
+        errors.push("Staff salary advance is restricted to employed/contract borrowers.");
+      }
+      return errors;
+    },
+  },
   PAYDAY_SOFT: {
     checklist: [
       "NRC",

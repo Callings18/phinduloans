@@ -17,6 +17,7 @@ function getProductCode(value: string | null | undefined): LoanProductCode | nul
   if (!value) return null;
   if (
     value === "SALARY_ADVANCE" ||
+    value === "SALARY_ADVANCE_STAFF" ||
     value === "PAYDAY_SOFT" ||
     value === "COLLATERAL" ||
     value === "BUSINESS" ||
@@ -35,6 +36,7 @@ function asRecord(value: Json | null | undefined): Record<string, unknown> {
 
 const requiredByProduct: Record<LoanProductCode, string[]> = {
   SALARY_ADVANCE: ["nrc_front", "nrc_back", "selfie_holding_nrc", "payslip_1", "bank_statement_1"],
+  SALARY_ADVANCE_STAFF: ["nrc_front", "nrc_back", "selfie_holding_nrc", "payslip_1", "bank_statement_1"],
   PAYDAY_SOFT: ["nrc_front", "nrc_back", "selfie_holding_nrc", "proof_of_residence", "sketch_map_residence"],
   COLLATERAL: ["nrc_front", "nrc_back", "selfie_holding_nrc", "collateral_details"],
   BUSINESS: ["nrc_front", "nrc_back", "financial_statement", "pacra_certificate", "tax_clearance"],

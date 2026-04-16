@@ -174,6 +174,7 @@ export default function ProductLoanFormShell({
   );
 
   const isMarketeer = productCode === "MARKETEER";
+  const isSalaryAdvanceFamily = productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF";
 
   const marketeerResult = useMemo(() => {
     if (!isMarketeer || !product || !loanAmount) return null;
@@ -624,12 +625,16 @@ export default function ProductLoanFormShell({
               </Card>
             )}
 
-            {productCode === "SALARY_ADVANCE" && (
+            {isSalaryAdvanceFamily && (
               <Card>
                 <CardContent className="pt-3 pb-3">
                   <div className="flex items-center gap-2">
                     <Checkbox checked={isCivilServantConfirmed} onCheckedChange={(v) => setIsCivilServantConfirmed(Boolean(v))} />
-                    <span className="text-xs">Confirmed borrower is a civil servant</span>
+                    <span className="text-xs">
+                      {productCode === "SALARY_ADVANCE_STAFF"
+                        ? "Confirmed borrower is an eligible staff member"
+                        : "Confirmed borrower is a civil servant"}
+                    </span>
                   </div>
                 </CardContent>
               </Card>

@@ -70,7 +70,9 @@ export default function HouseDashboardPage() {
         ? [{ label: "Collateral", value: "Required" }]
         : productCode === "BUSINESS"
           ? [{ label: "Business Owner Focus", value: "Enabled" }]
-          : [];
+          : productCode === "SALARY_ADVANCE_STAFF"
+            ? [{ label: "Program", value: "Staff salary" }]
+            : [];
 
   return (
     <div className="space-y-6">

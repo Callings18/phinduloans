@@ -62,7 +62,7 @@ export default function AdminLoanProductScopedDashboard() {
         };
       }
 
-      if (productCode === "SALARY_ADVANCE") {
+      if (productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF") {
         const { data, error } = await supabase
           .from("loan_repayments")
           .select("id, due_date, status, loan:loan_applications!inner(loan_product_id)")

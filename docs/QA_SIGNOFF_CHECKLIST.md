@@ -2,6 +2,8 @@
 
 Use this before calling the ERP/LMS release **fully done**.
 
+For **per–loan-product** demo acceptance (golden path and house reports), use [Product acceptance checklist](./PRODUCT_ACCEPTANCE_CHECKLIST.md) and align `product_code` values with production (`loan_products.product_code`).
+
 ## Environment
 
 - [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set for staging/production.
