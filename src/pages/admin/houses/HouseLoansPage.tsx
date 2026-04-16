@@ -1,27 +1,139 @@
+import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useHouseLoans } from "@/hooks/useHouseData";
+import { Search, Plus, Eye } from "lucide-react";
+import PaginationControls from "@/components/common/PaginationControls";
+import { format } from "date-fns";
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+  approved: { label: "Approved", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  awaiting_disbursement: { label: "Awaiting Disbursement", className: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  disbursed: { label: "Disbursed", className: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  active: { label: "Active", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  completed: { label: "Completed", className: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+  defaulted: { label: "Defaulted", className: "bg-red-600/20 text-red-500 border-red-600/30" },
+  rejected: { label: "Rejected", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+};
 
 export default function HouseLoansPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
-  const { data: loans } = useHouseLoans(productCode);
+  const { data: loans, isLoading } = useHouseLoans(productCode);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const filtered = useMemo(() => {
+    if (!loans) return [];
+    return loans.filter((l: any) => {
+      const q = search.toLowerCase();
+      const matchesSearch = !q ||
+        l.full_name?.toLowerCase().includes(q) ||
+        l.email?.toLowerCase().includes(q) ||
+        l.nrc_number?.toLowerCase().includes(q) ||
+        l.phone?.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === "all" || l.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [loans, search, statusFilter]);
+
+  const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // Stats
+  const totalAmount = (loans ?? []).reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
+  const activeCount = (loans ?? []).filter((l: any) => ["active", "disbursed"].includes(l.status)).length;
+
+  const statusCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    (loans ?? []).forEach((l: any) => { map[l.status] = (map[l.status] || 0) + 1; });
+    return map;
+  }, [loans]);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Loans</CardTitle>
-        <Button asChild size="sm"><Link to={`/admin/houses/${productCode}/loans/create`}>Create loan</Link></Button>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {(loans ?? []).map((loan: any) => (
-          <Link key={loan.id} to={`/admin/houses/${productCode}/loans/${loan.id}`} className="block rounded border p-3 hover:bg-muted/40">
-            <p className="font-medium">K{Number(loan.loan_amount || 0).toLocaleString()} - {loan.status}</p>
-            <p className="text-xs text-muted-foreground">{loan.full_name || loan.email}</p>
-          </Link>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Loans</h2>
+          <p className="text-sm text-muted-foreground">{(loans ?? []).length} total · {activeCount} active · K{totalAmount.toLocaleString()} portfolio</p>
+        </div>
+        <Button asChild size="sm"><Link to={`/admin/houses/${productCode}/loans/create`}><Plus size={16} className="mr-1" /> Create Loan</Link></Button>
+      </div>
+
+      {/* Status filter pills */}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}>
+          All ({(loans ?? []).length})
+        </Button>
+        {Object.entries(statusCounts).sort().map(([status, count]) => (
+          <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"} onClick={() => { setStatusFilter(status); setCurrentPage(1); }}>
+            {statusConfig[status]?.label || status} ({count})
+          </Button>
         ))}
-        {(loans ?? []).length === 0 && <p className="text-sm text-muted-foreground">No loans available.</p>}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+        <Input placeholder="Search by name, email, NRC, or phone..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="pl-9" />
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Borrower</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Term</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginated.map((l: any) => {
+                  const cfg = statusConfig[l.status] || statusConfig.pending;
+                  return (
+                    <TableRow key={l.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm">{l.full_name || l.email}</p>
+                          <p className="text-xs text-muted-foreground">{l.phone || l.nrc_number || "—"}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">K{Number(l.loan_amount || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-sm">{l.loan_term_months} {l.term_unit || "months"}</TableCell>
+                      <TableCell><Badge className={`${cfg.className} border text-xs`}>{cfg.label}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{l.created_at ? format(new Date(l.created_at), "dd MMM yyyy") : "—"}</TableCell>
+                      <TableCell>
+                        <Button asChild size="sm" variant="ghost">
+                          <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {paginated.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No loans found.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+      {filtered.length > pageSize && (
+        <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
+      )}
+    </div>
   );
 }

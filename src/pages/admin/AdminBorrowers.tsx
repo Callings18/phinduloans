@@ -898,7 +898,7 @@ const AdminBorrowers = () => {
 
       {/* Add Borrower Dialog */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-foreground">Add New Borrower</DialogTitle>
             <DialogDescription>Create a new borrower profile</DialogDescription>
@@ -1036,7 +1036,7 @@ const AdminBorrowers = () => {
 
       {/* Edit Borrower Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-foreground">Edit Borrower</DialogTitle>
             <DialogDescription>Update borrower profile details</DialogDescription>
