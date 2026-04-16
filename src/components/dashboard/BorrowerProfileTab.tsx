@@ -1,9 +1,13 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
+import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
+import KYCNextOfKin from "@/components/dashboard/KYCNextOfKin";
+import KYCReferences from "@/components/dashboard/KYCReferences";
 import {
   User,
   Mail,
@@ -22,6 +26,27 @@ interface Props {
   profile: any;
   kycVerified: boolean;
   onSignOut: () => void;
+}
+
+function BorrowerKycInlineSection({ userId }: { userId: string }) {
+  if (!userId) return null;
+  return (
+    <Card className="border-border/60 shadow-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">KYC & payout details</CardTitle>
+        <CardDescription>
+          Upload identity documents, add bank or mobile money for disbursement, and complete next of kin — same as under
+          Settings → Documents on the full profile page.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6 pt-0">
+        <ProfileDocumentVault userId={userId} />
+        <KYCFinancialInfo userId={userId} />
+        <KYCNextOfKin userId={userId} />
+        <KYCReferences userId={userId} />
+      </CardContent>
+    </Card>
+  );
 }
 
 function buildProfileHref(path: string, viewToken: string | null) {
@@ -118,6 +143,8 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onSignO
           </div>
         </CardContent>
       </Card>
+
+      <BorrowerKycInlineSection userId={user?.id || ""} />
 
       {/* Menu Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -21,6 +21,32 @@ export const LOAN_APPLICATION_IDENTITY_DOC_TYPES = [
 
 export type BorrowerVaultKycDocType = (typeof BORROWER_VAULT_KYC_DOC_TYPES)[number]["type"];
 
+/** Build latest row per `doc_type` (caller should pass rows ordered by `uploaded_at` desc). */
+export function mapLatestVaultRowByDocType<T extends { doc_type: string }>(rows: T[]): Record<string, T> {
+  const map: Record<string, T> = {};
+  for (const row of rows) {
+    if (!(row.doc_type in map)) map[row.doc_type] = row;
+  }
+  return map;
+}
+
+/**
+ * Resolve the document row for a UI slot (`selfie` accepts `BORROWER_SELFIE_VAULT_ALIASES`).
+ */
+export function vaultDocForSlot<T extends { doc_type: string }>(
+  byDocType: Record<string, T | undefined>,
+  slotType: BorrowerVaultKycDocType,
+): T | undefined {
+  if (slotType === "selfie") {
+    for (const alias of BORROWER_SELFIE_VAULT_ALIASES) {
+      const doc = byDocType[alias];
+      if (doc) return doc;
+    }
+    return undefined;
+  }
+  return byDocType[slotType];
+}
+
 /**
  * Latest row wins per doc_type (caller should pass rows ordered by uploaded_at desc).
  */

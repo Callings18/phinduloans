@@ -129,6 +129,17 @@ export default function BorrowerHomeTab({
         icon: ShieldAlert,
       };
     }
+    if (!hasBankDetails && !hasMobileMoney) {
+      return {
+        title: "Add payout details",
+        description:
+          "Add a bank account or mobile money number so approved loans can be disbursed to you.",
+        cta: "Open profile & payout",
+        tab: "profile" as BorrowerTab,
+        navigate: onOpenKycDocuments,
+        icon: Banknote,
+      };
+    }
     if (totalOverdue > 0) {
       return {
         title: "Resolve overdue repayments",

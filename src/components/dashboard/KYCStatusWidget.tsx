@@ -7,8 +7,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ShieldCheck, Clock, AlertTriangle, CheckCircle, XCircle, Upload } from "lucide-react";
 import { differenceInHours } from "date-fns";
 import {
-  BORROWER_SELFIE_VAULT_ALIASES,
   BORROWER_VAULT_KYC_DOC_TYPES,
+  mapLatestVaultRowByDocType,
+  vaultDocForSlot,
 } from "@/constants/borrowerKycDocs";
 
 const KYC_DOC_TYPES = BORROWER_VAULT_KYC_DOC_TYPES.map(({ type, label }) => ({ type, label }));
@@ -41,26 +42,12 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
     enabled: !!userId,
   });
 
-  // Map by type (most recent)
-  const docsByType: Record<string, (typeof vaultDocs)[0]> = {};
-  vaultDocs.forEach((d) => {
-    if (!docsByType[d.doc_type]) docsByType[d.doc_type] = d;
-  });
+  const docsByType = mapLatestVaultRowByDocType(vaultDocs);
 
-  const docForSlot = (slotType: string) => {
-    if (slotType === "selfie") {
-      for (const alias of BORROWER_SELFIE_VAULT_ALIASES) {
-        if (docsByType[alias]) return docsByType[alias];
-      }
-      return undefined;
-    }
-    return docsByType[slotType];
-  };
-
-  const verifiedCount = KYC_DOC_TYPES.filter((t) => docForSlot(t.type)?.is_verified).length;
+  const verifiedCount = KYC_DOC_TYPES.filter((t) => vaultDocForSlot(docsByType, t.type)?.is_verified).length;
   const allVerified = verifiedCount === KYC_DOC_TYPES.length;
-  const uploadedCount = KYC_DOC_TYPES.filter((t) => !!docForSlot(t.type)).length;
-  const pendingDocs = KYC_DOC_TYPES.map((t) => docForSlot(t.type)).filter(
+  const uploadedCount = KYC_DOC_TYPES.filter((t) => !!vaultDocForSlot(docsByType, t.type)).length;
+  const pendingDocs = KYC_DOC_TYPES.map((t) => vaultDocForSlot(docsByType, t.type)).filter(
     (doc) => doc && !doc.is_verified && !(doc.verified_at && doc.notes?.startsWith("Rejected:")),
   );
   const oldestPendingHours = pendingDocs.reduce((max, doc) => {
@@ -97,7 +84,7 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
       <CardContent className="p-4 pt-0">
         <div className="space-y-2">
           {KYC_DOC_TYPES.map((t) => {
-            const doc = docForSlot(t.type);
+            const doc = vaultDocForSlot(docsByType, t.type);
             const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
 
             return (

@@ -10,7 +10,14 @@ import {
   FileText, Upload, Eye, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BORROWER_VAULT_KYC_DOC_TYPES, borrowerVaultCoreSlotsUploaded } from "@/constants/borrowerKycDocs";
+import {
+  BORROWER_SELFIE_VAULT_ALIASES,
+  BORROWER_VAULT_KYC_DOC_TYPES,
+  borrowerVaultCoreSlotsUploaded,
+  mapLatestVaultRowByDocType,
+  vaultDocForSlot,
+} from "@/constants/borrowerKycDocs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const KYC_DOC_TYPES = [...BORROWER_VAULT_KYC_DOC_TYPES];
 
@@ -26,7 +33,7 @@ export default function ProfileDocumentVault({ userId }: Props) {
   const [expandedHistoryType, setExpandedHistoryType] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const { data: vaultDocs = [], isLoading } = useQuery({
+  const { data: vaultDocs = [], isLoading, isError, error } = useQuery({
     queryKey: ["borrower-kyc-vault", userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -102,13 +109,14 @@ export default function ProfileDocumentVault({ userId }: Props) {
             .eq("id", userId)
             .single();
           const name = profile?.full_name || "A borrower";
+          const docList = BORROWER_VAULT_KYC_DOC_TYPES.map((d) => d.label).join(", ");
           // Send notification via edge function (fire-and-forget)
           supabase.functions.invoke("send-notification", {
             body: {
               type: "email",
               to: "", // Edge function will use admin email from settings
               subject: "KYC Documents Submitted - Pending Verification",
-              message: `${name} has completed uploading all KYC documents (NRC Front, NRC Back, Selfie Holding NRC, Proof of Residence). Please log in to verify their documents.`,
+              message: `${name} has completed uploading all required identity documents (${docList}). Please log in to verify their documents.`,
               title: "KYC Submission Complete",
               eventType: "kyc_completed",
               notifyAdmins: true,
@@ -153,13 +161,9 @@ export default function ProfileDocumentVault({ userId }: Props) {
     uploadMutation.mutate({ file, docType, label });
   };
 
-  // Map by type (most recent)
-  const docsByType: Record<string, typeof vaultDocs[0]> = {};
-  vaultDocs.forEach((d) => {
-    if (!docsByType[d.doc_type]) docsByType[d.doc_type] = d;
-  });
+  const docsByType = mapLatestVaultRowByDocType(vaultDocs);
 
-  const verifiedCount = KYC_DOC_TYPES.filter((t) => docsByType[t.type]?.is_verified).length;
+  const verifiedCount = KYC_DOC_TYPES.filter((t) => vaultDocForSlot(docsByType, t.type)?.is_verified).length;
   const allVerified = verifiedCount === KYC_DOC_TYPES.length;
 
   return (
@@ -188,11 +192,24 @@ export default function ProfileDocumentVault({ userId }: Props) {
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
+          ) : isError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Could not load your documents</AlertTitle>
+              <AlertDescription>
+                {(error as Error)?.message ||
+                  "Your document list could not be loaded. Check your connection, sign out and back in, or contact support if this continues."}
+              </AlertDescription>
+            </Alert>
           ) : (
             <div className="space-y-4">
               {KYC_DOC_TYPES.map((kycType) => {
-                const doc = docsByType[kycType.type];
-                const versions = vaultDocs.filter((d) => d.doc_type === kycType.type);
+                const doc = vaultDocForSlot(docsByType, kycType.type);
+                const versions = vaultDocs.filter((d) => {
+                  if (kycType.type === "selfie") {
+                    return (BORROWER_SELFIE_VAULT_ALIASES as readonly string[]).includes(d.doc_type);
+                  }
+                  return d.doc_type === kycType.type;
+                });
                 const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
                 const isUploading = uploadingType === kycType.type;
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   borrowerIdentityKycSatisfiedFromVault,
   borrowerVaultCoreSlotsUploaded,
+  mapLatestVaultRowByDocType,
+  vaultDocForSlot,
 } from "./borrowerKycDocs";
 
 describe("borrowerIdentityKycSatisfiedFromVault", () => {
@@ -37,5 +39,15 @@ describe("borrowerVaultCoreSlotsUploaded", () => {
     expect(borrowerVaultCoreSlotsUploaded(["nrc_front", "nrc_back", "selfie_holding_nrc"])).toBe(true);
     expect(borrowerVaultCoreSlotsUploaded(["nrc_front", "nrc_back", "selfie"])).toBe(true);
     expect(borrowerVaultCoreSlotsUploaded(["nrc_front", "nrc_back"])).toBe(false);
+  });
+});
+
+describe("vaultDocForSlot", () => {
+  it("maps selfie_holding_nrc into selfie slot", () => {
+    const rows = [
+      { doc_type: "selfie_holding_nrc", is_verified: false, id: "1" },
+    ];
+    const by = mapLatestVaultRowByDocType(rows);
+    expect(vaultDocForSlot(by, "selfie")?.doc_type).toBe("selfie_holding_nrc");
   });
 });
