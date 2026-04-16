@@ -192,28 +192,30 @@ export default function HouseBorrowersPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginated.map((b: any) => (
-              <Card key={b.id} className="hover:border-primary/30 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-                      <User className="text-primary-foreground" size={20} />
+              <Link key={b.id} to={`/admin/houses/${productCode}/borrowers/${b.id}`} className="block">
+                <Card className="hover:border-primary/30 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center shrink-0">
+                        <User className="text-primary-foreground" size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-foreground truncate">{b.full_name || "Unknown"}</h4>
+                        <p className="text-xs text-muted-foreground truncate">{b.email}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h4 className="font-semibold text-foreground truncate">{b.full_name || "Unknown"}</h4>
-                      <p className="text-xs text-muted-foreground truncate">{b.email}</p>
+                    <div className="space-y-1.5 text-sm">
+                      {b.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /><span>{b.phone}</span></div>}
+                      {b.nrc_number && <div className="flex items-center gap-2 text-muted-foreground"><IdCard size={13} /><span>{b.nrc_number}</span></div>}
+                      {b.city && <div className="flex items-center gap-2 text-muted-foreground"><MapPin size={13} /><span>{b.city}</span></div>}
+                      <div className="flex items-center gap-2 text-muted-foreground"><CreditCard size={13} /><span>{loanCounts[b.id] || 0} loan(s)</span></div>
+                      {activeLoanAmounts[b.id] ? (
+                        <Badge variant="outline" className="text-xs mt-1">Active: K{activeLoanAmounts[b.id].toLocaleString()}</Badge>
+                      ) : null}
                     </div>
-                  </div>
-                  <div className="space-y-1.5 text-sm">
-                    {b.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /><span>{b.phone}</span></div>}
-                    {b.nrc_number && <div className="flex items-center gap-2 text-muted-foreground"><IdCard size={13} /><span>{b.nrc_number}</span></div>}
-                    {b.city && <div className="flex items-center gap-2 text-muted-foreground"><MapPin size={13} /><span>{b.city}</span></div>}
-                    <div className="flex items-center gap-2 text-muted-foreground"><CreditCard size={13} /><span>{loanCounts[b.id] || 0} loan(s)</span></div>
-                    {activeLoanAmounts[b.id] ? (
-                      <Badge variant="outline" className="text-xs mt-1">Active: K{activeLoanAmounts[b.id].toLocaleString()}</Badge>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
           </div>
           <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
