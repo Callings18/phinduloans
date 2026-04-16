@@ -35,9 +35,18 @@ interface AuthContextType {
   isAdmin: boolean;
   isStaff: boolean;
   hasRole: (role: string) => boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  sendOtp: (emailOrPhone: string) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+  ) => Promise<{
+    error: Error | null;
+    userId: string | null;
+    emailConfirmed: boolean;
+    hasSession: boolean;
+  }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; code?: string; status?: number }>;
+  sendOtp: (emailOrPhone: string) => Promise<{ error: Error | null; code?: string; status?: number }>;
   signOut: () => Promise<void>;
 }
 
@@ -166,7 +175,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logAuthEvent('signup');
     }
 
-    return { error: error as Error | null };
+    const user = data?.user ?? null;
+    const emailConfirmed = Boolean(user?.email_confirmed_at ?? user?.confirmed_at);
+    return {
+      error: error as Error | null,
+      userId: user?.id ?? null,
+      emailConfirmed,
+      hasSession: Boolean(data?.session),
+    };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -184,63 +200,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', data.user.id)
         .is('email_verified_at', null);
     }
-    return { error: error as Error | null };
+    return {
+      error: error as Error | null,
+      code: (error as { code?: string } | null)?.code,
+      status: (error as { status?: number } | null)?.status,
+    };
   }, []);
 
-  const sendOtp = async (emailOrPhone: string): Promise<{ error: Error | null }> => {
+  const sendOtp = async (emailOrPhone: string): Promise<{ error: Error | null; code?: string; status?: number }> => {
     const trimmed = emailOrPhone.trim();
-    if (!trimmed) return { error: new Error("Enter your email or phone number") };
+    if (!trimmed) return { error: new Error("Enter your email or phone number"), code: "validation_error" };
 
     const identifier = isEmail(trimmed) ? trimmed : normalizePhoneToE164(trimmed);
-    if (!identifier) return { error: new Error("Enter a valid email or phone number") };
+    if (!identifier) return { error: new Error("Enter a valid email or phone number"), code: "validation_error" };
 
     try {
       const isEmailInput = isEmail(trimmed);
       if (isEmailInput) {
-        const { data: profileRows } = await supabase.from("profiles").select("id").eq("email", trimmed).limit(1);
-        const exists = profileRows && profileRows.length > 0;
-        if (!exists) {
-          const { data: appRows } = await supabase.from("loan_applications").select("id").eq("email", trimmed).limit(1);
-          if (!appRows?.length) return { error: new Error("No account found for this email. Please sign up first.") };
-        }
         const { error } = await supabase.auth.signInWithOtp({
           email: trimmed,
           options: { shouldCreateUser: false },
         });
         if (error) {
           const msg = error.message?.toLowerCase() ?? "";
-          if (msg.includes("not found") || msg.includes("invalid") || msg.includes("user")) return { error: new Error("No account found for this email. Please sign up first.") };
-          if (msg.includes("expired")) return { error: new Error("OTP expired. Request a new code.") };
-          if (msg.includes("rate") || msg.includes("limit")) return { error: new Error("Too many attempts. Try again later.") };
-          return { error: error as Error };
+          if (msg.includes("not found") || msg.includes("invalid") || msg.includes("user")) return { error: new Error("No account found for this email. Please sign up first."), code: "account_not_found" };
+          if (msg.includes("expired")) return { error: new Error("OTP expired. Request a new code."), code: "otp_expired" };
+          if (msg.includes("rate") || msg.includes("limit")) return { error: new Error("Too many attempts. Try again later."), code: "rate_limited", status: (error as { status?: number }).status };
+          return { error: error as Error, code: (error as { code?: string }).code, status: (error as { status?: number }).status };
         }
         return { error: null };
       } else {
         const normalized = normalizePhoneToE164(trimmed);
-        const { data: p1 } = await supabase.from("profiles").select("id").eq("phone", normalized).limit(1);
-        const { data: p2 } = trimmed !== normalized ? await supabase.from("profiles").select("id").eq("phone", trimmed).limit(1) : { data: [] };
-        const exists = (p1 && p1.length > 0) || (p2 && p2.length > 0);
-        if (!exists) {
-          const { data: a1 } = await supabase.from("loan_applications").select("id").eq("phone", normalized).limit(1);
-          const { data: a2 } = trimmed !== normalized ? await supabase.from("loan_applications").select("id").eq("phone", trimmed).limit(1) : { data: [] };
-          const appRows = (a1?.length ? a1 : a2) ?? [];
-          if (!appRows.length) return { error: new Error("No account found for this number. Please sign up first.") };
-        }
         const { error } = await supabase.auth.signInWithOtp({
           phone: normalized,
           options: { shouldCreateUser: false },
         });
         if (error) {
           const msg = error.message?.toLowerCase() ?? "";
-          if (msg.includes("not found") || msg.includes("invalid") || msg.includes("user")) return { error: new Error("No account found for this number. Please sign up first.") };
-          if (msg.includes("expired")) return { error: new Error("OTP expired. Request a new code.") };
-          if (msg.includes("rate") || msg.includes("limit")) return { error: new Error("Too many attempts. Try again later.") };
-          return { error: error as Error };
+          if (msg.includes("not found") || msg.includes("invalid") || msg.includes("user")) return { error: new Error("No account found for this number. Please sign up first."), code: "account_not_found" };
+          if (msg.includes("expired")) return { error: new Error("OTP expired. Request a new code."), code: "otp_expired" };
+          if (msg.includes("rate") || msg.includes("limit")) return { error: new Error("Too many attempts. Try again later."), code: "rate_limited", status: (error as { status?: number }).status };
+          return { error: error as Error, code: (error as { code?: string }).code, status: (error as { status?: number }).status };
         }
         return { error: null };
       }
     } catch (e) {
-      return { error: e instanceof Error ? e : new Error("Something went wrong") };
+      return { error: e instanceof Error ? e : new Error("Something went wrong"), code: "unexpected_error" };
     }
   };
 

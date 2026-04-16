@@ -19,6 +19,14 @@ const signupSchema = loginSchema.extend({
 });
 
 type LoginMode = "password" | "email_otp" | "phone_otp";
+type AuthDiagnostic = {
+  step: "signup" | "signin" | "otp";
+  classification: string;
+  message: string;
+  status?: number;
+  code?: string;
+  at: string;
+};
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -34,6 +42,8 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [authDiagnostic, setAuthDiagnostic] = useState<AuthDiagnostic | null>(null);
+  const showAuthDebug = searchParams.get("authDebug") === "1";
   
   const { signIn, signUp, sendOtp, user, isLoading, isStaff } = useAuth();
   const { toast } = useToast();
@@ -68,6 +78,14 @@ const Auth = () => {
     }
   };
 
+  const classifyPasswordSignInError = (message: string) => {
+    const normalized = message.toLowerCase();
+    if (normalized.includes("email not confirmed")) return "email_not_confirmed";
+    if (normalized.includes("invalid login credentials")) return "invalid_credentials";
+    if (normalized.includes("too many requests") || normalized.includes("rate")) return "rate_limited";
+    return "unknown_signin_error";
+  };
+
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -82,6 +100,12 @@ const Auth = () => {
       try {
         const { error } = await sendOtp(input);
         if (error) {
+          setAuthDiagnostic({
+            step: "otp",
+            classification: "otp_send_failed",
+            message: error.message,
+            at: new Date().toISOString(),
+          });
           toast({
             title: "Sign-in link failed",
             description: error.message,
@@ -89,6 +113,12 @@ const Auth = () => {
           });
           setErrors({ email: error.message });
         } else {
+          setAuthDiagnostic({
+            step: "otp",
+            classification: "otp_sent",
+            message: "Email OTP link sent successfully.",
+            at: new Date().toISOString(),
+          });
           setOtpSentTo(input);
           toast({
             title: "Check your email",
@@ -107,8 +137,41 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { error } = await signIn(email, password);
+        const { error, code, status } = await signIn(email, password);
         if (error) {
+          const classification = classifyPasswordSignInError(error.message || "");
+          setAuthDiagnostic({
+            step: "signin",
+            classification,
+            message: error.message,
+            code,
+            status,
+            at: new Date().toISOString(),
+          });
+          const likelyCredentialIssue = classification === "invalid_credentials" || classification === "email_not_confirmed";
+
+          if (likelyCredentialIssue) {
+            const otpResult = await sendOtp(email.trim());
+            if (!otpResult.error) {
+              setLoginMode("email_otp");
+              setOtpSentTo(email.trim());
+              toast({
+                title: "Use email link to continue",
+                description:
+                  "Password sign-in is not ready for this account yet. We sent a secure sign-in link to your email.",
+              });
+              return;
+            }
+
+            setAuthDiagnostic({
+              step: "otp",
+              classification: "otp_send_failed_after_signin",
+              message: otpResult.error.message,
+              code: otpResult.code,
+              status: otpResult.status,
+              at: new Date().toISOString(),
+            });
+          }
           toast({
             title: "Login Failed",
             description: error.message === "Invalid login credentials" 
@@ -123,8 +186,15 @@ const Auth = () => {
           });
         }
       } else {
-        const { error } = await signUp(email, password, fullName);
+        const signupResult = await signUp(email, password, fullName);
+        const { error } = signupResult;
         if (error) {
+          setAuthDiagnostic({
+            step: "signup",
+            classification: "signup_failed",
+            message: error.message,
+            at: new Date().toISOString(),
+          });
           if (error.message.includes("already registered")) {
             toast({
               title: "Account Exists",
@@ -139,10 +209,78 @@ const Auth = () => {
             });
           }
         } else {
-          toast({
-            title: "Account Created!",
-            description: "Welcome to Phindu Credit Solutions.",
+          setAuthDiagnostic({
+            step: "signup",
+            classification: signupResult.emailConfirmed || signupResult.hasSession ? "signup_ready_for_password" : "signup_requires_email_confirmation",
+            message: signupResult.emailConfirmed || signupResult.hasSession
+              ? "Signup completed with confirmed email/session."
+              : "Signup completed but account is not yet email-confirmed.",
+            at: new Date().toISOString(),
           });
+
+          if (!signupResult.emailConfirmed && !signupResult.hasSession) {
+            const otpResult = await sendOtp(email.trim());
+            setIsLogin(true);
+            setLoginMode("email_otp");
+            if (!otpResult.error) {
+              setOtpSentTo(email.trim());
+              setAuthDiagnostic({
+                step: "otp",
+                classification: "otp_sent_post_signup_confirmation_required",
+                message: "Signup completed and OTP link sent.",
+                at: new Date().toISOString(),
+              });
+              toast({
+                title: "Check your email to sign in",
+                description:
+                  "Your account needs email confirmation. We sent a sign-in link.",
+              });
+            } else {
+              setAuthDiagnostic({
+                step: "otp",
+                classification: "otp_failed_post_signup_confirmation_required",
+                message: otpResult.error.message,
+                code: otpResult.code,
+                status: otpResult.status,
+                at: new Date().toISOString(),
+              });
+              toast({
+                title: "Account created, email confirmation required",
+                description:
+                  "Use Password or Email Link after waiting briefly if rate-limited.",
+              });
+            }
+            return;
+          }
+
+          // Try password login immediately so web signup can continue directly to dashboard.
+          const immediateLogin = await signIn(email.trim(), password);
+          if (!immediateLogin.error) {
+            toast({
+              title: "Account Created!",
+              description: "Welcome to Phindu Credit Solutions.",
+            });
+            return;
+          }
+
+          // Fallback: automatically send email-link login so borrower is not blocked.
+          const otpResult = await sendOtp(email.trim());
+          if (!otpResult.error) {
+            setIsLogin(true);
+            setLoginMode("email_otp");
+            setOtpSentTo(email.trim());
+            toast({
+              title: "Account created - check your email",
+              description:
+                "We sent you a sign-in link to complete first-time login.",
+            });
+          } else {
+            toast({
+              title: "Account Created!",
+              description:
+                "Your account was created, but password login is not ready yet. Please try Email Link login.",
+            });
+          }
         }
       }
     } finally {
@@ -358,6 +496,22 @@ const Auth = () => {
                 </button>
               </p>
             </div>
+
+            {showAuthDebug && authDiagnostic && (
+              <div className="mt-4 rounded-lg border border-border bg-background/60 p-3 text-xs">
+                <p className="font-semibold text-foreground">Auth diagnostics</p>
+                <p className="text-muted-foreground">Step: {authDiagnostic.step}</p>
+                <p className="text-muted-foreground">Classification: {authDiagnostic.classification}</p>
+                <p className="text-muted-foreground">Message: {authDiagnostic.message}</p>
+                {typeof authDiagnostic.status === "number" && (
+                  <p className="text-muted-foreground">HTTP status: {authDiagnostic.status}</p>
+                )}
+                {authDiagnostic.code && (
+                  <p className="text-muted-foreground">Code: {authDiagnostic.code}</p>
+                )}
+                <p className="text-muted-foreground">Time: {new Date(authDiagnostic.at).toLocaleString()}</p>
+              </div>
+            )}
           </div>
 
           {/* Back to home */}

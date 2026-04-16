@@ -6,46 +6,95 @@ import {
   houseStageReview,
 } from "./houseWorkflowRepository";
 
-const { rpcMock } = vi.hoisted(() => ({ rpcMock: vi.fn() }));
+const { rpcMock, fromMock, updateMock, updateEqMock, selectMock, selectEqMock, maybeSingleMock } = vi.hoisted(() => ({
+  rpcMock: vi.fn(),
+  fromMock: vi.fn(),
+  updateMock: vi.fn(),
+  updateEqMock: vi.fn(),
+  selectMock: vi.fn(),
+  selectEqMock: vi.fn(),
+  maybeSingleMock: vi.fn(),
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc: rpcMock,
+    from: fromMock,
   },
 }));
 
 describe("houseWorkflowRepository", () => {
   beforeEach(() => {
     rpcMock.mockReset();
+    fromMock.mockReset();
+    updateMock.mockReset();
+    updateEqMock.mockReset();
+    selectMock.mockReset();
+    selectEqMock.mockReset();
+    maybeSingleMock.mockReset();
+
+    updateMock.mockReturnValue({ eq: updateEqMock });
+    updateEqMock.mockResolvedValue({ error: null });
+    selectMock.mockReturnValue({ eq: selectEqMock });
+    selectEqMock.mockReturnValue({ maybeSingle: maybeSingleMock });
+    maybeSingleMock.mockResolvedValue({ data: { amount: 100 }, error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "disbursements") return { update: updateMock };
+      if (table === "loan_repayments") return { select: selectMock };
+      return { update: updateMock, select: selectMock };
+    });
   });
 
   it("runs the full house workflow RPC chain", async () => {
-    rpcMock.mockResolvedValue({ data: { ok: true }, error: null });
+    rpcMock.mockResolvedValue({ data: { success: true }, error: null });
 
     await houseSetLoanStatus("loan-1", "approved");
     await houseStageReview("loan-1", "manager");
     await houseMarkDisbursementCompleted("disb-1");
     await houseMarkRepaymentPaid("rep-1");
 
-    expect(rpcMock).toHaveBeenCalledTimes(4);
-    expect(rpcMock).toHaveBeenNthCalledWith(1, "house_set_loan_status", {
+    expect(rpcMock).toHaveBeenCalledTimes(3);
+    expect(rpcMock).toHaveBeenNthCalledWith(1, "transition_loan_status", {
       p_loan_id: "loan-1",
-      p_status: "approved",
+      p_action: "approve",
+      p_reason: null,
     });
-    expect(rpcMock).toHaveBeenNthCalledWith(2, "house_stage_review", {
+    expect(rpcMock).toHaveBeenNthCalledWith(2, "transition_loan_status", {
       p_loan_id: "loan-1",
-      p_stage: "manager",
+      p_action: "approve",
+      p_reason: null,
     });
-    expect(rpcMock).toHaveBeenNthCalledWith(3, "house_mark_disbursement_completed", {
-      p_disbursement_id: "disb-1",
-    });
-    expect(rpcMock).toHaveBeenNthCalledWith(4, "house_mark_repayment_paid", {
+    expect(rpcMock).toHaveBeenNthCalledWith(3, "record_loan_payment", {
       p_repayment_id: "rep-1",
+      p_amount: 0,
+      p_payment_method: "cash",
+      p_account_id: null,
+      p_transaction_reference: null,
+    });
+    expect(fromMock).toHaveBeenCalledWith("disbursements");
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
+    expect(updateEqMock).toHaveBeenCalledWith("id", "disb-1");
+  });
+
+  it("falls back to repayment amount when payment RPC first fails", async () => {
+    rpcMock
+      .mockRejectedValueOnce(new Error("first attempt failed"))
+      .mockResolvedValueOnce({ data: { success: true }, error: null });
+
+    await houseMarkRepaymentPaid("rep-2");
+
+    expect(fromMock).toHaveBeenCalledWith("loan_repayments");
+    expect(rpcMock).toHaveBeenLastCalledWith("record_loan_payment", {
+      p_repayment_id: "rep-2",
+      p_amount: 100,
+      p_payment_method: "cash",
+      p_account_id: null,
+      p_transaction_reference: null,
     });
   });
 
   it("throws RPC logical errors from backend", async () => {
-    rpcMock.mockResolvedValueOnce({ data: { ok: false, error: "No product access" }, error: null });
+    rpcMock.mockResolvedValueOnce({ data: { success: false, error: "No product access" }, error: null });
     await expect(houseSetLoanStatus("loan-1", "approved")).rejects.toThrow("No product access");
   });
 
