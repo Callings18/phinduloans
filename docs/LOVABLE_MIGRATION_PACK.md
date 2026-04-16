@@ -15,6 +15,7 @@ Run these migrations in timestamp order:
 7. `supabase/migrations/20260414060000_house_review_stage_defaults.sql`
 8. `supabase/migrations/20260414070000_house_workflow_rpc_and_write_policies.sql`
 9. `supabase/migrations/20260414080000_marketeer_fixed_terms.sql`
+10. `supabase/migrations/20260416212000_auth_profile_trigger_hardening.sql` — see `docs/SUPABASE_LOVABLE_AUTH_HANDOFF.md`
 
 ## 2) Purpose summary
 
@@ -51,6 +52,9 @@ Run these migrations in timestamp order:
 
 ### `20260414080000_marketeer_fixed_terms.sql`
 - Enforces fixed Marketeer defaults: 30% interest, 26 collection days, Sundays excluded via repayment anchor rule.
+
+### `20260416212000_auth_profile_trigger_hardening.sql`
+- Hardens `handle_new_user` (profiles + default `user` role), recreates `on_auth_user_created`, backfills missing profiles/roles. Full notes: `docs/SUPABASE_LOVABLE_AUTH_HANDOFF.md`.
 
 ## 3) Validation SQL (post-migration)
 
