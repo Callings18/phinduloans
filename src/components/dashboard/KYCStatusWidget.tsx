@@ -16,9 +16,11 @@ const KYC_DOC_TYPES = BORROWER_VAULT_KYC_DOC_TYPES.map(({ type, label }) => ({ t
 
 interface KYCStatusWidgetProps {
   userId: string;
+  /** When set (e.g. borrower dashboard), opens in-dashboard KYC panel instead of navigating to /profile. */
+  onOpenDocuments?: () => void;
 }
 
-export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
+export default function KYCStatusWidget({ userId, onOpenDocuments }: KYCStatusWidgetProps) {
   const [searchParams] = useSearchParams();
   const profileDocumentsHref = (() => {
     const v = searchParams.get("view");
@@ -118,19 +120,33 @@ export default function KYCStatusWidget({ userId }: KYCStatusWidgetProps) {
           })}
         </div>
         {uploadedCount < KYC_DOC_TYPES.length && (
-          <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
-            <Link to={profileDocumentsHref}>
+          onOpenDocuments ? (
+            <Button variant="outline" size="sm" className="mt-3 w-full" type="button" onClick={() => onOpenDocuments()}>
               <Upload size={14} className="mr-2" />
               Upload Missing Documents
-            </Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
+              <Link to={profileDocumentsHref}>
+                <Upload size={14} className="mr-2" />
+                Upload Missing Documents
+              </Link>
+            </Button>
+          )
         )}
         {uploadedCount > 0 && uploadedCount === KYC_DOC_TYPES.length && verifiedCount < KYC_DOC_TYPES.length && (
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            <AlertTriangle size={12} className="inline mr-1" />
-            Documents submitted — awaiting admin review
-            {oldestPendingHours > 0 ? ` (${oldestPendingHours}h)` : ""}
-          </p>
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-muted-foreground text-center">
+              <AlertTriangle size={12} className="inline mr-1" />
+              Documents submitted — awaiting admin review
+              {oldestPendingHours > 0 ? ` (${oldestPendingHours}h)` : ""}
+            </p>
+            {onOpenDocuments && (
+              <Button variant="outline" size="sm" className="w-full" type="button" onClick={() => onOpenDocuments()}>
+                Open KYC workspace
+              </Button>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

@@ -4,10 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
-import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
-import KYCNextOfKin from "@/components/dashboard/KYCNextOfKin";
-import KYCReferences from "@/components/dashboard/KYCReferences";
 import {
   User,
   Mail,
@@ -19,34 +15,16 @@ import {
   ChevronRight,
   CheckCircle,
   AlertTriangle,
+  FolderOpen,
 } from "lucide-react";
 
 interface Props {
   user: any;
   profile: any;
   kycVerified: boolean;
+  /** Opens in-dashboard KYC sheet (borrower). Staff `?view=` still uses profile links. */
+  onOpenKycWorkspace?: () => void;
   onSignOut: () => void;
-}
-
-function BorrowerKycInlineSection({ userId }: { userId: string }) {
-  if (!userId) return null;
-  return (
-    <Card className="border-border/60 shadow-card">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">KYC & payout details</CardTitle>
-        <CardDescription>
-          Upload identity documents, add bank or mobile money for disbursement, and complete next of kin — same as under
-          Settings → Documents on the full profile page.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6 pt-0">
-        <ProfileDocumentVault userId={userId} />
-        <KYCFinancialInfo userId={userId} />
-        <KYCNextOfKin userId={userId} />
-        <KYCReferences userId={userId} />
-      </CardContent>
-    </Card>
-  );
 }
 
 function buildProfileHref(path: string, viewToken: string | null) {
@@ -55,7 +33,7 @@ function buildProfileHref(path: string, viewToken: string | null) {
   return `${u.pathname}${u.search}`;
 }
 
-export default function BorrowerProfileTab({ user, profile, kycVerified, onSignOut }: Props) {
+export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenKycWorkspace, onSignOut }: Props) {
   const [searchParams] = useSearchParams();
   const viewToken = searchParams.get("view");
 
@@ -93,6 +71,9 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onSignO
     if (kycVerified) score += 20;
     return Math.min(100, score);
   })();
+
+  const menuCardClass =
+    "border-border/60 hover:border-primary/40 transition-colors cursor-pointer h-full shadow-card";
 
   return (
     <div className="space-y-6">
@@ -144,13 +125,40 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onSignO
         </CardContent>
       </Card>
 
-      <BorrowerKycInlineSection userId={user?.id || ""} />
+      {onOpenKycWorkspace && !viewToken && (
+        <Card className="border-primary/30 bg-primary/5 shadow-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FolderOpen className="text-primary" size={18} />
+              KYC & payout workspace
+            </CardTitle>
+            <CardDescription>
+              Upload NRC and selfie, add bank or mobile money, and next of kin — opens here without leaving your dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Button type="button" variant="hero" className="w-full sm:w-auto" onClick={() => onOpenKycWorkspace()}>
+              Open KYC workspace
+            </Button>
+            <p className="text-[11px] text-muted-foreground mt-3">
+              Prefer the full settings page? Use <span className="text-foreground">My Documents</span> below or go to{" "}
+              <Link to="/profile?tab=documents" className="text-primary underline-offset-2 hover:underline">
+                Profile
+              </Link>
+              .
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Menu Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {menuItems.map((item) => (
-          <Link key={item.label} to={item.to}>
-            <Card className="border-border/60 hover:border-primary/40 transition-colors cursor-pointer h-full shadow-card">
+        {menuItems.map((item) => {
+          const isDocuments = item.label === "My Documents";
+          const openSheetHere = Boolean(isDocuments && onOpenKycWorkspace && !viewToken);
+
+          const cardInner = (
+            <Card className={menuCardClass}>
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
@@ -164,8 +172,27 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onSignO
                 <ChevronRight size={18} className="text-muted-foreground" />
               </CardContent>
             </Card>
-          </Link>
-        ))}
+          );
+
+          if (openSheetHere) {
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className="block w-full text-left"
+                onClick={() => onOpenKycWorkspace?.()}
+              >
+                {cardInner}
+              </button>
+            );
+          }
+
+          return (
+            <Link key={item.label} to={item.to}>
+              {cardInner}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Sign Out */}

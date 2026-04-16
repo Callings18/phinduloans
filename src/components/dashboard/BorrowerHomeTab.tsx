@@ -39,7 +39,7 @@ interface BorrowerHomeTabProps {
   kycVerified: boolean;
   isStaff: boolean;
   onTabChange: (tab: BorrowerTab) => void;
-  /** Opens full Profile page on Documents / KYC tab (NRC, bank, next of kin). */
+  /** Opens in-dashboard KYC sheet (or profile when staff `?view=`). */
   onOpenKycDocuments?: () => void;
 }
 
@@ -319,7 +319,11 @@ export default function BorrowerHomeTab({
               </div>
               <p className="text-xs text-muted-foreground">Repay</p>
             </button>
-            <button className="space-y-1" onClick={() => onTabChange("profile")} type="button">
+            <button
+              className="space-y-1"
+              onClick={() => (onOpenKycDocuments ? onOpenKycDocuments() : onTabChange("profile"))}
+              type="button"
+            >
               <div className="h-12 w-12 mx-auto rounded-full border border-info/30 bg-info/10 flex items-center justify-center text-info">
                 <ShieldAlert size={18} />
               </div>
@@ -390,7 +394,7 @@ export default function BorrowerHomeTab({
       )}
 
       {/* KYC Status */}
-      {user && <KYCStatusWidget userId={user.id} />}
+      {user && <KYCStatusWidget userId={user.id} onOpenDocuments={onOpenKycDocuments} />}
 
       {/* Wallet transactions linked to real disbursement/repayment records */}
       {user && <WalletWidget />}

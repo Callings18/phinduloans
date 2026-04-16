@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import BorrowerHomeTab from "@/components/dashboard/BorrowerHomeTab";
+import BorrowerKycSheet from "@/components/dashboard/BorrowerKycSheet";
 import BorrowerLoansTab from "@/components/dashboard/BorrowerLoansTab";
 import BorrowerPaymentsTab from "@/components/dashboard/BorrowerPaymentsTab";
 import BorrowerProfileTab from "@/components/dashboard/BorrowerProfileTab";
@@ -74,6 +75,7 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<BorrowerTab>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [borrowerKycOpen, setBorrowerKycOpen] = useState(false);
 
   // Payment claim state
   const [submitPaymentRepayment, setSubmitPaymentRepayment] = useState<any>(null);
@@ -395,10 +397,14 @@ const Dashboard = () => {
 
   const openBorrowerKycDocuments = useCallback(() => {
     const v = searchParams.get("view");
-    const qs = new URLSearchParams();
-    qs.set("tab", "documents");
-    if (v) qs.set("view", v);
-    navigate(`/profile?${qs.toString()}`);
+    if (v) {
+      const qs = new URLSearchParams();
+      qs.set("tab", "documents");
+      qs.set("view", v);
+      navigate(`/profile?${qs.toString()}`);
+      return;
+    }
+    setBorrowerKycOpen(true);
   }, [navigate, searchParams]);
 
   if (isLoading) {
@@ -421,6 +427,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
+      <BorrowerKycSheet userId={user.id} open={borrowerKycOpen} onOpenChange={setBorrowerKycOpen} />
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside
         className={cn(
@@ -596,6 +603,7 @@ const Dashboard = () => {
                     user={user}
                     profile={profile}
                     kycVerified={kycVerified}
+                    onOpenKycWorkspace={openBorrowerKycDocuments}
                     onSignOut={async () => { await signOut(); navigate('/auth'); }}
                   />
                 )}
