@@ -760,78 +760,107 @@ export default function ProductLoanFormShell({
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div className="grid md:grid-cols-2 gap-3">
-                  {rules.checklist.map((item) => (
-                    <div
-                      key={item}
-                      className={`border rounded-lg p-3 transition-colors ${
-                        docFiles[item] ? "border-green-600/40 bg-green-600/5" : "border-border"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium">{item}</span>
-                        {docFiles[item] && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                  {rules.checklist.map((item) => {
+                    const hasFile = !!docFiles[item];
+                    const hasVault = !!vaultDocs[item];
+                    const covered = hasFile || hasVault;
+                    return (
+                      <div
+                        key={item}
+                        className={`border rounded-lg p-3 transition-colors ${
+                          covered ? "border-green-600/40 bg-green-600/5" : "border-border"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium">{item}</span>
+                          {covered && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                        </div>
+                        {hasFile ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground truncate flex-1">
+                              {docFiles[item]!.name}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => handleFileSelect(item, null)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : hasVault ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] border-green-600/30 text-green-600">
+                              ✓ From vault: {vaultDocs[item].file_name}
+                            </Badge>
+                            <input
+                              ref={(el) => { fileInputRefs.current[item] = el; }}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                handleFileSelect(item, f);
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-[10px]"
+                              onClick={() => fileInputRefs.current[item]?.click()}
+                            >
+                              Replace
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1.5">
+                            <input
+                              ref={(el) => { fileInputRefs.current[item] = el; }}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                handleFileSelect(item, f);
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10px] flex-1"
+                              onClick={() => fileInputRefs.current[item]?.click()}
+                            >
+                              <Upload className="h-3 w-3 mr-1" /> Upload
+                            </Button>
+                            <input
+                              ref={(el) => { fileInputRefs.current[`${item}_camera`] = el; }}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                handleFileSelect(item, f);
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10px]"
+                              onClick={() => fileInputRefs.current[`${item}_camera`]?.click()}
+                            >
+                              <Camera className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                      {docFiles[item] ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground truncate flex-1">
-                            {docFiles[item]!.name}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => handleFileSelect(item, null)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1.5">
-                          <input
-                            ref={(el) => { fileInputRefs.current[item] = el; }}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0] || null;
-                              handleFileSelect(item, f);
-                            }}
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[10px] flex-1"
-                            onClick={() => fileInputRefs.current[item]?.click()}
-                          >
-                            <Upload className="h-3 w-3 mr-1" /> Upload
-                          </Button>
-                          <input
-                            ref={(el) => { fileInputRefs.current[`${item}_camera`] = el; }}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0] || null;
-                              handleFileSelect(item, f);
-                            }}
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[10px]"
-                            onClick={() => fileInputRefs.current[`${item}_camera`]?.click()}
-                          >
-                            <Camera className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
-                    {Object.values(docFiles).filter(Boolean).length} / {rules.checklist.length} documents attached
+                    {rules.checklist.filter((item) => docFiles[item] || vaultDocs[item]).length} / {rules.checklist.length} documents attached
                   </p>
                   {allDocsProvided && (
                     <Badge variant="outline" className="border-green-600/40 text-green-600 text-xs">
