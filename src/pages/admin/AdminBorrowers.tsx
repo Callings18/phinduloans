@@ -898,73 +898,98 @@ const AdminBorrowers = () => {
 
       {/* Add Borrower Dialog */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-foreground">Add New Borrower</DialogTitle>
-            <DialogDescription>Create a new borrower profile</DialogDescription>
+            <DialogDescription>Create a new borrower profile. Fields marked with * are required.</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Full Name *</Label>
-              <Input
-                value={formData.full_name}
-                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                placeholder="John Doe"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Email *</Label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="john@example.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+260 967 713 001"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>NRC Number</Label>
-              <Input
-                value={formData.nrc_number}
-                onChange={(e) => setFormData({ ...formData, nrc_number: e.target.value })}
-                placeholder="123456/78/1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>City</Label>
-              <Select
-                value={formData.city}
-                onValueChange={(value) => setFormData({ ...formData, city: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select city" />
-                </SelectTrigger>
-                <SelectContent>
-                  {zambianCities.map(city => (
-                    <SelectItem key={city} value={city}>{city}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Textarea
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Full address..."
-                rows={2}
-              />
-            </div>
-            <div className="border border-border/60 rounded-lg p-3 space-y-3 bg-secondary/20">
-              <p className="text-sm font-medium text-foreground">Loan Product Onboarding (optional)</p>
+          <div className="space-y-6">
+            {/* Section 1: Personal Information */}
+            <section className="space-y-3">
+              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">1</span>
+                <h3 className="text-sm font-semibold text-foreground">Personal Information</h3>
+              </header>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Full Name *</Label>
+                  <Input
+                    autoFocus
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>NRC Number</Label>
+                  <Input
+                    value={formData.nrc_number}
+                    onChange={(e) => setFormData({ ...formData, nrc_number: e.target.value })}
+                    placeholder="123456/78/1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+260 967 713 001"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Section 2: Contact & Address */}
+            <section className="space-y-3">
+              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">2</span>
+                <h3 className="text-sm font-semibold text-foreground">Contact & Address</h3>
+              </header>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Select
+                    value={formData.city}
+                    onValueChange={(value) => setFormData({ ...formData, city: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zambianCities.map(city => (
+                        <SelectItem key={city} value={city}>{city}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Full address..."
+                    rows={2}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Section 3: Loan Onboarding */}
+            <section className="border border-border/60 rounded-lg p-4 space-y-3 bg-secondary/20">
+              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">3</span>
+                <h3 className="text-sm font-semibold text-foreground">Loan Product Onboarding <span className="text-xs font-normal text-muted-foreground">(optional)</span></h3>
+              </header>
               <div className="space-y-2">
                 <Label>Loan Product</Label>
                 <Select
