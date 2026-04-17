@@ -226,35 +226,75 @@ export default function HouseBorrowersPage() {
 
       {/* Add Borrower Dialog */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Borrower to {productData?.name || productCode}</DialogTitle>
-            <DialogDescription>Create a new borrower and optionally onboard them with a loan.</DialogDescription>
+            <DialogTitle className="text-foreground">Add Borrower to {productData?.name || productCode}</DialogTitle>
+            <DialogDescription>Create a new borrower profile. Fields marked with * are required.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2"><Label>Full Name *</Label><Input value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="John Doe" /></div>
-            <div className="space-y-2"><Label>Email *</Label><Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} placeholder="john@example.com" /></div>
-            <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 97..." /></div>
-            <div className="space-y-2"><Label>NRC Number</Label><Input value={form.nrc_number} onChange={(e) => setForm(f => ({ ...f, nrc_number: e.target.value }))} placeholder="123456/78/1" /></div>
-            <div className="space-y-2">
-              <Label>City</Label>
-              <Select value={form.city} onValueChange={(v) => setForm(f => ({ ...f, city: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
-                <SelectContent>{zambianCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2"><Label>Address</Label><Textarea value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Full address..." rows={2} /></div>
 
-            <div className="border border-border/60 rounded-lg p-3 space-y-3 bg-secondary/20">
-              <p className="text-sm font-medium">Loan Onboarding (optional)</p>
-              <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-6">
+            {/* Section 1: Personal Information */}
+            <section className="space-y-3">
+              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">1</span>
+                <h3 className="text-sm font-semibold text-foreground">Personal Information</h3>
+              </header>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Full Name *</Label>
+                  <Input autoFocus value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="John Doe" />
+                </div>
+                <div className="space-y-2">
+                  <Label>NRC Number</Label>
+                  <Input value={form.nrc_number} onChange={(e) => setForm(f => ({ ...f, nrc_number: e.target.value }))} placeholder="123456/78/1" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 967 713 001" />
+                </div>
+              </div>
+            </section>
+
+            {/* Section 2: Contact & Address */}
+            <section className="space-y-3">
+              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">2</span>
+                <h3 className="text-sm font-semibold text-foreground">Contact & Address</h3>
+              </header>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} placeholder="john@example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Select value={form.city} onValueChange={(v) => setForm(f => ({ ...f, city: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
+                    <SelectContent>{zambianCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Full address..." rows={2} />
+                </div>
+              </div>
+            </section>
+
+            {/* Section 3: Loan Onboarding */}
+            <section className="border border-border/60 rounded-lg p-4 space-y-3 bg-secondary/20">
+              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">3</span>
+                <h3 className="text-sm font-semibold text-foreground">Loan Onboarding <span className="text-xs font-normal text-muted-foreground">(optional)</span></h3>
+              </header>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1"><Label className="text-xs">Principal</Label><Input type="number" value={form.principal_amount} onChange={(e) => setForm(f => ({ ...f, principal_amount: e.target.value }))} placeholder="1000" /></div>
                 <div className="space-y-1"><Label className="text-xs">Interest</Label><Input type="number" value={form.interest_amount} onChange={(e) => setForm(f => ({ ...f, interest_amount: e.target.value }))} placeholder="300" /></div>
                 <div className="space-y-1"><Label className="text-xs">Daily repay</Label><Input type="number" value={form.daily_repayment} onChange={(e) => setForm(f => ({ ...f, daily_repayment: e.target.value }))} placeholder="50" /></div>
               </div>
               <div className="space-y-1"><Label className="text-xs">Start date</Label><Input type="date" value={form.loan_start_date} onChange={(e) => setForm(f => ({ ...f, loan_start_date: e.target.value }))} /></div>
-            </div>
+            </section>
           </div>
+
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
             <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
