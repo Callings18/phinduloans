@@ -6,16 +6,17 @@ import { Loader2 } from "lucide-react";
 import { subMonths, format } from "date-fns";
 
 const RepaymentPerformanceChart = () => {
-  const { data: chartData, isLoading } = useQuery({
+  const { data: chartData, isLoading, isError } = useQuery({
     queryKey: ["repayment-performance-chart"],
     queryFn: async () => {
       const sixMonthsAgo = subMonths(new Date(), 6);
 
-      const { data: repayments } = await supabase
+      const { data: repayments, error } = await supabase
         .from("loan_repayments")
         .select("status, due_date, amount, paid_date")
         .gte("due_date", format(sixMonthsAgo, "yyyy-MM-dd"));
 
+      if (error) throw error;
       const allRepayments = repayments || [];
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const monthMap = new Map<string, { onTime: number; late: number; missed: number }>();
@@ -68,6 +69,10 @@ const RepaymentPerformanceChart = () => {
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : isError ? (
+            <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground px-4">
+              Repayment performance could not be loaded.
             </div>
           ) : chartData && chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">

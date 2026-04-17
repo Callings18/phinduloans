@@ -1,21 +1,29 @@
-import { Link, useSearchParams } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   User,
   Mail,
   Phone,
-  FileText,
-  Shield,
-  Bell,
   LogOut,
-  ChevronRight,
   CheckCircle,
   AlertTriangle,
   FolderOpen,
+  Save,
+  Loader2,
+  Shield,
+  Bell,
+  FileText,
+  Lock,
 } from "lucide-react";
 
 interface Props {
@@ -27,41 +35,109 @@ interface Props {
   onSignOut: () => void;
 }
 
-function buildProfileHref(path: string, viewToken: string | null) {
-  const u = new URL(path, "http://local.invalid");
-  if (viewToken) u.searchParams.set("view", viewToken);
-  return `${u.pathname}${u.search}`;
-}
-
 export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenKycWorkspace, onSignOut }: Props) {
-  const [searchParams] = useSearchParams();
-  const viewToken = searchParams.get("view");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [profileTab, setProfileTab] = useState<"personal" | "kyc" | "security" | "notifications">("personal");
 
-  const menuItems = useMemo(
-    () =>
-      [
-        { icon: User, label: "Personal Information", to: buildProfileHref("/profile", viewToken), desc: "Name, NRC, phone number, address" },
-        {
-          icon: FileText,
-          label: "My Documents",
-          to: buildProfileHref("/profile?tab=documents", viewToken),
-          desc: "KYC uploads & document vault",
-        },
-        {
-          icon: Shield,
-          label: "Security",
-          to: buildProfileHref("/profile?tab=security", viewToken),
-          desc: "Password & active sessions",
-        },
-        {
-          icon: Bell,
-          label: "Notifications",
-          to: buildProfileHref("/profile?tab=notifications", viewToken),
-          desc: "Alert & notification preferences",
-        },
-      ] as const,
-    [viewToken],
-  );
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isEditingNotifications, setIsEditingNotifications] = useState(false);
+
+  const [profileForm, setProfileForm] = useState({
+    full_name: "",
+    phone: "",
+    nrc_number: "",
+    address: "",
+    city: "",
+  });
+  const [notificationForm, setNotificationForm] = useState({
+    email_reminders: true,
+    sms_reminders: true,
+    payment_alerts: true,
+    marketing: false,
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  useEffect(() => {
+    setProfileForm({
+      full_name: profile?.full_name || "",
+      phone: profile?.phone || "",
+      nrc_number: profile?.nrc_number || "",
+      address: profile?.address || "",
+      city: profile?.city || "",
+    });
+    setNotificationForm({
+      email_reminders: profile?.email_reminders ?? true,
+      sms_reminders: profile?.sms_reminders ?? true,
+      payment_alerts: profile?.payment_alerts ?? true,
+      marketing: profile?.marketing ?? false,
+    });
+  }, [profile]);
+
+  const saveProfileMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("Missing user");
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: profileForm.full_name.trim(),
+          phone: profileForm.phone.trim() || null,
+          nrc_number: profileForm.nrc_number.trim() || null,
+          address: profileForm.address.trim() || null,
+          city: profileForm.city.trim() || null,
+        })
+        .eq("id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile", user?.id] });
+      setIsEditingProfile(false);
+      toast({ title: "Profile updated successfully" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Could not save profile", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const saveNotificationsMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("Missing user");
+      const { error } = await supabase
+        .from("profiles")
+        .update(notificationForm)
+        .eq("id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile", user?.id] });
+      setIsEditingNotifications(false);
+      toast({ title: "Notification preferences saved" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Could not save preferences", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const pass = passwordForm.newPassword;
+      const confirm = passwordForm.confirmPassword;
+      if (pass.length < 8) throw new Error("Password must be at least 8 characters.");
+      if (pass !== confirm) throw new Error("Password confirmation does not match.");
+      const { error } = await supabase.auth.updateUser({ password: pass });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+      toast({ title: "Password changed successfully" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Could not change password", description: e.message, variant: "destructive" });
+    },
+  });
 
   const profileCompletion = (() => {
     let score = 35;
@@ -71,9 +147,6 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
     if (kycVerified) score += 20;
     return Math.min(100, score);
   })();
-
-  const menuCardClass =
-    "border-border/60 hover:border-primary/40 transition-colors cursor-pointer h-full shadow-card";
 
   return (
     <div className="space-y-6">
@@ -125,75 +198,202 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
         </CardContent>
       </Card>
 
-      {onOpenKycWorkspace && !viewToken && (
-        <Card className="border-primary/30 bg-primary/5 shadow-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FolderOpen className="text-primary" size={18} />
-              KYC & payout workspace
-            </CardTitle>
-            <CardDescription>
-              Upload NRC and selfie, add bank or mobile money, and next of kin — opens here without leaving your dashboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <Button type="button" variant="hero" className="w-full sm:w-auto" onClick={() => onOpenKycWorkspace()}>
-              Open KYC workspace
-            </Button>
-            <p className="text-[11px] text-muted-foreground mt-3">
-              Prefer the full settings page? Use <span className="text-foreground">My Documents</span> below or go to{" "}
-              <Link to="/profile?tab=documents" className="text-primary underline-offset-2 hover:underline">
-                Profile
-              </Link>
-              .
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs
+        value={profileTab}
+        onValueChange={(v) => setProfileTab(v as typeof profileTab)}
+        className="space-y-4"
+      >
+        <TabsList className="grid grid-cols-2 md:grid-cols-4">
+          <TabsTrigger value="personal" className="gap-1.5"><User size={14} /> Personal</TabsTrigger>
+          <TabsTrigger value="kyc" className="gap-1.5"><FileText size={14} /> KYC</TabsTrigger>
+          <TabsTrigger value="security" className="gap-1.5"><Shield size={14} /> Security</TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-1.5"><Bell size={14} /> Notifications</TabsTrigger>
+        </TabsList>
 
-      {/* Menu Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {menuItems.map((item) => {
-          const isDocuments = item.label === "My Documents";
-          const openSheetHere = Boolean(isDocuments && onOpenKycWorkspace && !viewToken);
-
-          const cardInner = (
-            <Card className={menuCardClass}>
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                    <item.icon size={20} className="text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{item.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                  </div>
+        <TabsContent value="personal">
+          <Card className="border-border/60 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle>Personal information</CardTitle>
+              <CardDescription>Update your profile details used in support and onboarding.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Full name</Label>
+                  <Input
+                    value={profileForm.full_name}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, full_name: e.target.value }))}
+                    disabled={!isEditingProfile}
+                  />
                 </div>
-                <ChevronRight size={18} className="text-muted-foreground" />
-              </CardContent>
-            </Card>
-          );
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input
+                    value={profileForm.phone}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))}
+                    disabled={!isEditingProfile}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>NRC number</Label>
+                  <Input
+                    value={profileForm.nrc_number}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, nrc_number: e.target.value }))}
+                    disabled={!isEditingProfile}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>City</Label>
+                  <Input
+                    value={profileForm.city}
+                    onChange={(e) => setProfileForm((p) => ({ ...p, city: e.target.value }))}
+                    disabled={!isEditingProfile}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Address</Label>
+                <Input
+                  value={profileForm.address}
+                  onChange={(e) => setProfileForm((p) => ({ ...p, address: e.target.value }))}
+                  disabled={!isEditingProfile}
+                />
+              </div>
 
-          if (openSheetHere) {
-            return (
-              <button
-                key={item.label}
-                type="button"
-                className="block w-full text-left"
-                onClick={() => onOpenKycWorkspace?.()}
-              >
-                {cardInner}
-              </button>
-            );
-          }
+              <div className="flex gap-2 justify-end">
+                {isEditingProfile ? (
+                  <>
+                    <Button type="button" variant="outline" onClick={() => setIsEditingProfile(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="hero"
+                      onClick={() => saveProfileMutation.mutate()}
+                      disabled={saveProfileMutation.isPending}
+                    >
+                      {saveProfileMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={14} /> : <Save className="mr-2" size={14} />}
+                      Save profile
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" variant="hero" onClick={() => setIsEditingProfile(true)}>
+                    Edit profile
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          return (
-            <Link key={item.label} to={item.to}>
-              {cardInner}
-            </Link>
-          );
-        })}
-      </div>
+        <TabsContent value="kyc">
+          <Card className="border-primary/30 bg-primary/5 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderOpen className="text-primary" size={18} />
+                KYC & payout workspace
+              </CardTitle>
+              <CardDescription>
+                Upload documents, add bank/mobile money, next of kin, and references in one place.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" variant="hero" className="w-full sm:w-auto" onClick={() => onOpenKycWorkspace?.()}>
+                Open KYC workspace
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security">
+          <Card className="border-border/60 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2"><Lock size={16} /> Change password</CardTitle>
+              <CardDescription>Use a strong password (minimum 8 characters).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>New password</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Confirm new password</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="hero"
+                  onClick={() => changePasswordMutation.mutate()}
+                  disabled={changePasswordMutation.isPending}
+                >
+                  {changePasswordMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={14} /> : <Lock className="mr-2" size={14} />}
+                  Update password
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <Card className="border-border/60 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle>Notification preferences</CardTitle>
+              <CardDescription>Choose how you receive reminders and updates.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { key: "email_reminders", label: "Email reminders" },
+                { key: "sms_reminders", label: "SMS reminders" },
+                { key: "payment_alerts", label: "Payment alerts" },
+                { key: "marketing", label: "Marketing updates" },
+              ].map((item) => (
+                <div key={item.key} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                  <p className="text-sm text-foreground">{item.label}</p>
+                  <Switch
+                    checked={Boolean(notificationForm[item.key as keyof typeof notificationForm])}
+                    disabled={!isEditingNotifications}
+                    onCheckedChange={(checked) =>
+                      setNotificationForm((p) => ({ ...p, [item.key]: checked }))
+                    }
+                  />
+                </div>
+              ))}
+
+              <div className="flex gap-2 justify-end">
+                {isEditingNotifications ? (
+                  <>
+                    <Button type="button" variant="outline" onClick={() => setIsEditingNotifications(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="hero"
+                      onClick={() => saveNotificationsMutation.mutate()}
+                      disabled={saveNotificationsMutation.isPending}
+                    >
+                      {saveNotificationsMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={14} /> : <Save className="mr-2" size={14} />}
+                      Save preferences
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" variant="hero" onClick={() => setIsEditingNotifications(true)}>
+                    Edit preferences
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Sign Out */}
       <Button

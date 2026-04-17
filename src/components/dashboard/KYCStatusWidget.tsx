@@ -25,9 +25,9 @@ export default function KYCStatusWidget({ userId, onOpenDocuments }: KYCStatusWi
   const profileDocumentsHref = (() => {
     const v = searchParams.get("view");
     const qs = new URLSearchParams();
-    qs.set("tab", "documents");
+    qs.set("tab", "profile");
     if (v) qs.set("view", v);
-    return `/profile?${qs.toString()}`;
+    return `/dashboard?${qs.toString()}`;
   })();
 
   const { data: vaultDocs = [] } = useQuery({

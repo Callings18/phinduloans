@@ -42,6 +42,7 @@ export async function fetchAdminDashboardStats(
   ]);
 
   if (applications.error) throw applications.error;
+  if (profiles.error) throw profiles.error;
   if (disbursementsBase.error) throw disbursementsBase.error;
   if (repaymentsBase.error) throw repaymentsBase.error;
 

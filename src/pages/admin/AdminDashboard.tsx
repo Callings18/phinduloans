@@ -22,6 +22,7 @@ import {
   User,
   Wrench,
   FlaskConical,
+  Loader2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,10 +47,14 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     import.meta.env.VITE_DEV_SUPPORT_WHATSAPP ||
     "https://wa.me/260000000000?text=Hello%20Developer%2C%20I%20need%20help%20with%20the%20admin%20system.";
 
-  const { data: stats, isLoading: statsLoading } = useAdminDashboardStats(loanProductId);
-  const { data: upcomingPayments } = useAdminUpcomingPayments(loanProductId);
+  const { data: stats, isLoading: statsLoading, isError: statsLoadError } = useAdminDashboardStats(loanProductId);
+  const {
+    data: upcomingPayments,
+    isLoading: upcomingPaymentsLoading,
+    isError: upcomingPaymentsError,
+  } = useAdminUpcomingPayments(loanProductId);
 
-  const { data: operationalRisk } = useQuery({
+  const { data: operationalRisk, isError: operationalRiskFailed } = useQuery({
     queryKey: ["admin-operational-risk"],
     queryFn: async () => {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -210,28 +215,36 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               <CardDescription>Realtime blockers requiring action (organisation-wide)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Pending disbursements</span>
-                <Badge variant="outline">{operationalRisk?.pendingDisbursements ?? 0}</Badge>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Failed disbursements</span>
-                <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">
-                  {operationalRisk?.failedDisbursements ?? 0}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Claims {" > "} 24h pending</span>
-                <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
-                  {operationalRisk?.stalePaymentClaims ?? 0}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">KYC docs {" > "} 24h unreviewed</span>
-                <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
-                  {operationalRisk?.staleKycDocs ?? 0}
-                </Badge>
-              </div>
+              {operationalRiskFailed ? (
+                <p className="text-sm text-muted-foreground">
+                  Operational metrics could not be loaded. Refresh the page or try again shortly.
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Pending disbursements</span>
+                    <Badge variant="outline">{operationalRisk?.pendingDisbursements ?? 0}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Failed disbursements</span>
+                    <Badge variant="outline" className="bg-destructive/20 text-destructive border-destructive/30">
+                      {operationalRisk?.failedDisbursements ?? 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Claims {" > "} 24h pending</span>
+                    <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
+                      {operationalRisk?.stalePaymentClaims ?? 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">KYC docs {" > "} 24h unreviewed</span>
+                    <Badge variant="outline" className="bg-warning/20 text-warning border-warning/30">
+                      {operationalRisk?.staleKycDocs ?? 0}
+                    </Badge>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -241,29 +254,35 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               <CardDescription>Finance reconciliation before day close</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Disbursement ledger balanced</span>
-                <Badge
-                  variant="outline"
-                  className={
-                    Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
-                      ? "bg-success/20 text-success border-success/30"
-                      : "bg-destructive/20 text-destructive border-destructive/30"
-                  }
-                >
-                  {Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
-                    ? "PASS"
-                    : `GAP K${Math.abs(operationalRisk?.disbursementGap ?? 0).toLocaleString()}`}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">No failed disbursements outstanding</span>
-                <Badge variant="outline">{(operationalRisk?.failedDisbursements ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">No stale payment claims</span>
-                <Badge variant="outline">{(operationalRisk?.stalePaymentClaims ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
-              </div>
+              {operationalRiskFailed ? (
+                <p className="text-muted-foreground">Daily close checks unavailable until metrics load.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Disbursement ledger balanced</span>
+                    <Badge
+                      variant="outline"
+                      className={
+                        Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
+                          ? "bg-success/20 text-success border-success/30"
+                          : "bg-destructive/20 text-destructive border-destructive/30"
+                      }
+                    >
+                      {Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
+                        ? "PASS"
+                        : `GAP K${Math.abs(operationalRisk?.disbursementGap ?? 0).toLocaleString()}`}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">No failed disbursements outstanding</span>
+                    <Badge variant="outline">{(operationalRisk?.failedDisbursements ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">No stale payment claims</span>
+                    <Badge variant="outline">{(operationalRisk?.stalePaymentClaims ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -274,13 +293,17 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-muted-foreground text-sm font-medium">Total Applications</p>
-                  <p className="text-4xl font-bold text-foreground">{stats?.totalApplications || 0}</p>
+                  <p className="text-4xl font-bold text-foreground flex items-center min-h-[2.5rem]">
+                    {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-9 w-9 animate-spin text-muted-foreground" /> : stats?.totalApplications ?? 0}
+                  </p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center shadow-button">
                   <FileText className="text-primary-foreground" size={24} />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-3">{stats?.pendingApplications || 0} pending review</p>
+              <p className="text-sm text-muted-foreground mt-3">
+                {statsLoadError || statsLoading ? "—" : `${stats?.pendingApplications ?? 0} pending review`}
+              </p>
             </CardContent>
           </Card>
 
@@ -289,13 +312,17 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-muted-foreground text-sm font-medium">Active Loans</p>
-                  <p className="text-4xl font-bold text-foreground">{stats?.activeLoans || 0}</p>
+                  <p className="text-4xl font-bold text-foreground flex items-center min-h-[2.5rem]">
+                    {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-9 w-9 animate-spin text-muted-foreground" /> : stats?.activeLoans ?? 0}
+                  </p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-warning to-warning/70 flex items-center justify-center shadow-lg">
                   <Clock className="text-white" size={24} />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-3">{stats?.completedLoans || 0} completed</p>
+              <p className="text-sm text-muted-foreground mt-3">
+                {statsLoadError || statsLoading ? "—" : `${stats?.completedLoans ?? 0} completed`}
+              </p>
             </CardContent>
           </Card>
 
@@ -306,7 +333,9 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                   <p className="text-muted-foreground text-sm font-medium">
                     {loanProductId ? "Borrowers (this product)" : "Total Borrowers"}
                   </p>
-                  <p className="text-4xl font-bold text-foreground">{stats?.totalBorrowers || 0}</p>
+                  <p className="text-4xl font-bold text-foreground flex items-center min-h-[2.5rem]">
+                    {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-9 w-9 animate-spin text-muted-foreground" /> : stats?.totalBorrowers ?? 0}
+                  </p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-success to-success/70 flex items-center justify-center shadow-lg">
                   <Users className="text-white" size={24} />
@@ -323,7 +352,9 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-muted-foreground text-sm font-medium">Total Disbursed</p>
-                  <p className="text-3xl font-bold text-foreground">K{(stats?.totalDisbursed || 0).toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-foreground flex items-center min-h-[2rem]">
+                    {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /> : `K${(stats?.totalDisbursed ?? 0).toLocaleString()}`}
+                  </p>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg">
                   <Wallet className="text-white" size={24} />
@@ -340,25 +371,39 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
               <p className="text-muted-foreground text-xs font-medium mb-1">Amount Recovered</p>
-              <p className="text-2xl font-bold text-success">K{(stats?.amountRecovered || 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-success flex items-center min-h-[2rem]">
+                {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /> : `K${(stats?.amountRecovered ?? 0).toLocaleString()}`}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">Payments received</p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card/80">
             <CardContent className="p-4">
               <p className="text-muted-foreground text-xs font-medium mb-1">Outstanding Balance</p>
-              <p className="text-2xl font-bold text-warning">K{(stats?.outstandingBalance || 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-warning flex items-center min-h-[2rem]">
+                {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /> : `K${(stats?.outstandingBalance ?? 0).toLocaleString()}`}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">Pending repayments</p>
             </CardContent>
           </Card>
-          <Card className={`${(stats?.overdueCount || 0) > 0 ? "border-destructive/30 bg-destructive/5" : "border-border/50 bg-card/80"}`}>
+          <Card
+            className={`${
+              !statsLoading && !statsLoadError && (stats?.overdueCount ?? 0) > 0
+                ? "border-destructive/30 bg-destructive/5"
+                : "border-border/50 bg-card/80"
+            }`}
+          >
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-destructive/20 flex items-center justify-center">
                 <AlertTriangle size={18} className="text-destructive" />
               </div>
               <div>
-                <p className="text-xl font-bold text-destructive">K{(stats?.overdueAmount || 0).toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">{stats?.overdueCount || 0} overdue payments</p>
+                <p className="text-xl font-bold text-destructive flex items-center min-h-[1.75rem]">
+                  {statsLoadError ? "—" : statsLoading ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : `K${(stats?.overdueAmount ?? 0).toLocaleString()}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {statsLoadError || statsLoading ? "—" : `${stats?.overdueCount ?? 0} overdue payments`}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -383,7 +428,16 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
             </div>
           </CardHeader>
           <CardContent>
-            {upcomingPayments && upcomingPayments.length > 0 ? (
+            {upcomingPaymentsError ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                Upcoming payments could not be loaded. Try refreshing the page.
+              </div>
+            ) : upcomingPaymentsLoading ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin opacity-70" />
+                <p className="text-sm">Loading payments…</p>
+              </div>
+            ) : upcomingPayments && upcomingPayments.length > 0 ? (
               <div className="space-y-3">
                 {upcomingPayments.map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
                   const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
@@ -400,7 +454,10 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") openLoan(payment.loan_id);
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openLoan(payment.loan_id);
+                        }
                       }}
                       className="flex cursor-pointer flex-col gap-3 rounded-lg border border-border/50 p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
                       onClick={() => openLoan(payment.loan_id)}
@@ -461,7 +518,20 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                   </tr>
                 </thead>
                 <tbody>
-                  {stats?.recentApplications?.length === 0 ? (
+                  {statsLoading ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                        <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin opacity-70" />
+                        <p>Loading applications…</p>
+                      </td>
+                    </tr>
+                  ) : statsLoadError ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                        <p>Recent applications could not be loaded.</p>
+                      </td>
+                    </tr>
+                  ) : (stats?.recentApplications?.length ?? 0) === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-12 text-center text-muted-foreground">
                         <FileText size={40} className="mx-auto mb-3 opacity-50" />
@@ -482,7 +552,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                         </td>
                         <td className="py-4 px-4">
                           <Badge variant="outline" className={`${getStatusBadge(app.status)} capitalize`}>
-                            {app.status.replace("_", " ")}
+                            {app.status.split("_").join(" ")}
                           </Badge>
                         </td>
                         <td className="py-4 px-4">

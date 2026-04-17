@@ -145,7 +145,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
                 <FileText size={18} className="mr-2" /> {hasActiveLoan ? "Apply Again" : "Apply Now"}
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => navigate("/profile")}>
+              <Button variant="outline" onClick={() => navigate("/dashboard?tab=profile")}>
                 <Upload size={18} className="mr-2" /> Upload Documents
               </Button>
             )}

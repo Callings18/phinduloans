@@ -16,18 +16,19 @@ import { Loader2 } from "lucide-react";
 import { subMonths, format } from "date-fns";
 
 const DisbursementTrendsChart = () => {
-  const { data: chartData, isLoading } = useQuery({
+  const { data: chartData, isLoading, isError } = useQuery({
     queryKey: ["disbursement-trends-chart"],
     queryFn: async () => {
       const sixMonthsAgo = subMonths(new Date(), 6);
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("loan_applications")
         .select("id, loan_amount, disbursed_at")
         .in("status", ["active", "disbursed", "completed"])
         .not("disbursed_at", "is", null)
         .gte("disbursed_at", sixMonthsAgo.toISOString());
 
+      if (error) throw error;
       const loans = data || [];
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const monthMap = new Map<string, { count: number; amount: number }>();
@@ -68,6 +69,10 @@ const DisbursementTrendsChart = () => {
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : isError ? (
+            <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground px-4">
+              Disbursement trends could not be loaded.
             </div>
           ) : chartData && chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">

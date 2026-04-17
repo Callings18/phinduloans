@@ -15,7 +15,7 @@ const COLORS = [
 ];
 
 const ProductMixChart = () => {
-  const { data: mixData, isLoading } = useQuery({
+  const { data: mixData, isLoading, isError } = useQuery({
     queryKey: ["product-mix-chart"],
     queryFn: async () => {
       const [loansRes, productsRes] = await Promise.all([
@@ -25,6 +25,9 @@ const ProductMixChart = () => {
           .in("status", ["active", "disbursed", "completed"]),
         supabase.from("loan_products").select("id, name"),
       ]);
+
+      if (loansRes.error) throw loansRes.error;
+      if (productsRes.error) throw productsRes.error;
 
       const loans = loansRes.data || [];
       const products = productsRes.data || [];
@@ -61,6 +64,10 @@ const ProductMixChart = () => {
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : isError ? (
+            <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground px-4">
+              Product mix could not be loaded.
             </div>
           ) : mixData && mixData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
