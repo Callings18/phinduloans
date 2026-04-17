@@ -57,6 +57,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
     marketing: false,
   });
   const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
@@ -76,6 +77,51 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
       marketing: profile?.marketing ?? false,
     });
   }, [profile]);
+
+  const normalizedProfile = useMemo(
+    () => ({
+      full_name: (profile?.full_name || "").trim(),
+      phone: (profile?.phone || "").trim(),
+      nrc_number: (profile?.nrc_number || "").trim(),
+      address: (profile?.address || "").trim(),
+      city: (profile?.city || "").trim(),
+    }),
+    [profile],
+  );
+
+  const normalizedProfileForm = useMemo(
+    () => ({
+      full_name: profileForm.full_name.trim(),
+      phone: profileForm.phone.trim(),
+      nrc_number: profileForm.nrc_number.trim(),
+      address: profileForm.address.trim(),
+      city: profileForm.city.trim(),
+    }),
+    [profileForm],
+  );
+
+  const profileChanged = useMemo(
+    () =>
+      normalizedProfile.full_name !== normalizedProfileForm.full_name ||
+      normalizedProfile.phone !== normalizedProfileForm.phone ||
+      normalizedProfile.nrc_number !== normalizedProfileForm.nrc_number ||
+      normalizedProfile.address !== normalizedProfileForm.address ||
+      normalizedProfile.city !== normalizedProfileForm.city,
+    [normalizedProfile, normalizedProfileForm],
+  );
+
+  const profileValidationError = useMemo(() => {
+    if (!normalizedProfileForm.full_name || normalizedProfileForm.full_name.length < 3) {
+      return "Full name must be at least 3 characters.";
+    }
+    if (normalizedProfileForm.phone && !/^[0-9+\-\s]{9,15}$/.test(normalizedProfileForm.phone)) {
+      return "Phone format is invalid.";
+    }
+    if (normalizedProfileForm.nrc_number && !/^[A-Za-z0-9/\-]{6,20}$/.test(normalizedProfileForm.nrc_number)) {
+      return "NRC format is invalid.";
+    }
+    return "";
+  }, [normalizedProfileForm]);
 
   const saveProfileMutation = useMutation({
     mutationFn: async () => {
@@ -123,15 +169,24 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
 
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
+      const current = passwordForm.currentPassword;
       const pass = passwordForm.newPassword;
       const confirm = passwordForm.confirmPassword;
+      if (!current) throw new Error("Enter your current password.");
       if (pass.length < 8) throw new Error("Password must be at least 8 characters.");
       if (pass !== confirm) throw new Error("Password confirmation does not match.");
+
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user?.email || "",
+        password: current,
+      });
+      if (reauthError) throw new Error("Current password is incorrect.");
+
       const { error } = await supabase.auth.updateUser({ password: pass });
       if (error) throw error;
     },
     onSuccess: () => {
-      setPasswordForm({ newPassword: "", confirmPassword: "" });
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
       toast({ title: "Password changed successfully" });
     },
     onError: (e: Error) => {
@@ -270,7 +325,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                       type="button"
                       variant="hero"
                       onClick={() => saveProfileMutation.mutate()}
-                      disabled={saveProfileMutation.isPending}
+                      disabled={saveProfileMutation.isPending || !profileChanged || Boolean(profileValidationError)}
                     >
                       {saveProfileMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={14} /> : <Save className="mr-2" size={14} />}
                       Save profile
@@ -282,6 +337,9 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                   </Button>
                 )}
               </div>
+              {isEditingProfile && profileValidationError && (
+                <p className="text-sm text-destructive">{profileValidationError}</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -313,6 +371,14 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
+                <Label>Current password</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
                 <Label>New password</Label>
                 <Input
                   type="password"
@@ -333,7 +399,12 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                   type="button"
                   variant="hero"
                   onClick={() => changePasswordMutation.mutate()}
-                  disabled={changePasswordMutation.isPending}
+                  disabled={
+                    changePasswordMutation.isPending ||
+                    !passwordForm.currentPassword ||
+                    passwordForm.newPassword.length < 8 ||
+                    passwordForm.newPassword !== passwordForm.confirmPassword
+                  }
                 >
                   {changePasswordMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={14} /> : <Lock className="mr-2" size={14} />}
                   Update password

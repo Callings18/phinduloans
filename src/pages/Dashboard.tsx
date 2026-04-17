@@ -100,6 +100,11 @@ const Dashboard = () => {
     if (tab && ["home", "loans", "apply", "payments", "profile"].includes(tab)) {
       setActiveTab(tab);
     }
+    const kycTarget = searchParams.get("kyc");
+    if (kycTarget && (kycTarget === "documents" || kycTarget === "workspace")) {
+      setActiveTab("profile");
+      setBorrowerKycOpen(true);
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -404,8 +409,21 @@ const Dashboard = () => {
       navigate(`/profile?${qs.toString()}`);
       return;
     }
+    const qs = new URLSearchParams(searchParams);
+    qs.set("tab", "profile");
+    qs.set("kyc", "workspace");
+    setSearchParams(qs, { replace: true });
     setBorrowerKycOpen(true);
-  }, [navigate, searchParams]);
+  }, [navigate, searchParams, setSearchParams]);
+
+  const handleBorrowerKycOpenChange = useCallback((open: boolean) => {
+    setBorrowerKycOpen(open);
+    if (!open) {
+      const qs = new URLSearchParams(searchParams);
+      qs.delete("kyc");
+      setSearchParams(qs, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   if (isLoading) {
     return (
@@ -427,7 +445,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
-      <BorrowerKycSheet userId={user.id} open={borrowerKycOpen} onOpenChange={setBorrowerKycOpen} />
+      <BorrowerKycSheet userId={user.id} open={borrowerKycOpen} onOpenChange={handleBorrowerKycOpenChange} />
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside
         className={cn(

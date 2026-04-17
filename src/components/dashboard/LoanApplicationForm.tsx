@@ -419,7 +419,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Your profile is incomplete. Please update your{" "}
-            <Button variant="link" className="p-0 h-auto" onClick={() => navigate("/dashboard?tab=profile")}>profile</Button>
+            <Button variant="link" className="p-0 h-auto" onClick={() => navigate("/dashboard?tab=profile&kyc=documents")}>profile</Button>
             {" "}with your full name, phone, and NRC number before applying.
           </AlertDescription>
         </Alert>
@@ -439,7 +439,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           <AlertCircle className="h-4 w-4 text-yellow-500" />
           <AlertDescription className="text-yellow-200">
             Your KYC documents are not yet verified. You can still apply, but approval requires verified identity documents.{" "}
-            <Button variant="link" className="p-0 h-auto text-yellow-400" onClick={() => navigate("/dashboard?tab=profile")}>Upload Documents</Button>
+            <Button variant="link" className="p-0 h-auto text-yellow-400" onClick={() => navigate("/dashboard?tab=profile&kyc=documents")}>Upload Documents</Button>
           </AlertDescription>
         </Alert>
       )}
