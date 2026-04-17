@@ -30,6 +30,40 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // AUTHORIZATION CHECK: Verify calling user is authenticated staff
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Authorization header required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+
+    const staffRoles = ["admin", "super_admin", "loan_officer", "finance_officer"];
+    const isStaff = roles?.some((r: { role: string }) => staffRoles.includes(r.role));
+
+    if (!isStaff) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Forbidden - staff access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const body: CRBSubmitRequest = await req.json();
     const { 
       borrower_id, 
