@@ -1044,7 +1044,7 @@ const AdminBorrowers = () => {
                   onChange={(e) => setFormData({ ...formData, loan_start_date: e.target.value })}
                 />
               </div>
-            </div>
+            </section>
           </div>
 
           <DialogFooter className="gap-2">
