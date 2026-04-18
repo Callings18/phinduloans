@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -35,10 +45,31 @@ interface Props {
   onSignOut: () => void;
 }
 
+type ProfileSectionTab = "personal" | "kyc" | "security" | "notifications";
+
+function profileFormFromProfile(profile: any) {
+  return {
+    full_name: profile?.full_name || "",
+    phone: profile?.phone || "",
+    nrc_number: profile?.nrc_number || "",
+    address: profile?.address || "",
+    city: profile?.city || "",
+  };
+}
+
+function notificationFormFromProfile(profile: any) {
+  return {
+    email_reminders: profile?.email_reminders ?? true,
+    sms_reminders: profile?.sms_reminders ?? true,
+    payment_alerts: profile?.payment_alerts ?? true,
+    marketing: profile?.marketing ?? false,
+  };
+}
+
 export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenKycWorkspace, onSignOut }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [profileTab, setProfileTab] = useState<"personal" | "kyc" | "security" | "notifications">("personal");
+  const [profileTab, setProfileTab] = useState<ProfileSectionTab>("personal");
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingNotifications, setIsEditingNotifications] = useState(false);
@@ -62,20 +93,13 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
     confirmPassword: "",
   });
 
+  const [unsavedDialog, setUnsavedDialog] = useState<
+    null | { kind: "tab"; next: ProfileSectionTab } | { kind: "signout" }
+  >(null);
+
   useEffect(() => {
-    setProfileForm({
-      full_name: profile?.full_name || "",
-      phone: profile?.phone || "",
-      nrc_number: profile?.nrc_number || "",
-      address: profile?.address || "",
-      city: profile?.city || "",
-    });
-    setNotificationForm({
-      email_reminders: profile?.email_reminders ?? true,
-      sms_reminders: profile?.sms_reminders ?? true,
-      payment_alerts: profile?.payment_alerts ?? true,
-      marketing: profile?.marketing ?? false,
-    });
+    setProfileForm(profileFormFromProfile(profile));
+    setNotificationForm(notificationFormFromProfile(profile));
   }, [profile]);
 
   const normalizedProfile = useMemo(
@@ -109,6 +133,51 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
       normalizedProfile.city !== normalizedProfileForm.city,
     [normalizedProfile, normalizedProfileForm],
   );
+
+  const normalizedNotificationsFromProfile = useMemo(() => notificationFormFromProfile(profile), [profile]);
+
+  const notificationsChanged = useMemo(
+    () =>
+      notificationForm.email_reminders !== normalizedNotificationsFromProfile.email_reminders ||
+      notificationForm.sms_reminders !== normalizedNotificationsFromProfile.sms_reminders ||
+      notificationForm.payment_alerts !== normalizedNotificationsFromProfile.payment_alerts ||
+      notificationForm.marketing !== normalizedNotificationsFromProfile.marketing,
+    [notificationForm, normalizedNotificationsFromProfile],
+  );
+
+  const passwordDirty = useMemo(
+    () =>
+      Boolean(
+        passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword,
+      ),
+    [passwordForm],
+  );
+
+  const hasUnsavedEdits = useMemo(
+    () =>
+      (isEditingProfile && profileChanged) ||
+      (isEditingNotifications && notificationsChanged) ||
+      passwordDirty,
+    [isEditingProfile, profileChanged, isEditingNotifications, notificationsChanged, passwordDirty],
+  );
+
+  const discardAllDrafts = useCallback(() => {
+    setProfileForm(profileFormFromProfile(profile));
+    setNotificationForm(notificationFormFromProfile(profile));
+    setIsEditingProfile(false);
+    setIsEditingNotifications(false);
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  }, [profile]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedEdits) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasUnsavedEdits]);
 
   const profileValidationError = useMemo(() => {
     if (!normalizedProfileForm.full_name || normalizedProfileForm.full_name.length < 3) {
@@ -194,6 +263,34 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
     },
   });
 
+  const handleTabChangeRequest = useCallback(
+    (next: ProfileSectionTab) => {
+      if (next === profileTab) return;
+      if (!hasUnsavedEdits) {
+        setProfileTab(next);
+        return;
+      }
+      setUnsavedDialog({ kind: "tab", next });
+    },
+    [profileTab, hasUnsavedEdits],
+  );
+
+  const confirmDiscardAndProceed = useCallback(() => {
+    if (!unsavedDialog) return;
+    discardAllDrafts();
+    if (unsavedDialog.kind === "tab") {
+      setProfileTab(unsavedDialog.next);
+    } else {
+      onSignOut();
+    }
+    setUnsavedDialog(null);
+  }, [unsavedDialog, discardAllDrafts, onSignOut]);
+
+  const handleSignOutRequest = useCallback(() => {
+    if (hasUnsavedEdits) setUnsavedDialog({ kind: "signout" });
+    else onSignOut();
+  }, [hasUnsavedEdits, onSignOut]);
+
   const profileCompletion = (() => {
     let score = 35;
     if (profile?.full_name) score += 20;
@@ -253,9 +350,26 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
         </CardContent>
       </Card>
 
+      <AlertDialog open={unsavedDialog !== null} onOpenChange={(open) => !open && setUnsavedDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have edits that are not saved yet. If you continue, those changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Keep editing</AlertDialogCancel>
+            <AlertDialogAction type="button" className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDiscardAndProceed}>
+              Discard and continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Tabs
         value={profileTab}
-        onValueChange={(v) => setProfileTab(v as typeof profileTab)}
+        onValueChange={(v) => handleTabChangeRequest(v as ProfileSectionTab)}
         className="space-y-4"
       >
         <TabsList className="grid grid-cols-2 md:grid-cols-4">
@@ -318,7 +432,14 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
               <div className="flex gap-2 justify-end">
                 {isEditingProfile ? (
                   <>
-                    <Button type="button" variant="outline" onClick={() => setIsEditingProfile(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setProfileForm(profileFormFromProfile(profile));
+                        setIsEditingProfile(false);
+                      }}
+                    >
                       Cancel
                     </Button>
                     <Button
@@ -442,14 +563,21 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
               <div className="flex gap-2 justify-end">
                 {isEditingNotifications ? (
                   <>
-                    <Button type="button" variant="outline" onClick={() => setIsEditingNotifications(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setNotificationForm(notificationFormFromProfile(profile));
+                        setIsEditingNotifications(false);
+                      }}
+                    >
                       Cancel
                     </Button>
                     <Button
                       type="button"
                       variant="hero"
                       onClick={() => saveNotificationsMutation.mutate()}
-                      disabled={saveNotificationsMutation.isPending}
+                      disabled={saveNotificationsMutation.isPending || !notificationsChanged}
                     >
                       {saveNotificationsMutation.isPending ? <Loader2 className="mr-2 animate-spin" size={14} /> : <Save className="mr-2" size={14} />}
                       Save preferences
@@ -470,7 +598,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
       <Button
         variant="outline"
         className="border-destructive/30 text-destructive hover:bg-destructive/10 w-full md:w-auto"
-        onClick={onSignOut}
+        onClick={handleSignOutRequest}
       >
         <LogOut size={16} className="mr-2" />
         Sign Out
