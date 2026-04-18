@@ -107,36 +107,55 @@ export default function HouseBorrowersPage() {
       const userId = response.data?.user_id;
       if (!userId) return response.data;
 
-      // Optionally create a loan
+      // Optionally create a loan + auto-disburse so repayment schedule generates
       const principal = Number(form.principal_amount || 0);
       const interest = Number(form.interest_amount || 0);
       const daily = Number(form.daily_repayment || 0);
       if (principal > 0 && productData?.id) {
         const total = principal + Math.max(0, interest);
         const termDays = daily > 0 ? Math.max(1, Math.round(total / daily)) : 26;
-        await supabase.from("loan_applications").insert({
-          user_id: userId,
-          loan_product_id: productData.id,
-          full_name: form.full_name,
-          email: form.email,
-          phone: form.phone || "",
-          nrc_number: form.nrc_number || "N/A",
-          address: form.address || "",
-          city: form.city || "",
-          employment_type: "self_employed" as const,
-          employer_name: productCode === "MARKETEER" ? "Marketeers" : "",
-          monthly_income: Math.max(principal * 2, 500),
-          loan_amount: principal,
-          loan_purpose: `${productData.name || productCode} loan`,
-          loan_term_months: termDays,
-          term_unit: "days",
-          interest_rate: principal > 0 ? (interest / principal) * 100 : 0,
-          monthly_payment: daily > 0 ? daily : Math.round(total / termDays),
-          total_repayment: total,
-          status: "approved" as const,
-          approved_at: `${form.loan_start_date}T08:00:00.000Z`,
-          source: `house_${productCode.toLowerCase()}`,
-        });
+        const isMarketeer = productCode === "MARKETEER";
+        const { data: loan, error: loanErr } = await supabase
+          .from("loan_applications")
+          .insert({
+            user_id: userId,
+            loan_product_id: productData.id,
+            full_name: form.full_name,
+            email: form.email,
+            phone: form.phone || "N/A",
+            nrc_number: form.nrc_number || "N/A",
+            address: form.address || "",
+            city: form.city || "",
+            employment_type: (isMarketeer ? "self_employed" : "employed") as any,
+            employer_name: isMarketeer ? "Marketeers" : "",
+            monthly_income: Math.max(principal * 2, 500),
+            loan_amount: principal,
+            loan_purpose: `${productData.name || productCode} loan`,
+            loan_term_months: termDays,
+            term_unit: "days",
+            interest_rate: principal > 0 ? (interest / principal) * 100 : 0,
+            monthly_payment: daily > 0 ? daily : Math.round(total / termDays),
+            total_repayment: total,
+            status: "approved" as const,
+            approved_at: `${form.loan_start_date}T08:00:00.000Z`,
+            source: `house_${productCode.toLowerCase()}`,
+          })
+          .select("id")
+          .single();
+        if (loanErr) throw new Error(`Loan creation failed: ${loanErr.message}`);
+
+        // Auto-create completed disbursement → triggers schedule generation
+        if (loan?.id) {
+          const { error: disbErr } = await supabase.from("disbursements").insert({
+            loan_id: loan.id,
+            amount: principal,
+            disbursement_method: "cash",
+            status: "completed",
+            disbursed_at: `${form.loan_start_date}T08:00:00.000Z`,
+            transaction_reference: `HOUSE-${productCode}-${Date.now()}`,
+          });
+          if (disbErr) throw new Error(`Disbursement failed: ${disbErr.message}`);
+        }
       }
       return response.data;
     },
