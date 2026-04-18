@@ -114,21 +114,9 @@ const WorkflowConfiguration = ({ productId, productName }: WorkflowConfiguration
                 </div>
             </div>
 
-            {/* Info Banner */}
-            <Card className="bg-muted/30 border-muted">
-                <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                        <Info className="text-muted-foreground mt-0.5" size={18} />
-                        <div>
-                            <p className="text-sm font-medium">Feature Coming Soon</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Custom workflow configuration will be available after the database migration is completed.
-                                Currently, loans follow the standard status workflow shown below.
-                            </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Info banner removed at launch — hide "Coming Soon" verbiage to
+                prevent the appearance of dead-end features in production. The
+                standard workflow visualization below is the actual live flow. */}
 
             {/* Default Workflow Visualization */}
             <Card className="border-border/50 overflow-hidden">

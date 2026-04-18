@@ -336,55 +336,60 @@ const AdminDisbursements = () => {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const updateData: any = { status };
-      if (status === "completed") {
-        updateData.disbursed_at = new Date().toISOString();
-        updateData.transaction_reference = `TXN-${Date.now()}`;
+      // FAILED / cancelled: simple status flip, no balance impact.
+      if (status !== "completed") {
+        const { error } = await supabase
+          .from("disbursements")
+          .update({ status })
+          .eq("id", id);
+        if (error) throw error;
+        await logAudit({
+          action: "DISBURSE_STATUS_UPDATE",
+          entity_type: "disbursement",
+          entity_id: id,
+          module: "disbursement",
+          new_values: { status },
+        });
+        return;
       }
 
-      const { error } = await supabase
-        .from("disbursements")
-        .update(updateData)
-        .eq("id", id);
-
-      if (error) throw error;
-
-      // Record disbursement metadata on the loan — the DB trigger on disbursements
-      // auto-generates the repayment schedule and sets the loan to "active".
-      if (status === "completed") {
-        const disbursement = disbursements?.find((d) => d.id === id);
-        if (disbursement) {
-          if (!disbursement.source_account_id) {
-            throw new Error("No source account linked to this disbursement. Please create a new disbursement with a source account.");
-          }
-
-          const { data: freshLoan, error: loanFetchError } = await supabase
-            .from("loan_applications")
-            .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
-            .eq("id", disbursement.loan_id)
-            .single();
-          if (loanFetchError) throw loanFetchError;
-
-          await createRepaymentScheduleForLoan(freshLoan, supabase);
-
-          // Only update metadata; do NOT set status — the trigger handles that
-          await supabase
-            .from("loan_applications")
-            .update({
-              disbursed_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-              disbursed_at: new Date().toISOString(),
-            })
-            .eq("id", disbursement.loan_id);
-        }
+      // COMPLETED: use atomic server-side RPC (balance guard + ledger + loan
+      // status advance + audit log all in one transaction).
+      const disbursement = disbursements?.find((d) => d.id === id);
+      if (!disbursement) throw new Error("Disbursement not found locally");
+      if (!disbursement.source_account_id) {
+        throw new Error("No source account linked to this disbursement. Please create a new disbursement with a source account.");
       }
 
-      await logAudit({
-        action: status === "completed" ? "DISBURSE_COMPLETE" : "DISBURSE_STATUS_UPDATE",
-        entity_type: "disbursement",
-        entity_id: id,
-        module: "disbursement",
-        new_values: { status },
+      // Client-side preflight balance hint (server still enforces).
+      const sourceAccount = accounts.find((a) => a.id === disbursement.source_account_id);
+      if (sourceAccount && sourceAccount.balance < disbursement.amount) {
+        throw new Error(
+          `Insufficient funds in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}, Required: K${disbursement.amount.toLocaleString()}`
+        );
+      }
+
+      const { data, error } = await supabase.rpc("complete_disbursement", {
+        p_disbursement_id: id,
+        p_account_id: disbursement.source_account_id,
+        p_transaction_reference: null,
       });
+      if (error) throw error;
+      const result = data as { success: boolean; error?: string } | null;
+      if (!result?.success) {
+        throw new Error(result?.error || "Failed to complete disbursement");
+      }
+
+      // Generate repayment schedule client-side (DB trigger may also do it; this
+      // is idempotent because createRepaymentScheduleForLoan checks first).
+      const { data: freshLoan, error: loanFetchError } = await supabase
+        .from("loan_applications")
+        .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
+        .eq("id", disbursement.loan_id)
+        .single();
+      if (!loanFetchError && freshLoan) {
+        await createRepaymentScheduleForLoan(freshLoan, supabase);
+      }
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });

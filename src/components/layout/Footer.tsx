@@ -48,17 +48,25 @@ const Footer = () => {
           {/* Legal */}
           <div className="space-y-4">
             <h4 className="text-foreground font-semibold">Legal</h4>
-            <ul className="space-y-2">
-              {["Privacy Policy", "Terms of Service", "Loan Agreement", "Data Protection"].map((link) => (
-                <li key={link}>
-                  <Link
-                    to="#"
-                    className="text-muted-foreground text-sm hover:text-primary transition-colors"
-                  >
-                    {link}
-                  </Link>
-                </li>
-              ))}
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>Licensed by the Bank of Zambia</li>
+              <li>Data Protection — DPA 2021 compliant</li>
+              <li>
+                <a
+                  href="mailto:info@phindu.com"
+                  className="hover:text-primary transition-colors"
+                >
+                  Request privacy policy
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:info@phindu.com"
+                  className="hover:text-primary transition-colors"
+                >
+                  Request loan agreement template
+                </a>
+              </li>
             </ul>
           </div>
 
