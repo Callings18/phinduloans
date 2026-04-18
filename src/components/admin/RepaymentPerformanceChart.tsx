@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { Loader2 } from "lucide-react";
 import { subMonths, format } from "date-fns";
+import QueryStateView from "@/components/common/QueryStateView";
 
 const RepaymentPerformanceChart = () => {
   const { data: chartData, isLoading, isError } = useQuery({
@@ -66,15 +66,14 @@ const RepaymentPerformanceChart = () => {
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : isError ? (
-            <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground px-4">
-              Repayment performance could not be loaded.
-            </div>
-          ) : chartData && chartData.length > 0 ? (
+          <QueryStateView
+            isLoading={isLoading}
+            isError={isError}
+            hasData={(chartData?.length ?? 0) > 0}
+            loadingText="Loading repayment performance..."
+            errorText="Repayment performance could not be loaded."
+            emptyText="No repayment data."
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
@@ -94,11 +93,7 @@ const RepaymentPerformanceChart = () => {
                 <Bar dataKey="Missed" stackId="a" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No repayment data
-            </div>
-          )}
+          </QueryStateView>
         </div>
       </CardContent>
     </Card>

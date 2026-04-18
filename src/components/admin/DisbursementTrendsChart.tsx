@@ -12,8 +12,8 @@ import {
   Line,
   ComposedChart,
 } from "recharts";
-import { Loader2 } from "lucide-react";
 import { subMonths, format } from "date-fns";
+import QueryStateView from "@/components/common/QueryStateView";
 
 const DisbursementTrendsChart = () => {
   const { data: chartData, isLoading, isError } = useQuery({
@@ -66,15 +66,14 @@ const DisbursementTrendsChart = () => {
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : isError ? (
-            <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground px-4">
-              Disbursement trends could not be loaded.
-            </div>
-          ) : chartData && chartData.length > 0 ? (
+          <QueryStateView
+            isLoading={isLoading}
+            isError={isError}
+            hasData={(chartData?.length ?? 0) > 0}
+            loadingText="Loading disbursement trends..."
+            errorText="Disbursement trends could not be loaded."
+            emptyText="No disbursement data."
+          >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
@@ -117,11 +116,7 @@ const DisbursementTrendsChart = () => {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No disbursement data
-            </div>
-          )}
+          </QueryStateView>
         </div>
       </CardContent>
     </Card>

@@ -3,7 +3,7 @@
 Use this as the **single planning list** between “feature complete” and “client go-live.”  
 **Assumption:** target **2–4 weeks** to production; client uses **LMS (loans)** plus **internal HR/payroll** for staff.
 
-**Related:** [CLIENT_UAT_CHECKLIST_10.md](./CLIENT_UAT_CHECKLIST_10.md) (pilot smoke, 10 rows) · [RLS_UI_MATRIX.md](./RLS_UI_MATRIX.md) (M5: role × route matrix) · [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) · [ENTERPRISE_READINESS_CHECKLIST.md](./ENTERPRISE_READINESS_CHECKLIST.md) · [MIGRATIONS_FOR_DEPLOY.md](./MIGRATIONS_FOR_DEPLOY.md) · [PRODUCTION_RELEASE_CHECKLIST_3DAY.md](./PRODUCTION_RELEASE_CHECKLIST_3DAY.md)
+**Related:** [LAUNCH_MATRIX_UAT.md](./LAUNCH_MATRIX_UAT.md) (House × Role × Flow sign-off) · [CLIENT_UAT_CHECKLIST_10.md](./CLIENT_UAT_CHECKLIST_10.md) (pilot smoke, 10 rows) · [RLS_UI_MATRIX.md](./RLS_UI_MATRIX.md) (M5: role × route matrix) · [QA_SIGNOFF_CHECKLIST.md](./QA_SIGNOFF_CHECKLIST.md) · [ENTERPRISE_READINESS_CHECKLIST.md](./ENTERPRISE_READINESS_CHECKLIST.md) · [MIGRATIONS_FOR_DEPLOY.md](./MIGRATIONS_FOR_DEPLOY.md) · [PRODUCTION_RELEASE_CHECKLIST_3DAY.md](./PRODUCTION_RELEASE_CHECKLIST_3DAY.md)
 
 ---
 

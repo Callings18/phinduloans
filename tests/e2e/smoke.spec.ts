@@ -18,6 +18,18 @@ const financeCreds: Creds | null =
       }
     : null;
 
+/** Borrower-only account (non-staff) — optional; extends launch-matrix coverage for borrower flows */
+const borrowerCreds: Creds | null =
+  process.env.E2E_BORROWER_EMAIL && process.env.E2E_BORROWER_PASSWORD
+    ? {
+        email: process.env.E2E_BORROWER_EMAIL,
+        password: process.env.E2E_BORROWER_PASSWORD,
+      }
+    : null;
+
+/** e.g. MARKETEER, PAYDAY_SOFT — must exist in `loan_products.product_code` for staff user */
+const houseProductCode = process.env.E2E_HOUSE_PRODUCT_CODE?.trim() || "";
+
 async function login(page: Page, creds: Creds) {
   await page.goto("/auth");
   await page.fill("#email", creds.email);
@@ -31,6 +43,14 @@ test.describe("borrower portal smoke", () => {
     await page.waitForURL(/\/auth/, { timeout: 15_000 });
     expect(page.url()).toMatch(/\/auth/);
   });
+
+  test("borrower can load dashboard after sign-in", async ({ page }) => {
+    test.skip(!borrowerCreds, "Set E2E_BORROWER_EMAIL and E2E_BORROWER_PASSWORD (non-staff borrower)");
+    await login(page, borrowerCreds!);
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/Welcome back/i)).toBeVisible({ timeout: 15_000 });
+  });
 });
 
 test.describe("admin hardening smoke", () => {
@@ -40,6 +60,32 @@ test.describe("admin hardening smoke", () => {
     await page.goto("/admin/houses");
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Loan Product Houses" })).toBeVisible();
+  });
+
+  test("finance staff can open global disbursements, repayments, and reports", async ({ page }) => {
+    test.skip(!financeCreds, "Set E2E_FINANCE_EMAIL and E2E_FINANCE_PASSWORD");
+    await login(page, financeCreds!);
+
+    await page.goto("/admin/disbursements");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Disbursements" })).toBeVisible();
+
+    await page.goto("/admin/repayments");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Repayments" })).toBeVisible();
+
+    await page.goto("/admin/reports");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Reports & Export" })).toBeVisible();
+  });
+
+  test("finance staff can open a house dashboard when E2E_HOUSE_PRODUCT_CODE is set", async ({ page }) => {
+    test.skip(!financeCreds, "Set E2E_FINANCE_EMAIL and E2E_FINANCE_PASSWORD");
+    test.skip(!houseProductCode, "Set E2E_HOUSE_PRODUCT_CODE (e.g. MARKETEER) — user needs house:dashboard_view for that product");
+    await login(page, financeCreds!);
+    await page.goto(`/admin/houses/${encodeURIComponent(houseProductCode)}`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText("Total loans", { exact: true })).toBeVisible({ timeout: 15_000 });
   });
 
   test("route denial for low-privileged staff on settings", async ({ page }) => {

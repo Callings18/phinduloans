@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Loader2 } from "lucide-react";
+import QueryStateView from "@/components/common/QueryStateView";
 
 const COLORS = [
   "hsl(var(--primary))",
@@ -61,15 +61,14 @@ const ProductMixChart = () => {
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : isError ? (
-            <div className="flex items-center justify-center h-full text-center text-sm text-muted-foreground px-4">
-              Product mix could not be loaded.
-            </div>
-          ) : mixData && mixData.length > 0 ? (
+          <QueryStateView
+            isLoading={isLoading}
+            isError={isError}
+            hasData={(mixData?.length ?? 0) > 0}
+            loadingText="Loading product mix..."
+            errorText="Product mix could not be loaded."
+            emptyText="No product data."
+          >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -101,11 +100,7 @@ const ProductMixChart = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No product data
-            </div>
-          )}
+          </QueryStateView>
         </div>
         {/* Summary table */}
         {mixData && mixData.length > 0 && (
