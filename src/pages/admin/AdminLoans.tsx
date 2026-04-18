@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/table";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 import PaginationControls from "@/components/common/PaginationControls";
+import { DesktopTableWrap, MobileCardStack } from "@/components/common/ResponsiveDataViews";
 import { useAuth } from "@/hooks/useAuth";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 
@@ -113,6 +114,9 @@ interface LoanProduct {
   interest_rate: number;
   processing_fee_percent: number | null;
   enforcement_fee_percent?: number | null;
+  insurance_percent?: number | null;
+  platform_fee_percent?: number | null;
+  vat_percent?: number | null;
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -718,6 +722,93 @@ const AdminLoans = () => {
     return [{ value: "all", label: "All" }];
   };
 
+  const LoanActionsMenu = ({ loan }: { loan: Loan }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="min-h-11 min-w-[7rem] shrink-0 md:min-h-9">
+          Actions
+          <MoreHorizontal size={14} className="ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem
+          onClick={() => {
+            setSelectedLoan(loan);
+            setIsDetailsOpen(true);
+          }}
+        >
+          <Eye size={14} className="mr-2" />
+          View Details
+        </DropdownMenuItem>
+        {can("loans", "edit") && (
+          <DropdownMenuItem onClick={() => openEditDialog(loan)}>
+            <Edit size={14} className="mr-2" />
+            Edit Loan
+          </DropdownMenuItem>
+        )}
+        {["awaiting_disbursement", "approved"].includes(loan.status) && can("loans", "edit") && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                setDisbursementLoan(loan);
+                setDisbursementMethod("bank_transfer");
+                setDisbursementSourceAccountId("");
+                setDisbursementReference("");
+                setIsDisbursementOpen(true);
+              }}
+            >
+              <Banknote size={14} className="mr-2" />
+              Disburse Funds
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setSelectedLoan(loan);
+                setIsDetailsOpen(true);
+              }}
+            >
+              <Eye size={14} className="mr-2" />
+              Review & Disburse
+            </DropdownMenuItem>
+          </>
+        )}
+        {["active", "disbursed"].includes(loan.status) && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => openQuickPayment(loan)}>
+              <Receipt size={14} className="mr-2" />
+              Record Payment
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDownloadSchedule(loan)}>
+              <Download size={14} className="mr-2" />
+              Download Schedule PDF
+            </DropdownMenuItem>
+          </>
+        )}
+        {["active", "disbursed"].includes(loan.status) && can("loans", "edit") && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => {
+                if (!confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) return;
+                const reason = window.prompt("Reason for marking as defaulted (required, min 3 characters):", "");
+                if (!reason || reason.trim().length < 3) {
+                  toast.error("A reason of at least 3 characters is required.");
+                  return;
+                }
+                moveToDefaultedMutation.mutate({ loanId: loan.id, reason: reason.trim() });
+              }}
+            >
+              <XCircle size={14} className="mr-2" />
+              Move to Defaulted
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -783,11 +874,19 @@ const AdminLoans = () => {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setStatusFilter("all"); }}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="awaiting_disbursement">Awaiting Disbursement ({stats.awaitingDisbursement})</TabsTrigger>
-            <TabsTrigger value="active">Active Loans ({stats.active})</TabsTrigger>
-            <TabsTrigger value="completed">Completed ({stats.completed})</TabsTrigger>
-            <TabsTrigger value="defaulted">Defaulted ({stats.defaulted})</TabsTrigger>
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:grid-cols-4">
+            <TabsTrigger value="awaiting_disbursement" className="text-xs sm:text-sm">
+              Awaiting ({stats.awaitingDisbursement})
+            </TabsTrigger>
+            <TabsTrigger value="active" className="text-xs sm:text-sm">
+              Active ({stats.active})
+            </TabsTrigger>
+            <TabsTrigger value="completed" className="text-xs sm:text-sm">
+              Completed ({stats.completed})
+            </TabsTrigger>
+            <TabsTrigger value="defaulted" className="text-xs sm:text-sm">
+              Defaulted ({stats.defaulted})
+            </TabsTrigger>
           </TabsList>
 
           {/* Filters */}
@@ -832,6 +931,7 @@ const AdminLoans = () => {
             ) : paginatedLoans.length > 0 ? (
               <>
                 <Card className="border-border/50">
+                  <DesktopTableWrap>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -902,93 +1002,94 @@ const AdminLoans = () => {
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="outline" size="sm">
-                                    Actions
-                                    <MoreHorizontal size={14} className="ml-1" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  <DropdownMenuItem onClick={() => {
-                                    setSelectedLoan(loan);
-                                    setIsDetailsOpen(true);
-                                  }}>
-                                    <Eye size={14} className="mr-2" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  {can('loans', 'edit') && (
-                                    <DropdownMenuItem onClick={() => openEditDialog(loan)}>
-                                      <Edit size={14} className="mr-2" />
-                                      Edit Loan
-                                    </DropdownMenuItem>
-                                  )}
-                                  {["awaiting_disbursement", "approved"].includes(loan.status) && can('loans', 'edit') && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem onClick={() => {
-                                        setDisbursementLoan(loan);
-                                        setDisbursementMethod("bank_transfer");
-                                        setDisbursementSourceAccountId("");
-                                        setDisbursementReference("");
-                                        setIsDisbursementOpen(true);
-                                      }}>
-                                        <Banknote size={14} className="mr-2" />
-                                        Disburse Funds
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => {
-                                        setSelectedLoan(loan);
-                                        setIsDetailsOpen(true);
-                                      }}>
-                                        <Eye size={14} className="mr-2" />
-                                        Review & Disburse
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                  {["active", "disbursed"].includes(loan.status) && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem onClick={() => openQuickPayment(loan)}>
-                                        <Receipt size={14} className="mr-2" />
-                                        Record Payment
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleDownloadSchedule(loan)}>
-                                        <Download size={14} className="mr-2" />
-                                        Download Schedule PDF
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                  {["active", "disbursed"].includes(loan.status) && can('loans', 'edit') && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => {
-                                          if (!confirm(`Are you sure you want to move ${loan.full_name}'s loan to Defaulted?`)) return;
-                                          const reason = window.prompt(
-                                            "Reason for marking as defaulted (required, min 3 characters):",
-                                            ""
-                                          );
-                                          if (!reason || reason.trim().length < 3) {
-                                            toast.error("A reason of at least 3 characters is required.");
-                                            return;
-                                          }
-                                          moveToDefaultedMutation.mutate({ loanId: loan.id, reason: reason.trim() });
-                                        }}
-                                      >
-                                        <XCircle size={14} className="mr-2" />
-                                        Move to Defaulted
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <LoanActionsMenu loan={loan} />
                             </TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
+                  </DesktopTableWrap>
+                  <MobileCardStack>
+                    {paginatedLoans.map((loan) => {
+                      const dueDate = loanDueDates?.[loan.id];
+                      const isOverdue = dueDate && new Date(dueDate) < new Date(new Date().toDateString());
+                      const product = loanProducts?.find((p) => p.id === loan.loan_product_id);
+                      const loanPrincipal = Number(loan.loan_amount);
+                      const processingFee = product?.processing_fee_percent ? (loanPrincipal * product.processing_fee_percent) / 100 : 0;
+                      const enforcementFee = product?.enforcement_fee_percent ? (loanPrincipal * product.enforcement_fee_percent) / 100 : 0;
+                      const insuranceFee = product?.insurance_percent
+                        ? (loanPrincipal * product.insurance_percent) / 100
+                        : 0;
+                      const platformFee = product?.platform_fee_percent
+                        ? (loanPrincipal * product.platform_fee_percent) / 100
+                        : 0;
+                      const vatableAmount = processingFee + enforcementFee + platformFee;
+                      const vatAmount = product?.vat_percent ? (vatableAmount * product.vat_percent) / 100 : 0;
+                      const disbursedAmount =
+                        loanPrincipal - processingFee - enforcementFee - insuranceFee - platformFee - vatAmount;
+
+                      return (
+                        <Card key={loan.id} className="border-border/50">
+                          <CardContent className="space-y-3 p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
+                                  <User size={18} className="text-muted-foreground" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-foreground">{loan.full_name}</p>
+                                  <p className="truncate text-sm text-muted-foreground">{loan.email}</p>
+                                </div>
+                              </div>
+                              <LoanActionsMenu loan={loan} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Amount</p>
+                                <p className="font-medium text-foreground">K{Number(loan.loan_amount).toLocaleString()}</p>
+                                {(processingFee > 0 || enforcementFee > 0 || insuranceFee > 0 || platformFee > 0 || vatAmount > 0) && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {["disbursed", "active", "completed", "defaulted"].includes(loan.status) ? (
+                                      <span className="text-success">Disbursed: K{disbursedAmount.toLocaleString()}</span>
+                                    ) : (
+                                      <span className="text-warning">Net: K{disbursedAmount.toLocaleString()}</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Term / Status</p>
+                                <p className="text-foreground">
+                                  {loan.loan_term_months} {loan.term_unit || "months"}
+                                </p>
+                                <div className="mt-1">{getStatusBadge(loan.status)}</div>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Created</p>
+                                <p>{format(new Date(loan.created_at), "MMM dd, yyyy")}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Next due</p>
+                                {dueDate && ["active", "disbursed"].includes(loan.status) ? (
+                                  <p className={isOverdue ? "font-medium text-destructive" : "text-foreground"}>
+                                    {format(new Date(dueDate), "MMM dd, yyyy")}
+                                    {isOverdue && <span className="ml-1 text-xs">Overdue</span>}
+                                  </p>
+                                ) : ["awaiting_disbursement", "approved"].includes(loan.status) ? (
+                                  <Badge variant="outline" className="border-warning/30 bg-warning/10 text-xs text-warning">
+                                    Pending disburse
+                                  </Badge>
+                                ) : (
+                                  <p className="text-muted-foreground">—</p>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </MobileCardStack>
                 </Card>
                 <PaginationControls
                   currentPage={currentPage}

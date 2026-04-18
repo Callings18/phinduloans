@@ -96,4 +96,4 @@ Source: [`src/App.tsx`](../src/App.tsx) nested routes under `houses/:productCode
 
 Playwright tests in [`tests/e2e/smoke.spec.ts`](../tests/e2e/smoke.spec.ts) cover **some** cells when credentials are set. They **do not** replace full UAT. See that file for `E2E_*` env vars.
 
-**Related docs:** [`CLIENT_UAT_CHECKLIST_10.md`](./CLIENT_UAT_CHECKLIST_10.md) · [`RLS_UI_MATRIX.md`](./RLS_UI_MATRIX.md) · [`FLOWS_AND_MODULES_AUDIT.md`](./FLOWS_AND_MODULES_AUDIT.md)
+**Related docs:** [`STAGING_SEED_UAT.md`](./STAGING_SEED_UAT.md) (minimum staging data for manual UAT) · [`CLIENT_UAT_CHECKLIST_10.md`](./CLIENT_UAT_CHECKLIST_10.md) · [`RLS_UI_MATRIX.md`](./RLS_UI_MATRIX.md) · [`FLOWS_AND_MODULES_AUDIT.md`](./FLOWS_AND_MODULES_AUDIT.md)

@@ -5,7 +5,8 @@ type QueryStateViewProps = {
   isLoading: boolean;
   isError: boolean;
   hasData: boolean;
-  children: ReactNode;
+  /** Rendered only when not loading, not error, and hasData is true */
+  children?: ReactNode;
   loadingText?: string;
   errorText?: string;
   emptyText?: string;
@@ -45,5 +46,5 @@ export default function QueryStateView({
     return <div className={viewClassName}>{emptyText}</div>;
   }
 
-  return <>{children}</>;
+  return <>{children ?? null}</>;
 }

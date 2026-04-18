@@ -57,6 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 import GuidedTour from "@/components/common/GuidedTour";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
 import PaginationControls from "@/components/common/PaginationControls";
+import QueryStateView from "@/components/common/QueryStateView";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
 
@@ -159,7 +160,7 @@ const AdminBorrowers = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: borrowers, isLoading } = useQuery({
+  const { data: borrowers, isLoading, isError } = useQuery({
     queryKey: ['admin-borrowers'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -759,8 +760,23 @@ const AdminBorrowers = () => {
 
         {/* Borrowers Grid */}
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="min-h-[240px]">
+            <QueryStateView
+              isLoading
+              isError={false}
+              hasData={false}
+              loadingText="Loading borrowers..."
+              emptyText=""
+            />
+          </div>
+        ) : isError ? (
+          <div className="min-h-[240px]">
+            <QueryStateView
+              isLoading={false}
+              isError
+              hasData={false}
+              errorText="Borrowers could not be loaded. Check your connection and try again."
+            />
           </div>
         ) : paginatedBorrowers && paginatedBorrowers.length > 0 ? (
           <>
