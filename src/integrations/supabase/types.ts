@@ -3848,6 +3848,14 @@ export type Database = {
         Returns: number
       }
       cleanup_expired_otps: { Args: never; Returns: undefined }
+      complete_disbursement: {
+        Args: {
+          p_account_id: string
+          p_disbursement_id: string
+          p_transaction_reference?: string
+        }
+        Returns: Json
+      }
       get_my_permissions: {
         Args: never
         Returns: {

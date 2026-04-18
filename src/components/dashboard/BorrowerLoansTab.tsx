@@ -31,6 +31,7 @@ import { ApplicationStatusTracker } from "./ApplicationStatusTracker";
 import DocumentChecklist from "./DocumentChecklist";
 import { borrowerInstallmentLabel, borrowerTermShortLabel } from "@/utils/repaymentFrequencyLabels";
 import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
+import { getCanonicalStatusLabel, getCanonicalStatusBadgeClasses } from "@/constants/loanStatusLabels";
 
 function loanFrequencySource(loan: BorrowerDashboardLoan) {
   const p = loan.loan_products;
@@ -42,18 +43,28 @@ function loanFrequencySource(loan: BorrowerDashboardLoan) {
   };
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: "Submitted", color: "bg-warning/20 text-warning border-warning/30", icon: Clock },
-  under_review: { label: "Under Review", color: "bg-info/20 text-info border-info/30", icon: FileText },
-  approved: { label: "Approved", color: "bg-success/20 text-success border-success/30", icon: CheckCircle },
-  contract_signing: { label: "Contract Signing", color: "bg-accent/20 text-accent border-accent/30", icon: FileText },
-  awaiting_disbursement: { label: "Awaiting Disbursement", color: "bg-primary/20 text-primary border-primary/30", icon: Banknote },
-  rejected: { label: "Rejected", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertCircle },
-  disbursed: { label: "Disbursed", color: "bg-primary/20 text-primary border-primary/30", icon: CreditCard },
-  active: { label: "Active", color: "bg-success/20 text-success border-success/30", icon: TrendingUp },
-  completed: { label: "Completed", color: "bg-muted/50 text-muted-foreground border-border", icon: CheckCircle },
-  defaulted: { label: "Defaulted", color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertCircle },
+// Icons remain product-specific; labels and colors come from the canonical
+// status helpers so borrower wording matches admin wording 1:1.
+const statusIcons: Record<string, any> = {
+  pending: Clock,
+  under_review: FileText,
+  approved: CheckCircle,
+  contract_signing: FileText,
+  awaiting_disbursement: Banknote,
+  rejected: AlertCircle,
+  disbursed: CreditCard,
+  active: TrendingUp,
+  completed: CheckCircle,
+  defaulted: AlertCircle,
 };
+
+function getStatusDisplay(status: string) {
+  return {
+    label: getCanonicalStatusLabel(status),
+    color: getCanonicalStatusBadgeClasses(status),
+    icon: statusIcons[status] || Clock,
+  };
+}
 
 interface Props {
   userId: string;
@@ -110,7 +121,7 @@ export default function BorrowerLoansTab({
   };
 
   const renderLoanCard = (loan: any, showSchedule = true) => {
-    const config = statusConfig[loan.status] || statusConfig.pending;
+    const config = getStatusDisplay(loan.status);
     const StatusIcon = config.icon;
     const loanRepayments = repayments.filter((r) => r.loan_id === loan.id);
     const progress = getLoanProgress(loan.id);

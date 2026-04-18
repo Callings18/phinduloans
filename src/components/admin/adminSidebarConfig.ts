@@ -84,7 +84,8 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: Banknote, label: "Repayments", path: "/admin/repayments", perm: { module: "repayments", action: "view" } },
       { icon: ListOrdered, label: "Bulk repayments", path: "/admin/bulk-repayments", perm: { module: "repayments", action: "view" } },
       { icon: Wallet, label: "Accounts", path: "/admin/accounts", perm: { module: "disbursement", action: "view" } },
-      { icon: Wallet, label: "Wallets", path: "/admin/wallets", perm: { module: "wallets", action: "view" } },
+      // Wallets module hidden until built (was "Coming Soon"). Re-enable by restoring this entry.
+      // { icon: Wallet, label: "Wallets", path: "/admin/wallets", perm: { module: "wallets", action: "view" } },
       { icon: Receipt, label: "Expenses", path: "/admin/expenses", perm: { module: "expenses", action: "view" } },
     ],
   },
@@ -115,7 +116,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
     label: "Administration",
     items: [
       { icon: FileSignature, label: "Contract templates", path: "/admin/contract-templates", perm: { module: "loans", action: "view" } },
-      { icon: UserCog, label: "Staff", path: "/admin/staff", perm: { module: "staff", action: "view" } },
+      { icon: UserCog, label: "Staff", path: "/admin/staff", perm: { module: "settings", action: "manage" } },
       { icon: Shield, label: "Roles & permissions", path: "/admin/roles-permissions", adminOnly: true },
       { icon: Mail, label: "Email log", path: "/admin/email-log", adminOnly: true },
       { icon: BookOpen, label: "User guide", path: "/admin/user-guide" },

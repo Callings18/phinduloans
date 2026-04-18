@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 
 interface LoanApplication {
   id: string;
@@ -131,10 +132,10 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
             )
           );
           
-          // Show toast notification for status change
+          // Show toast notification for status change (canonical label)
           toast({
             title: "Application Status Updated",
-            description: `Your loan application status changed to: ${updatedApp.status.replace(/_/g, " ").toUpperCase()}`,
+            description: `Your loan application status changed to: ${getCanonicalStatusLabel(updatedApp.status)}`,
           });
         }
       )
@@ -202,8 +203,8 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
                     {app.loan_term_months} months • Applied {format(new Date(app.created_at), "MMM d, yyyy")}
                   </p>
                 </div>
-                <Badge variant={getStatusBadgeVariant(app.status)} className="capitalize">
-                  {app.status.replace(/_/g, " ")}
+                <Badge variant={getStatusBadgeVariant(app.status)}>
+                  {getCanonicalStatusLabel(app.status)}
                 </Badge>
               </div>
             </CardHeader>
