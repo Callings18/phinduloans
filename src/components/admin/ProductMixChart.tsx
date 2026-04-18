@@ -60,7 +60,7 @@ const ProductMixChart = () => {
         <CardDescription>Loan distribution by product</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-[240px] min-h-[220px] sm:h-[280px] md:h-[300px]">
           <QueryStateView
             isLoading={isLoading}
             isError={isError}

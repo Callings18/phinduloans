@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/loanCalculations";
 import { useToast } from "@/hooks/use-toast";
 import { LOAN_APPLICATION_IDENTITY_DOC_TYPES } from "@/constants/borrowerKycDocs";
+import { MobileStickyFormFooter } from "@/components/common/ResponsiveDataViews";
 
 interface LoanProduct {
   id: string;
@@ -401,7 +402,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 md:pb-6">
       {/* Header with close */}
       <div className="flex items-center justify-between">
         <div>
@@ -508,12 +509,14 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               );
             })}
           </div>
-          <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <MobileStickyFormFooter>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button onClick={() => setStep(1)} disabled={!canProceedStep1 || !isProfileComplete}>
               Continue <ArrowRight size={16} className="ml-2" />
             </Button>
-          </div>
+          </MobileStickyFormFooter>
         </div>
       )}
 
@@ -693,14 +696,14 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             </Card>
           )}
 
-          <div className="flex justify-between pt-4">
+          <MobileStickyFormFooter>
             <Button variant="outline" onClick={() => setStep(0)}>
               <ArrowLeft size={16} className="mr-2" /> Back
             </Button>
             <Button onClick={() => setStep(2)} disabled={!canProceedStep2}>
               Continue <ArrowRight size={16} className="ml-2" />
             </Button>
-          </div>
+          </MobileStickyFormFooter>
         </div>
       )}
 
@@ -755,14 +758,14 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             {uploadedMandatoryCount}/{mandatoryDocs.length} required documents uploaded
           </div>
 
-          <div className="flex justify-between pt-4">
+          <MobileStickyFormFooter>
             <Button variant="outline" onClick={() => setStep(1)}>
               <ArrowLeft size={16} className="mr-2" /> Back
             </Button>
             <Button onClick={() => setStep(3)} disabled={!canProceedStep3}>
               Continue <ArrowRight size={16} className="ml-2" />
             </Button>
-          </div>
+          </MobileStickyFormFooter>
         </div>
       )}
 
@@ -773,7 +776,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
           <Card className="border-border/50">
             <CardHeader className="pb-2"><CardTitle className="text-base">Personal Information</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-sm">
+            <CardContent className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div><span className="text-muted-foreground">Name:</span> <span className="font-medium ml-1">{profile?.full_name}</span></div>
               <div><span className="text-muted-foreground">Phone:</span> <span className="font-medium ml-1">{profile?.phone}</span></div>
               <div><span className="text-muted-foreground">NRC:</span> <span className="font-medium ml-1">{profile?.nrc_number}</span></div>
@@ -783,7 +786,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
           <Card className="border-border/50">
             <CardHeader className="pb-2"><CardTitle className="text-base">Loan Details</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-sm">
+            <CardContent className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div><span className="text-muted-foreground">Product:</span> <span className="font-medium ml-1">{selectedProduct.name}</span></div>
               <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium ml-1">{formatCurrency(loanAmount)}</span></div>
               <div><span className="text-muted-foreground">Term:</span> <span className="font-medium ml-1">{loanTerm} months</span></div>
@@ -863,7 +866,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             </div>
           </div>
 
-          <div className="flex justify-between pt-4">
+          <MobileStickyFormFooter>
             <Button variant="outline" onClick={() => setStep(2)}>
               <ArrowLeft size={16} className="mr-2" /> Back
             </Button>
@@ -871,7 +874,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               variant="hero"
               onClick={handleSubmit}
               disabled={isSubmitting || !canSubmit || !isProfileComplete}
-              className="min-w-[180px]"
+              className="min-w-[min(180px,45vw)]"
             >
               {isSubmitting ? (
                 <><Loader2 size={16} className="mr-2 animate-spin" /> Submitting...</>
@@ -879,7 +882,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 <><CheckCircle size={16} className="mr-2" /> Submit Application</>
               )}
             </Button>
-          </div>
+          </MobileStickyFormFooter>
         </div>
       )}
     </div>

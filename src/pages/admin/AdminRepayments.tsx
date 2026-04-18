@@ -61,6 +61,7 @@ import { useSystemSettings } from "@/hooks/useSystemSettings";
 import BulkActions, { defaultRepaymentActions } from "@/components/common/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
 import PaginationControls from "@/components/common/PaginationControls";
+import { DesktopTableWrap, MobileCardStack } from "@/components/common/ResponsiveDataViews";
 import { fetchAdminPaymentClaims, reviewPaymentClaim } from "@/services/repositories/workflowRepository";
 
 interface Repayment {
@@ -741,6 +742,43 @@ const AdminRepayments = () => {
   // Paginate
   const paginatedRepayments = filteredRepayments;
 
+  const RepaymentRowActions = ({ rep }: { rep: Repayment }) => (
+    <div className="flex flex-col items-end gap-1 sm:items-end">
+      {rep.status === "pending" && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
+        <div className="mb-1 flex max-w-full flex-col items-end gap-2 text-xs text-muted-foreground">
+          <Badge variant="secondary" className="text-xs">
+            Borrower reported – pending verification
+          </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 min-h-11 text-xs"
+            onClick={() => handleVerifyClaim(rep, claimsByRepaymentId[rep.id])}
+          >
+            <CheckCircle size={12} className="mr-1" />
+            Verify & record
+          </Button>
+        </div>
+      )}
+      {rep.status === "pending" && canRecordPayment && (
+        <Button size="sm" onClick={() => handleRecordPayment(rep)} className="gradient-primary min-h-11 w-full sm:w-auto">
+          <Plus size={14} className="mr-1" />
+          Record Payment
+        </Button>
+      )}
+      {rep.status === "paid" && (
+        <div className="flex w-full flex-col items-stretch gap-2 sm:items-end">
+          <span className="text-right text-sm text-muted-foreground">
+            {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd") : "-"}
+          </span>
+          <Button size="sm" variant="outline" className="min-h-11" onClick={() => handleDownloadReceipt(rep)} title="Download Receipt">
+            <Download size={14} />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -883,6 +921,8 @@ const AdminRepayments = () => {
                 </p>
               </div>
             ) : (
+              <>
+              <DesktopTableWrap>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -985,53 +1025,90 @@ const AdminRepayments = () => {
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            {rep.status === "pending" && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                                <Badge variant="secondary" className="text-xs">Borrower reported – pending verification</Badge>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs"
-                                  onClick={() => handleVerifyClaim(rep, claimsByRepaymentId[rep.id])}
-                                >
-                                  <CheckCircle size={12} className="mr-1" />
-                                  Verify & record
-                                </Button>
-                              </div>
-                            )}
-                            {rep.status === "pending" && canRecordPayment && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleRecordPayment(rep)}
-                                className="gradient-primary"
-                              >
-                                <Plus size={14} className="mr-1" />
-                                Record Payment
-                              </Button>
-                            )}
-                            {rep.status === "paid" && (
-                              <>
-                                <span className="text-sm text-muted-foreground">
-                                  {rep.paid_date ? format(new Date(rep.paid_date), "MMM dd") : "-"}
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleDownloadReceipt(rep)}
-                                  title="Download Receipt"
-                                >
-                                  <Download size={14} />
-                                </Button>
-                              </>
-                            )}
-                          </div>
+                          <RepaymentRowActions rep={rep} />
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
+              </DesktopTableWrap>
+              <MobileCardStack>
+                {paginatedRepayments?.map((rep) => {
+                  const statusInfo = getStatusInfo(rep);
+                  const StatusIcon = statusInfo.icon;
+                  const instOriginal = Number(rep.original_amount || rep.amount);
+                  const instPaid = Number(rep.principal_paid || 0);
+                  const outstanding =
+                    rep.status === "paid" ? 0 : Math.max(0, instOriginal - instPaid);
+                  return (
+                    <Card
+                      key={rep.id}
+                      className={`border-border/50 ${statusInfo.status.includes("overdue") ? "bg-destructive/5" : ""} ${selectedRepayments.includes(rep.id) ? "ring-2 ring-primary/30" : ""}`}
+                    >
+                      <CardContent className="space-y-3 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <Checkbox
+                            checked={selectedRepayments.includes(rep.id)}
+                            onCheckedChange={() => toggleSelectRepayment(rep.id)}
+                            className="mt-1"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-muted-foreground">#{rep.installment_number || "—"}</span>
+                              <Badge variant="outline" className={statusInfo.color}>
+                                <StatusIcon size={12} className="mr-1" />
+                                {statusInfo.status}
+                              </Badge>
+                            </div>
+                            <div className="mt-2 flex items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
+                                <User className="text-primary" size={18} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-foreground">{rep.loan_applications?.full_name}</p>
+                                <p className="truncate text-sm text-muted-foreground">{rep.loan_applications?.phone}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Installment</p>
+                            <p className="font-semibold">K{Number(rep.original_amount || rep.amount).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Outstanding</p>
+                            <p className={outstanding > 0 ? "font-semibold text-destructive" : "font-semibold text-success"}>
+                              {rep.status === "paid" ? "K0" : `K${outstanding.toLocaleString()}`}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Due</p>
+                            <p className="flex items-center gap-1">
+                              <Calendar size={14} className="shrink-0 text-muted-foreground" />
+                              {format(new Date(rep.due_date), "MMM dd, yyyy")}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Paid</p>
+                            <p>{rep.paid_date ? format(new Date(rep.paid_date), "MMM dd, yyyy") : "—"}</p>
+                          </div>
+                        </div>
+                        {rep.payment_method && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">Method:</span>{" "}
+                            <span className="capitalize">{rep.payment_method.replace(/_/g, " ")}</span>
+                            {rep.transaction_reference ? ` · ${rep.transaction_reference}` : ""}
+                          </p>
+                        )}
+                        <RepaymentRowActions rep={rep} />
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </MobileCardStack>
+              </>
             )}
           </CardContent>
           {(filteredRepayments?.length || 0) > 0 && (

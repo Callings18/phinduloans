@@ -65,7 +65,7 @@ const DisbursementTrendsChart = () => {
         <CardDescription>Volume &amp; value over last 6 months</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-[220px] min-h-[200px] sm:h-[260px] md:h-[300px]">
           <QueryStateView
             isLoading={isLoading}
             isError={isError}
