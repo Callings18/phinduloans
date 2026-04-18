@@ -72,7 +72,7 @@ const ProductMixChart = () => {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={mixData}
+                  data={mixData ?? []}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -85,7 +85,7 @@ const ProductMixChart = () => {
                   }
                   labelLine={false}
                 >
-                  {mixData.map((_, idx) => (
+                  {(mixData ?? []).map((_, idx) => (
                     <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                   ))}
                 </Pie>
