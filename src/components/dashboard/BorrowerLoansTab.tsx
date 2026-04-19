@@ -215,7 +215,13 @@ export default function BorrowerLoansTab({
                           </div>
                           <div className="flex items-center gap-1.5">
                             {["pending", "overdue"].includes(rep.status) && (
-                              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => onSubmitPayment(rep)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                data-testid="borrower-open-payment-claim"
+                                onClick={() => onSubmitPayment(rep)}
+                              >
                                 <Banknote size={10} className="mr-0.5" />
                                 I've paid
                               </Button>

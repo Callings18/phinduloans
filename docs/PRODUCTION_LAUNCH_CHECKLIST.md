@@ -96,7 +96,7 @@ If a critical bug appears within the first 24h:
 - Wallets module is hidden until built out
 - Custom workflow configuration is read-only (standard pipeline only)
 - WhatsApp delivery requires recipient opt-in via Twilio sandbox keyword `join`
-- No automated test suite — depends on the QA Test Sheet for regression
+- Borrower/staff **Playwright** smoke and borrower critical-path specs exist (`npm run test:e2e:smoke`, `npm run test:e2e:borrower`) but require configured env users and seeded data; full regression still uses the QA Test Sheet until CI runs these on every release branch
 - No staging environment — fixes deploy directly to production
 
 ## Sign-off

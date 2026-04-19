@@ -12,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
+    "test:e2e:borrower": "playwright test tests/e2e/borrower-critical.spec.ts",
     "test:e2e:headed": "playwright test tests/e2e/smoke.spec.ts --headed"
   },
   "dependencies": {
@@ -59,7 +60,7 @@
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "jsdom": "^20.0.3",
-    "jspdf": "^4.1.0",
+    "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.462.0",
     "react": "^18.3.1",

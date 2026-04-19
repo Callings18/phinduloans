@@ -518,7 +518,7 @@ const Dashboard = () => {
                 <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
                   {showApplicationForm ? "Apply for Loan" : tabTitle[activeTab]}
                 </h1>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="truncate text-xs text-muted-foreground" data-testid="borrower-dashboard-welcome">
                   Welcome back, {profile?.full_name || "Customer"}
                 </p>
               </div>
@@ -663,7 +663,7 @@ const Dashboard = () => {
       </Sheet>
 
       <Dialog open={!!submitPaymentRepayment} onOpenChange={(open) => { if (!open) { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" data-testid="borrower-payment-claim-dialog">
           <DialogHeader>
             <DialogTitle>Submit Payment Claim</DialogTitle>
             <DialogDescription>
@@ -688,7 +688,11 @@ const Dashboard = () => {
           )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setSubmitPaymentRepayment(null); setClaimAmount(""); setClaimReference(""); setClaimReceiptFile(null); }}>Cancel</Button>
-            <Button onClick={() => submitPaymentClaimMutation.mutate()} disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}>
+            <Button
+              data-testid="borrower-payment-claim-submit"
+              onClick={() => submitPaymentClaimMutation.mutate()}
+              disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}
+            >
               {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1.5" />}
               Submit Payment
             </Button>

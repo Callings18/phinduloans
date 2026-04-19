@@ -1,93 +1,91 @@
-# Welcome to your Lovable project
+# Phindu Loans
 
-## Project info
+Loan management platform for borrower onboarding, underwriting, disbursement, repayments, collections, reporting, and HR/payroll workflows.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Repository
 
-## How can I edit this code?
+- **GitHub:** [Callings18/phinduloans](https://github.com/Callings18/phinduloans)
+- **Stack:** Vite + React + TypeScript + Tailwind + Supabase
 
-There are several ways of editing your application.
+## Local Development
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Node.js 20+
+- npm 10+
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Setup
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone https://github.com/Callings18/phinduloans.git
+cd phinduloans
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Run
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Quality Checks
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```sh
+npm run typecheck
+npm run lint
+npm run build
+```
 
-**Use GitHub Codespaces**
+### E2E Smoke
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```sh
+npm run test:e2e:smoke
+```
 
-## What technologies are used for this project?
+### E2E Borrower critical path
 
-This project is built with:
+Requires `E2E_BORROWER_EMAIL` and `E2E_BORROWER_PASSWORD` (non-staff borrower). See [docs/DEV_DEPENDENCIES.md](docs/DEV_DEPENDENCIES.md).
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```sh
+npm run test:e2e:borrower
+```
 
-## NestJS API (strangler backend)
+### PDF / jsPDF installs
 
-The [`backend/`](backend/) folder contains a **NestJS + Prisma + PostgreSQL** service used to migrate off direct Supabase calls. See [`backend/README.md`](backend/README.md), [`docs/API_CONTRACTS.md`](docs/API_CONTRACTS.md), and [`docs/SUPABASE_AUDIT.md`](docs/SUPABASE_AUDIT.md).
+See [docs/DEV_DEPENDENCIES.md](docs/DEV_DEPENDENCIES.md) for `jspdf` + `jspdf-autotable` notes and `npm ci` guidance.
 
-## Next.js API (Phase 1 workflow)
+## Environment Variables
 
-The [`apps/api-next/`](apps/api-next/) folder contains the **Next.js route-handler API** for Phase 1 borrower/admin workflow backbone (status transitions, timeline, payment-claim handshake, notifications).
+Use a local `.env` / `.env.local` for runtime configuration. Common optional frontend flags:
 
-**Optional env (frontend):**
 - `VITE_API_URL=http://localhost:3001`
 - `VITE_API_PHASE1_WORKFLOW=true`
-- `VITE_API_LOAN_PRODUCTS=true` (if also using API for loan product reads)
+- `VITE_API_LOAN_PRODUCTS=true`
+- `VITE_VAPID_PUBLIC_KEY=<public-web-push-key>`
+- `VITE_BORROWER_WEB_INSTALL_GATE=true|false`
 
-See [`docs/PHASE1_SMOKE_TESTS.md`](docs/PHASE1_SMOKE_TESTS.md) for verification.
+See:
 
-**PWA / borrower install gate (optional env):**
+- `docs/PHASE1_SMOKE_TESTS.md`
+- `docs/SCOPE_ADDENDUM_PWA_PHASE.md`
+- `supabase/functions/send-web-push/README.md`
 
-- `VITE_VAPID_PUBLIC_KEY` — Web Push (must pair with Edge Function secrets; see [`supabase/functions/send-web-push/README.md`](supabase/functions/send-web-push/README.md)).
-- `VITE_BORROWER_WEB_INSTALL_GATE` — `false` / `true` / unset (unset defaults to **on in production only**). See [`docs/SCOPE_ADDENDUM_PWA_PHASE.md`](docs/SCOPE_ADDENDUM_PWA_PHASE.md).
+## Backend Services In Repo
 
-## How can I deploy this project?
+- **NestJS strangler backend:** `backend/`
+- **Next.js workflow API:** `apps/api-next/`
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Reference docs:
 
-## Can I connect a custom domain to my Lovable project?
+- `backend/README.md`
+- `docs/API_CONTRACTS.md`
+- `docs/SUPABASE_AUDIT.md`
 
-Yes, you can!
+## Deployment
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Deployments are managed from this GitHub repository branch workflow (and any linked hosting provider). There is no template placeholder setup remaining in this README.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+For production readiness and launch checks, review:
+
+- `PROJECT_CHECKLIST_AND_NOTES.md`
+- `LAUNCH_READINESS_CHECKLIST.md`

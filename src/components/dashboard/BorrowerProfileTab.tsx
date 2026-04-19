@@ -301,7 +301,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
   })();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="borrower-profile-tab">
       {/* User Info Card */}
       <Card className="border-border/60 shadow-card">
         <CardContent className="p-6">
@@ -372,11 +372,19 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
         onValueChange={(v) => handleTabChangeRequest(v as ProfileSectionTab)}
         className="space-y-4"
       >
-        <TabsList className="grid grid-cols-2 md:grid-cols-4">
-          <TabsTrigger value="personal" className="gap-1.5"><User size={14} /> Personal</TabsTrigger>
-          <TabsTrigger value="kyc" className="gap-1.5"><FileText size={14} /> KYC</TabsTrigger>
-          <TabsTrigger value="security" className="gap-1.5"><Shield size={14} /> Security</TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-1.5"><Bell size={14} /> Notifications</TabsTrigger>
+        <TabsList className="grid grid-cols-2 md:grid-cols-4" data-testid="borrower-profile-section-tabs">
+          <TabsTrigger value="personal" className="gap-1.5" data-testid="borrower-profile-tab-personal">
+            <User size={14} /> Personal
+          </TabsTrigger>
+          <TabsTrigger value="kyc" className="gap-1.5" data-testid="borrower-profile-tab-kyc">
+            <FileText size={14} /> KYC
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-1.5" data-testid="borrower-profile-tab-security">
+            <Shield size={14} /> Security
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-1.5" data-testid="borrower-profile-tab-notifications">
+            <Bell size={14} /> Notifications
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal">
@@ -390,6 +398,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                 <div className="space-y-1.5">
                   <Label>Full name</Label>
                   <Input
+                    data-testid="borrower-profile-full-name"
                     value={profileForm.full_name}
                     onChange={(e) => setProfileForm((p) => ({ ...p, full_name: e.target.value }))}
                     disabled={!isEditingProfile}
@@ -398,6 +407,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                 <div className="space-y-1.5">
                   <Label>Phone</Label>
                   <Input
+                    data-testid="borrower-profile-phone"
                     value={profileForm.phone}
                     onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))}
                     disabled={!isEditingProfile}
@@ -445,6 +455,7 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                     <Button
                       type="button"
                       variant="hero"
+                      data-testid="borrower-profile-save"
                       onClick={() => saveProfileMutation.mutate()}
                       disabled={saveProfileMutation.isPending || !profileChanged || Boolean(profileValidationError)}
                     >
@@ -453,13 +464,15 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                     </Button>
                   </>
                 ) : (
-                  <Button type="button" variant="hero" onClick={() => setIsEditingProfile(true)}>
+                  <Button type="button" variant="hero" data-testid="borrower-profile-edit" onClick={() => setIsEditingProfile(true)}>
                     Edit profile
                   </Button>
                 )}
               </div>
               {isEditingProfile && profileValidationError && (
-                <p className="text-sm text-destructive">{profileValidationError}</p>
+                <p className="text-sm text-destructive" data-testid="borrower-profile-validation-error">
+                  {profileValidationError}
+                </p>
               )}
             </CardContent>
           </Card>
@@ -477,7 +490,13 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button type="button" variant="hero" className="w-full sm:w-auto" onClick={() => onOpenKycWorkspace?.()}>
+              <Button
+                type="button"
+                variant="hero"
+                className="w-full sm:w-auto"
+                data-testid="borrower-profile-open-kyc"
+                onClick={() => onOpenKycWorkspace?.()}
+              >
                 Open KYC workspace
               </Button>
             </CardContent>

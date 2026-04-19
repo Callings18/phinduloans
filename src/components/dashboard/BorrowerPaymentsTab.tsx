@@ -186,7 +186,13 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                       </div>
                     )}
                     {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => onSubmitPayment(rep)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        data-testid="borrower-open-payment-claim"
+                        onClick={() => onSubmitPayment(rep)}
+                      >
                         <Banknote size={14} className="mr-1.5" />
                         I've paid
                       </Button>
@@ -249,7 +255,12 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                       </TableCell>
                       <TableCell className="text-right">
                         {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
-                          <Button variant="outline" size="sm" onClick={() => onSubmitPayment(rep)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="borrower-open-payment-claim"
+                            onClick={() => onSubmitPayment(rep)}
+                          >
                             <Banknote size={14} className="mr-1.5" />
                             I've paid
                           </Button>

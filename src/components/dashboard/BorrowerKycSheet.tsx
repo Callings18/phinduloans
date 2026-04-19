@@ -26,7 +26,11 @@ export default function BorrowerKycSheet({ userId, open, onOpenChange }: Borrowe
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex h-full w-full max-w-full flex-col gap-0 border-border p-0 sm:max-w-xl">
+      <SheetContent
+        side="right"
+        data-testid="borrower-kyc-sheet"
+        className="flex h-full w-full max-w-full flex-col gap-0 border-border p-0 sm:max-w-xl"
+      >
         <div className="shrink-0 border-b border-border px-6 pb-4 pt-6 pr-14">
           <SheetHeader className="space-y-2 text-left">
             <SheetTitle>KYC & payout</SheetTitle>
@@ -47,7 +51,7 @@ export default function BorrowerKycSheet({ userId, open, onOpenChange }: Borrowe
         </div>
 
         <div className="shrink-0 border-t border-border bg-background/95 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <Button type="button" variant="hero" className="w-full" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="hero" className="w-full" data-testid="borrower-kyc-sheet-done" onClick={() => onOpenChange(false)}>
             Done
           </Button>
         </div>

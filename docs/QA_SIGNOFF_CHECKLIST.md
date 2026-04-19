@@ -40,6 +40,15 @@ With a staff JWT (`Authorization: Bearer <access_token>`):
 ## Regression (manual)
 
 - [ ] Borrower: apply → KYC → dashboard; payment claim submit; profile tabs.
+
+### Borrower automation (Playwright)
+
+When `E2E_BORROWER_EMAIL` / `E2E_BORROWER_PASSWORD` are set against a **staging-like** Supabase project with a seeded non-staff borrower:
+
+- [ ] Run `npm run test:e2e:borrower` — covers dashboard load, KYC deep-link sheet, profile validation + save, and payment claim submit **when** a pending repayment exists.
+- [ ] Attach CI or local run output (pass) to release notes, or paste failing step + trace path for triage.
+
+See [DEV_DEPENDENCIES.md](./DEV_DEPENDENCIES.md) for env vars and jsPDF install notes.
 - [ ] Staff: document verify → finance approve → approve → contract → disburse → repayment/claim review.
 - [ ] Payroll: **view** vs **manage** (generate) vs **approve** (approve / mark paid) matches `payroll:view`, `payroll:manage`, and `payroll:approve` (see [CLIENT_READINESS_BACKLOG.md](./CLIENT_READINESS_BACKLOG.md)).
 - [ ] Payroll: expand run → **Export CSV** produces employee lines plus totals row; spot-check against run totals.
