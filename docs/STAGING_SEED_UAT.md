@@ -37,6 +37,7 @@ See [PHASE1_SMOKE_TESTS.md](./PHASE1_SMOKE_TESTS.md). After seeding:
 - `E2E_BORROWER_*` — non-staff borrower.
 - `E2E_FINANCE_*` — can reach `/admin/disbursements`, `/admin/repayments`, `/admin/reports`, `/admin/houses`.
 - `E2E_HOUSE_PRODUCT_CODE` — must exist in `loan_products.product_code`; finance user needs `house:dashboard_view` for that product.
+- `E2E_SEEDED_EXPENSE_VENDOR` — must match a **pending** row’s `vendor_payee` (seed with [smoke-seed-expense.sql](./smoke-seed-expense.sql) or your own insert).
 
 ## Data migrations
 
