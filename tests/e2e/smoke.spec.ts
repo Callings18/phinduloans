@@ -29,6 +29,7 @@ const borrowerCreds: Creds | null =
 
 /** e.g. MARKETEER, PAYDAY_SOFT — must exist in `loan_products.product_code` for staff user */
 const houseProductCode = process.env.E2E_HOUSE_PRODUCT_CODE?.trim() || "";
+const seededExpenseVendor = process.env.E2E_SEEDED_EXPENSE_VENDOR?.trim() || "";
 
 async function login(page: Page, creds: Creds) {
   await page.goto("/auth");
@@ -112,6 +113,33 @@ test.describe("admin hardening smoke", () => {
 
     await approveItem.click();
     await expect(page.getByText("Expense status updated")).toBeVisible();
+  });
+
+  test("seeded expense transitions pending -> approved and persists", async ({ page }) => {
+    test.skip(!financeCreds, "Set E2E_FINANCE_EMAIL and E2E_FINANCE_PASSWORD");
+    test.skip(
+      !seededExpenseVendor,
+      "Set E2E_SEEDED_EXPENSE_VENDOR to a known pending expense vendor/payee value in staging seed data",
+    );
+    await login(page, financeCreds!);
+    await page.goto("/admin/expenses");
+    await page.waitForLoadState("networkidle");
+
+    await page.getByPlaceholder("Search expenses...").fill(seededExpenseVendor);
+    const seededRow = page.getByRole("row").filter({ hasText: seededExpenseVendor }).first();
+    await expect(seededRow).toBeVisible({ timeout: 15_000 });
+    await expect(seededRow).toContainText("Pending");
+
+    await seededRow.getByRole("button", { name: "Actions" }).click();
+    await page.getByRole("menuitem", { name: "Approve" }).click();
+    await expect(page.getByText("Expense status updated")).toBeVisible();
+
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await page.getByPlaceholder("Search expenses...").fill(seededExpenseVendor);
+    const updatedRow = page.getByRole("row").filter({ hasText: seededExpenseVendor }).first();
+    await expect(updatedRow).toBeVisible({ timeout: 15_000 });
+    await expect(updatedRow).toContainText("Approved");
   });
 
   test("write-off flow surfaces approve action and executes if pending exists", async ({ page }) => {

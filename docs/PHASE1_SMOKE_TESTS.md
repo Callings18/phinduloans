@@ -58,6 +58,7 @@ Use these checks after enabling `VITE_API_PHASE1_WORKFLOW=true` and running `app
   - `E2E_FINANCE_EMAIL`, `E2E_FINANCE_PASSWORD` (finance flows + **houses hub** + global disbursements/repayments/reports — user must have `loans:view`, `disbursement:view`, `repayments:view`, and reports access as applicable, e.g. `finance_officer`)
   - `E2E_BORROWER_EMAIL`, `E2E_BORROWER_PASSWORD` (optional — **non-staff** borrower; asserts `/dashboard` loads after login)
   - `E2E_HOUSE_PRODUCT_CODE` (optional — e.g. `MARKETEER`; finance user must have `house:dashboard_view` for that product; asserts house dashboard KPIs load)
+  - `E2E_SEEDED_EXPENSE_VENDOR` (optional but recommended — unique vendor/payee value for a known **pending** seeded expense; test approves it, reloads, and asserts persisted `Approved` status)
 - Optional client monitoring (not required for smoke):
   - `VITE_SENTRY_DSN` — when set, `@sentry/react` is initialized in `src/main.tsx` and `errorHandler` forwards captured errors to Sentry.
 - Notes:
