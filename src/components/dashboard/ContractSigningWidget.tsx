@@ -12,6 +12,7 @@ import { FileText, CheckCircle, Download, PenTool, Loader2, AlertTriangle, Clock
 import { toast } from "sonner";
 import { format } from "date-fns";
 import SignaturePad from "@/components/common/SignaturePad";
+import { validateBorrowerContractUploadFile } from "@/utils/borrowerUploadValidation";
 import { downloadLoanContract, generateSignedContractPDF } from "@/utils/generateLoanContract";
 import { logAudit } from "@/utils/auditLog";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,6 @@ export default function ContractSigningWidget({ userId }: Props) {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [isSignDialogOpen, setIsSignDialogOpen] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
-  const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [uploadedContractFile, setUploadedContractFile] = useState<File | null>(null);
   const [signingMethod, setSigningMethod] = useState<"draw" | "upload">("draw");
@@ -159,6 +159,8 @@ export default function ContractSigningWidget({ userId }: Props) {
   const uploadContractMutation = useMutation({
     mutationFn: async () => {
       if (!selectedLoan || !uploadedContractFile) throw new Error("Missing loan or file");
+      const uploadErr = validateBorrowerContractUploadFile(uploadedContractFile);
+      if (uploadErr) throw new Error(uploadErr);
 
       const fileExt = uploadedContractFile.name.split('.').pop();
       const fileName = `${userId}/signed_contract_${selectedLoan.id}_${Date.now()}.${fileExt}`;
@@ -210,16 +212,24 @@ export default function ContractSigningWidget({ userId }: Props) {
     },
   });
 
-  const handleSignatureCapture = (data: string, file?: File) => {
+  const handleSignatureCapture = (data: string, _file?: File) => {
     setSignatureData(data);
-    setSignatureFile(file || null);
   };
 
   const handleContractFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedContractFile(file);
+    if (!file) {
+      setUploadedContractFile(null);
+      return;
     }
+    const err = validateBorrowerContractUploadFile(file);
+    if (err) {
+      toast.error(err);
+      e.target.value = "";
+      setUploadedContractFile(null);
+      return;
+    }
+    setUploadedContractFile(file);
   };
 
   const handleOpenSignDialog = (loan: Loan) => {
@@ -235,7 +245,6 @@ export default function ContractSigningWidget({ userId }: Props) {
     setIsSignDialogOpen(false);
     setSelectedLoan(null);
     setSignatureData(null);
-    setSignatureFile(null);
     setAgreedToTerms(false);
     setUploadedContractFile(null);
     setSigningMethod("draw");

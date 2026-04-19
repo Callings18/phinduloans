@@ -5,6 +5,7 @@ import { appendLoanEvent } from "@/lib/events";
 import { HttpError, toErrorResponse } from "@/lib/http-errors";
 import { getRequestId } from "@/lib/request-meta";
 import { triggerInAppNotification } from "@/lib/notifications";
+import { repaymentRemainingKwacha } from "@/lib/repaymentRemaining";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const bodySchema = z.object({
@@ -22,12 +23,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: repayment, error: repErr } = await supabaseAdmin
       .from("loan_repayments")
-      .select("id, loan_id, user_id")
+      .select("id, loan_id, user_id, amount, original_amount, principal_paid")
       .eq("id", repaymentId)
       .single();
     if (repErr || !repayment) throw new HttpError(404, "REPAYMENT_NOT_FOUND", "Repayment not found");
     if (repayment.user_id !== auth.userId) {
       throw new HttpError(403, "FORBIDDEN", "Cannot submit claim for another user");
+    }
+
+    const maxRemaining = repaymentRemainingKwacha(repayment);
+    const claimAmount = Math.round(body.amount * 100) / 100;
+    if (claimAmount > maxRemaining + 0.009) {
+      throw new HttpError(
+        400,
+        "AMOUNT_EXCEEDS_REMAINING",
+        `Claim amount cannot exceed the remaining installment balance (K${maxRemaining.toLocaleString()}).`,
+      );
     }
 
     const { data: existing, error: existingErr } = await supabaseAdmin

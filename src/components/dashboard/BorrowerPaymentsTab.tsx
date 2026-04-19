@@ -248,10 +248,19 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                       </TableCell>
                       <TableCell>
                         {claimStatus ? (
-                          <Badge className={`${claimStatus.color} border text-xs`}>
-                            {claimStatus.label}
-                          </Badge>
-                        ) : "—"}
+                          <div className="space-y-1">
+                            <Badge className={`${claimStatus.color} border text-xs`}>
+                              {claimStatus.label}
+                            </Badge>
+                            {claim?.reference && (
+                              <p className="text-[10px] text-muted-foreground truncate max-w-[10rem]" title={claim.reference}>
+                                Ref: {claim.reference}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {["pending", "overdue"].includes(rep.status) && remaining > 0 && (

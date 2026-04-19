@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, type ChangeEvent } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -45,9 +45,12 @@ import phinduLogo from "@/assets/phindu-logo-white.png";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import NotificationCenter from "@/components/common/NotificationCenter";
 import {
+  fetchBorrowerLoanEvents,
   fetchBorrowerPaymentClaims,
   submitPaymentClaim,
 } from "@/services/repositories/workflowRepository";
+import { validateBorrowerReceiptFile } from "@/utils/borrowerUploadValidation";
+import { repaymentRemainingKwacha } from "@/utils/repaymentRemaining";
 import { borrowerIdentityKycSatisfiedFromVault } from "@/constants/borrowerKycDocs";
 import {
   borrowerInterestPeriodLabel,
@@ -330,9 +333,15 @@ const Dashboard = () => {
   }, [repayments]);
 
   const handleSubmitPayment = useCallback((rep: any) => {
-    const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
-    setSubmitPaymentRepayment({ id: rep.id, loan_id: rep.loan_id, amount: remaining, due_date: rep.due_date, installment_number: rep.installment_number });
-    setClaimAmount(String(remaining));
+    const maxClaimAmount = repaymentRemainingKwacha(rep);
+    setSubmitPaymentRepayment({
+      id: rep.id,
+      loan_id: rep.loan_id,
+      maxClaimAmount,
+      due_date: rep.due_date,
+      installment_number: rep.installment_number,
+    });
+    setClaimAmount(String(maxClaimAmount));
     setClaimReference("");
     setClaimReceiptFile(null);
   }, []);
@@ -343,9 +352,17 @@ const Dashboard = () => {
       const amount = parseFloat(claimAmount);
       if (isNaN(amount) || amount <= 0) throw new Error("Enter a valid amount");
       if (!claimReference.trim()) throw new Error("Enter transaction reference");
+      const max = submitPaymentRepayment.maxClaimAmount as number;
+      const roundedAmt = Math.round(amount * 100) / 100;
+      const roundedMax = Math.round(max * 100) / 100;
+      if (roundedAmt > roundedMax + 0.009) {
+        throw new Error(`Amount cannot exceed K${max.toLocaleString()} for this installment.`);
+      }
 
       let receiptUrl: string | null = null;
       if (claimReceiptFile) {
+        const receiptErr = validateBorrowerReceiptFile(claimReceiptFile);
+        if (receiptErr) throw new Error(receiptErr);
         const ext = claimReceiptFile.name.split(".").pop() || "bin";
         const path = `payment-receipts/${user.id}/claim_${submitPaymentRepayment.id}_${Date.now()}.${ext}`;
         const { error: uploadError } = await supabase.storage
@@ -379,12 +396,35 @@ const Dashboard = () => {
     onError: (e) => toast.error((e as Error).message || "Failed to submit"),
   });
 
+  const claimAmountValid = useMemo(() => {
+    if (!submitPaymentRepayment) return false;
+    const n = parseFloat(claimAmount);
+    if (isNaN(n) || n <= 0) return false;
+    const max = Number(submitPaymentRepayment.maxClaimAmount);
+    return Math.round(n * 100) / 100 <= Math.round(max * 100) / 100 + 0.009;
+  }, [claimAmount, submitPaymentRepayment]);
+
+  const handleClaimReceiptChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) {
+      setClaimReceiptFile(null);
+      return;
+    }
+    const err = validateBorrowerReceiptFile(file);
+    if (err) {
+      toast.error(err);
+      e.target.value = "";
+      setClaimReceiptFile(null);
+      return;
+    }
+    setClaimReceiptFile(file);
+  }, []);
+
   const { data: borrowerLoanEvents = [] } = useQuery({
     queryKey: ["borrower-loan-events", user?.id, loans.map((l) => l.id).join(",")],
     queryFn: async () => {
       if (!loans.length) return [];
-      const { fetchBorrowerLoanEvents } = await import("@/services/repositories/workflowRepository");
-      const byLoan = await Promise.all(loans.slice(0, 12).map((loan) => fetchBorrowerLoanEvents(loan.id)));
+      const byLoan = await Promise.all(loans.map((loan) => fetchBorrowerLoanEvents(loan.id)));
       return byLoan.flat();
     },
     enabled: !!user?.id && loans.length > 0,
@@ -674,7 +714,23 @@ const Dashboard = () => {
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
                 <Label htmlFor="claim-amount">Amount (K)</Label>
-                <Input id="claim-amount" type="number" min="0" step="0.01" value={claimAmount} onChange={(e) => setClaimAmount(e.target.value)} />
+                <Input
+                  id="claim-amount"
+                  type="number"
+                  min="0"
+                  max={submitPaymentRepayment.maxClaimAmount}
+                  step="0.01"
+                  value={claimAmount}
+                  onChange={(e) => setClaimAmount(e.target.value)}
+                />
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="borrower-payment-claim-max"
+                  data-max={submitPaymentRepayment.maxClaimAmount}
+                >
+                  Maximum claimable:{" "}
+                  <strong>K{Number(submitPaymentRepayment.maxClaimAmount).toLocaleString()}</strong>
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="claim-reference">Transaction Reference *</Label>
@@ -682,7 +738,7 @@ const Dashboard = () => {
               </div>
               <div className="space-y-1.5">
                 <Label>Receipt (optional)</Label>
-                <Input type="file" accept="image/*,.pdf" onChange={(e) => setClaimReceiptFile(e.target.files?.[0] ?? null)} />
+                <Input type="file" accept="image/*,.pdf" onChange={handleClaimReceiptChange} />
               </div>
             </div>
           )}
@@ -691,7 +747,12 @@ const Dashboard = () => {
             <Button
               data-testid="borrower-payment-claim-submit"
               onClick={() => submitPaymentClaimMutation.mutate()}
-              disabled={submitPaymentClaimMutation.isPending || !claimReference.trim() || !claimAmount}
+              disabled={
+                submitPaymentClaimMutation.isPending ||
+                !claimReference.trim() ||
+                !claimAmount ||
+                !claimAmountValid
+              }
             >
               {submitPaymentClaimMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} className="mr-1.5" />}
               Submit Payment

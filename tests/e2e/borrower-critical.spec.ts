@@ -64,5 +64,28 @@ test.describe("borrower critical path", () => {
     }
     await page.getByTestId("borrower-payment-claim-submit").click();
     await expect(page.getByText("Payment reference submitted", { exact: false })).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByText(`Ref: ${ref}`, { exact: true })).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("payment claim dialog: disables submit when amount exceeds max", async ({ page }) => {
+    test.skip(!borrowerCreds, "Set E2E_BORROWER_EMAIL and E2E_BORROWER_PASSWORD");
+    await signInBorrowerAndOpenDashboard(page, borrowerCreds!);
+    await page.goto("/dashboard?tab=payments");
+    await page.waitForLoadState("networkidle");
+
+    const openClaim = page.getByTestId("borrower-open-payment-claim").first();
+    if ((await openClaim.count()) === 0) {
+      test.skip(true, "No pending repayments for this borrower — seed an active loan + schedule or use a fixture account");
+    }
+
+    await openClaim.click();
+    await expect(page.getByTestId("borrower-payment-claim-dialog")).toBeVisible({ timeout: 15_000 });
+    const maxAttr = await page.getByTestId("borrower-payment-claim-max").getAttribute("data-max");
+    const max = maxAttr ? Number(maxAttr) : NaN;
+    test.skip(Number.isNaN(max) || max <= 0, "Could not read max claimable amount from dialog");
+
+    await page.locator("#claim-reference").fill(`E2E-over-${Date.now()}`);
+    await page.locator("#claim-amount").fill(String(max + 10_000));
+    await expect(page.getByTestId("borrower-payment-claim-submit")).toBeDisabled();
   });
 });

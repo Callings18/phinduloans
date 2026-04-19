@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { apiGet, apiPost, getApiBaseUrl } from "@/api/httpClient";
 import { apiFeatureFlags } from "@/config/apiMode";
+import { repaymentRemainingKwacha } from "@/utils/repaymentRemaining";
 
 export interface LoanEvent {
   id: string;
@@ -58,6 +59,20 @@ export async function submitPaymentClaim(
   }
 
   if (fallbackData) {
+    const { data: repRow, error: repFetchErr } = await supabase
+      .from("loan_repayments")
+      .select("amount, original_amount, principal_paid")
+      .eq("id", repaymentId)
+      .single();
+    if (repFetchErr || !repRow) throw new Error("Repayment not found");
+    const maxRemaining = repaymentRemainingKwacha(repRow);
+    const amt = Math.round(payload.amount * 100) / 100;
+    if (amt > maxRemaining + 0.009) {
+      throw new Error(
+        `Claim amount cannot exceed the remaining installment balance (K${maxRemaining.toLocaleString()}).`,
+      );
+    }
+
     const { data, error } = await supabase
       .from("payment_claims")
       .insert({
