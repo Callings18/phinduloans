@@ -758,8 +758,9 @@ const AdminSettings = () => {
           </TabsContent>
 
           {/* Twilio/SendGrid Notification Settings */}
-          <TabsContent value="twilio">
+          <TabsContent value="twilio" className="space-y-6">
             <NotificationProvidersSettings />
+            <ProviderTestSendCard />
           </TabsContent>
 
           {/* Brevo Notification Settings */}
