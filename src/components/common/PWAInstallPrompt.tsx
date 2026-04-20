@@ -11,6 +11,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { usePwaInstallPrompt } from "@/hooks/usePwaInstallPrompt";
 import { isStandaloneDisplayMode } from "@/utils/pwaDisplayMode";
+import { downloadApk, isAndroidDevice } from "@/utils/appDownload";
+import { Link } from "react-router-dom";
 
 const SNOOZE_KEY = "pwa-install-snooze-until";
 const REOPEN_INTERVAL_MS = 10_000; // re-show every 10s while not snoozed/installed
@@ -70,6 +72,21 @@ export const PWAInstallPrompt = () => {
   }, [deferredPrompt]);
 
   const handleInstall = async () => {
+    // Android → ship the official APK directly.
+    if (isAndroidDevice()) {
+      downloadApk();
+      toast({
+        title: "Downloading app",
+        description:
+          "PhinduCredit.apk is downloading. Open it from your downloads to install.",
+      });
+      setShowPrompt(false);
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
     if (!deferredPrompt) {
       toast({
         title: "Use your browser menu",
