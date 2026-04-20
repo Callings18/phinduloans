@@ -360,6 +360,36 @@ export default function ProfileDocumentVault({ userId }: Props) {
                           <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download">
                             <Download size={14} />
                           </Button>
+                          <input
+                            type="file"
+                            ref={(el) => { replaceRefs.current[kycType.type] = el; }}
+                            className="hidden"
+                            accept={kycType.accept}
+                            capture={kycType.capture ? "environment" : undefined}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileSelect(kycType.type, kycType.label, file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => replaceRefs.current[kycType.type]?.click()}
+                            disabled={isUploading}
+                            title="Replace with a new version"
+                          >
+                            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setPendingDelete({ id: doc.id, file_url: doc.file_url, label: kycType.label })}
+                            title="Delete document"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </>
                       )}
                     </div>
