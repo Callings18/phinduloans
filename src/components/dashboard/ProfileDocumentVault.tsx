@@ -35,7 +35,9 @@ export default function ProfileDocumentVault({ userId }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [expandedHistoryType, setExpandedHistoryType] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; file_url: string; label: string } | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const replaceRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { data: vaultDocs = [], isLoading, isError, error } = useQuery({
     queryKey: ["borrower-kyc-vault", userId],
