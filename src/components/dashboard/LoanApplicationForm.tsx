@@ -904,6 +904,9 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             </Alert>
           )}
 
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <Checkbox id="terms-review" checked={termsAccepted} onCheckedChange={(c) => setTermsAccepted(c === true)} />
               <Label htmlFor="terms-review" className="text-sm text-muted-foreground cursor-pointer">
                 I accept the terms and conditions of the loan agreement and understand the repayment obligations.
               </Label>
