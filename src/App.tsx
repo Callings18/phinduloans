@@ -148,31 +148,16 @@ function App() {
               <PWAInstallPrompt />
               <BrowserRouter>
                 <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route
-                    path="/apply"
-                    element={<Apply />}
-                  />
-                  <Route path="/calculator" element={<Calculator />} />
-                  <Route
-                    path="/pre-qualify"
-                    element={<Apply />}
-                  />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/about-us" element={<About />} />
-                  <Route
-                    path="/auth"
-                    element={<Auth />}
-                  />
-                  <Route
-                    path="/login"
-                    element={<Auth />}
-                  />
-                  <Route
-                    path="/dashboard"
-                    element={<Dashboard />}
-                  />
-                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
+                  <Route path="/apply" element={<ErrorBoundary><Apply /></ErrorBoundary>} />
+                  <Route path="/calculator" element={<ErrorBoundary><Calculator /></ErrorBoundary>} />
+                  <Route path="/pre-qualify" element={<ErrorBoundary><Apply /></ErrorBoundary>} />
+                  <Route path="/about" element={<ErrorBoundary><About /></ErrorBoundary>} />
+                  <Route path="/about-us" element={<ErrorBoundary><About /></ErrorBoundary>} />
+                  <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+                  <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+                  <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                  <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
                   <Route path="/admin" element={<AdminRoute />}>
                     <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
                     <Route
