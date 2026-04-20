@@ -276,7 +276,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     return !!documentFiles[docKey];
   }).length;
   const canProceedStep3 = uploadedMandatoryCount >= mandatoryDocs.length;
-  const canSubmit = termsAccepted && crbConsent;
+  const canSubmit = termsAccepted && crbConsent && hasPayoutDestination;
 
   const handleFileChange = (docType: string, file: File | null) => {
     setDocumentFiles(prev => ({ ...prev, [docType]: file }));
