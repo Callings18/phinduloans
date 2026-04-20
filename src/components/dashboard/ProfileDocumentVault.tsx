@@ -7,9 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
-  FileText, Upload, Eye, Download, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
+  FileText, Upload, Eye, Download, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2, Trash2, RefreshCw,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   BORROWER_SELFIE_VAULT_ALIASES,
   BORROWER_VAULT_KYC_DOC_TYPES,
@@ -31,7 +35,9 @@ export default function ProfileDocumentVault({ userId }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [expandedHistoryType, setExpandedHistoryType] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; file_url: string; label: string } | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const replaceRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { data: vaultDocs = [], isLoading, isError, error } = useQuery({
     queryKey: ["borrower-kyc-vault", userId],
@@ -144,6 +150,31 @@ export default function ProfileDocumentVault({ userId }: Props) {
     onError: (e: any) => {
       toast({ title: "Upload failed", description: e.message, variant: "destructive" });
       setUploadingType(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async ({ id, file_url }: { id: string; file_url: string }) => {
+      // Best-effort remove from storage (path is stored in file_url, not a full URL)
+      if (file_url && !file_url.startsWith("http")) {
+        await supabase.storage.from("loan-documents").remove([file_url]);
+      }
+      const { error } = await supabase
+        .from("borrower_document_vault")
+        .delete()
+        .eq("id", id)
+        .eq("borrower_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", userId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+      toast({ title: "Document removed", description: "You can now upload a new version." });
+      setPendingDelete(null);
+    },
+    onError: (e: any) => {
+      toast({ title: "Could not remove document", description: e?.message, variant: "destructive" });
+      setPendingDelete(null);
     },
   });
 
@@ -329,6 +360,36 @@ export default function ProfileDocumentVault({ userId }: Props) {
                           <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download">
                             <Download size={14} />
                           </Button>
+                          <input
+                            type="file"
+                            ref={(el) => { replaceRefs.current[kycType.type] = el; }}
+                            className="hidden"
+                            accept={kycType.accept}
+                            capture={kycType.capture ? "environment" : undefined}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileSelect(kycType.type, kycType.label, file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => replaceRefs.current[kycType.type]?.click()}
+                            disabled={isUploading}
+                            title="Replace with a new version"
+                          >
+                            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setPendingDelete({ id: doc.id, file_url: doc.file_url, label: kycType.label })}
+                            title="Delete document"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </>
                       )}
                     </div>
@@ -378,6 +439,29 @@ export default function ProfileDocumentVault({ userId }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirm delete */}
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{pendingDelete?.label}" will be permanently removed from your vault. You can upload a new version afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => pendingDelete && deleteMutation.mutate({ id: pendingDelete.id, file_url: pendingDelete.file_url })}
+            >
+              {deleteMutation.isPending ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Trash2 size={14} className="mr-1" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -133,11 +133,59 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!user?.id) return;
+
+    const STATUS_TOAST: Record<string, { title: string; description: string; kind: "success" | "error" | "info" }> = {
+      approved: { title: "🎉 Loan approved!", description: "Your application was approved. Check your email for next steps.", kind: "success" },
+      rejected: { title: "Loan application not approved", description: "Open your loan to see the reason from the admin.", kind: "error" },
+      contract_signing: { title: "📝 Contract ready to sign", description: "Your loan contract is ready — please review and sign.", kind: "info" },
+      awaiting_disbursement: { title: "⏳ Awaiting disbursement", description: "Funds will be sent to your declared payout destination shortly.", kind: "info" },
+      disbursed: { title: "💸 Loan disbursed", description: "Your loan has been disbursed. Check your wallet/bank account.", kind: "success" },
+      active: { title: "✅ Loan active", description: "Your loan is now active. Repayment schedule is available.", kind: "success" },
+      completed: { title: "🏆 Loan fully repaid!", description: "Congratulations — your loan is now closed.", kind: "success" },
+      defaulted: { title: "⚠️ Loan marked as defaulted", description: "Please contact us immediately to resolve this.", kind: "error" },
+    };
+
     const channel = supabase
-      .channel('loan-status-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_applications', filter: `user_id=eq.${user.id}` }, () => {
+      .channel(`borrower-loan-status-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_applications', filter: `user_id=eq.${user.id}` }, (payload) => {
+        const oldStatus = (payload.old as any)?.status;
+        const newStatus = (payload.new as any)?.status;
+        if (payload.eventType === 'UPDATE' && oldStatus && newStatus && oldStatus !== newStatus) {
+          const config = STATUS_TOAST[newStatus];
+          if (config) {
+            const fn = config.kind === "success" ? toast.success : config.kind === "error" ? toast.error : toast.info;
+            fn(config.title, { description: config.description, duration: 8000 });
+          }
+        }
         queryClient.invalidateQueries({ queryKey: ['user-loans', user.id] });
         queryClient.invalidateQueries({ queryKey: ['user-repayments', user.id] });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notification_logs', filter: `user_id=eq.${user.id}` }, (payload) => {
+        const row = payload.new as any;
+        if (row?.title || row?.message) {
+          toast(row.title || "New notification", {
+            description: row.message,
+            duration: 7000,
+          });
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'borrower_document_vault', filter: `borrower_id=eq.${user.id}` }, (payload) => {
+        const oldRow = payload.old as any;
+        const newRow = payload.new as any;
+        // Admin verified
+        if (!oldRow?.is_verified && newRow?.is_verified) {
+          toast.success("✅ Document verified", {
+            description: `${newRow.doc_label || "Your document"} was approved by the admin.`,
+            duration: 7000,
+          });
+        }
+        // Admin rejected (notes start with "Rejected:")
+        if (newRow?.notes?.startsWith?.("Rejected:") && oldRow?.notes !== newRow?.notes) {
+          toast.error("Document needs attention", {
+            description: `${newRow.doc_label || "A document"}: ${newRow.notes.replace("Rejected:", "").trim()}`,
+            duration: 9000,
+          });
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
