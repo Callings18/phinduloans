@@ -34,7 +34,9 @@ import {
   Bell,
   FileText,
   Lock,
+  Download,
 } from "lucide-react";
+import { exportBorrowerData } from "@/utils/exportBorrowerData";
 import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
 import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
 import KYCNextOfKin from "@/components/dashboard/KYCNextOfKin";
