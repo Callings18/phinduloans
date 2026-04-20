@@ -153,6 +153,31 @@ export default function ProfileDocumentVault({ userId }: Props) {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async ({ id, file_url }: { id: string; file_url: string }) => {
+      // Best-effort remove from storage (path is stored in file_url, not a full URL)
+      if (file_url && !file_url.startsWith("http")) {
+        await supabase.storage.from("loan-documents").remove([file_url]);
+      }
+      const { error } = await supabase
+        .from("borrower_document_vault")
+        .delete()
+        .eq("id", id)
+        .eq("borrower_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-vault", userId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-kyc-statuses"] });
+      toast({ title: "Document removed", description: "You can now upload a new version." });
+      setPendingDelete(null);
+    },
+    onError: (e: any) => {
+      toast({ title: "Could not remove document", description: e?.message, variant: "destructive" });
+      setPendingDelete(null);
+    },
+  });
+
   const handlePreview = async (fileUrl: string) => {
     const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
     if (url) setPreviewUrl(url);
