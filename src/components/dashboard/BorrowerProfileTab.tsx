@@ -550,9 +550,30 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="notifications">
+          <Card className="border-border/60 shadow-card mt-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2"><Download size={16} /> Download my data</CardTitle>
+              <CardDescription>Export all your personal data we hold (profile, loans, payments, KYC, documents) as a JSON file.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await exportBorrowerData(user.id);
+                    toast({ title: "Data exported", description: "Your data file has been downloaded." });
+                  } catch (e) {
+                    toast({ title: "Export failed", description: (e as Error).message, variant: "destructive" });
+                  }
+                }}
+              >
+                <Download className="mr-2" size={14} /> Download my data (JSON)
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
           <Card className="border-border/60 shadow-card">
             <CardHeader className="pb-2">
               <CardTitle>Notification preferences</CardTitle>
