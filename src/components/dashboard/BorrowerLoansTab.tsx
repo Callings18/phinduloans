@@ -79,6 +79,7 @@ interface Props {
     new_values?: Record<string, unknown> | null;
   }>;
   onDownloadStatement: (loan: any) => void;
+  onDownloadStatementCsv: (loan: any) => void;
   onDownloadSchedule: (loan: any) => void;
   onSubmitPayment: (rep: any) => void;
   isGenerating: string | null;
