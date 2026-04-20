@@ -714,17 +714,6 @@ const Dashboard = () => {
                     onApply={() => handleStartApplication()}
                   />
                 )}
-                    userId={user.id}
-                    loans={loans}
-                    repayments={repayments}
-                    loanEvents={borrowerLoanEvents}
-                    onDownloadStatement={downloadStatement}
-                    onDownloadSchedule={downloadSchedule}
-                    onSubmitPayment={handleSubmitPayment}
-                    isGenerating={isGenerating}
-                    onApply={() => handleStartApplication()}
-                  />
-                )}
                 {activeTab === "payments" && (
                   <BorrowerPaymentsTab
                     repayments={repayments}
