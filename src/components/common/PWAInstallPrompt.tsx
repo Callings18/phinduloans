@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { X, Download, Smartphone, Share, PlusSquare, Clock } from "lucide-react";
+import { X, Download, Share, PlusSquare, Clock } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
