@@ -146,8 +146,8 @@ function App() {
             <TooltipProvider>
               <Toaster />
               <Sonner />
-              <PWAInstallPrompt />
               <BrowserRouter>
+                <PWAInstallPrompt />
                 <Routes>
                   <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                   <Route path="/apply" element={<ErrorBoundary><Apply /></ErrorBoundary>} />
