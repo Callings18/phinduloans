@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useHouseBorrowers, useHouseLoans } from "@/hooks/useHouseData";
 import { format } from "date-fns";
 import { ArrowLeft, User, Phone, IdCard, MapPin, CreditCard, Eye, Mail } from "lucide-react";
+import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
 
 export default function HouseBorrowerDetailPage() {
   const { productCode = "", borrowerId = "" } = useParams<{ productCode: string; borrowerId: string }>();
@@ -18,22 +19,8 @@ export default function HouseBorrowerDetailPage() {
   const borrower = useMemo(() => (borrowers ?? []).find((b: any) => b.id === borrowerId), [borrowers, borrowerId]);
   const borrowerLoans = useMemo(() => (loans ?? []).filter((l: any) => l.user_id === borrowerId), [loans, borrowerId]);
 
-  // Fetch KYC info
-  const { data: kyc } = useQuery({
-    queryKey: ["borrower-kyc", borrowerId],
-    enabled: Boolean(borrowerId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("borrower_kyc_info")
-        .select("*")
-        .eq("borrower_id", borrowerId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-
   // Fetch repayment stats for this borrower's loans
+
   const loanIds = borrowerLoans.map((l: any) => l.id);
   const { data: repayments = [] } = useQuery({
     queryKey: ["borrower-house-repayments", loanIds],
@@ -104,20 +91,9 @@ export default function HouseBorrowerDetailPage() {
         </CardContent>
       </Card>
 
-      {/* KYC financial info */}
-      {kyc && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Financial Information</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            {kyc.bank_name && <div><p className="text-xs text-muted-foreground">Bank</p><p className="font-medium">{kyc.bank_name}</p></div>}
-            {kyc.bank_account_number && <div><p className="text-xs text-muted-foreground">Account #</p><p className="font-medium">{kyc.bank_account_number}</p></div>}
-            {kyc.mtn_mobile_money_number && <div><p className="text-xs text-muted-foreground">MTN MoMo</p><p className="font-medium">{kyc.mtn_mobile_money_number}</p></div>}
-            {kyc.airtel_money_number && <div><p className="text-xs text-muted-foreground">Airtel Money</p><p className="font-medium">{kyc.airtel_money_number}</p></div>}
-            {kyc.nok_full_name && <div><p className="text-xs text-muted-foreground">Next of Kin</p><p className="font-medium">{kyc.nok_full_name} ({kyc.nok_relationship})</p></div>}
-            {kyc.nok_phone && <div><p className="text-xs text-muted-foreground">NOK Phone</p><p className="font-medium">{kyc.nok_phone}</p></div>}
-          </CardContent>
-        </Card>
-      )}
+      {/* Full KYC workspace — same view as the Borrowers module */}
+      <BorrowerKYCSection borrowerId={borrowerId} />
+
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
