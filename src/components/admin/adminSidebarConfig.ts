@@ -25,6 +25,9 @@ import {
   Receipt,
   ClipboardList,
   Percent,
+  Rocket,
+  CheckSquare,
+  ToggleLeft,
 } from "lucide-react";
 
 /** Optional permission gate: item visible if can(module, action) or admin fallback handled in sidebar. */
@@ -121,6 +124,14 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: Mail, label: "Email log", path: "/admin/email-log", adminOnly: true },
       { icon: BookOpen, label: "User guide", path: "/admin/user-guide" },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
+    ],
+  },
+  {
+    label: "Launch & operations",
+    items: [
+      { icon: Rocket, label: "Production readiness", path: "/admin/production-readiness", adminOnly: true },
+      { icon: CheckSquare, label: "UAT checklist", path: "/admin/uat-checklist", adminOnly: true },
+      { icon: ToggleLeft, label: "Feature flags", path: "/admin/feature-flags", adminOnly: true },
     ],
   },
 ];

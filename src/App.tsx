@@ -48,6 +48,9 @@ import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
+import AdminProductionReadiness from "./pages/admin/AdminProductionReadiness";
+import AdminUatChecklist from "./pages/admin/AdminUatChecklist";
+import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
 import AdminLoanProductDashboards from "./pages/admin/AdminLoanProductDashboards";
 import AdminLoanProductScopedDashboard from "./pages/admin/AdminLoanProductScopedDashboard";
 import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
@@ -583,6 +586,36 @@ function App() {
                             ]}
                           >
                             <AdminCRBQueue />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="production-readiness"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminProductionReadiness />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="uat-checklist"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminUatChecklist />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="feature-flags"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminFeatureFlags />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

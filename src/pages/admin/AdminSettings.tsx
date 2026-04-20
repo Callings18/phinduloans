@@ -32,6 +32,7 @@ import { BrevoSettings } from "@/components/admin/BrevoSettings";
 import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonitor";
 import NotificationSettingsPanel from "@/components/admin/NotificationSettingsPanel";
 import { NotificationProvidersSettings } from "@/components/admin/NotificationProvidersSettings";
+import ProviderTestSendCard from "@/components/admin/ProviderTestSendCard";
 
 interface PaymentSettings {
   id: string;
@@ -757,8 +758,9 @@ const AdminSettings = () => {
           </TabsContent>
 
           {/* Twilio/SendGrid Notification Settings */}
-          <TabsContent value="twilio">
+          <TabsContent value="twilio" className="space-y-6">
             <NotificationProvidersSettings />
+            <ProviderTestSendCard />
           </TabsContent>
 
           {/* Brevo Notification Settings */}
