@@ -3372,6 +3372,44 @@ export type Database = {
           },
         ]
       }
+      product_house_borrowers: {
+        Row: {
+          added_by: string | null
+          borrower_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          product_code: string
+          updated_at: string
+        }
+        Insert: {
+          added_by?: string | null
+          borrower_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_code: string
+          updated_at?: string
+        }
+        Update: {
+          added_by?: string | null
+          borrower_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_house_borrowers_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           address: string | null

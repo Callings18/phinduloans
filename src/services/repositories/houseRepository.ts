@@ -24,15 +24,29 @@ export async function fetchHouseLoans(productCode: string) {
 }
 
 export async function fetchHouseBorrowers(productCode: string) {
-  const loans = await fetchHouseLoans(productCode);
-  const userIds = Array.from(new Set((loans || []).map((l: any) => l.user_id).filter(Boolean)));
+  const { data: memberships, error: membershipError } = await (supabase.from as any)("product_house_borrowers")
+    .select("borrower_id")
+    .eq("product_code", productCode)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (membershipError) throw membershipError;
+
+  const userIds: string[] = Array.from(
+    new Set(
+      (memberships ?? [])
+        .map((row: any) => row.borrower_id)
+        .filter((borrowerId: unknown): borrowerId is string => typeof borrowerId === "string" && borrowerId.length > 0)
+    )
+  );
   if (userIds.length === 0) return [];
   const { data, error } = await supabase
     .from("profiles")
     .select("id, full_name, email, phone, city, nrc_number")
     .in("id", userIds);
   if (error) throw error;
-  return data ?? [];
+  const borrowerMap = new Map((data ?? []).map((profile: any) => [profile.id, profile]));
+  return userIds.map((id) => borrowerMap.get(id)).filter(Boolean);
 }
 
 export async function fetchHouseRepayments(productCode: string) {
