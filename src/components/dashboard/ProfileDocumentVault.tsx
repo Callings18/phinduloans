@@ -153,7 +153,28 @@ export default function ProfileDocumentVault({ userId }: Props) {
     else toast({ title: "Could not load document", variant: "destructive" });
   };
 
-  const handleFileSelect = (docType: string, label: string, file: File) => {
+  const handleDownload = async (fileUrl: string, fileName: string) => {
+    try {
+      const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
+      if (!url) {
+        toast({ title: "Could not generate download link", variant: "destructive" });
+        return;
+      }
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || "document";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e?.message, variant: "destructive" });
+    }
+  };
+
     if (file.size > 10 * 1024 * 1024) {
       toast({ title: "File too large", description: "Maximum 10MB", variant: "destructive" });
       return;
