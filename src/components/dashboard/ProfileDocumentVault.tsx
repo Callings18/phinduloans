@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
-  FileText, Upload, Eye, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
+  FileText, Upload, Eye, Download, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -153,6 +153,28 @@ export default function ProfileDocumentVault({ userId }: Props) {
     else toast({ title: "Could not load document", variant: "destructive" });
   };
 
+  const handleDownload = async (fileUrl: string, fileName: string) => {
+    try {
+      const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
+      if (!url) {
+        toast({ title: "Could not generate download link", variant: "destructive" });
+        return;
+      }
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || "document";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e?.message, variant: "destructive" });
+    }
+  };
+
   const handleFileSelect = (docType: string, label: string, file: File) => {
     if (file.size > 10 * 1024 * 1024) {
       toast({ title: "File too large", description: "Maximum 10MB", variant: "destructive" });
@@ -289,8 +311,11 @@ export default function ProfileDocumentVault({ userId }: Props) {
                           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border gap-1">
                             <CheckCircle size={12} /> Verified
                           </Badge>
-                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)} title="View">
                             <Eye size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download">
+                            <Download size={14} />
                           </Button>
                         </>
                       ) : (
@@ -298,8 +323,11 @@ export default function ProfileDocumentVault({ userId }: Props) {
                           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border gap-1">
                             <Clock size={12} /> Pending Review
                           </Badge>
-                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)} title="View">
                             <Eye size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download">
+                            <Download size={14} />
                           </Button>
                         </>
                       )}
@@ -315,9 +343,14 @@ export default function ProfileDocumentVault({ userId }: Props) {
                             <span className="text-[11px] text-muted-foreground truncate">
                               {version.file_name} • {new Date(version.uploaded_at).toLocaleString()}
                             </span>
-                            <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handlePreview(version.file_url)}>
-                              <Eye size={12} />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handlePreview(version.file_url)} title="View">
+                                <Eye size={12} />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handleDownload(version.file_url, version.file_name)} title="Download">
+                                <Download size={12} />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>

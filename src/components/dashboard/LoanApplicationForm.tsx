@@ -149,6 +149,27 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     enabled: !!user,
   });
 
+  const { data: payoutInfo } = useQuery({
+    queryKey: ["payout-info-apply", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase
+        .from("borrower_kyc_info")
+        .select("bank_name, bank_account_number, airtel_money_number, mtn_mobile_money_number, zamtel_kwacha_number")
+        .eq("borrower_id", user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const hasPayoutDestination = !!(
+    payoutInfo?.airtel_money_number ||
+    payoutInfo?.mtn_mobile_money_number ||
+    payoutInfo?.zamtel_kwacha_number ||
+    (payoutInfo?.bank_name && payoutInfo?.bank_account_number)
+  );
+
   const { data: hasOpenLoan } = useQuery({
     queryKey: ["open-loan-check", user?.id],
     queryFn: async () => {
@@ -255,7 +276,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     return !!documentFiles[docKey];
   }).length;
   const canProceedStep3 = uploadedMandatoryCount >= mandatoryDocs.length;
-  const canSubmit = termsAccepted && crbConsent;
+  const canSubmit = termsAccepted && crbConsent && hasPayoutDestination;
 
   const handleFileChange = (docType: string, file: File | null) => {
     setDocumentFiles(prev => ({ ...prev, [docType]: file }));
@@ -863,6 +884,25 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           </Card>
 
           <Separator />
+
+          {!hasPayoutDestination && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between gap-3">
+                <span>
+                  You must add a <strong>payout destination</strong> (mobile money or bank account) before submitting. This is where your loan will be deposited.
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { onClose(); navigate("/profile?tab=kyc"); }}
+                >
+                  Add payout details
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div className="space-y-4">
             <div className="flex items-start gap-3">
