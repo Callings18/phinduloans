@@ -3,13 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#6B1A3A" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Phindu Credit" />
-    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/icons/icon-512.png" color="#6B1A3A" />
     <title>Phindu Credit Solutions - Fast Personal & Salary Loans in Zambia</title>
     <meta name="description" content="Get quick personal and salary loans in Zambia with Phindu Credit Solutions. Apply online, get approved in 24 hours, and receive funds via mobile money. Money when you need it." />
     <meta name="author" content="Phindu Credit Solutions" />
@@ -19,7 +23,9 @@
     <meta property="og:title" content="Phindu Credit Solutions - Fast Personal & Salary Loans in Zambia" />
     <meta property="og:description" content="Get quick personal and salary loans in Zambia. Apply online, get approved in 24 hours, and receive funds via mobile money." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:image" content="https://phindu.com/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:url" content="https://phinducredit.co.zm" />
     <meta property="og:site_name" content="Phindu Credit Solutions" />
 
@@ -27,7 +33,7 @@
     <meta name="twitter:site" content="@PhinduCredit" />
     <meta name="twitter:title" content="Phindu Credit Solutions - Fast Loans in Zambia" />
     <meta name="twitter:description" content="Quick personal and salary loans. Apply online, approved in 24 hours." />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:image" content="https://phindu.com/og-image.jpg" />
 
     <script type="application/ld+json">
     {
@@ -44,7 +50,33 @@
   </head>
 
   <body>
+    <style>
+      #initial-splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#6B1A3A 0%,#2D0818 80%);color:#fff;font-family:'Outfit',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;transition:opacity .35s ease}
+      #initial-splash.hide{opacity:0;pointer-events:none}
+      #initial-splash .logo{width:120px;height:120px;border-radius:28px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(0,0,0,.35);animation:pulse 1.6s ease-in-out infinite}
+      #initial-splash .logo img{width:74%;height:74%;object-fit:contain}
+      #initial-splash .wm{margin-top:24px;font-weight:700;font-size:24px;letter-spacing:.2px}
+      #initial-splash .tag{margin-top:6px;font-size:13px;opacity:.8}
+      #initial-splash .bar{margin-top:28px;width:160px;height:3px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+      #initial-splash .bar i{display:block;width:40%;height:100%;background:#fff;border-radius:99px;animation:slide 1.2s ease-in-out infinite}
+      @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+      @keyframes slide{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+    </style>
+    <div id="initial-splash" role="status" aria-label="Loading Phindu Credit">
+      <div class="logo"><img src="/icons/icon-512.png" alt="Phindu Credit" /></div>
+      <div class="wm">Phindu Credit</div>
+      <div class="tag">Money when you need it</div>
+      <div class="bar"><i></i></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var s = document.getElementById('initial-splash');
+          if (s) { s.classList.add('hide'); setTimeout(function(){ s.remove(); }, 400); }
+        }, 350);
+      });
+    </script>
   </body>
 </html>
