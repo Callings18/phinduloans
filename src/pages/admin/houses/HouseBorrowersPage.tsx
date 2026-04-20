@@ -38,8 +38,6 @@ export default function HouseBorrowersPage() {
 
   const [form, setForm] = useState({
     full_name: "", email: "", phone: "", nrc_number: "", address: "", city: "Lusaka",
-    principal_amount: "", interest_amount: "", daily_repayment: "",
-    loan_start_date: new Date().toISOString().slice(0, 10),
   });
 
   // Loan counts per borrower
@@ -103,70 +101,14 @@ export default function HouseBorrowersPage() {
       });
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.error);
-
-      const userId = response.data?.user_id;
-      if (!userId) return response.data;
-
-      // Optionally create a loan + auto-disburse so repayment schedule generates
-      const principal = Number(form.principal_amount || 0);
-      const interest = Number(form.interest_amount || 0);
-      const daily = Number(form.daily_repayment || 0);
-      if (principal > 0 && productData?.id) {
-        const total = principal + Math.max(0, interest);
-        const termDays = daily > 0 ? Math.max(1, Math.round(total / daily)) : 26;
-        const isMarketeer = productCode === "MARKETEER";
-        const { data: loan, error: loanErr } = await supabase
-          .from("loan_applications")
-          .insert({
-            user_id: userId,
-            loan_product_id: productData.id,
-            full_name: form.full_name,
-            email: form.email,
-            phone: form.phone || "N/A",
-            nrc_number: form.nrc_number || "N/A",
-            address: form.address || "",
-            city: form.city || "",
-            employment_type: (isMarketeer ? "self_employed" : "employed") as any,
-            employer_name: isMarketeer ? "Marketeers" : "",
-            monthly_income: Math.max(principal * 2, 500),
-            loan_amount: principal,
-            loan_purpose: `${productData.name || productCode} loan`,
-            loan_term_months: termDays,
-            term_unit: "days",
-            interest_rate: principal > 0 ? (interest / principal) * 100 : 0,
-            monthly_payment: daily > 0 ? daily : Math.round(total / termDays),
-            total_repayment: total,
-            status: "approved" as const,
-            approved_at: `${form.loan_start_date}T08:00:00.000Z`,
-            source: `house_${productCode.toLowerCase()}`,
-          })
-          .select("id")
-          .single();
-        if (loanErr) throw new Error(`Loan creation failed: ${loanErr.message}`);
-
-        // Auto-create completed disbursement → triggers schedule generation
-        if (loan?.id) {
-          const { error: disbErr } = await supabase.from("disbursements").insert({
-            loan_id: loan.id,
-            amount: principal,
-            disbursement_method: "cash",
-            status: "completed",
-            disbursed_at: `${form.loan_start_date}T08:00:00.000Z`,
-            transaction_reference: `HOUSE-${productCode}-${Date.now()}`,
-          });
-          if (disbErr) throw new Error(`Disbursement failed: ${disbErr.message}`);
-        }
-      }
       return response.data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["house-borrowers", productCode] });
-      queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
-      queryClient.invalidateQueries({ queryKey: ["house-report-summary", productCode] });
       queryClient.invalidateQueries({ queryKey: ["admin-borrowers"] });
-      toast({ title: data?.existing ? "Borrower already existed" : "Borrower added", description: data?.message });
+      toast({ title: data?.existing ? "Borrower already existed" : "Borrower added", description: data?.message || "Use the Loans tab to create a loan for this borrower." });
       setIsAddOpen(false);
-      setForm({ full_name: "", email: "", phone: "", nrc_number: "", address: "", city: "Lusaka", principal_amount: "", interest_amount: "", daily_repayment: "", loan_start_date: new Date().toISOString().slice(0, 10) });
+      setForm({ full_name: "", email: "", phone: "", nrc_number: "", address: "", city: "Lusaka" });
     },
     onError: (e: any) => {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -299,19 +241,6 @@ export default function HouseBorrowersPage() {
               </div>
             </section>
 
-            {/* Section 3: Loan Onboarding */}
-            <section className="border border-border/60 rounded-lg p-4 space-y-3 bg-secondary/20">
-              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">3</span>
-                <h3 className="text-sm font-semibold text-foreground">Loan Onboarding <span className="text-xs font-normal text-muted-foreground">(optional)</span></h3>
-              </header>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1"><Label className="text-xs">Principal</Label><Input type="number" value={form.principal_amount} onChange={(e) => setForm(f => ({ ...f, principal_amount: e.target.value }))} placeholder="1000" /></div>
-                <div className="space-y-1"><Label className="text-xs">Interest</Label><Input type="number" value={form.interest_amount} onChange={(e) => setForm(f => ({ ...f, interest_amount: e.target.value }))} placeholder="300" /></div>
-                <div className="space-y-1"><Label className="text-xs">Daily repay</Label><Input type="number" value={form.daily_repayment} onChange={(e) => setForm(f => ({ ...f, daily_repayment: e.target.value }))} placeholder="50" /></div>
-              </div>
-              <div className="space-y-1"><Label className="text-xs">Start date</Label><Input type="date" value={form.loan_start_date} onChange={(e) => setForm(f => ({ ...f, loan_start_date: e.target.value }))} /></div>
-            </section>
           </div>
 
           <DialogFooter className="gap-2">
