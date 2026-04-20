@@ -316,6 +316,16 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                             I've paid
                           </Button>
                         )}
+                        {rep.status === "paid" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadReceipt(rep)}
+                          >
+                            <Download size={14} className="mr-1.5" />
+                            Receipt
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
