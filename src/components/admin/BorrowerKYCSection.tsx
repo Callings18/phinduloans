@@ -248,7 +248,28 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
     else toast({ title: "Permission denied", description: "Contact an admin for access.", variant: "destructive" });
   };
 
-  // Map vault docs by type
+  const handleDownload = async (fileUrl: string, fileName: string) => {
+    try {
+      const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
+      if (!url) {
+        toast({ title: "Could not generate download link", variant: "destructive" });
+        return;
+      }
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || "document";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e?.message, variant: "destructive" });
+    }
+  };
+
   const docsByType: Record<string, typeof vaultDocs[0]> = {};
   vaultDocs.forEach((d) => { if (!docsByType[d.doc_type]) docsByType[d.doc_type] = d; });
 
