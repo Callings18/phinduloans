@@ -149,6 +149,27 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     enabled: !!user,
   });
 
+  const { data: payoutInfo } = useQuery({
+    queryKey: ["payout-info-apply", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase
+        .from("borrower_kyc_info")
+        .select("bank_name, bank_account_number, airtel_money_number, mtn_mobile_money_number, zamtel_kwacha_number")
+        .eq("borrower_id", user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const hasPayoutDestination = !!(
+    payoutInfo?.airtel_money_number ||
+    payoutInfo?.mtn_mobile_money_number ||
+    payoutInfo?.zamtel_kwacha_number ||
+    (payoutInfo?.bank_name && payoutInfo?.bank_account_number)
+  );
+
   const { data: hasOpenLoan } = useQuery({
     queryKey: ["open-loan-check", user?.id],
     queryFn: async () => {
