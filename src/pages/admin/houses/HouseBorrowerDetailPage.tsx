@@ -19,22 +19,8 @@ export default function HouseBorrowerDetailPage() {
   const borrower = useMemo(() => (borrowers ?? []).find((b: any) => b.id === borrowerId), [borrowers, borrowerId]);
   const borrowerLoans = useMemo(() => (loans ?? []).filter((l: any) => l.user_id === borrowerId), [loans, borrowerId]);
 
-  // Fetch KYC info
-  const { data: kyc } = useQuery({
-    queryKey: ["borrower-kyc", borrowerId],
-    enabled: Boolean(borrowerId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("borrower_kyc_info")
-        .select("*")
-        .eq("borrower_id", borrowerId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-
   // Fetch repayment stats for this borrower's loans
+
   const loanIds = borrowerLoans.map((l: any) => l.id);
   const { data: repayments = [] } = useQuery({
     queryKey: ["borrower-house-repayments", loanIds],
