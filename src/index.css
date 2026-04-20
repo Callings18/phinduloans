@@ -118,7 +118,7 @@
     --info-foreground: 0 0% 100%;
   }
 
-  /* Dark theme */
+  /* Dark theme — burgundy brand */
   .dark {
     --background: 280 60% 4%;
     --foreground: 0 0% 98%;
@@ -126,19 +126,20 @@
     --card-foreground: 0 0% 98%;
     --popover: 280 50% 8%;
     --popover-foreground: 0 0% 98%;
-    --primary: 330 90% 55%;
+    --primary: 336 60% 26%;
     --primary-foreground: 0 0% 100%;
+    --primary-glow: 336 55% 38%;
     --secondary: 280 40% 15%;
     --secondary-foreground: 0 0% 98%;
     --muted: 280 30% 12%;
     --muted-foreground: 280 10% 60%;
-    --accent: 330 100% 60%;
+    --accent: 336 60% 32%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 280 30% 18%;
     --input: 280 30% 15%;
-    --ring: 330 90% 55%;
+    --ring: 336 60% 26%;
   }
 }
 
