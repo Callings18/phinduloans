@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
-  CheckCircle, XCircle, Clock, FileText, Eye, ShieldCheck, AlertTriangle, Upload,
+  CheckCircle, XCircle, Clock, FileText, Eye, Download, ShieldCheck, AlertTriangle, Upload,
 } from "lucide-react";
 import { differenceInHours } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
