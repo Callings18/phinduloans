@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
-  FileText, Upload, Eye, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
+  FileText, Upload, Eye, Download, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
