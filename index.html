@@ -50,7 +50,33 @@
   </head>
 
   <body>
+    <style>
+      #initial-splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#6B1A3A 0%,#2D0818 80%);color:#fff;font-family:'Outfit',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;transition:opacity .35s ease}
+      #initial-splash.hide{opacity:0;pointer-events:none}
+      #initial-splash .logo{width:120px;height:120px;border-radius:28px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(0,0,0,.35);animation:pulse 1.6s ease-in-out infinite}
+      #initial-splash .logo img{width:74%;height:74%;object-fit:contain}
+      #initial-splash .wm{margin-top:24px;font-weight:700;font-size:24px;letter-spacing:.2px}
+      #initial-splash .tag{margin-top:6px;font-size:13px;opacity:.8}
+      #initial-splash .bar{margin-top:28px;width:160px;height:3px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}
+      #initial-splash .bar i{display:block;width:40%;height:100%;background:#fff;border-radius:99px;animation:slide 1.2s ease-in-out infinite}
+      @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+      @keyframes slide{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+    </style>
+    <div id="initial-splash" role="status" aria-label="Loading Phindu Credit">
+      <div class="logo"><img src="/icons/icon-512.png" alt="Phindu Credit" /></div>
+      <div class="wm">Phindu Credit</div>
+      <div class="tag">Money when you need it</div>
+      <div class="bar"><i></i></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var s = document.getElementById('initial-splash');
+          if (s) { s.classList.add('hide'); setTimeout(function(){ s.remove(); }, 400); }
+        }, 350);
+      });
+    </script>
   </body>
 </html>
