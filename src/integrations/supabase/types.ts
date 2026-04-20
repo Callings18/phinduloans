@@ -1487,6 +1487,42 @@ export type Database = {
           },
         ]
       }
+      feature_flags: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          flag_key: string
+          flag_label: string
+          id: string
+          is_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          flag_key: string
+          flag_label: string
+          id?: string
+          is_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          flag_key?: string
+          flag_label?: string
+          id?: string
+          is_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       guarantees: {
         Row: {
           admin_override: boolean | null
@@ -3716,6 +3752,45 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           value?: Json
+        }
+        Relationships: []
+      }
+      uat_signoffs: {
+        Row: {
+          category: string
+          checklist_item: string
+          created_at: string
+          house_code: string
+          id: string
+          is_signed_off: boolean
+          notes: string | null
+          signed_off_at: string | null
+          signed_off_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          checklist_item: string
+          created_at?: string
+          house_code: string
+          id?: string
+          is_signed_off?: boolean
+          notes?: string | null
+          signed_off_at?: string | null
+          signed_off_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          checklist_item?: string
+          created_at?: string
+          house_code?: string
+          id?: string
+          is_signed_off?: boolean
+          notes?: string | null
+          signed_off_at?: string | null
+          signed_off_by?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
