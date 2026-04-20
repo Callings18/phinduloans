@@ -10,6 +10,25 @@ import { isPast, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
+type HouseRepaymentRow = {
+  status: string;
+  due_date: string;
+  amount: number | null;
+  principal_paid: number | null;
+  paid_date: string | null;
+};
+
+type HouseLoanRow = {
+  id: string;
+  full_name?: string | null;
+  email?: string | null;
+  loan_amount: number | null;
+  status: string;
+  loan_term_months?: number | null;
+  term_unit?: string | null;
+  created_at: string;
+};
+
 export default function HouseReportsPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const { user } = useAuth();
@@ -20,20 +39,28 @@ export default function HouseReportsPage() {
   const { toast } = useToast();
 
   const repaymentStats = useMemo(() => {
-    const reps = repayments ?? [];
+    const reps = (repayments ?? []) as HouseRepaymentRow[];
     const today = format(new Date(), "yyyy-MM-dd");
     const monthStart = format(new Date(), "yyyy-MM-01");
-    const totalPaid = reps.filter((r: any) => r.status === "paid").reduce((s: number, r: any) => s + Number(r.principal_paid || r.amount || 0), 0);
-    const totalDue = reps.filter((r: any) => r.status !== "paid" && r.status !== "cancelled").reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
-    const overdueCount = reps.filter((r: any) => r.status !== "paid" && r.status !== "cancelled" && isPast(new Date(r.due_date)) && r.due_date !== today).length;
-    const collectedThisMonth = reps.filter((r: any) => r.status === "paid" && r.paid_date && r.paid_date >= monthStart).reduce((s: number, r: any) => s + Number(r.principal_paid || r.amount || 0), 0);
-    const repaymentRate = reps.length > 0 ? Math.round((reps.filter((r: any) => r.status === "paid").length / reps.length) * 100) : 0;
+    const totalPaid = reps
+      .filter((r) => r.status === "paid")
+      .reduce((s, r) => s + Number(r.principal_paid || r.amount || 0), 0);
+    const totalDue = reps
+      .filter((r) => r.status !== "paid" && r.status !== "cancelled")
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+    const overdueCount = reps.filter((r) => r.status !== "paid" && r.status !== "cancelled" && isPast(new Date(r.due_date)) && r.due_date !== today).length;
+    const collectedThisMonth = reps
+      .filter((r) => r.status === "paid" && r.paid_date && r.paid_date >= monthStart)
+      .reduce((s, r) => s + Number(r.principal_paid || r.amount || 0), 0);
+    const repaymentRate = reps.length > 0 ? Math.round((reps.filter((r) => r.status === "paid").length / reps.length) * 100) : 0;
     return { totalPaid, totalDue, overdueCount, collectedThisMonth, repaymentRate };
   }, [repayments]);
 
   const statusBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
-    (loans ?? []).forEach((l: any) => { map[l.status] = (map[l.status] || 0) + 1; });
+    (loans ?? []).forEach((l) => {
+      map[l.status] = (map[l.status] || 0) + 1;
+    });
     return Object.entries(map).sort(([, a], [, b]) => b - a);
   }, [loans]);
 
@@ -52,7 +79,14 @@ export default function HouseReportsPage() {
 
     // Add loan detail rows
     const loanHeaders = ["loan_id", "borrower", "amount", "status", "term", "created_at"];
-    const loanRows = (loans ?? []).map((l: any) => [l.id, l.full_name || l.email, l.loan_amount, l.status, `${l.loan_term_months} ${l.term_unit || "months"}`, l.created_at]);
+    const loanRows = ((loans ?? []) as HouseLoanRow[]).map((l) => [
+      l.id,
+      l.full_name || l.email || "",
+      l.loan_amount ?? 0,
+      l.status,
+      `${l.loan_term_months ?? 0} ${l.term_unit || "months"}`,
+      l.created_at,
+    ]);
 
     const csvContent = [
       headers.join(","),
@@ -71,7 +105,7 @@ export default function HouseReportsPage() {
     a.click();
     URL.revokeObjectURL(url);
     if (user?.id) {
-      await (supabase.from as any)("product_house_report_posts").insert({
+      const { error: postError } = await (supabase.from as any)("product_house_report_posts").insert({
         product_code: productCode,
         product_name: product?.name ?? productCode,
         report_type: "house_summary",
@@ -90,6 +124,10 @@ export default function HouseReportsPage() {
         },
         csv_content: csvContent,
       });
+      if (postError) {
+        toast({ title: "Report downloaded, but posting failed", description: postError.message, variant: "destructive" });
+        return;
+      }
     }
     toast({ title: "Report exported" });
   };

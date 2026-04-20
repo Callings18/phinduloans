@@ -27,7 +27,7 @@ export default function HouseLayout() {
   if (!isLoading && !product) {
     return <Navigate to="/admin" replace />;
   }
-  if (!accessLoading && (hasAccess === false || accessError)) {
+  if (!accessLoading && hasAccess === false) {
     return (
       <AdminLayout>
         <Card>
@@ -37,6 +37,24 @@ export default function HouseLayout() {
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>You do not have access to this loan product house.</p>
             <p>Ask an administrator to grant product access in `user_product_access`.</p>
+          </CardContent>
+        </Card>
+      </AdminLayout>
+    );
+  }
+
+  if (!accessLoading && accessError) {
+    return (
+      <AdminLayout>
+        <Card>
+          <CardHeader>
+            <CardTitle>Could not verify access</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>We could not confirm your product access right now. This may be a temporary network issue.</p>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/admin/houses">Back to houses</Link>
+            </Button>
           </CardContent>
         </Card>
       </AdminLayout>

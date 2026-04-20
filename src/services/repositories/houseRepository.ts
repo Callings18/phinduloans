@@ -1,4 +1,40 @@
 import { supabase } from "@/integrations/supabase/client";
+import { startOfDay } from "date-fns";
+
+type HouseProduct = {
+  id: string;
+  name: string;
+  product_code: string;
+  interest_rate: number | null;
+  is_active: boolean | null;
+};
+
+type HouseLoan = {
+  id: string;
+  user_id: string | null;
+  loan_amount: number | null;
+  status: string;
+  created_at: string;
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  nrc_number?: string | null;
+  city?: string | null;
+  total_repayment?: number | null;
+  loan_term_months?: number | null;
+  term_unit?: string | null;
+};
+
+type HouseRepayment = {
+  status: string;
+  due_date: string;
+  amount: number | null;
+};
+
+type HouseDisbursement = {
+  status: string;
+  amount: number | null;
+};
 
 export async function fetchHouseProductByCode(productCode: string) {
   const { data, error } = await supabase
@@ -7,7 +43,7 @@ export async function fetchHouseProductByCode(productCode: string) {
     .eq("product_code", productCode)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  return (data ?? null) as HouseProduct | null;
 }
 
 export async function fetchHouseLoans(productCode: string) {
@@ -20,7 +56,7 @@ export async function fetchHouseLoans(productCode: string) {
     .order("created_at", { ascending: false })
     .limit(300);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as HouseLoan[];
 }
 
 export async function fetchHouseBorrowers(productCode: string) {
@@ -35,7 +71,7 @@ export async function fetchHouseBorrowers(productCode: string) {
   const userIds: string[] = Array.from(
     new Set(
       (memberships ?? [])
-        .map((row: any) => row.borrower_id)
+        .map((row: { borrower_id: unknown }) => row.borrower_id)
         .filter((borrowerId: unknown): borrowerId is string => typeof borrowerId === "string" && borrowerId.length > 0)
     )
   );
@@ -45,13 +81,13 @@ export async function fetchHouseBorrowers(productCode: string) {
     .select("id, full_name, email, phone, city, nrc_number")
     .in("id", userIds);
   if (error) throw error;
-  const borrowerMap = new Map((data ?? []).map((profile: any) => [profile.id, profile]));
+  const borrowerMap = new Map((data ?? []).map((profile) => [profile.id, profile]));
   return userIds.map((id) => borrowerMap.get(id)).filter(Boolean);
 }
 
 export async function fetchHouseRepayments(productCode: string) {
   const loans = await fetchHouseLoans(productCode);
-  const loanIds = Array.from(new Set((loans || []).map((l: any) => l.id)));
+  const loanIds = Array.from(new Set(loans.map((l) => l.id)));
   if (loanIds.length === 0) return [];
   const { data, error } = await supabase
     .from("loan_repayments")
@@ -64,7 +100,7 @@ export async function fetchHouseRepayments(productCode: string) {
 
 export async function fetchHouseDisbursements(productCode: string) {
   const loans = await fetchHouseLoans(productCode);
-  const loanIds = Array.from(new Set((loans || []).map((l: any) => l.id)));
+  const loanIds = Array.from(new Set(loans.map((l) => l.id)));
   if (loanIds.length === 0) return [];
   const { data, error } = await supabase
     .from("disbursements")
@@ -82,10 +118,14 @@ export async function fetchHouseReportSummary(productCode: string) {
     fetchHouseDisbursements(productCode),
   ]);
   const totalLoans = loans.length;
-  const activeLoans = loans.filter((l: any) => ["active", "disbursed"].includes(l.status)).length;
-  const overdue = repayments.filter((r: any) => r.status !== "paid" && new Date(r.due_date) < new Date()).length;
+  const activeLoans = loans.filter((l) => ["active", "disbursed"].includes(l.status)).length;
+  const today = startOfDay(new Date());
+  const overdue = (repayments as HouseRepayment[]).filter((r) => {
+    if (r.status === "paid" || !r.due_date) return false;
+    return startOfDay(new Date(r.due_date)) < today;
+  }).length;
   const disbursed = disbursements
-    .filter((d: any) => d.status === "completed")
-    .reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+    .filter((d) => (d as HouseDisbursement).status === "completed")
+    .reduce((sum, d) => sum + Number((d as HouseDisbursement).amount || 0), 0);
   return { totalLoans, activeLoans, overdue, totalDisbursed: disbursed };
 }
