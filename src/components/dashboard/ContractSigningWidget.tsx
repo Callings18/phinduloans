@@ -349,11 +349,12 @@ export default function ContractSigningWidget({ userId }: Props) {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <PenTool className="text-primary" />
-              Sign Loan Contract
+              <FileText className="text-primary" />
+              Loan Contract (Optional)
             </DialogTitle>
             <DialogDescription>
-              Review and sign your loan contract to proceed with disbursement
+              You can sign your contract here digitally, or upload a copy you've already signed offline.
+              This step is optional — our team also handles signing via WhatsApp.
             </DialogDescription>
           </DialogHeader>
 
