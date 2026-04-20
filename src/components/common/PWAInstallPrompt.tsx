@@ -1,58 +1,126 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { X, Download, Smartphone } from "lucide-react";
+import { X, Download, Smartphone, Share, PlusSquare, Clock } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { usePwaInstallPrompt } from "@/hooks/usePwaInstallPrompt";
+import { isStandaloneDisplayMode } from "@/utils/pwaDisplayMode";
+
+const SNOOZE_KEY = "pwa-install-snooze-until";
+const REOPEN_INTERVAL_MS = 10_000; // re-show every 10s while not snoozed/installed
+
+const SNOOZE_OPTIONS = [
+  { label: "Mute for 1 hour", ms: 60 * 60 * 1000 },
+  { label: "Mute for 1 day", ms: 24 * 60 * 60 * 1000 },
+  { label: "Mute for 1 week", ms: 7 * 24 * 60 * 60 * 1000 },
+];
+
+const isLikelyIOS =
+  typeof navigator !== "undefined" &&
+  /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+  !(window as Window & { MSStream?: unknown }).MSStream;
+
+function isSnoozed(): boolean {
+  const until = Number(localStorage.getItem(SNOOZE_KEY) || 0);
+  return Number.isFinite(until) && until > Date.now();
+}
 
 export const PWAInstallPrompt = () => {
   const { deferredPrompt, promptInstall } = usePwaInstallPrompt();
   const [showPrompt, setShowPrompt] = useState(false);
   const { toast } = useToast();
+  const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    if (isStandaloneDisplayMode()) {
       setShowPrompt(false);
       return;
     }
-    const dismissed = localStorage.getItem("pwa-install-dismissed");
-    if (deferredPrompt && !dismissed) {
+
+    const tryShow = () => {
+      if (isStandaloneDisplayMode()) {
+        setShowPrompt(false);
+        return;
+      }
+      if (isSnoozed()) {
+        setShowPrompt(false);
+        return;
+      }
+      // On iOS the browser never fires beforeinstallprompt — still show instructions.
+      // On Chromium, only show once we have a deferred prompt OR after the first 10s tick anyway.
       setShowPrompt(true);
-    }
-    if (!deferredPrompt) {
-      setShowPrompt(false);
-    }
+    };
+
+    // First nudge after 10s, then re-pop every 10s if user closed without snoozing.
+    const firstTimer = window.setTimeout(tryShow, REOPEN_INTERVAL_MS);
+    intervalRef.current = window.setInterval(tryShow, REOPEN_INTERVAL_MS);
+
+    return () => {
+      window.clearTimeout(firstTimer);
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+      }
+    };
   }, [deferredPrompt]);
 
   const handleInstall = async () => {
+    if (!deferredPrompt) {
+      toast({
+        title: "Use your browser menu",
+        description:
+          "Open your browser menu (⋮) and tap 'Install app' or 'Add to Home Screen'.",
+      });
+      return;
+    }
     const choice = await promptInstall();
     if (choice?.outcome === "accepted") {
       toast({
-        title: "App Installing",
-        description: "Phindu Loans is being added to your home screen",
+        title: "App installing",
+        description: "Phindu Loans is being added to your home screen.",
       });
+      setShowPrompt(false);
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    } else {
+      // Treat declined as a 1-hour snooze so we don't immediately re-pop.
+      localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_OPTIONS[0].ms));
+      setShowPrompt(false);
     }
+  };
+
+  const handleClose = () => {
+    // Plain close = next 10s tick will re-open. Encourages install.
     setShowPrompt(false);
   };
 
-  const handleDismiss = () => {
+  const handleSnooze = (ms: number, label: string) => {
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + ms));
     setShowPrompt(false);
-    localStorage.setItem("pwa-install-dismissed", "true");
-    setTimeout(() => {
-      localStorage.removeItem("pwa-install-dismissed");
-    }, 7 * 24 * 60 * 60 * 1000);
+    toast({
+      title: "Install reminder muted",
+      description: `We'll stop nudging you ${label.toLowerCase()}.`,
+    });
   };
 
-  if (!showPrompt || !deferredPrompt) {
+  if (!showPrompt) {
     return null;
   }
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-md animate-slide-up">
-      <Card className="glass border-primary/50 shadow-2xl">
+      <Card className="glass border-primary/50 shadow-2xl relative">
         <CardContent className="p-4">
           <button
-            onClick={handleDismiss}
+            onClick={handleClose}
+            aria-label="Close"
             className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X size={18} />
@@ -60,29 +128,64 @@ export const PWAInstallPrompt = () => {
 
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center flex-shrink-0">
-              <Smartphone className="text-white" size={24} />
+              <Smartphone className="text-primary-foreground" size={24} />
             </div>
 
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 space-y-3 min-w-0">
               <div>
-                <h3 className="font-semibold text-foreground mb-1">Install Phindu Loans App</h3>
+                <h3 className="font-semibold text-foreground mb-1">
+                  Install the Phindu Loans app
+                </h3>
                 <p className="text-sm text-muted-foreground">
-                  Install our app for quick access to loans, faster applications, and offline support.
+                  Apply for loans faster, get push reminders, and use the app offline.
                 </p>
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="hero" size="sm" onClick={handleInstall} className="flex-1">
+              {isLikelyIOS && !deferredPrompt ? (
+                <ol className="text-xs text-muted-foreground space-y-2">
+                  <li className="flex gap-2 items-start">
+                    <Share className="shrink-0 mt-0.5 text-primary" size={14} />
+                    <span>
+                      Tap <strong className="text-foreground">Share</strong> in Safari.
+                    </span>
+                  </li>
+                  <li className="flex gap-2 items-start">
+                    <PlusSquare className="shrink-0 mt-0.5 text-primary" size={14} />
+                    <span>
+                      Choose{" "}
+                      <strong className="text-foreground">Add to Home Screen</strong>.
+                    </span>
+                  </li>
+                </ol>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="hero" size="sm" onClick={handleInstall} className="flex-1 min-w-[140px]">
                   <Download size={16} className="mr-2" />
                   Install App
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleDismiss}>
-                  Not Now
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <Clock size={14} className="mr-1" />
+                      Mute
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {SNOOZE_OPTIONS.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.label}
+                        onClick={() => handleSnooze(opt.ms, opt.label)}
+                      >
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               <p className="text-xs text-muted-foreground">
-                ✓ Works offline • ✓ Faster load times • ✓ Push notifications
+                ✓ Works offline • ✓ Faster • ✓ Push notifications
               </p>
             </div>
           </div>
