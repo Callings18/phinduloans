@@ -8,7 +8,9 @@ import {
   AlertCircle,
   Banknote,
   Calendar,
+  Download,
 } from "lucide-react";
+import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import {
   Table,
