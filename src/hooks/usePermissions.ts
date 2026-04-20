@@ -74,7 +74,8 @@ export function usePermissions() {
   const can = useCallback(
     (module: string, action: string) => {
       if (authLoading || loading) return false;
-      if (authHasRole("super_admin")) return true;
+      // Admin & super_admin always pass — server-side RLS still enforces.
+      if (authHasRole("super_admin") || authHasRole("admin")) return true;
       return permissionSet.has(permKey(module, action));
     },
     [permissionSet, authLoading, loading, authHasRole]
@@ -84,7 +85,7 @@ export function usePermissions() {
   const hasPermission = useCallback(
     (permissionName: string) => {
       if (authLoading || loading) return false;
-      if (authHasRole("super_admin")) return true;
+      if (authHasRole("super_admin") || authHasRole("admin")) return true;
       // Support both "module:action" and "module_action" formats
       if (permissionSet.has(permissionName)) return true;
       const parts = permissionName.includes(":") ? permissionName.split(":") : permissionName.split("_");
