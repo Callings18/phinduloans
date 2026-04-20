@@ -293,14 +293,15 @@ export default function ContractSigningWidget({ userId }: Props) {
 
   return (
     <>
-      <Card className="glass border-warning/50 bg-warning/5">
+      <Card className="glass border-border/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <PenTool size={18} className="text-warning" />
-            Contracts Awaiting Signature
+            <FileText size={18} className="text-muted-foreground" />
+            Loan Contract (Optional)
           </CardTitle>
           <CardDescription>
-            Sign your approved loan contracts to proceed with disbursement
+            Contracts are usually signed offline via WhatsApp with our team. You can optionally
+            view your contract here, or upload a signed copy if you'd like to keep a digital record.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -310,20 +311,14 @@ export default function ContractSigningWidget({ userId }: Props) {
               className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-warning/20 flex items-center justify-center">
-                  <FileText className="text-warning" size={20} />
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                  <FileText className="text-muted-foreground" size={20} />
                 </div>
                 <div>
                   <p className="font-medium">Loan Contract</p>
-                  {loan.status === "active" || loan.status === "disbursed" ? (
-                    <p className="text-sm text-muted-foreground">
-                      K{loan.loan_amount.toLocaleString()} • Please sign to complete your file
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      K{loan.loan_amount.toLocaleString()} • {loan.loan_term_months} months
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground">
+                    K{loan.loan_amount.toLocaleString()} • {loan.loan_term_months} months
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -336,11 +331,12 @@ export default function ContractSigningWidget({ userId }: Props) {
                   View
                 </Button>
                 <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => handleOpenSignDialog(loan)}
                 >
-                  <PenTool size={14} className="mr-1" />
-                  Sign
+                  <Upload size={14} className="mr-1" />
+                  Upload Signed Copy
                 </Button>
               </div>
             </div>
@@ -353,11 +349,12 @@ export default function ContractSigningWidget({ userId }: Props) {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <PenTool className="text-primary" />
-              Sign Loan Contract
+              <FileText className="text-primary" />
+              Loan Contract (Optional)
             </DialogTitle>
             <DialogDescription>
-              Review and sign your loan contract to proceed with disbursement
+              You can sign your contract here digitally, or upload a copy you've already signed offline.
+              This step is optional — our team also handles signing via WhatsApp.
             </DialogDescription>
           </DialogHeader>
 
