@@ -187,7 +187,7 @@ export const PWAInstallPrompt = () => {
                   className="flex-1 min-w-[140px] bg-primary-foreground text-primary hover:bg-primary-foreground/90"
                 >
                   <Download size={16} className="mr-2" />
-                  Install App
+                  {isAndroidDevice() ? "Download App (APK)" : "Install App"}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -213,9 +213,18 @@ export const PWAInstallPrompt = () => {
                 </DropdownMenu>
               </div>
 
-              <p className="text-xs text-primary-foreground/80">
-                ✓ Works offline • ✓ Faster • ✓ Push notifications
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-primary-foreground/80">
+                  ✓ Works offline • ✓ Faster • ✓ Push
+                </p>
+                <Link
+                  to="/install"
+                  onClick={() => setShowPrompt(false)}
+                  className="text-xs underline text-primary-foreground/90 hover:text-primary-foreground whitespace-nowrap"
+                >
+                  More options
+                </Link>
+              </div>
             </div>
           </div>
         </CardContent>
