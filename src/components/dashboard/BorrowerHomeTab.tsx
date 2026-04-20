@@ -15,6 +15,9 @@ import KYCStatusWidget from "./KYCStatusWidget";
 import ContractSigningWidget from "./ContractSigningWidget";
 import PaymentReminder from "./PaymentReminder";
 import WalletWidget from "./WalletWidget";
+import BorrowerSupportCard from "./BorrowerSupportCard";
+import EligibilityWidget from "./EligibilityWidget";
+import ResumeApplicationBanner from "./ResumeApplicationBanner";
 import type { BorrowerTab } from "./BorrowerBottomNav";
 import type { LucideIcon } from "lucide-react";
 import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
@@ -41,6 +44,10 @@ interface BorrowerHomeTabProps {
   onTabChange: (tab: BorrowerTab) => void;
   /** Opens in-dashboard KYC sheet (or profile when staff `?view=`). */
   onOpenKycDocuments?: () => void;
+  hasDraft?: boolean;
+  draftLastSaved?: Date | null;
+  onResumeDraft?: () => void;
+  onDiscardDraft?: () => void;
 }
 
 export default function BorrowerHomeTab({
@@ -54,6 +61,10 @@ export default function BorrowerHomeTab({
   isStaff,
   onTabChange,
   onOpenKycDocuments,
+  hasDraft,
+  draftLastSaved,
+  onResumeDraft,
+  onDiscardDraft,
 }: BorrowerHomeTabProps) {
   void isStaff;
 
@@ -242,6 +253,22 @@ export default function BorrowerHomeTab({
         </CardContent>
       </Card>
 
+      {/* Resume application banner */}
+      {hasDraft && onResumeDraft && activeLoans.length === 0 && (
+        <ResumeApplicationBanner
+          lastSaved={draftLastSaved ?? null}
+          onResume={onResumeDraft}
+          onDiscard={onDiscardDraft ?? (() => {})}
+        />
+      )}
+
+      {/* Indicative eligibility */}
+      <EligibilityWidget
+        monthlyIncome={profile?.monthly_income}
+        hasActiveLoan={activeLoans.length > 0}
+        onApply={() => onTabChange("apply")}
+      />
+
       {/* Payment Reminders */}
       {repayments && repayments.length > 0 && (
         <PaymentReminder repayments={repayments} />
@@ -420,6 +447,12 @@ export default function BorrowerHomeTab({
           <span className="text-xs">Apply Now</span>
         </Button>
       </div>
+
+      {/* Help & Support */}
+      <BorrowerSupportCard
+        borrowerName={profile?.full_name}
+        loanReference={activeLoans[0] ? `LOAN-${activeLoans[0].id.substring(0, 8).toUpperCase()}` : undefined}
+      />
     </div>
   );
 }

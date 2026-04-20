@@ -663,6 +663,45 @@ export type Database = {
           },
         ]
       }
+      consent_logs: {
+        Row: {
+          accepted: boolean
+          application_id: string | null
+          consent_type: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          user_agent: string | null
+          user_id: string
+          version: string
+        }
+        Insert: {
+          accepted?: boolean
+          application_id?: string | null
+          consent_type: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_agent?: string | null
+          user_id: string
+          version?: string
+        }
+        Update: {
+          accepted?: boolean
+          application_id?: string | null
+          consent_type?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_agent?: string | null
+          user_id?: string
+          version?: string
+        }
+        Relationships: []
+      }
       contract_templates: {
         Row: {
           content: string | null

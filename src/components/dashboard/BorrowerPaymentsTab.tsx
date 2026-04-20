@@ -8,7 +8,9 @@ import {
   AlertCircle,
   Banknote,
   Calendar,
+  Download,
 } from "lucide-react";
+import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
 import {
   Table,
@@ -66,6 +68,35 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
   const getLoanRef = (loanId: string) => {
     const loan = loans.find((l) => l.id === loanId);
     return loan ? `K${Number(loan.loan_amount).toLocaleString()}` : "Loan";
+  };
+
+  const totalInstallmentsByLoan = new Map<string, number>();
+  repayments.forEach((r) => {
+    totalInstallmentsByLoan.set(r.loan_id, (totalInstallmentsByLoan.get(r.loan_id) || 0) + 1);
+  });
+
+  const handleDownloadReceipt = (rep: any) => {
+    const loan = loans.find((l) => l.id === rep.loan_id);
+    if (!loan) return;
+    const paidForLoan = repayments
+      .filter((r) => r.loan_id === rep.loan_id && r.status === "paid")
+      .reduce((s, r) => s + Number(r.principal_paid || r.original_amount || r.amount), 0);
+    const totalDue = Number(loan.total_repayment || loan.loan_amount || 0);
+    downloadRepaymentReceipt({
+      borrowerName: (loan as any).full_name || "Borrower",
+      borrowerPhone: (loan as any).phone || "",
+      borrowerEmail: (loan as any).email || "",
+      loanReference: `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+      loanAmount: Number(loan.loan_amount),
+      repaymentAmount: Number(rep.principal_paid || rep.original_amount || rep.amount),
+      paymentDate: rep.paid_date || rep.due_date,
+      paymentMethod: rep.payment_method || "cash",
+      transactionReference: rep.transaction_reference || `INST-${rep.installment_number}`,
+      installmentNumber: rep.installment_number || 1,
+      totalInstallments: totalInstallmentsByLoan.get(rep.loan_id) || 1,
+      totalPaid: paidForLoan,
+      outstandingBalance: Math.max(0, totalDue - paidForLoan),
+    });
   };
 
   const loanFrequencySource = (loan: BorrowerDashboardLoan) => {
@@ -197,6 +228,17 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         I've paid
                       </Button>
                     )}
+                    {rep.status === "paid" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => handleDownloadReceipt(rep)}
+                      >
+                        <Download size={14} className="mr-1.5" />
+                        Download receipt
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -272,6 +314,16 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                           >
                             <Banknote size={14} className="mr-1.5" />
                             I've paid
+                          </Button>
+                        )}
+                        {rep.status === "paid" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadReceipt(rep)}
+                          >
+                            <Download size={14} className="mr-1.5" />
+                            Receipt
                           </Button>
                         )}
                       </TableCell>
