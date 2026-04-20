@@ -32,7 +32,13 @@ export async function fetchHouseBorrowers(productCode: string) {
 
   if (membershipError) throw membershipError;
 
-  const userIds = Array.from(new Set((memberships ?? []).map((row: any) => row.borrower_id).filter(Boolean)));
+  const userIds = Array.from(
+    new Set(
+      (memberships ?? [])
+        .map((row: any) => row.borrower_id)
+        .filter((borrowerId: unknown): borrowerId is string => typeof borrowerId === "string" && borrowerId.length > 0)
+    )
+  );
   if (userIds.length === 0) return [];
   const { data, error } = await supabase
     .from("profiles")
