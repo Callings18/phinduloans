@@ -15,6 +15,9 @@ import KYCStatusWidget from "./KYCStatusWidget";
 import ContractSigningWidget from "./ContractSigningWidget";
 import PaymentReminder from "./PaymentReminder";
 import WalletWidget from "./WalletWidget";
+import BorrowerSupportCard from "./BorrowerSupportCard";
+import EligibilityWidget from "./EligibilityWidget";
+import ResumeApplicationBanner from "./ResumeApplicationBanner";
 import type { BorrowerTab } from "./BorrowerBottomNav";
 import type { LucideIcon } from "lucide-react";
 import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
@@ -41,6 +44,10 @@ interface BorrowerHomeTabProps {
   onTabChange: (tab: BorrowerTab) => void;
   /** Opens in-dashboard KYC sheet (or profile when staff `?view=`). */
   onOpenKycDocuments?: () => void;
+  hasDraft?: boolean;
+  draftLastSaved?: Date | null;
+  onResumeDraft?: () => void;
+  onDiscardDraft?: () => void;
 }
 
 export default function BorrowerHomeTab({
@@ -54,6 +61,10 @@ export default function BorrowerHomeTab({
   isStaff,
   onTabChange,
   onOpenKycDocuments,
+  hasDraft,
+  draftLastSaved,
+  onResumeDraft,
+  onDiscardDraft,
 }: BorrowerHomeTabProps) {
   void isStaff;
 
