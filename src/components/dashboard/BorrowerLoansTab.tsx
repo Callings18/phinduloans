@@ -92,6 +92,7 @@ export default function BorrowerLoansTab({
   repayments,
   loanEvents = [],
   onDownloadStatement,
+  onDownloadStatementCsv,
   onDownloadSchedule,
   onSubmitPayment,
   isGenerating,
@@ -183,7 +184,11 @@ export default function BorrowerLoansTab({
                   </Button>
                   <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onDownloadStatement(loan)} disabled={isGenerating === loan.id}>
                     {isGenerating === loan.id ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} className="mr-1" />}
-                    Statement
+                    Statement PDF
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onDownloadStatementCsv(loan)}>
+                    <FileText size={12} className="mr-1" />
+                    Statement CSV
                   </Button>
                 </>
               )}
