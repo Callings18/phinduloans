@@ -32,7 +32,7 @@ export async function fetchHouseBorrowers(productCode: string) {
 
   if (membershipError) throw membershipError;
 
-  const userIds = Array.from(
+  const userIds: string[] = Array.from(
     new Set(
       (memberships ?? [])
         .map((row: any) => row.borrower_id)
