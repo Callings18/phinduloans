@@ -175,6 +175,7 @@ export default function ProfileDocumentVault({ userId }: Props) {
     }
   };
 
+  const handleFileSelect = (docType: string, label: string, file: File) => {
     if (file.size > 10 * 1024 * 1024) {
       toast({ title: "File too large", description: "Maximum 10MB", variant: "destructive" });
       return;
