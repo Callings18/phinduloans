@@ -326,6 +326,19 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       if (insertError) throw insertError;
       const applicationId = newApp.id;
 
+      // Auto-enroll borrower in the loan product's House roster (best-effort)
+      try {
+        const productCode = (selectedProduct as any).product_code as string | null | undefined;
+        if (productCode) {
+          await (supabase.from as any)("product_house_borrowers").upsert(
+            { product_code: productCode, borrower_id: user.id, added_by: user.id },
+            { onConflict: "product_code,borrower_id" },
+          );
+        }
+      } catch (houseErr) {
+        console.warn("House roster enrollment skipped:", houseErr);
+      }
+
       // Upload documents
       const docEntries = Object.entries(documentFiles).filter(([, file]) => file !== null);
       for (const [docType, file] of docEntries) {
