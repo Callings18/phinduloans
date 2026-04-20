@@ -37,6 +37,7 @@ import {
   Download,
 } from "lucide-react";
 import { exportBorrowerData } from "@/utils/exportBorrowerData";
+import WhatsAppOptInCard from "@/components/dashboard/WhatsAppOptInCard";
 import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
 import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
 import KYCNextOfKin from "@/components/dashboard/KYCNextOfKin";
@@ -599,6 +600,8 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
                   />
                 </div>
               ))}
+
+              <WhatsAppOptInCard />
 
               <div className="flex gap-2 justify-end">
                 {isEditingNotifications ? (
