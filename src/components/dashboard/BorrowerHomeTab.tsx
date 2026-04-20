@@ -447,6 +447,12 @@ export default function BorrowerHomeTab({
           <span className="text-xs">Apply Now</span>
         </Button>
       </div>
+
+      {/* Help & Support */}
+      <BorrowerSupportCard
+        borrowerName={profile?.full_name}
+        loanReference={activeLoans[0] ? `LOAN-${activeLoans[0].id.substring(0, 8).toUpperCase()}` : undefined}
+      />
     </div>
   );
 }
