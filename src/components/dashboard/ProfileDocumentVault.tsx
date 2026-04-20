@@ -7,9 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import {
-  FileText, Upload, Eye, Download, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2,
+  FileText, Upload, Eye, Download, CheckCircle, Clock, XCircle, Camera, ShieldCheck, AlertTriangle, Loader2, Trash2, RefreshCw,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   BORROWER_SELFIE_VAULT_ALIASES,
   BORROWER_VAULT_KYC_DOC_TYPES,
