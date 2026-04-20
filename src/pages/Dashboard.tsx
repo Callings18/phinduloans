@@ -17,7 +17,9 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAccountStatement } from "@/utils/generateStatement";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
+import { downloadLoanScheduleCsv } from "@/utils/exportLoanScheduleCsv";
 import { toast } from "sonner";
+import useApplicationDraft from "@/hooks/useApplicationDraft";
 import {
   Banknote,
   Loader2,
@@ -380,6 +382,17 @@ const Dashboard = () => {
     }
   }, [repayments]);
 
+  const downloadStatementCsv = useCallback((loan: any) => {
+    const loanRepayments = repayments.filter((r) => r.loan_id === loan.id);
+    downloadLoanScheduleCsv(
+      `LOAN-${loan.id.substring(0, 8).toUpperCase()}`,
+      loan.full_name || "Borrower",
+      loanRepayments,
+    );
+  }, [repayments]);
+
+  const { hasDraft, lastSaved: draftLastSaved, clearDraft } = useApplicationDraft();
+
   const handleSubmitPayment = useCallback((rep: any) => {
     const maxClaimAmount = repaymentRemainingKwacha(rep);
     setSubmitPaymentRepayment({
@@ -681,10 +694,26 @@ const Dashboard = () => {
                     isStaff={isStaff}
                     onTabChange={handleTabChange}
                     onOpenKycDocuments={openBorrowerKycDocuments}
+                    hasDraft={hasDraft}
+                    draftLastSaved={draftLastSaved}
+                    onResumeDraft={() => handleStartApplication()}
+                    onDiscardDraft={clearDraft}
                   />
                 )}
                 {activeTab === "loans" && (
                   <BorrowerLoansTab
+                    userId={user.id}
+                    loans={loans}
+                    repayments={repayments}
+                    loanEvents={borrowerLoanEvents}
+                    onDownloadStatement={downloadStatement}
+                    onDownloadStatementCsv={downloadStatementCsv}
+                    onDownloadSchedule={downloadSchedule}
+                    onSubmitPayment={handleSubmitPayment}
+                    isGenerating={isGenerating}
+                    onApply={() => handleStartApplication()}
+                  />
+                )}
                     userId={user.id}
                     loans={loans}
                     repayments={repayments}
