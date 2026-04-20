@@ -5,6 +5,7 @@ import {
   FileText,
   Banknote,
   ArrowUpRight,
+  Smartphone,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -29,6 +30,13 @@ const quickActions = [
     description: "Log repayment",
     path: "/admin/repayments?action=new",
     color: "from-warning to-orange-600",
+  },
+  {
+    icon: Smartphone,
+    label: "Install our App",
+    description: "Android APK & iOS guide",
+    path: "/install",
+    color: "from-fuchsia-500 to-primary",
   },
 ];
 
