@@ -21,6 +21,44 @@ const Footer = () => {
             <p className="text-muted-foreground text-sm">
               Money when you need it. Fast, secure, and transparent lending solutions for Zambia.
             </p>
+
+            {/* App store badges */}
+            <div>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                Get the app
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/install"
+                  aria-label="Download Android APK"
+                  className="flex items-center gap-2 bg-foreground text-background rounded-lg px-3 py-2 hover:opacity-90 transition-opacity"
+                >
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+                    <path fill="#34A853" d="M3 20.5V3.5c0-.6.3-1 .8-1.3l11.7 9.8L3.8 21.8c-.5-.3-.8-.7-.8-1.3z" />
+                    <path fill="#FBBC04" d="M17.6 14.4l-2.6-2.4 2.6-2.4 3.5 2c.7.4.7 1.4 0 1.8l-3.5 2z" />
+                    <path fill="#EA4335" d="M15 12l-11.2 9.8c.4.2.9.2 1.3-.1L17.6 14.4 15 12z" />
+                    <path fill="#4285F4" d="M15 12l2.6-2.4L5.1 2.3c-.4-.3-.9-.3-1.3-.1L15 12z" />
+                  </svg>
+                  <div className="text-left leading-tight">
+                    <p className="text-[9px] opacity-80">Get it on</p>
+                    <p className="text-xs font-semibold">Google Play</p>
+                  </div>
+                </Link>
+                <Link
+                  to="/install"
+                  aria-label="iOS install instructions"
+                  className="flex items-center gap-2 bg-foreground text-background rounded-lg px-3 py-2 hover:opacity-90 transition-opacity"
+                >
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-background" aria-hidden="true">
+                    <path d="M16.365 1.43c0 1.14-.46 2.23-1.21 3-.79.83-2.07 1.47-3.12 1.39-.13-1.1.41-2.24 1.13-3 .82-.86 2.21-1.5 3.2-1.39zM20.5 17.34c-.55 1.27-.81 1.84-1.52 2.96-.99 1.56-2.39 3.5-4.13 3.51-1.55.02-1.95-1.01-4.06-1-2.11.01-2.55 1.02-4.1 1-1.74-.02-3.07-1.77-4.06-3.33-2.78-4.32-3.07-9.52-1.09-12.27 1.41-1.96 3.65-3.11 5.75-3.11 2.13 0 3.47 1.17 5.23 1.17 1.71 0 2.75-1.17 5.21-1.17 1.86 0 3.83 1.01 5.23 2.76-4.6 2.52-3.85 9.09-2.27 8.48z" />
+                  </svg>
+                  <div className="text-left leading-tight">
+                    <p className="text-[9px] opacity-80">Download on the</p>
+                    <p className="text-xs font-semibold">App Store</p>
+                  </div>
+                </Link>
+              </div>
+            </div>
           </div>
 
           {/* Quick Links */}

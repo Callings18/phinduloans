@@ -83,7 +83,7 @@ const Install = () => {
                 Apple does not allow APK installs. Install Phindu as a home-screen app from Safari instead.
               </p>
               <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside bg-muted/50 rounded-lg p-4">
-                <li>Open <strong>phinducredit.co.zm</strong> in <strong>Safari</strong></li>
+                <li>Open <strong>phindu.com</strong> in <strong>Safari</strong></li>
                 <li>Tap the <strong>Share</strong> button at the bottom</li>
                 <li>Choose <strong>Add to Home Screen</strong></li>
                 <li>Tap <strong>Add</strong> — the app icon appears on your home screen</li>
