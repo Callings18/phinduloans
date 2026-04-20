@@ -11,6 +11,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { usePwaInstallPrompt } from "@/hooks/usePwaInstallPrompt";
 import { isStandaloneDisplayMode } from "@/utils/pwaDisplayMode";
+import { downloadApk, isAndroidDevice } from "@/utils/appDownload";
+import { Link } from "react-router-dom";
 
 const SNOOZE_KEY = "pwa-install-snooze-until";
 const REOPEN_INTERVAL_MS = 10_000; // re-show every 10s while not snoozed/installed
@@ -70,6 +72,21 @@ export const PWAInstallPrompt = () => {
   }, [deferredPrompt]);
 
   const handleInstall = async () => {
+    // Android → ship the official APK directly.
+    if (isAndroidDevice()) {
+      downloadApk();
+      toast({
+        title: "Downloading app",
+        description:
+          "PhinduCredit.apk is downloading. Open it from your downloads to install.",
+      });
+      setShowPrompt(false);
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
     if (!deferredPrompt) {
       toast({
         title: "Use your browser menu",
@@ -170,7 +187,7 @@ export const PWAInstallPrompt = () => {
                   className="flex-1 min-w-[140px] bg-primary-foreground text-primary hover:bg-primary-foreground/90"
                 >
                   <Download size={16} className="mr-2" />
-                  Install App
+                  {isAndroidDevice() ? "Download App (APK)" : "Install App"}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -196,9 +213,18 @@ export const PWAInstallPrompt = () => {
                 </DropdownMenu>
               </div>
 
-              <p className="text-xs text-primary-foreground/80">
-                ✓ Works offline • ✓ Faster • ✓ Push notifications
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-primary-foreground/80">
+                  ✓ Works offline • ✓ Faster • ✓ Push
+                </p>
+                <Link
+                  to="/install"
+                  onClick={() => setShowPrompt(false)}
+                  className="text-xs underline text-primary-foreground/90 hover:text-primary-foreground whitespace-nowrap"
+                >
+                  More options
+                </Link>
+              </div>
             </div>
           </div>
         </CardContent>

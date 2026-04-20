@@ -20,6 +20,7 @@ import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 // PreQualification removed — /pre-qualify redirects via Apply component
 import NotFound from "./pages/NotFound";
+import Install from "./pages/Install";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
 import AdminLoans from "./pages/admin/AdminLoans";
@@ -158,6 +159,9 @@ function App() {
                   <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
                   <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+                  <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
+                  <Route path="/download" element={<ErrorBoundary><Install /></ErrorBoundary>} />
+                  <Route path="/app" element={<ErrorBoundary><Install /></ErrorBoundary>} />
                   <Route path="/admin" element={<AdminRoute />}>
                     <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
                     <Route

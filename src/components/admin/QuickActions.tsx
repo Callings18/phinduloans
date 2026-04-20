@@ -5,6 +5,7 @@ import {
   FileText,
   Banknote,
   ArrowUpRight,
+  Smartphone,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -30,6 +31,13 @@ const quickActions = [
     path: "/admin/repayments?action=new",
     color: "from-warning to-orange-600",
   },
+  {
+    icon: Smartphone,
+    label: "Install our App",
+    description: "Android APK & iOS guide",
+    path: "/install",
+    color: "from-fuchsia-500 to-primary",
+  },
 ];
 
 import { forwardRef } from "react";
@@ -44,7 +52,7 @@ const QuickActions = forwardRef<HTMLDivElement>((_, ref) => {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickActions.map((action) => (
             <Link
               key={action.label}
