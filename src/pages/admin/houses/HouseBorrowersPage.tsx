@@ -97,6 +97,7 @@ export default function HouseBorrowersPage() {
           nrc_number: form.nrc_number || null,
           address: form.address || null,
           city: form.city || null,
+          product_code: productCode,
         },
       });
       if (response.error) throw response.error;

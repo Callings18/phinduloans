@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, full_name, phone, nrc_number, address, city } = await req.json();
+    const { email, full_name, phone, nrc_number, address, city, product_code } = await req.json();
 
     if (!email || !full_name) {
       return new Response(JSON.stringify({ error: "Email and full name are required" }), {
@@ -125,6 +125,27 @@ Deno.serve(async (req) => {
           console.error("Error updating profile:", updateError);
         }
 
+        if (product_code) {
+          const { error: houseLinkError } = await supabaseAdmin
+            .from("product_house_borrowers")
+            .upsert(
+              {
+                product_code,
+                borrower_id: userId,
+                added_by: requestingUser.id,
+              },
+              { onConflict: "product_code,borrower_id" }
+            );
+
+          if (houseLinkError) {
+            console.error("Error linking existing borrower to product house:", houseLinkError);
+            return new Response(JSON.stringify({ error: houseLinkError.message }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -162,6 +183,27 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error("Error updating profile:", updateError);
+    }
+
+    if (product_code) {
+      const { error: houseLinkError } = await supabaseAdmin
+        .from("product_house_borrowers")
+        .upsert(
+          {
+            product_code,
+            borrower_id: userId,
+            added_by: requestingUser.id,
+          },
+          { onConflict: "product_code,borrower_id" }
+        );
+
+      if (houseLinkError) {
+        console.error("Error linking new borrower to product house:", houseLinkError);
+        return new Response(JSON.stringify({ error: houseLinkError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     return new Response(
