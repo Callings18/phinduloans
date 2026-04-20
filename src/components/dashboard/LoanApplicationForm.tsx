@@ -885,9 +885,25 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
           <Separator />
 
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <Checkbox id="terms-review" checked={termsAccepted} onCheckedChange={(c) => setTermsAccepted(c === true)} />
+          {!hasPayoutDestination && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between gap-3">
+                <span>
+                  You must add a <strong>payout destination</strong> (mobile money or bank account) before submitting. This is where your loan will be deposited.
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { onClose(); navigate("/profile?tab=kyc"); }}
+                >
+                  Add payout details
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
               <Label htmlFor="terms-review" className="text-sm text-muted-foreground cursor-pointer">
                 I accept the terms and conditions of the loan agreement and understand the repayment obligations.
               </Label>
