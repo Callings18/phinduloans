@@ -15,9 +15,8 @@
     --popover: 280 50% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 336 60% 26%;
+    --primary: 330 90% 55%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 336 55% 38%;
 
     --secondary: 280 40% 15%;
     --secondary-foreground: 0 0% 98%;
@@ -25,7 +24,7 @@
     --muted: 280 30% 12%;
     --muted-foreground: 280 10% 60%;
 
-    --accent: 336 60% 32%;
+    --accent: 330 100% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -33,29 +32,29 @@
 
     --border: 280 30% 18%;
     --input: 280 30% 15%;
-    --ring: 336 60% 26%;
+    --ring: 330 90% 55%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 280 50% 6%;
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 336 60% 26%;
+    --sidebar-primary: 330 90% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 280 40% 12%;
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 280 30% 18%;
-    --sidebar-ring: 336 60% 26%;
+    --sidebar-ring: 330 90% 55%;
 
-    /* Custom tokens — burgundy brand gradient */
-    --gradient-primary: linear-gradient(135deg, hsl(336, 60%, 26%) 0%, hsl(336, 55%, 38%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(336, 60%, 8%) 0%, hsl(336, 55%, 14%) 50%, hsl(280, 60%, 4%) 100%);
+    /* Custom tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(330, 90%, 55%) 0%, hsl(280, 80%, 45%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(280, 60%, 8%) 0%, hsl(300, 50%, 6%) 50%, hsl(280, 60%, 4%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(280, 50%, 12%) 0%, hsl(280, 50%, 6%) 100%);
-    --gradient-button: linear-gradient(135deg, hsl(336, 60%, 26%) 0%, hsl(336, 55%, 38%) 100%);
+    --gradient-button: linear-gradient(135deg, hsl(330, 90%, 55%) 0%, hsl(340, 85%, 50%) 100%);
     --gradient-success: linear-gradient(135deg, hsl(160, 70%, 40%) 0%, hsl(140, 60%, 35%) 100%);
 
-    --shadow-glow: 0 0 60px hsl(336, 60%, 26% / 0.35);
+    --shadow-glow: 0 0 60px hsl(330, 90%, 55% / 0.3);
     --shadow-card: 0 8px 32px hsl(280, 60%, 4% / 0.5);
-    --shadow-button: 0 4px 20px hsl(336, 60%, 26% / 0.4);
+    --shadow-button: 0 4px 20px hsl(330, 90%, 55% / 0.4);
     --shadow-elevated: 0 20px 40px -12px hsl(280, 60%, 4% / 0.6);
 
     --glass-bg: hsl(280 50% 10% / 0.6);
@@ -81,7 +80,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 10%;
 
-    --primary: 336 60% 26%;
+    --primary: 330 90% 50%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 5% 96%;
@@ -90,7 +89,7 @@
     --muted: 240 5% 96%;
     --muted-foreground: 240 4% 46%;
 
-    --accent: 336 60% 32%;
+    --accent: 330 90% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -98,16 +97,16 @@
 
     --border: 240 6% 90%;
     --input: 240 6% 90%;
-    --ring: 336 60% 26%;
+    --ring: 330 90% 50%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 10% 10%;
-    --sidebar-primary: 336 60% 26%;
+    --sidebar-primary: 330 90% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 5% 96%;
     --sidebar-accent-foreground: 240 10% 10%;
     --sidebar-border: 240 6% 90%;
-    --sidebar-ring: 336 60% 26%;
+    --sidebar-ring: 330 90% 50%;
 
     /* Status colors for light mode */
     --success: 160 60% 40%;
@@ -118,7 +117,7 @@
     --info-foreground: 0 0% 100%;
   }
 
-  /* Dark theme — burgundy brand */
+  /* Dark theme */
   .dark {
     --background: 280 60% 4%;
     --foreground: 0 0% 98%;
@@ -126,20 +125,19 @@
     --card-foreground: 0 0% 98%;
     --popover: 280 50% 8%;
     --popover-foreground: 0 0% 98%;
-    --primary: 336 60% 26%;
+    --primary: 330 90% 55%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 336 55% 38%;
     --secondary: 280 40% 15%;
     --secondary-foreground: 0 0% 98%;
     --muted: 280 30% 12%;
     --muted-foreground: 280 10% 60%;
-    --accent: 336 60% 32%;
+    --accent: 330 100% 60%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 280 30% 18%;
     --input: 280 30% 15%;
-    --ring: 336 60% 26%;
+    --ring: 330 90% 55%;
   }
 }
 
