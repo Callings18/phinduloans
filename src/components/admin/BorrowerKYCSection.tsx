@@ -328,12 +328,14 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                       ) : doc.is_verified ? (
                         <>
                           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border gap-1"><CheckCircle size={12} /> Verified</Badge>
-                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)} title="View"><Eye size={14} /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download"><Download size={14} /></Button>
                         </>
                       ) : isRejected ? (
                         <>
                           <Badge variant="destructive" className="gap-1"><XCircle size={12} /> Rejected</Badge>
-                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)} title="View"><Eye size={14} /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download"><Download size={14} /></Button>
                           <label className="cursor-pointer">
                             <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUploadKYC(file, kycType.type, kycType.label); e.target.value = ""; }} disabled={uploadingType === kycType.type} />
                             <span className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded-md border border-input bg-background hover:bg-accent cursor-pointer">
@@ -353,7 +355,8 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                             <Clock size={12} />
                             {pendingState === "urgent" ? `Urgent (${pendingHours}h)` : pendingState === "waiting" ? `Waiting (${pendingHours}h)` : "Pending"}
                           </Badge>
-                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)}><Eye size={14} /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handlePreview(doc.file_url)} title="View"><Eye size={14} /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownload(doc.file_url, doc.file_name)} title="Download"><Download size={14} /></Button>
                           <Button size="sm" className="h-7 text-xs" onClick={() => approveMutation.mutate(doc.id)} disabled={approveMutation.isPending}>Approve</Button>
                           <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/30" onClick={() => { setRejectDocId(doc.id); setRejectDocLabel(kycType.label); }}>Reject</Button>
                         </>
@@ -371,9 +374,14 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
                               <span className="text-[11px] text-muted-foreground truncate">
                                 {version.file_name} • {new Date(version.uploaded_at).toLocaleString()}
                               </span>
-                              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handlePreview(version.file_url)}>
-                                <Eye size={12} />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handlePreview(version.file_url)} title="View">
+                                  <Eye size={12} />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handleDownload(version.file_url, version.file_name)} title="Download">
+                                  <Download size={12} />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
