@@ -253,6 +253,22 @@ export default function BorrowerHomeTab({
         </CardContent>
       </Card>
 
+      {/* Resume application banner */}
+      {hasDraft && onResumeDraft && activeLoans.length === 0 && (
+        <ResumeApplicationBanner
+          lastSaved={draftLastSaved ?? null}
+          onResume={onResumeDraft}
+          onDiscard={onDiscardDraft ?? (() => {})}
+        />
+      )}
+
+      {/* Indicative eligibility */}
+      <EligibilityWidget
+        monthlyIncome={profile?.monthly_income}
+        hasActiveLoan={activeLoans.length > 0}
+        onApply={() => onTabChange("apply")}
+      />
+
       {/* Payment Reminders */}
       {repayments && repayments.length > 0 && (
         <PaymentReminder repayments={repayments} />
