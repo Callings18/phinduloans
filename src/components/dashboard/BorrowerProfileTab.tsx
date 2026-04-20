@@ -35,6 +35,10 @@ import {
   FileText,
   Lock,
 } from "lucide-react";
+import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
+import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
+import KYCNextOfKin from "@/components/dashboard/KYCNextOfKin";
+import KYCReferences from "@/components/dashboard/KYCReferences";
 
 interface Props {
   user: any;
@@ -478,29 +482,21 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
           </Card>
         </TabsContent>
 
-        <TabsContent value="kyc">
-          <Card className="border-primary/30 bg-primary/5 shadow-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FolderOpen className="text-primary" size={18} />
-                KYC & payout workspace
-              </CardTitle>
-              <CardDescription>
-                Upload documents, add bank/mobile money, next of kin, and references in one place.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                type="button"
-                variant="hero"
-                className="w-full sm:w-auto"
-                data-testid="borrower-profile-open-kyc"
-                onClick={() => onOpenKycWorkspace?.()}
-              >
-                Open KYC workspace
-              </Button>
-            </CardContent>
-          </Card>
+        <TabsContent value="kyc" className="space-y-6">
+          {user?.id ? (
+            <>
+              <ProfileDocumentVault userId={user.id} />
+              <KYCFinancialInfo userId={user.id} />
+              <KYCNextOfKin userId={user.id} />
+              <KYCReferences userId={user.id} />
+            </>
+          ) : (
+            <Card className="border-border/60 shadow-card">
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                Sign in to manage your KYC details.
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="security">
