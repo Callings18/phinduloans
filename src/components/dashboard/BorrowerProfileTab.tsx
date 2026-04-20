@@ -574,6 +574,8 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="notifications">
           <Card className="border-border/60 shadow-card">
             <CardHeader className="pb-2">
               <CardTitle>Notification preferences</CardTitle>
