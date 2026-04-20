@@ -42,17 +42,18 @@ export default function PermissionRoute({
     return <>{children}</>;
   }
 
-  if (rpcError && !hasRole("super_admin")) {
-    return (
-      <div className="max-w-lg mx-auto mt-8 p-4 rounded-lg border border-destructive/50 bg-destructive/10 text-sm">
-        Permissions could not be verified. You cannot access this page until{" "}
-        <code className="text-xs">get_my_permissions</code> succeeds. Please refresh or contact an administrator.
-      </div>
-    );
+  // Admins and super_admins always pass — server-side RLS still enforces.
+  if (hasRole("super_admin") || hasRole("admin")) {
+    return <>{children}</>;
   }
 
-  if (hasRole("super_admin")) {
-    return <>{children}</>;
+  // If the permissions RPC failed for a non-admin staff member, surface a clear message.
+  if (rpcError) {
+    return (
+      <div className="max-w-lg mx-auto mt-8 p-4 rounded-lg border border-destructive/50 bg-destructive/10 text-sm">
+        Permissions could not be verified. Please refresh or contact an administrator.
+      </div>
+    );
   }
 
   if (anyOf && anyOf.length > 0) {
