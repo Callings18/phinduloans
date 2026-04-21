@@ -663,6 +663,20 @@ const AdminAccounts = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="pnl">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PiggyBank className="h-5 w-5" /> Profit & Loss
+                </CardTitle>
+                <CardDescription>Income, expenses, and net profit by date range and account</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AccountsPnLReport />
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {/* Edit Account Dialog */}
