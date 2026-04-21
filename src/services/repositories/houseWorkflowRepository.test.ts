@@ -50,10 +50,10 @@ describe("houseWorkflowRepository", () => {
 
     await houseSetLoanStatus("loan-1", "approved");
     await houseStageReview("loan-1", "manager");
-    await houseMarkDisbursementCompleted("disb-1");
+    await houseMarkDisbursementCompleted({ disbursementId: "disb-1", accountId: "acct-1" });
     await houseMarkRepaymentPaid("rep-1");
 
-    expect(rpcMock).toHaveBeenCalledTimes(3);
+    expect(rpcMock).toHaveBeenCalledTimes(4);
     expect(rpcMock).toHaveBeenNthCalledWith(1, "transition_loan_status", {
       p_loan_id: "loan-1",
       p_action: "approve",
@@ -64,16 +64,18 @@ describe("houseWorkflowRepository", () => {
       p_action: "approve",
       p_reason: null,
     });
-    expect(rpcMock).toHaveBeenNthCalledWith(3, "record_loan_payment", {
+    expect(rpcMock).toHaveBeenNthCalledWith(3, "complete_disbursement", {
+      p_disbursement_id: "disb-1",
+      p_account_id: "acct-1",
+      p_transaction_reference: null,
+    });
+    expect(rpcMock).toHaveBeenNthCalledWith(4, "record_loan_payment", {
       p_repayment_id: "rep-1",
       p_amount: 0,
       p_payment_method: "cash",
       p_account_id: null,
       p_transaction_reference: null,
     });
-    expect(fromMock).toHaveBeenCalledWith("disbursements");
-    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
-    expect(updateEqMock).toHaveBeenCalledWith("id", "disb-1");
   });
 
   it("falls back to repayment amount when payment RPC first fails", async () => {

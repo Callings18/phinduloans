@@ -34,7 +34,15 @@ export default function HouseDisbursementsPage() {
   const totalDisbursed = completed.reduce((s: number, d: any) => s + Number(d.amount || 0), 0);
 
   const disburseMutation = useMutation({
-    mutationFn: (id: string) => houseMarkDisbursementCompleted(id),
+    mutationFn: async (disbursement: any) => {
+      if (!disbursement?.source_account_id) {
+        throw new Error("No funding account linked to this disbursement");
+      }
+      return houseMarkDisbursementCompleted({
+        disbursementId: disbursement.id,
+        accountId: disbursement.source_account_id,
+      });
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-disbursements", productCode] });
       await queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
@@ -120,7 +128,7 @@ export default function HouseDisbursementsPage() {
                           size="sm"
                           className="h-7 text-xs"
                           disabled={disburseMutation.isPending}
-                          onClick={() => disburseMutation.mutate(d.id)}
+                           onClick={() => disburseMutation.mutate(d)}
                         >
                           Disburse now
                         </Button>

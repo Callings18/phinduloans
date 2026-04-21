@@ -8,22 +8,27 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useHouseLoans } from "@/hooks/useHouseData";
+import { useHouseLoans, useHouseProduct } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
-import { houseSetLoanStatus, recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
+import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
+import { calculateLoan } from "@/utils/loanCalculations";
+import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { format } from "date-fns";
-import { ArrowLeft, User, Banknote, Calendar, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download } from "lucide-react";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
   const { data: loans } = useHouseLoans(productCode);
+  const { data: product } = useHouseProduct(productCode);
   const loan = useMemo(() => (loans ?? []).find((l: any) => l.id === loanId), [loans, loanId]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [selectedAccount, setSelectedAccount] = useState("");
+  const [selectedDisbursementAccount, setSelectedDisbursementAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
 
   const { data: accounts = [] } = useQuery({
@@ -67,9 +72,25 @@ export default function HouseLoanDetailPage() {
     },
   });
 
+  const { data: pendingDisbursement } = useQuery({
+    queryKey: ["house-loan-disbursement", loanId],
+    enabled: Boolean(loanId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("disbursements")
+        .select("id, status, source_account_id")
+        .eq("loan_id", loanId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).find((item: any) => !["completed", "failed", "cancelled"].includes(item.status)) ?? null;
+    },
+  });
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["house-loan-repayments", loanId] });
+    queryClient.invalidateQueries({ queryKey: ["house-loan-disbursement", loanId] });
     queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+    queryClient.invalidateQueries({ queryKey: ["house-disbursements", productCode] });
     queryClient.invalidateQueries({ queryKey: ["house-report-summary", productCode] });
     queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
   };
@@ -107,6 +128,7 @@ export default function HouseLoanDetailPage() {
 
   const payMutation = useMutation({
     mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
+      if (!selectedAccount) throw new Error("Select the account to credit first");
       return recordLoanPayment({
         repaymentId,
         amount,
@@ -126,6 +148,117 @@ export default function HouseLoanDetailPage() {
       toast({ title: "Payment failed", description: e.message, variant: "destructive" });
     },
   });
+
+  const disbursementMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("Loan not found");
+      const accountId = pendingDisbursement?.source_account_id || selectedDisbursementAccount;
+      if (!accountId) throw new Error("Select the funding account to debit");
+
+      let disbursementId = pendingDisbursement?.id || null;
+      if (!disbursementId) {
+        const calc = calculateLoan(
+          Number(loan.loan_amount || 0),
+          Number(loan.loan_term_months || 0),
+          {
+            product_name: product?.name || null,
+            product_code: product?.product_code || productCode,
+            pricing_tiers: product?.pricing_tiers,
+            interest_rate: Number(product?.interest_rate || 0),
+            interest_period: (product?.interest_period as any) || null,
+            interest_type: (product?.interest_type as any) || null,
+            processing_fee_percent: product?.processing_fee_percent || 0,
+            enforcement_fee_percent: product?.enforcement_fee_percent || 0,
+            insurance_percent: product?.insurance_percent || 0,
+            vat_percent: product?.vat_percent || 0,
+            platform_fee_percent: product?.platform_fee_percent || 0,
+            term_unit: (product?.term_unit as any) || null,
+          },
+          ((loan.term_unit || product?.term_unit || "months") as any),
+        );
+
+        const { data: inserted, error: insertError } = await supabase
+          .from("disbursements")
+          .insert({
+            loan_id: loan.id,
+            amount: Number(calc.disbursementAmount || loan.loan_amount || 0),
+            disbursement_method: "cash",
+            status: "pending",
+            source_account_id: accountId,
+          })
+          .select("id")
+          .single();
+        if (insertError) throw insertError;
+        disbursementId = inserted.id;
+      }
+
+      await houseMarkDisbursementCompleted({ disbursementId, accountId });
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
+          user_id: loan.user_id,
+          loan_term_months: Number(loan.loan_term_months || 0),
+          total_repayment: Number(loan.total_repayment || 0),
+          monthly_payment: Number((loan as any).monthly_payment || 0),
+          loan_product_id: (loan as any).loan_product_id || null,
+          term_unit: loan.term_unit || product?.term_unit || "months",
+        },
+        supabase,
+      );
+    },
+    onSuccess: () => {
+      invalidateAll();
+      toast({ title: "Disbursement completed and account debited" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Disbursement failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const handleDownloadSchedule = async () => {
+    if (!loan || repayments.length === 0) {
+      toast({ title: "No repayment schedule yet", description: "Disburse the loan first.", variant: "destructive" });
+      return;
+    }
+
+    const { data: settings } = await (supabase.from("system_settings") as any)
+      .select("setting_key, setting_value")
+      .in("setting_key", ["company_name", "company_address", "company_phone"]);
+
+    const settingsMap: Record<string, string> = {};
+    settings?.forEach((s: any) => {
+      settingsMap[s.setting_key] = s.setting_value;
+    });
+
+    downloadLoanSchedule({
+      borrowerName: loan.full_name || borrowerProfile?.full_name || "",
+      borrowerPhone: loan.phone || borrowerProfile?.phone || "",
+      borrowerEmail: loan.email || borrowerProfile?.email || "",
+      loanReference: loan.id.slice(0, 8).toUpperCase(),
+      loanAmount: Number(loan.loan_amount || 0),
+      interestRate: Number(product?.interest_rate || 0),
+      interestPeriod: product?.interest_period || (loan.term_unit === "days" ? "daily" : loan.term_unit === "weeks" ? "weekly" : "monthly"),
+      termMonths: Number(loan.loan_term_months || 0),
+      monthlyPayment: Number((loan as any).monthly_payment || repayments[0]?.amount || 0),
+      totalRepayment: Number(loan.total_repayment || 0),
+      disbursementDate: (loan as any).disbursed_at || loan.created_at,
+      firstRepaymentDate: repayments[0]?.due_date || "",
+      termSummaryLabel: `${loan.loan_term_months} ${loan.term_unit || product?.term_unit || "months"}`,
+      paymentColumnTitle: loan.term_unit === "days" ? "DAILY PAYMENT" : loan.term_unit === "weeks" ? "WEEKLY PAYMENT" : "MONTHLY PAYMENT",
+      repayments: repayments.map((r: any) => ({
+        installmentNumber: r.installment_number,
+        dueDate: r.due_date,
+        amount: Number(r.amount || 0),
+        status: r.status,
+        paidDate: r.paid_date || undefined,
+      })),
+      companyName: settingsMap.company_name,
+      companyAddress: settingsMap.company_address,
+      companyPhone: settingsMap.company_phone,
+    });
+
+    toast({ title: "Repayment schedule PDF downloaded" });
+  };
 
   if (!loan) return <p className="text-sm text-muted-foreground p-4">Loan not found.</p>;
 
@@ -216,7 +349,19 @@ export default function HouseLoanDetailPage() {
             </>
           )}
           {["approved", "contract_signing", "awaiting_disbursement"].includes(loan.status) && (
-            <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("disbursed")} disabled={statusMutation.isPending}>Mark Disbursed</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={selectedDisbursementAccount} onValueChange={setSelectedDisbursementAccount}>
+                <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="Funding account" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" onClick={() => disbursementMutation.mutate()} disabled={disbursementMutation.isPending || (!pendingDisbursement?.source_account_id && !selectedDisbursementAccount)}>
+                {pendingDisbursement ? "Complete disbursement" : "Disburse from account"}
+              </Button>
+            </div>
           )}
           {loan.status === "disbursed" && (
             <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("active")} disabled={statusMutation.isPending}>Activate</Button>
@@ -263,9 +408,14 @@ export default function HouseLoanDetailPage() {
       {/* Repayment schedule */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Calendar size={16} /> Repayment Schedule ({repayments.length} installments)
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calendar size={16} /> Repayment Schedule ({repayments.length} installments)
+            </CardTitle>
+            <Button size="sm" variant="outline" onClick={handleDownloadSchedule} disabled={repayments.length === 0}>
+              <Download size={14} className="mr-1" /> PDF
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -314,7 +464,7 @@ export default function HouseLoanDetailPage() {
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs"
-                          disabled={payMutation.isPending}
+                          disabled={payMutation.isPending || !selectedAccount}
                           onClick={() => payMutation.mutate({
                             repaymentId: r.id,
                             amount: Number(payAmounts[r.id] || r.amount),
