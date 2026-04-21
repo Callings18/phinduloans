@@ -783,6 +783,47 @@ export default function ProductLoanFormShell({
                 {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
               </Button>
             </div>
+
+            {/* Failure recovery: one-click retry + rollback */}
+            {lastError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-semibold text-destructive">Loan creation failed</p>
+                    <p className="text-xs text-destructive/90">{lastError}</p>
+                    {pendingLoanId && (
+                      <p className="text-[11px] text-muted-foreground">
+                        A draft loan record was created but not finalised. You can retry to finish it, or roll it back to start clean.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    onClick={() => createMutation.mutate()}
+                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || !product || validationErrors.length > 0}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retry
+                  </Button>
+                  {pendingLoanId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={rollbackPendingLoan}
+                      disabled={rollbackPending || createMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      {rollbackPending ? "Rolling back..." : "Rollback draft"}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => setLastError(null)} disabled={rollbackPending || createMutation.isPending}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           {/* ===== TAB 3: Documents (file uploads) ===== */}
