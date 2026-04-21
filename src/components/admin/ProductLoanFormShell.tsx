@@ -18,6 +18,7 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { useProductLoanRules } from "@/hooks/useProductLoanRules";
 import type { LoanProductCode } from "@/config/loanProductModules";
 import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCollectionDates } from "@/lib/marketeerCalculations";
+import { fetchHouseProductByCode } from "@/services/repositories/houseRepository";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
@@ -63,16 +64,7 @@ export default function ProductLoanFormShell({
   const rules = useProductLoanRules(productCode);
 
   const resolveProduct = async (code: LoanProductCode) => {
-    const { data, error } = await supabase
-      .from("loan_products")
-      .select("id, name, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit, pricing_tiers")
-      .eq("product_code", code)
-      .eq("is_active", true)
-      .order("updated_at", { ascending: false })
-      .limit(1);
-
-    if (error) throw error;
-    return data?.[0] ?? null;
+    return fetchHouseProductByCode(code);
   };
 
   // --- Core fields ---
