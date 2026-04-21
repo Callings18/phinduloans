@@ -17,6 +17,7 @@ import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment, 
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { format } from "date-fns";
 import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download } from "lucide-react";
+import HouseLoanActions from "@/components/admin/houses/HouseLoanActions";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
@@ -376,6 +377,9 @@ export default function HouseLoanDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Advanced loan actions toolbar (parity with legacy LoanDetailsModal) */}
+      <HouseLoanActions loan={loan} product={product} productCode={productCode} onChanged={invalidateAll} />
 
       {/* Payment settings */}
       {pendingRepayments.length > 0 && (

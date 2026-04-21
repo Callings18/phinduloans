@@ -102,11 +102,12 @@ export default function HouseCollectionsPage() {
 
   const payMutation = useMutation({
     mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
+      if (!selectedAccount) throw new Error("Select the account to credit before recording payments");
       return recordLoanPayment({
         repaymentId,
         amount,
         paymentMethod,
-        accountId: selectedAccount || null,
+        accountId: selectedAccount,
       });
     },
     onSuccess: handlePaymentSuccess,
@@ -180,13 +181,14 @@ export default function HouseCollectionsPage() {
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Credit to:</span>
           <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-            <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="Select account" /></SelectTrigger>
+            <SelectTrigger className={`w-44 h-8 text-xs ${!selectedAccount ? "border-destructive" : ""}`}><SelectValue placeholder="Select account" /></SelectTrigger>
             <SelectContent>
               {accounts.map((a: any) => (
                 <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {!selectedAccount && <span className="text-xs text-destructive">Required</span>}
         </div>
       </div>
 
@@ -239,7 +241,7 @@ export default function HouseCollectionsPage() {
                           size="sm"
                           variant="default"
                           className="h-7 text-xs"
-                          disabled={payMutation.isPending}
+                          disabled={payMutation.isPending || !selectedAccount}
                           onClick={() => payMutation.mutate({
                             repaymentId: r.id,
                             amount: Number(payAmounts[r.id] || r.amount),

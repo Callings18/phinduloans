@@ -276,7 +276,7 @@ export default function MarketeerDailyCollectionTracker() {
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Credit to:</span>
           <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-            <SelectTrigger className="w-44 h-8 text-xs">
+            <SelectTrigger className={`w-44 h-8 text-xs ${!selectedAccount ? "border-destructive" : ""}`}>
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
             <SelectContent>
@@ -285,6 +285,9 @@ export default function MarketeerDailyCollectionTracker() {
               ))}
             </SelectContent>
           </Select>
+          {!selectedAccount && (
+            <span className="text-xs text-destructive">Required</span>
+          )}
         </div>
       </div>
 
@@ -362,7 +365,7 @@ export default function MarketeerDailyCollectionTracker() {
                             size="sm"
                             variant="default"
                             className="h-7 text-xs"
-                            disabled={recordPaymentMutation.isPending}
+                            disabled={recordPaymentMutation.isPending || !selectedAccount}
                             onClick={() =>
                               recordPaymentMutation.mutate({
                                 repaymentId: loan.todayDue!.id,
@@ -390,7 +393,7 @@ export default function MarketeerDailyCollectionTracker() {
                               size="sm"
                               variant="destructive"
                               className="h-7 text-xs"
-                              disabled={recordBulkOverdue.isPending}
+                              disabled={recordBulkOverdue.isPending || !selectedAccount}
                               onClick={() =>
                                 recordBulkOverdue.mutate({
                                   items: loan.overdueItems.map((r) => ({ id: r.id, amount: Number(r.amount) })),
@@ -411,7 +414,7 @@ export default function MarketeerDailyCollectionTracker() {
                                   size="sm"
                                   variant="outline"
                                   className="h-6 text-xs px-2"
-                                  disabled={recordPaymentMutation.isPending}
+                                  disabled={recordPaymentMutation.isPending || !selectedAccount}
                                   onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: Number(r.amount) })}
                                 >
                                   Pay
