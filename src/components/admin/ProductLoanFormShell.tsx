@@ -21,7 +21,7 @@ import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCo
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2 } from "lucide-react";
 
 type Borrower = {
   id: string;
@@ -94,6 +94,12 @@ export default function ProductLoanFormShell({
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
   const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
+
+  // Failure recovery state — captures last error and any partially created loan id
+  // so the user can retry the submit or roll back the orphaned draft in one click.
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
+  const [rollbackPending, setRollbackPending] = useState(false);
 
   // Pre-populate docs from borrower's permanent vault
   useEffect(() => {
