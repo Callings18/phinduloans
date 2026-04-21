@@ -1010,67 +1010,6 @@ const AdminBorrowers = () => {
               </div>
             </section>
 
-            {/* Section 3: Loan Onboarding */}
-            <section className="border border-border/60 rounded-lg p-4 space-y-3 bg-secondary/20">
-              <header className="flex items-center gap-2 border-b border-border/60 pb-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">3</span>
-                <h3 className="text-sm font-semibold text-foreground">Loan Product Onboarding <span className="text-xs font-normal text-muted-foreground">(optional)</span></h3>
-              </header>
-              <div className="space-y-2">
-                <Label>Loan Product</Label>
-                <Select
-                  value={formData.loan_product_id || "none"}
-                  onValueChange={(value) => setFormData({ ...formData, loan_product_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select loan product" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No loan yet</SelectItem>
-                    {loanProducts.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Principal</Label>
-                  <Input
-                    type="number"
-                    value={formData.principal_amount}
-                    onChange={(e) => setFormData({ ...formData, principal_amount: e.target.value })}
-                    placeholder="1000"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Interest</Label>
-                  <Input
-                    type="number"
-                    value={formData.interest_amount}
-                    onChange={(e) => setFormData({ ...formData, interest_amount: e.target.value })}
-                    placeholder="300"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Daily repay</Label>
-                  <Input
-                    type="number"
-                    value={formData.daily_repayment}
-                    onChange={(e) => setFormData({ ...formData, daily_repayment: e.target.value })}
-                    placeholder="50"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Start date</Label>
-                <Input
-                  type="date"
-                  value={formData.loan_start_date}
-                  onChange={(e) => setFormData({ ...formData, loan_start_date: e.target.value })}
-                />
-              </div>
-            </section>
           </div>
 
           <DialogFooter className="gap-2">
