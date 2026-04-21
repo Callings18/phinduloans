@@ -115,11 +115,11 @@ export default function ProductLoanFormShell({
     })();
   }, [borrowerId]);
 
-  const { data: product } = useQuery({
+  const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ["product-by-code", productCode],
     queryFn: async () => {
-      const fromAny = supabase.from as any;
-      const { data, error } = await fromAny("loan_products")
+      const { data, error } = await supabase
+        .from("loan_products")
         .select("id, name, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit, pricing_tiers")
         .eq("product_code", productCode)
         .maybeSingle();
@@ -743,7 +743,7 @@ export default function ProductLoanFormShell({
               <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
               <Button
                 onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending || docUploading || validationErrors.length > 0}
+                disabled={createMutation.isPending || docUploading || productLoading || !product || validationErrors.length > 0}
               >
                 {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
               </Button>
