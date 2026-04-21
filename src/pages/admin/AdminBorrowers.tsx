@@ -195,7 +195,7 @@ const AdminBorrowers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_products")
-        .select("id, name, is_active")
+        .select("id, name, product_code, is_active")
         .eq("is_active", true)
         .order("name", { ascending: true });
       if (error) throw error;
@@ -302,6 +302,13 @@ const AdminBorrowers = () => {
         throw new Error("Not authenticated");
       }
 
+      // If a loan product was chosen, also link the borrower to that product's house
+      // so they appear under "Borrower screens by loan product" — matching HouseBorrowersPage behaviour.
+      const selectedProduct = data.loan_product_id && data.loan_product_id !== "none"
+        ? loanProducts.find((p: any) => p.id === data.loan_product_id)
+        : null;
+      const productCode = (selectedProduct as any)?.product_code ?? null;
+
       const response = await supabase.functions.invoke('create-borrower', {
         body: {
           email: data.email,
@@ -310,6 +317,7 @@ const AdminBorrowers = () => {
           nrc_number: data.nrc_number || null,
           address: data.address || null,
           city: data.city || null,
+          product_code: productCode,
         },
       });
 
@@ -384,6 +392,7 @@ const AdminBorrowers = () => {
       let createdCount = 0;
       for (const item of MARKETEER_BORROWERS) {
         const safeEmail = `${item.full_name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")}@marketeers.local`;
+        const targetProductCode = (loanProducts.find((p: any) => p.id === targetProductId) as any)?.product_code ?? null;
         const { data: response, error: responseError } = await supabase.functions.invoke("create-borrower", {
           body: {
             email: safeEmail,
@@ -392,6 +401,7 @@ const AdminBorrowers = () => {
             nrc_number: null,
             address: null,
             city: "Lusaka",
+            product_code: targetProductCode,
           },
         });
         if (responseError) throw responseError;
