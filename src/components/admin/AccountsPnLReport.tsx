@@ -98,9 +98,78 @@ export default function AccountsPnLReport({ productCode }: Props) {
     return { repaymentIncome, otherIncome, disbursementsOut, opExpenses, writeOffsAmt, totalIncome, totalExpenses, netProfit };
   }, [txns, expenses, writeoffs]);
 
+  const handleExportCsv = () => {
+    const escape = (v: any) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const accountName = accountId === "all" ? "All accounts" : (accounts.find((a: any) => a.id === accountId)?.account_name ?? accountId);
+    const rows: (string | number)[][] = [];
+    rows.push(["Profit & Loss Report"]);
+    rows.push(["Period", `${from} to ${to}`]);
+    rows.push(["Account", accountName]);
+    rows.push([]);
+    rows.push(["Summary"]);
+    rows.push(["Section", "Line item", "Amount (ZMW)"]);
+    rows.push(["Income", "Repayments", totals.repaymentIncome.toFixed(2)]);
+    rows.push(["Income", "Other income", totals.otherIncome.toFixed(2)]);
+    rows.push(["Income", "Total income", totals.totalIncome.toFixed(2)]);
+    rows.push(["Expenses", "Operating expenses", totals.opExpenses.toFixed(2)]);
+    rows.push(["Expenses", "Loan write-offs (net)", totals.writeOffsAmt.toFixed(2)]);
+    rows.push(["Expenses", "Total expenses", totals.totalExpenses.toFixed(2)]);
+    rows.push(["Result", "Net profit", totals.netProfit.toFixed(2)]);
+    rows.push(["Memo", "Disbursed in period", totals.disbursementsOut.toFixed(2)]);
+    rows.push([]);
+    rows.push(["Income breakdown"]);
+    rows.push(["Date", "Type", "Source", "Notes", "Amount (ZMW)"]);
+    txns
+      .filter((t: any) => ["repayment", "other_income"].includes(t.transaction_type))
+      .forEach((t: any) => {
+        rows.push([
+          format(new Date(t.created_at), "yyyy-MM-dd"),
+          String(t.transaction_type).replace("_", " "),
+          t.source || t.destination || "",
+          t.notes || "",
+          Number(t.amount || 0).toFixed(2),
+        ]);
+      });
+    rows.push([]);
+    rows.push(["Expense breakdown"]);
+    rows.push(["Date", "Category", "Vendor / Payee", "Branch", "Amount (ZMW)"]);
+    expenses.forEach((e: any) => {
+      rows.push([
+        e.paid_at ? format(new Date(e.paid_at), "yyyy-MM-dd") : "",
+        e.expense_category || "",
+        e.vendor_payee || "",
+        e.branch || "",
+        Number(e.amount || 0).toFixed(2),
+      ]);
+    });
+    writeoffs.forEach((w: any) => {
+      rows.push([
+        w.approved_at ? format(new Date(w.approved_at), "yyyy-MM-dd") : "",
+        "Loan write-off",
+        "",
+        "",
+        (Number(w.writeoff_amount || 0) - Number(w.recovery_amount || 0)).toFixed(2),
+      ]);
+    });
+
+    const csv = rows.map((r) => r.map(escape).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pnl-${from}-to-${to}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -120,6 +189,11 @@ export default function AccountsPnLReport({ productCode }: Props) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-1 flex flex-col justify-end">
+          <Button variant="outline" onClick={handleExportCsv} disabled={isLoading}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
         </div>
       </div>
 
