@@ -195,7 +195,7 @@ const AdminBorrowers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_products")
-        .select("id, name, is_active")
+        .select("id, name, product_code, is_active")
         .eq("is_active", true)
         .order("name", { ascending: true });
       if (error) throw error;
