@@ -13,6 +13,7 @@ export interface LoanForSchedule {
   monthly_payment?: number | null;
   loan_product_id?: string | null;
   term_unit?: string | null;
+  repayment_start_date?: string | null;
 }
 
 /**
@@ -99,20 +100,27 @@ export async function createRepaymentScheduleForLoan(
     installment_number: number;
     status: string;
   }> = [];
-  // Use date-only (noon UTC) to prevent timezone-related off-by-one issues
-  const startDate = new Date();
+  // Use date-only (noon UTC) to prevent timezone-related off-by-one issues.
+  // If a repayment_start_date is provided, that date becomes installment #1 due date.
+  const startDate =
+    loan.repayment_start_date && !Number.isNaN(new Date(loan.repayment_start_date).getTime())
+      ? new Date(loan.repayment_start_date)
+      : new Date();
   startDate.setHours(12, 0, 0, 0);
+  const hasExplicitStartDate =
+    Boolean(loan.repayment_start_date) && !Number.isNaN(new Date(loan.repayment_start_date as string).getTime());
 
   for (let i = 1; i <= numInstallments; i++) {
     let dueDate: Date;
+    const offset = hasExplicitStartDate ? i - 1 : i;
     if (isDaily) {
       dueDate = new Date(startDate);
-      dueDate.setDate(dueDate.getDate() + i);
+      dueDate.setDate(dueDate.getDate() + offset);
     } else if (isWeekly) {
       dueDate = new Date(startDate);
-      dueDate.setDate(dueDate.getDate() + i * 7);
+      dueDate.setDate(dueDate.getDate() + offset * 7);
     } else {
-      dueDate = addMonths(startDate, i);
+      dueDate = addMonths(startDate, offset);
     }
     repaymentRecords.push({
       loan_id: loan.id,

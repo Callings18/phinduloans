@@ -21,7 +21,7 @@ import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCo
 import { fetchHouseProductByCode } from "@/services/repositories/houseRepository";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2 } from "lucide-react";
 
 type Borrower = {
@@ -80,6 +80,7 @@ export default function ProductLoanFormShell({
   const [jobTitle, setJobTitle] = useState("");
   const [city, setCity] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
+  const [repaymentStartDate, setRepaymentStartDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
 
   // --- Marketeer-specific fields ---
   const [businessMonths, setBusinessMonths] = useState("0");
@@ -178,6 +179,8 @@ export default function ProductLoanFormShell({
 
   const isMarketeer = productCode === "MARKETEER";
   const isSalaryAdvanceFamily = productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF";
+  const usesDailySchedule = termUnit === "days";
+  const minRepaymentStartDate = format(addDays(new Date(), 1), "yyyy-MM-dd");
 
   const marketeerResult = useMemo(() => {
     if (!isMarketeer || !product || !loanAmount) return null;
@@ -189,8 +192,9 @@ export default function ProductLoanFormShell({
 
   const collectionDates = useMemo(() => {
     if (!isMarketeer || !marketeerResult) return [];
-    return generateMarketeerCollectionDates(new Date(), marketeerResult.durationDays);
-  }, [isMarketeer, marketeerResult]);
+    const start = repaymentStartDate ? new Date(repaymentStartDate) : new Date();
+    return generateMarketeerCollectionDates(start, marketeerResult.durationDays);
+  }, [isMarketeer, marketeerResult, repaymentStartDate]);
 
   const preview = useMemo(() => {
     if (!product || !loanAmount || !termValue) return null;
@@ -305,6 +309,12 @@ export default function ProductLoanFormShell({
       if (!loanAmount || !termValue || !loanPurpose || !monthlyIncome) {
         throw new Error("Fill in all required loan fields.");
       }
+      if (usesDailySchedule && !repaymentStartDate) {
+        throw new Error("Repayment start date is required.");
+      }
+      if (usesDailySchedule && repaymentStartDate < minRepaymentStartDate) {
+        throw new Error("Repayment start date must be tomorrow or later.");
+      }
       if (validationErrors.length > 0) throw new Error(validationErrors[0]);
 
       const activeProduct = product?.id ? product : await resolveProduct(productCode);
@@ -386,6 +396,7 @@ export default function ProductLoanFormShell({
         admin_notes: adminNotes || null,
         source: "internal",
         status: "pending" as const,
+        repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
         product_specific_data: {
           product_code: productCode,
           business_months: Number(businessMonths || 0),
@@ -710,7 +721,7 @@ export default function ProductLoanFormShell({
                     Interest: 30% flat · Duration: 26 business days (Mon–Fri) · Daily collection · Range: K1,000 – K10,000
                   </p>
                 )}
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Loan Amount (K) *</Label>
                     <Input
@@ -739,6 +750,18 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">Purpose *</Label>
                     <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
                   </div>
+                  {usesDailySchedule && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Repayment Start Date *</Label>
+                      <Input
+                        className="h-9"
+                        type="date"
+                        value={repaymentStartDate}
+                        min={minRepaymentStartDate}
+                        onChange={(e) => setRepaymentStartDate(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Loan Preview */}
