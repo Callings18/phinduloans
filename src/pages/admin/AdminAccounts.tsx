@@ -572,6 +572,7 @@ const AdminAccounts = () => {
           <TabsList>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="transactions">Transaction History</TabsTrigger>
+            <TabsTrigger value="pnl" className="gap-1"><TrendingUp className="h-4 w-4" /> Profit & Loss</TabsTrigger>
           </TabsList>
 
           <TabsContent value="accounts">
