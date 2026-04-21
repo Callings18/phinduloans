@@ -365,7 +365,7 @@ export default function MarketeerDailyCollectionTracker() {
                             size="sm"
                             variant="default"
                             className="h-7 text-xs"
-                            disabled={recordPaymentMutation.isPending}
+                            disabled={recordPaymentMutation.isPending || !selectedAccount}
                             onClick={() =>
                               recordPaymentMutation.mutate({
                                 repaymentId: loan.todayDue!.id,
@@ -393,7 +393,7 @@ export default function MarketeerDailyCollectionTracker() {
                               size="sm"
                               variant="destructive"
                               className="h-7 text-xs"
-                              disabled={recordBulkOverdue.isPending}
+                              disabled={recordBulkOverdue.isPending || !selectedAccount}
                               onClick={() =>
                                 recordBulkOverdue.mutate({
                                   items: loan.overdueItems.map((r) => ({ id: r.id, amount: Number(r.amount) })),
@@ -414,7 +414,7 @@ export default function MarketeerDailyCollectionTracker() {
                                   size="sm"
                                   variant="outline"
                                   className="h-6 text-xs px-2"
-                                  disabled={recordPaymentMutation.isPending}
+                                  disabled={recordPaymentMutation.isPending || !selectedAccount}
                                   onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: Number(r.amount) })}
                                 >
                                   Pay
