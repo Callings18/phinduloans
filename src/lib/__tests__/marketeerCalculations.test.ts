@@ -33,10 +33,11 @@ describe("calculateMarketeerLoan", () => {
 });
 
 describe("generateMarketeerCollectionDates", () => {
-  it("skips Saturdays and Sundays, returns 26 collection dates", () => {
+  it("skips Sundays, includes Saturdays, returns 26 collection dates", () => {
     const start = new Date("2026-04-13T00:00:00.000Z"); // Monday
     const dates = generateMarketeerCollectionDates(start, MARKETEER_COLLECTION_DAYS);
     expect(dates).toHaveLength(MARKETEER_COLLECTION_DAYS);
-    expect(dates.every((d) => d.getDay() !== 0 && d.getDay() !== 6)).toBe(true);
+    expect(dates.every((d) => d.getDay() !== 0)).toBe(true);
+    expect(dates.some((d) => d.getDay() === 6)).toBe(true);
   });
 });

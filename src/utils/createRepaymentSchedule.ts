@@ -4,6 +4,7 @@
  */
 import { format, addMonths } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { skipSundays } from "@/lib/marketeerCalculations";
 
 export interface LoanForSchedule {
   id: string;
@@ -116,6 +117,8 @@ export async function createRepaymentScheduleForLoan(
     if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
+      // No collections on Sundays — push to Monday
+      dueDate = skipSundays(dueDate);
     } else if (isWeekly) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset * 7);

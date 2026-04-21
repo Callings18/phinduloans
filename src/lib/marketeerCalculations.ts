@@ -56,16 +56,27 @@ export function getMarketeerTiersOrDefault(raw: unknown): MarketeerTier[] {
 }
 
 /**
- * Generate collection dates excluding Saturdays (6) and Sundays (0).
- * Marketeer loans collect Monday–Friday only.
+ * Advance a date forward until it lands on a collection day (Mon–Sat).
+ * Sundays are skipped — no loan collections on Sundays.
+ */
+export function skipSundays(date: Date): Date {
+  const d = new Date(date);
+  while (d.getDay() === 0) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+
+/**
+ * Generate collection dates excluding Sundays (0).
+ * Marketeer loans collect Monday–Saturday.
  */
 export function generateMarketeerCollectionDates(startDate: Date, collectionDays: number): Date[] {
   const dates: Date[] = [];
   const cursor = new Date(startDate);
 
   while (dates.length < collectionDays) {
-    const dayOfWeek = cursor.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (cursor.getDay() !== 0) {
       dates.push(new Date(cursor));
     }
     cursor.setDate(cursor.getDate() + 1);
