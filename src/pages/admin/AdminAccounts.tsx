@@ -13,8 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { Plus, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, Wallet, Building, Smartphone, Banknote, Edit, History } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, Wallet, Building, Smartphone, Banknote, Edit, History, TrendingUp, PiggyBank } from "lucide-react";
 import { format } from "date-fns";
+import AccountsPnLReport from "@/components/admin/AccountsPnLReport";
+import AddOtherIncomeDialog from "@/components/admin/AddOtherIncomeDialog";
 
 interface Account {
   id: string;
@@ -338,6 +340,7 @@ const AdminAccounts = () => {
             <p className="text-muted-foreground">Manage your funds and wallets</p>
           </div>
           <div className="flex gap-2">
+            <AddOtherIncomeDialog />
             <Dialog open={addFundsOpen} onOpenChange={setAddFundsOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2">
@@ -569,6 +572,7 @@ const AdminAccounts = () => {
           <TabsList>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="transactions">Transaction History</TabsTrigger>
+            <TabsTrigger value="pnl" className="gap-1"><TrendingUp className="h-4 w-4" /> Profit & Loss</TabsTrigger>
           </TabsList>
 
           <TabsContent value="accounts">
@@ -656,6 +660,20 @@ const AdminAccounts = () => {
                     ))}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="pnl">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PiggyBank className="h-5 w-5" /> Profit & Loss
+                </CardTitle>
+                <CardDescription>Income, expenses, and net profit by date range and account</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AccountsPnLReport />
               </CardContent>
             </Card>
           </TabsContent>
