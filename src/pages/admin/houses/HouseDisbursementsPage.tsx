@@ -20,6 +20,20 @@ export default function HouseDisbursementsPage() {
   const { data: loans } = useHouseLoans(productCode);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [rowAccounts, setRowAccounts] = useState<Record<string, string>>({});
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id, account_name, balance")
+        .eq("is_active", true)
+        .order("account_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const loanMap = useMemo(() => {
     const map: Record<string, any> = {};
@@ -35,19 +49,21 @@ export default function HouseDisbursementsPage() {
 
   const disburseMutation = useMutation({
     mutationFn: async (disbursement: any) => {
-      if (!disbursement?.source_account_id) {
-        throw new Error("No funding account linked to this disbursement");
+      const accountId = rowAccounts[disbursement.id] || disbursement?.source_account_id;
+      if (!accountId) {
+        throw new Error("Pick a funding account before disbursing");
       }
       return houseMarkDisbursementCompleted({
         disbursementId: disbursement.id,
-        accountId: disbursement.source_account_id,
+        accountId,
       });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["house-disbursements", productCode] });
       await queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
       await queryClient.invalidateQueries({ queryKey: ["house-report-summary", productCode] });
-      toast({ title: "Disbursement completed" });
+      await queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      toast({ title: "Disbursement completed and account debited" });
     },
     onError: (e: Error) => {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -103,7 +119,7 @@ export default function HouseDisbursementsPage() {
                 <TableRow>
                   <TableHead>Borrower</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Method</TableHead>
+                  <TableHead>Funding account</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead></TableHead>
@@ -112,11 +128,23 @@ export default function HouseDisbursementsPage() {
               <TableBody>
                 {pending.map((d: any) => {
                   const loan = loanMap[d.loan_id];
+                  const chosen = rowAccounts[d.id] || d.source_account_id || "";
                   return (
                     <TableRow key={d.id}>
                       <TableCell className="font-medium">{loan?.full_name || "—"}</TableCell>
                       <TableCell className="text-right font-medium">K{Number(d.amount || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-sm">{d.disbursement_method || "N/A"}</TableCell>
+                      <TableCell>
+                        <Select value={chosen} onValueChange={(v) => setRowAccounts((p) => ({ ...p, [d.id]: v }))}>
+                          <SelectTrigger className={`h-7 text-xs w-44 ${!chosen ? "border-destructive" : ""}`}>
+                            <SelectValue placeholder="Pick account" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accounts.map((a: any) => (
+                              <SelectItem key={a.id} value={a.id}>{a.account_name} — K{Number(a.balance).toLocaleString()}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs">{d.status}</Badge>
                       </TableCell>
@@ -127,8 +155,8 @@ export default function HouseDisbursementsPage() {
                         <Button
                           size="sm"
                           className="h-7 text-xs"
-                          disabled={disburseMutation.isPending}
-                           onClick={() => disburseMutation.mutate(d)}
+                          disabled={disburseMutation.isPending || !chosen}
+                          onClick={() => disburseMutation.mutate(d)}
                         >
                           Disburse now
                         </Button>
