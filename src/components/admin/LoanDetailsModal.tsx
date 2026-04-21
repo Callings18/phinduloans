@@ -1415,9 +1415,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const startDate = new Date();
 
       for (let i = 1; i <= remainingInstallments; i++) {
-        const dueDate = new Date(startDate);
+        let dueDate = new Date(startDate);
         if (isDaily) {
           dueDate.setDate(dueDate.getDate() + i);
+          // Skip Sundays — no collections on Sundays
+          while (dueDate.getDay() === 0) {
+            dueDate.setDate(dueDate.getDate() + 1);
+          }
         } else if (isWeekly) {
           dueDate.setDate(dueDate.getDate() + i * 7);
         } else {
