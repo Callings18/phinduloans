@@ -13,8 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { Plus, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, Wallet, Building, Smartphone, Banknote, Edit, History } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, Wallet, Building, Smartphone, Banknote, Edit, History, TrendingUp, PiggyBank } from "lucide-react";
 import { format } from "date-fns";
+import AccountsPnLReport from "@/components/admin/AccountsPnLReport";
+import AddOtherIncomeDialog from "@/components/admin/AddOtherIncomeDialog";
 
 interface Account {
   id: string;
