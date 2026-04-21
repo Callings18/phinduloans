@@ -3948,6 +3948,39 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_gateway_settings_safe: {
+        Row: {
+          created_at: string | null
+          environment: string | null
+          gateway_name: string | null
+          has_api_key: boolean | null
+          has_webhook_secret: boolean | null
+          id: string | null
+          is_active: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          environment?: string | null
+          gateway_name?: string | null
+          has_api_key?: never
+          has_webhook_secret?: never
+          id?: string | null
+          is_active?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          environment?: string | null
+          gateway_name?: string | null
+          has_api_key?: never
+          has_webhook_secret?: never
+          id?: string | null
+          is_active?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       v_house_report_summary: {
         Row: {
           active_loans: number | null
