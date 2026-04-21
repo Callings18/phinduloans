@@ -340,6 +340,7 @@ const AdminAccounts = () => {
             <p className="text-muted-foreground">Manage your funds and wallets</p>
           </div>
           <div className="flex gap-2">
+            <AddOtherIncomeDialog />
             <Dialog open={addFundsOpen} onOpenChange={setAddFundsOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2">
