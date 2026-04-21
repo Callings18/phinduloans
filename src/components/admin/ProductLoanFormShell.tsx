@@ -21,7 +21,7 @@ import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCo
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2 } from "lucide-react";
 
 type Borrower = {
   id: string;
@@ -94,6 +94,12 @@ export default function ProductLoanFormShell({
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
   const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
+
+  // Failure recovery state — captures last error and any partially created loan id
+  // so the user can retry the submit or roll back the orphaned draft in one click.
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
+  const [rollbackPending, setRollbackPending] = useState(false);
 
   // Pre-populate docs from borrower's permanent vault
   useEffect(() => {
@@ -385,6 +391,7 @@ export default function ProductLoanFormShell({
 
       // Upload documents to storage after loan is created
       if (inserted?.id) {
+        setPendingLoanId(inserted.id);
         setDocUploading(true);
         try {
           const uploadedPaths = await uploadDocuments(inserted.id, selectedBorrower.id);
@@ -403,16 +410,44 @@ export default function ProductLoanFormShell({
           setDocUploading(false);
         }
       }
+      return inserted?.id ?? null;
     },
     onSuccess: () => {
+      setLastError(null);
+      setPendingLoanId(null);
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
       toast({ title: `${title} application created`, description: "Loan moved to pending review." });
       navigate(successRedirectPath);
     },
     onError: (error: Error) => {
+      setLastError(error.message || "Loan creation failed.");
       toast({ title: "Unable to create loan", description: error.message, variant: "destructive" });
     },
   });
+
+  const rollbackPendingLoan = async () => {
+    if (!pendingLoanId) return;
+    setRollbackPending(true);
+    try {
+      const { error } = await supabase
+        .from("loan_applications")
+        .delete()
+        .eq("id", pendingLoanId)
+        .eq("status", "pending");
+      if (error) throw error;
+      toast({ title: "Draft rolled back", description: "The unfinished loan has been removed. You can edit and try again." });
+      setPendingLoanId(null);
+      setLastError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Rollback failed.";
+      toast({ title: "Rollback failed", description: msg, variant: "destructive" });
+    } finally {
+      setRollbackPending(false);
+    }
+  };
 
   return (
     <AdminLayout>
@@ -748,6 +783,47 @@ export default function ProductLoanFormShell({
                 {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
               </Button>
             </div>
+
+            {/* Failure recovery: one-click retry + rollback */}
+            {lastError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-semibold text-destructive">Loan creation failed</p>
+                    <p className="text-xs text-destructive/90">{lastError}</p>
+                    {pendingLoanId && (
+                      <p className="text-[11px] text-muted-foreground">
+                        A draft loan record was created but not finalised. You can retry to finish it, or roll it back to start clean.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    onClick={() => createMutation.mutate()}
+                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || !product || validationErrors.length > 0}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retry
+                  </Button>
+                  {pendingLoanId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={rollbackPendingLoan}
+                      disabled={rollbackPending || createMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      {rollbackPending ? "Rolling back..." : "Rollback draft"}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => setLastError(null)} disabled={rollbackPending || createMutation.isPending}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           {/* ===== TAB 3: Documents (file uploads) ===== */}
