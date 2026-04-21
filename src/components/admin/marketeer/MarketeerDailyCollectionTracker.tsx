@@ -276,7 +276,7 @@ export default function MarketeerDailyCollectionTracker() {
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Credit to:</span>
           <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-            <SelectTrigger className="w-44 h-8 text-xs">
+            <SelectTrigger className={`w-44 h-8 text-xs ${!selectedAccount ? "border-destructive" : ""}`}>
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
             <SelectContent>
@@ -285,6 +285,9 @@ export default function MarketeerDailyCollectionTracker() {
               ))}
             </SelectContent>
           </Select>
+          {!selectedAccount && (
+            <span className="text-xs text-destructive">Required</span>
+          )}
         </div>
       </div>
 
