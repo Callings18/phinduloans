@@ -302,6 +302,13 @@ const AdminBorrowers = () => {
         throw new Error("Not authenticated");
       }
 
+      // If a loan product was chosen, also link the borrower to that product's house
+      // so they appear under "Borrower screens by loan product" — matching HouseBorrowersPage behaviour.
+      const selectedProduct = data.loan_product_id && data.loan_product_id !== "none"
+        ? loanProducts.find((p: any) => p.id === data.loan_product_id)
+        : null;
+      const productCode = (selectedProduct as any)?.product_code ?? null;
+
       const response = await supabase.functions.invoke('create-borrower', {
         body: {
           email: data.email,
@@ -310,6 +317,7 @@ const AdminBorrowers = () => {
           nrc_number: data.nrc_number || null,
           address: data.address || null,
           city: data.city || null,
+          product_code: productCode,
         },
       });
 
