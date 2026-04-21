@@ -311,6 +311,29 @@ export default function ProductLoanFormShell({
       }
       if (validationErrors.length > 0) throw new Error(validationErrors[0]);
 
+      // SAFEGUARD: if a previous attempt already created a pending loan row,
+      // do NOT insert another. Verify it still exists & is pending; if so, resume
+      // the flow against that same id (re-upload docs, refresh metadata).
+      // If it's gone or no longer pending, clear the marker and proceed fresh.
+      if (pendingLoanId) {
+        const { data: existing } = await supabase
+          .from("loan_applications")
+          .select("id, status")
+          .eq("id", pendingLoanId)
+          .maybeSingle();
+        if (existing && existing.status === "pending") {
+          setDocUploading(true);
+          try {
+            await uploadDocuments(existing.id, selectedBorrower.id);
+          } finally {
+            setDocUploading(false);
+          }
+          return existing.id;
+        }
+        // Stale marker — clear and fall through to a fresh insert.
+        setPendingLoanId(null);
+      }
+
       let totalRepayment = 0;
       let installmentAmount = 0;
 
