@@ -62,6 +62,19 @@ export default function ProductLoanFormShell({
   const queryClient = useQueryClient();
   const rules = useProductLoanRules(productCode);
 
+  const resolveProduct = async (code: LoanProductCode) => {
+    const { data, error } = await supabase
+      .from("loan_products")
+      .select("id, name, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit, pricing_tiers")
+      .eq("product_code", code)
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+    return data?.[0] ?? null;
+  };
+
   // --- Core fields ---
   const [borrowerId, setBorrowerId] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
@@ -123,15 +136,7 @@ export default function ProductLoanFormShell({
 
   const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ["product-by-code", productCode],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loan_products")
-        .select("id, name, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit, pricing_tiers")
-        .eq("product_code", productCode)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => resolveProduct(productCode),
   });
 
   const { data: borrowers } = useQuery({
@@ -304,12 +309,17 @@ export default function ProductLoanFormShell({
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!selectedBorrower) throw new Error("Select a borrower first.");
-      if (!product?.id) throw new Error("Loan product not found. Check product_code setup.");
       if (!user?.id) throw new Error("User session not found.");
       if (!loanAmount || !termValue || !loanPurpose || !monthlyIncome) {
         throw new Error("Fill in all required loan fields.");
       }
       if (validationErrors.length > 0) throw new Error(validationErrors[0]);
+
+      const activeProduct = product?.id ? product : await resolveProduct(productCode);
+      if (activeProduct?.id) {
+        queryClient.setQueryData(["product-by-code", productCode], activeProduct);
+      }
+      if (!activeProduct?.id) throw new Error("Loan product not found. Check product_code setup.");
 
       // SAFEGUARD: if a previous attempt already created a pending loan row,
       // do NOT insert another. Verify it still exists & is pending; if so, resume
@@ -346,14 +356,14 @@ export default function ProductLoanFormShell({
           Number(termValue),
           {
             product_code: productCode,
-            interest_rate: Number(product.interest_rate || 0),
-            interest_period: (product.interest_period || "monthly") as "daily" | "weekly" | "monthly" | "yearly",
-            interest_type: ((product.interest_type as string) || "flat") as "flat" | "reducing",
-            processing_fee_percent: Number(product.processing_fee_percent || 0),
-            enforcement_fee_percent: Number(product.enforcement_fee_percent || 0),
-            insurance_percent: Number(product.insurance_percent || 0),
-            vat_percent: Number(product.vat_percent || 0),
-            platform_fee_percent: Number(product.platform_fee_percent || 0),
+            interest_rate: Number(activeProduct.interest_rate || 0),
+            interest_period: (activeProduct.interest_period || "monthly") as "daily" | "weekly" | "monthly" | "yearly",
+            interest_type: ((activeProduct.interest_type as string) || "flat") as "flat" | "reducing",
+            processing_fee_percent: Number(activeProduct.processing_fee_percent || 0),
+            enforcement_fee_percent: Number(activeProduct.enforcement_fee_percent || 0),
+            insurance_percent: Number(activeProduct.insurance_percent || 0),
+            vat_percent: Number(activeProduct.vat_percent || 0),
+            platform_fee_percent: Number(activeProduct.platform_fee_percent || 0),
           },
           termUnit
         );
@@ -363,7 +373,7 @@ export default function ProductLoanFormShell({
 
       const payload = {
         user_id: selectedBorrower.id,
-        loan_product_id: product.id,
+        loan_product_id: activeProduct.id,
         full_name: selectedBorrower.full_name || selectedBorrower.email,
         email: selectedBorrower.email,
         phone: contactNumber || selectedBorrower.phone || "",
@@ -378,7 +388,7 @@ export default function ProductLoanFormShell({
         loan_term_months: Number(termValue),
         term_unit: termUnit,
         loan_purpose: loanPurpose,
-        interest_rate: Number(product.interest_rate || 0),
+        interest_rate: Number(activeProduct.interest_rate || 0),
         monthly_payment: installmentAmount,
         total_repayment: totalRepayment,
         admin_notes: adminNotes || null,
@@ -801,7 +811,7 @@ export default function ProductLoanFormShell({
               <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
               <Button
                 onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending || docUploading || productLoading || !product || validationErrors.length > 0}
+                  disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0}
               >
                 {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
               </Button>
@@ -826,7 +836,7 @@ export default function ProductLoanFormShell({
                   <Button
                     size="sm"
                     onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || !product || validationErrors.length > 0}
+                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || validationErrors.length > 0}
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retry
                   </Button>

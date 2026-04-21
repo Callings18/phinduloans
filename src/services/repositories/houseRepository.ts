@@ -41,9 +41,11 @@ export async function fetchHouseProductByCode(productCode: string) {
     .from("loan_products")
     .select("id, name, product_code, interest_rate, is_active")
     .eq("product_code", productCode)
-    .maybeSingle();
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return (data ?? null) as HouseProduct | null;
+  return ((data?.[0] ?? null) as HouseProduct | null);
 }
 
 export async function fetchHouseLoans(productCode: string) {
