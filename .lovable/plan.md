@@ -1,60 +1,79 @@
 
 
-# Fix: Loans Stuck at "Disbursed" — Triggers Missing from Database
+## Bring loan houses to full LMS parity + accounts reporting
 
-## Root Cause
+Goal: every house behaves like the legacy admin loan flow (reloan, top-up, restructure, penalties, early settlement, schedule PDF), every disbursement and collection is tied to a funding account, and the Accounts module shows a true P&L with expenses and other income.
 
-**All database triggers have been dropped.** The trigger functions exist (e.g., `generate_repayment_schedule`, `enforce_loan_application_status_transition`, `notify_loan_status_change`) but none are actually attached to any tables. This means:
+### 1. Funding account is mandatory on every money movement
 
-1. When a disbursement is inserted with `status = 'completed'`, the `generate_repayment_schedule` trigger never fires — so no repayment schedule is created and the loan is never auto-set to `active`.
-2. The loan status transition enforcement trigger doesn't run either.
-3. No notification triggers fire (loan approval SMS/email, payment received, etc.).
+**House Disbursements page** (`HouseDisbursementsPage.tsx`)
+- Add an inline **"Funding account"** Select on every pending row (defaulting to the disbursement's `source_account_id` if one was set at loan creation).
+- "Disburse now" button is disabled until an account is picked.
+- Submit calls `complete_disbursement` RPC with `p_account_id` so the account is debited atomically and `account_transactions` gets a `disbursement` ledger row.
 
-## The Intended Flow
+**House Loan Detail page** (`HouseLoanDetailPage.tsx`)
+- Already enforces a funding account on disburse — keep.
+- Repayment "Pay" button: hard-disable until a "Credit to" account is selected (currently just warns). Show an inline error if user tries.
 
-```text
-Admin clicks "Disburse" on an awaiting_disbursement loan
-  → Code inserts disbursement record (status: completed)
-  → Code updates loan status to "disbursed"
-  → TRIGGER: generate_repayment_schedule fires on disbursements INSERT
-    → Creates repayment schedule based on loan product frequency
-    → Sets loan status to "active"
-```
+**House Collections page** (`HouseCollectionsPage.tsx`)
+- Same enforcement: "Pay" disabled and account selector highlighted in red until chosen.
 
-Right now step 3 never happens because the trigger isn't attached.
+**Marketeer collections** (`MarketeerDailyCollectionTracker.tsx`) — same enforcement pattern.
 
-## Fix Plan
+### 2. Restore the full legacy loan-actions toolbar inside each house
 
-### 1. Re-create all critical triggers (database migration)
+`HouseLoanDetailPage.tsx` will gain the same actions the original `LoanDetailsModal` exposes, all routed through existing RPCs:
 
-Run a single migration that re-attaches all essential triggers:
+| Action | Backend used | When shown |
+|---|---|---|
+| Apply penalties | `apply_loan_penalties(p_loan_id)` | active / disbursed with overdue installments |
+| Early settlement quote + record | `calculate_early_settlement` then `record_loan_payment` per remaining row, debiting selected account | active |
+| Restructure (term, interest, frequency) | update `loan_applications` then regenerate via `createRepaymentScheduleForLoan` | active / disbursed |
+| Top-up (increase principal) | new disbursement against funding account using `complete_disbursement`, schedule regen | active |
+| Re-loan (new loan from completed) | duplicate `loan_applications` row, link `parent_loan_id`, route to disburse flow | completed |
+| Reverse last payment | flip latest paid `loan_repayments` back to `pending`, debit account back | admin-only |
+| Mark defaulted | `admin_mark_loan_defaulted(p_loan_id, p_reason)` | active / disbursed |
+| Download PDF schedule | `downloadLoanSchedule` (already added) | any with installments |
+| Loan history / events | read `loan_events` + `loan_status_transitions` | always |
+| Send borrower message | reuse staff messaging path | always |
 
-- **`trigger_generate_repayment_schedule`** on `disbursements` — AFTER INSERT OR UPDATE — fires `generate_repayment_schedule()` when status becomes `completed`
-- **`trigger_enforce_loan_status`** on `loan_applications` — BEFORE UPDATE — fires `enforce_loan_application_status_transition()`
-- **`trigger_enforce_disbursement_status`** on `disbursements` — BEFORE UPDATE — fires `enforce_disbursement_status_transition()`
-- **`trigger_enforce_payroll_status`** on `payroll_runs` — BEFORE UPDATE — fires `enforce_payroll_run_status_transition()`
-- **`trigger_notify_loan_status_change`** on `loan_applications` — AFTER UPDATE OF status — fires `notify_loan_status_change()`
-- **`trigger_notify_disbursement`** on `disbursements` — AFTER UPDATE OF status — fires `notify_disbursement()`
-- **`trigger_notify_payment_received`** on `loan_repayments` — AFTER UPDATE OF status — fires `notify_payment_received()`
-- **`trigger_log_loan_updates`** on `loan_applications` — AFTER UPDATE — fires `log_loan_changes()`
-- **`trigger_log_repayment`** on `loan_repayments` — AFTER INSERT — fires `log_repayment_activity()`
-- **`trigger_cancel_repayments_on_closure`** on `loan_applications` — AFTER UPDATE OF status — fires `cancel_repayments_on_loan_closure()`
-- Various `update_*_updated_at` triggers on tables that need auto-timestamping
+Each money-moving action requires an account selection in its dialog (top-up funding account, reversal target account, early settlement crediting account).
 
-### 2. Fix the 10 already-disbursed loans (data cleanup)
+### 3. Accounts module = single source of financial truth
 
-The 10 loans that were disbursed are stuck at `disbursed` status with no repayment schedule. Since triggers can't retroactively fire, we need to:
-- For each loan in `disbursed` status that has no repayment records, programmatically generate the schedule and set status to `active` inside the same migration using a DO block.
+`AdminAccounts.tsx` and a new `AccountsReportTab`:
 
-### 3. No frontend changes needed
+- Existing tabs (Accounts, Transaction History) stay.
+- New **"Profit & Loss"** tab built purely from `account_transactions` + `expenses`:
+  ```text
+  Income
+    Repayments (interest + principal split via loan_repayments.principal_paid)
+    Other income (account_transactions.transaction_type = 'other_income')
+  Expenses
+    Operating expenses (expenses table, status = paid)
+    Loan write-offs (loan_writeoffs.status = approved)
+  = Net Profit (period)
+  ```
+  Filters: date range + account.
+- New **"Other Income"** quick-action button: opens dialog → pick account → enter amount, source, note → inserts an `account_transactions` row of type `other_income` and credits the account balance (mirrors the existing "Add funds" path but tagged so P&L treats it as income, not capital injection).
+- Expenses (`AdminExpenses.tsx`) already debits accounts when marked paid via `admin_set_expense_status` — confirm and surface them in the new P&L report.
 
-The frontend code is already correct — it inserts the disbursement and updates the status. The only issue is the missing triggers.
+### 4. Cross-house consistency
 
-## Files Changed
+- All four houses (`SALARY_ADVANCE`, `COLLATERAL`, `BUSINESS`, `MOTOR_VEHICLE`, `MARKETEER`, `PAYDAY_SOFT`, `SALARY_ADVANCE_STAFF`) use the same `HouseLoanDetailPage` shell — adding actions there propagates to every house automatically.
+- House Reports page gains the same P&L block scoped to the house's loans (income from that house's repayments minus allocated expenses if `expenses.module = product_code`).
 
-- New database migration: Re-create all triggers + backfill disbursed loans to active with schedules
+### Technical details
 
-## Why This Happened
+- New file: `src/components/admin/houses/HouseLoanActions.tsx` — collapsible toolbar of the actions above, reused from `HouseLoanDetailPage`.
+- New file: `src/components/admin/AccountsPnLReport.tsx` — date-range driven P&L using `account_transactions`, `expenses`, `loan_repayments`, `loan_writeoffs`.
+- New file: `src/components/admin/AddOtherIncomeDialog.tsx`.
+- Repository additions in `houseWorkflowRepository.ts`: `houseApplyPenalties`, `houseRestructureLoan`, `houseTopUpLoan`, `houseReloanFromCompleted`, `houseReversePayment`, `houseEarlySettlement`.
+- DB: no schema change needed — all RPCs already exist (`apply_loan_penalties`, `calculate_early_settlement`, `complete_disbursement`, `record_loan_payment`, `admin_mark_loan_defaulted`). One small migration to add a CHECK-tolerant `'other_income'` value to `account_transactions.transaction_type` if it's currently constrained, plus an index on `account_transactions(created_at, account_id)` for the P&L query.
+- Account selectors everywhere read from the same `accounts-active` query already cached, so balances refresh in real time after each transaction.
 
-Triggers were likely dropped during one of the earlier migration iterations that used `DROP TRIGGER IF EXISTS` statements without successfully re-creating them (possibly due to a migration error that rolled back the CREATE but not the DROP).
+### Out of scope (ask before doing)
+
+- Auto-allocating expenses to a specific loan house unless `expenses.module` already carries the product code.
+- Multi-currency P&L.
 
