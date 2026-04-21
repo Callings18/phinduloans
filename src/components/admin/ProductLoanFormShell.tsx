@@ -391,6 +391,7 @@ export default function ProductLoanFormShell({
 
       // Upload documents to storage after loan is created
       if (inserted?.id) {
+        setPendingLoanId(inserted.id);
         setDocUploading(true);
         try {
           const uploadedPaths = await uploadDocuments(inserted.id, selectedBorrower.id);
@@ -409,16 +410,44 @@ export default function ProductLoanFormShell({
           setDocUploading(false);
         }
       }
+      return inserted?.id ?? null;
     },
     onSuccess: () => {
+      setLastError(null);
+      setPendingLoanId(null);
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
       toast({ title: `${title} application created`, description: "Loan moved to pending review." });
       navigate(successRedirectPath);
     },
     onError: (error: Error) => {
+      setLastError(error.message || "Loan creation failed.");
       toast({ title: "Unable to create loan", description: error.message, variant: "destructive" });
     },
   });
+
+  const rollbackPendingLoan = async () => {
+    if (!pendingLoanId) return;
+    setRollbackPending(true);
+    try {
+      const { error } = await supabase
+        .from("loan_applications")
+        .delete()
+        .eq("id", pendingLoanId)
+        .eq("status", "pending");
+      if (error) throw error;
+      toast({ title: "Draft rolled back", description: "The unfinished loan has been removed. You can edit and try again." });
+      setPendingLoanId(null);
+      setLastError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Rollback failed.";
+      toast({ title: "Rollback failed", description: msg, variant: "destructive" });
+    } finally {
+      setRollbackPending(false);
+    }
+  };
 
   return (
     <AdminLayout>
