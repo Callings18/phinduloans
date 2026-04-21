@@ -1671,6 +1671,7 @@ export type Database = {
           recommended_at: string | null
           recommended_by: string | null
           rejection_reason: string | null
+          repayment_start_date: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           selfie_url: string | null
@@ -1752,6 +1753,7 @@ export type Database = {
           recommended_at?: string | null
           recommended_by?: string | null
           rejection_reason?: string | null
+          repayment_start_date?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           selfie_url?: string | null
@@ -1833,6 +1835,7 @@ export type Database = {
           recommended_at?: string | null
           recommended_by?: string | null
           rejection_reason?: string | null
+          repayment_start_date?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           selfie_url?: string | null
