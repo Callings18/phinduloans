@@ -37,6 +37,12 @@ export interface PaymentReceiptData {
   loan_completed?: boolean;
 }
 
+export interface CompleteDisbursementParams {
+  disbursementId: string;
+  accountId: string;
+  transactionReference?: string | null;
+}
+
 /**
  * Record a loan payment via the atomic RPC function.
  * This handles: marking repayment paid, crediting the account, auto-completing loan, audit logging.
@@ -96,12 +102,14 @@ export async function houseStageReview(loanId: string, stage: HouseReviewStage) 
   }
 }
 
-export async function houseMarkDisbursementCompleted(disbursementId: string) {
-  const { error } = await supabase
-    .from("disbursements")
-    .update({ status: "completed", disbursed_at: new Date().toISOString() })
-    .eq("id", disbursementId);
+export async function houseMarkDisbursementCompleted(params: CompleteDisbursementParams) {
+  const { data, error } = await (supabase.rpc as any)("complete_disbursement", {
+    p_disbursement_id: params.disbursementId,
+    p_account_id: params.accountId,
+    p_transaction_reference: params.transactionReference || null,
+  });
   if (error) throw error;
+  assertRpcOk(data, "Disbursement completion failed");
 }
 
 export async function houseMarkRepaymentPaid(repaymentId: string) {
