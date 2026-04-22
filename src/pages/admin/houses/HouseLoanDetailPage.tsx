@@ -417,13 +417,20 @@ export default function HouseLoanDetailPage() {
       {/* Repayment schedule */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <CardTitle className="text-base flex items-center gap-2">
               <Calendar size={16} /> Repayment Schedule ({repayments.length} installments)
             </CardTitle>
-            <Button size="sm" variant="outline" onClick={handleDownloadSchedule} disabled={repayments.length === 0}>
-              <Download size={14} className="mr-1" /> PDF
-            </Button>
+            <div className="flex items-center gap-2">
+              {overdueRows.length > 0 && (
+                <Badge variant="destructive" className="text-xs">
+                  {overdueRows.length} overdue · K{overdueAmount.toLocaleString()} · oldest {oldestOverdueDays}d late
+                </Badge>
+              )}
+              <Button size="sm" variant="outline" onClick={handleDownloadSchedule} disabled={repayments.length === 0}>
+                <Download size={14} className="mr-1" /> PDF
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -440,55 +447,65 @@ export default function HouseLoanDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {repayments.map((r: any) => (
-                <TableRow key={r.id}>
-                  <TableCell className="text-sm">{r.installment_number}</TableCell>
-                  <TableCell className="text-sm">{format(new Date(r.due_date), "dd MMM yyyy (EEE)")}</TableCell>
-                  <TableCell className="text-right font-medium">K{Number(r.amount || 0).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={r.status === "paid" ? "default" : r.status === "cancelled" ? "secondary" : "destructive"}
-                      className="text-xs"
-                    >
-                      {r.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {r.paid_date ? format(new Date(r.paid_date), "dd MMM yyyy") : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground capitalize">
-                    {r.payment_method?.replace(/_/g, " ") || "—"}
-                  </TableCell>
-                  <TableCell>
-                    {r.status !== "paid" && r.status !== "cancelled" && (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          placeholder={String(r.amount)}
-                          className="w-20 h-7 text-xs"
-                          value={payAmounts[r.id] ?? ""}
-                          onChange={(e) => setPayAmounts((p) => ({ ...p, [r.id]: e.target.value }))}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          disabled={payMutation.isPending || !selectedAccount}
-                          onClick={() => payMutation.mutate({
-                            repaymentId: r.id,
-                            amount: Number(payAmounts[r.id] || r.amount),
-                          })}
-                        >
-                          Pay
-                        </Button>
-                      </div>
-                    )}
-                    {r.status === "paid" && (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {repayments.map((r: any) => {
+                const isPending = r.status !== "paid" && r.status !== "cancelled";
+                const isOverdue = isPending && r.due_date && r.due_date < todayStr;
+                const daysLate = isOverdue ? differenceInCalendarDays(today, new Date(r.due_date)) : 0;
+                return (
+                  <TableRow key={r.id} className={isOverdue ? "bg-destructive/5" : undefined}>
+                    <TableCell className="text-sm">{r.installment_number}</TableCell>
+                    <TableCell className="text-sm">
+                      {format(new Date(r.due_date), "dd MMM yyyy (EEE)")}
+                      {isOverdue && (
+                        <span className="block text-xs text-destructive">{daysLate}d late</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">K{Number(r.amount || 0).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={r.status === "paid" ? "default" : r.status === "cancelled" ? "secondary" : isOverdue ? "destructive" : "outline"}
+                        className="text-xs"
+                      >
+                        {isOverdue ? "overdue" : r.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.paid_date ? format(new Date(r.paid_date), "dd MMM yyyy") : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground capitalize">
+                      {r.payment_method?.replace(/_/g, " ") || "—"}
+                    </TableCell>
+                    <TableCell>
+                      {isPending && (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            placeholder={String(r.amount)}
+                            className="w-20 h-7 text-xs"
+                            value={payAmounts[r.id] ?? ""}
+                            onChange={(e) => setPayAmounts((p) => ({ ...p, [r.id]: e.target.value }))}
+                          />
+                          <Button
+                            size="sm"
+                            variant={isOverdue ? "destructive" : "outline"}
+                            className="h-7 text-xs"
+                            disabled={payMutation.isPending || !selectedAccount}
+                            onClick={() => payMutation.mutate({
+                              repaymentId: r.id,
+                              amount: Number(payAmounts[r.id] || r.amount),
+                            })}
+                          >
+                            Pay
+                          </Button>
+                        </div>
+                      )}
+                      {r.status === "paid" && (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {repayments.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
