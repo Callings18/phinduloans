@@ -57,6 +57,7 @@ export function RecordHousePaymentDialog({
   isSubmitting,
   onSubmit,
 }: RecordHousePaymentDialogProps) {
+  const { toast } = useToast();
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState(defaultPaymentMethod);
   const [accountId, setAccountId] = useState(defaultAccountId);
@@ -86,10 +87,27 @@ export function RecordHousePaymentDialog({
     }
   }, [open, repayment, defaultPaymentMethod, defaultAccountId]);
 
+  const maxAmount = Number(repayment?.amount || 0);
+  const numAmount = Number(amount);
+  const exceedsOutstanding = numAmount > maxAmount + 0.001;
+
   const handleSubmit = () => {
-    const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) return;
-    if (!accountId) return;
+    if (!numAmount || numAmount <= 0) {
+      toast({ title: "Invalid amount", description: "Enter an amount greater than zero.", variant: "destructive" });
+      return;
+    }
+    if (!accountId) {
+      toast({ title: "Account required", description: "Select the account to credit.", variant: "destructive" });
+      return;
+    }
+    if (exceedsOutstanding) {
+      toast({
+        title: "Amount exceeds outstanding",
+        description: `Maximum allowed for this installment is K${maxAmount.toLocaleString()}. Adjust the amount and try again.`,
+        variant: "destructive",
+      });
+      return;
+    }
     onSubmit({
       amount: numAmount,
       paymentMethod,
