@@ -178,6 +178,41 @@ export function RecordHousePaymentDialog({
           </div>
 
           <div className="space-y-1.5">
+            <Label>Payment date *</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    isFutureDate && "border-destructive"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(paidDate, "PPP")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={paidDate}
+                  onSelect={(d) => d && setPaidDate(d)}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            {isFutureDate ? (
+              <p className="text-xs text-destructive">Payment date cannot be in the future.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Defaults to today. Change to backdate the payment.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="rp-method">Payment method *</Label>
             <Select value={paymentMethod} onValueChange={setPaymentMethod}>
               <SelectTrigger id="rp-method">
