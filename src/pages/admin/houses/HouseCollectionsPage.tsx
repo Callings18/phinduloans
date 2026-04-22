@@ -89,7 +89,7 @@ export default function HouseCollectionsPage() {
         loanReference: receipt.loan_id?.slice(0, 8) || "",
         loanAmount: receipt.loan_amount || 0,
         repaymentAmount: receipt.repayment_amount || 0,
-        paymentDate: new Date().toISOString(),
+        paymentDate: receipt.paid_date ? new Date(receipt.paid_date).toISOString() : new Date().toISOString(),
         paymentMethod: receipt.payment_method || "cash",
         transactionReference: receipt.receipt_no || "",
         installmentNumber: receipt.installment_number || 0,
