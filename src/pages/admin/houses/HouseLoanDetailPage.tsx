@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { calculateLoan } from "@/utils/loanCalculations";
-import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
+import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment } from "@/services/repositories/houseWorkflowRepository";
 import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { differenceInCalendarDays } from "date-fns";
 import { format } from "date-fns";
