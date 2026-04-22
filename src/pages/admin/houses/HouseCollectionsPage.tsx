@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { BetaBadge } from "@/components/admin/BetaBadge";
+import { RecordHousePaymentDialog, type RecordHousePaymentValue } from "@/components/admin/houses/RecordHousePaymentDialog";
 import { format } from "date-fns";
 import { AlertTriangle, CheckCircle2, Banknote, Clock } from "lucide-react";
 
@@ -24,7 +24,7 @@ export default function HouseCollectionsPage() {
   const { toast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [selectedAccount, setSelectedAccount] = useState("");
-  const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
+  const [activeRepayment, setActiveRepayment] = useState<any | null>(null);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
@@ -101,16 +101,19 @@ export default function HouseCollectionsPage() {
   };
 
   const payMutation = useMutation({
-    mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
-      if (!selectedAccount) throw new Error("Select the account to credit before recording payments");
+    mutationFn: async (value: RecordHousePaymentValue & { repaymentId: string }) => {
       return recordLoanPayment({
-        repaymentId,
-        amount,
-        paymentMethod,
-        accountId: selectedAccount,
+        repaymentId: value.repaymentId,
+        amount: value.amount,
+        paymentMethod: value.paymentMethod,
+        accountId: value.accountId,
+        transactionReference: value.transactionReference,
       });
     },
-    onSuccess: handlePaymentSuccess,
+    onSuccess: (receipt) => {
+      handlePaymentSuccess(receipt);
+      setActiveRepayment(null);
+    },
     onError: (e: Error) => {
       toast({ title: "Payment failed", description: e.message, variant: "destructive" });
     },
@@ -229,27 +232,14 @@ export default function HouseCollectionsPage() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">#{r.installment_number}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          placeholder={String(r.amount)}
-                          className="w-20 h-7 text-xs"
-                          value={payAmounts[r.id] ?? ""}
-                          onChange={(e) => setPayAmounts((p) => ({ ...p, [r.id]: e.target.value }))}
-                        />
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-7 text-xs"
-                          disabled={payMutation.isPending || !selectedAccount}
-                          onClick={() => payMutation.mutate({
-                            repaymentId: r.id,
-                            amount: Number(payAmounts[r.id] || r.amount),
-                          })}
-                        >
-                          Pay
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        onClick={() => setActiveRepayment({ ...r, _borrowerName: loan?.full_name })}
+                      >
+                        Record payment
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -265,6 +255,17 @@ export default function HouseCollectionsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <RecordHousePaymentDialog
+        open={!!activeRepayment}
+        onOpenChange={(o) => { if (!o) setActiveRepayment(null); }}
+        repayment={activeRepayment}
+        borrowerName={activeRepayment?._borrowerName}
+        defaultPaymentMethod={paymentMethod}
+        defaultAccountId={selectedAccount}
+        isSubmitting={payMutation.isPending}
+        onSubmit={(value) => payMutation.mutate({ ...value, repaymentId: activeRepayment.id })}
+      />
     </div>
   );
 }
