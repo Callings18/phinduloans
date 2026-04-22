@@ -101,16 +101,19 @@ export default function HouseCollectionsPage() {
   };
 
   const payMutation = useMutation({
-    mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
-      if (!selectedAccount) throw new Error("Select the account to credit before recording payments");
+    mutationFn: async (value: RecordHousePaymentValue & { repaymentId: string }) => {
       return recordLoanPayment({
-        repaymentId,
-        amount,
-        paymentMethod,
-        accountId: selectedAccount,
+        repaymentId: value.repaymentId,
+        amount: value.amount,
+        paymentMethod: value.paymentMethod,
+        accountId: value.accountId,
+        transactionReference: value.transactionReference,
       });
     },
-    onSuccess: handlePaymentSuccess,
+    onSuccess: (receipt) => {
+      handlePaymentSuccess(receipt);
+      setActiveRepayment(null);
+    },
     onError: (e: Error) => {
       toast({ title: "Payment failed", description: e.message, variant: "destructive" });
     },
