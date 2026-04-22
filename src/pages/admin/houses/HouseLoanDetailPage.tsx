@@ -32,6 +32,7 @@ export default function HouseLoanDetailPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedDisbursementAccount, setSelectedDisbursementAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
+  const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
