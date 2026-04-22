@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { BetaBadge } from "@/components/admin/BetaBadge";
+import { RecordHousePaymentDialog, type RecordHousePaymentValue } from "@/components/admin/houses/RecordHousePaymentDialog";
 import { format } from "date-fns";
 import { AlertTriangle, CheckCircle2, Banknote, Clock } from "lucide-react";
 
