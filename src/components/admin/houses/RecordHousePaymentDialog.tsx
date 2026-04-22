@@ -22,11 +22,16 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface RecordHousePaymentValue {
   amount: number;
   paymentMethod: string;
   accountId: string;
+  paidDate: string; // ISO yyyy-MM-dd
   transactionReference?: string;
   notes?: string;
 }
@@ -63,6 +68,7 @@ export function RecordHousePaymentDialog({
   const [accountId, setAccountId] = useState(defaultAccountId);
   const [transactionReference, setTransactionReference] = useState("");
   const [notes, setNotes] = useState("");
+  const [paidDate, setPaidDate] = useState<Date>(new Date());
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
@@ -84,12 +90,16 @@ export function RecordHousePaymentDialog({
       setAccountId(defaultAccountId);
       setTransactionReference("");
       setNotes("");
+      setPaidDate(new Date());
     }
   }, [open, repayment, defaultPaymentMethod, defaultAccountId]);
 
   const maxAmount = Number(repayment?.amount || 0);
   const numAmount = Number(amount);
   const exceedsOutstanding = numAmount > maxAmount + 0.001;
+  const todayStart = new Date();
+  todayStart.setHours(23, 59, 59, 999);
+  const isFutureDate = paidDate > todayStart;
 
   const handleSubmit = () => {
     if (!numAmount || numAmount <= 0) {
@@ -108,10 +118,15 @@ export function RecordHousePaymentDialog({
       });
       return;
     }
+    if (isFutureDate) {
+      toast({ title: "Invalid payment date", description: "Payment date cannot be in the future.", variant: "destructive" });
+      return;
+    }
     onSubmit({
       amount: numAmount,
       paymentMethod,
       accountId,
+      paidDate: format(paidDate, "yyyy-MM-dd"),
       transactionReference: transactionReference.trim() || undefined,
       notes: notes.trim() || undefined,
     });
@@ -158,6 +173,41 @@ export function RecordHousePaymentDialog({
             ) : (
               <p className="text-xs text-muted-foreground">
                 Scheduled / outstanding: K{maxAmount.toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Payment date *</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    isFutureDate && "border-destructive"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(paidDate, "PPP")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={paidDate}
+                  onSelect={(d) => d && setPaidDate(d)}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            {isFutureDate ? (
+              <p className="text-xs text-destructive">Payment date cannot be in the future.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Defaults to today. Change to backdate the payment.
               </p>
             )}
           </div>
@@ -223,7 +273,7 @@ export function RecordHousePaymentDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !accountId || !Number(amount) || exceedsOutstanding}
+            disabled={isSubmitting || !accountId || !Number(amount) || exceedsOutstanding || isFutureDate}
           >
             {isSubmitting ? "Recording…" : "Record payment"}
           </Button>

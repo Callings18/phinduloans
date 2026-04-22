@@ -4099,16 +4099,28 @@ export type Database = {
           total_outstanding: number
         }[]
       }
-      record_loan_payment: {
-        Args: {
-          p_account_id?: string
-          p_amount: number
-          p_payment_method?: string
-          p_repayment_id: string
-          p_transaction_reference?: string
-        }
-        Returns: Json
-      }
+      record_loan_payment:
+        | {
+            Args: {
+              p_account_id?: string
+              p_amount: number
+              p_payment_method?: string
+              p_repayment_id: string
+              p_transaction_reference?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_account_id?: string
+              p_amount: number
+              p_paid_date?: string
+              p_payment_method?: string
+              p_repayment_id: string
+              p_transaction_reference?: string
+            }
+            Returns: Json
+          }
       send_notification_via_edge_function: {
         Args: {
           p_event_type?: string
