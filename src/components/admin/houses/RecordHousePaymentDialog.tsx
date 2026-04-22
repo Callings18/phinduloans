@@ -144,14 +144,22 @@ export function RecordHousePaymentDialog({
               id="rp-amount"
               type="number"
               min="0"
+              max={maxAmount}
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              className={exceedsOutstanding ? "border-destructive" : ""}
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">
-              Scheduled: K{Number(repayment?.amount || 0).toLocaleString()}
-            </p>
+            {exceedsOutstanding ? (
+              <p className="text-xs text-destructive">
+                Cannot exceed outstanding K{maxAmount.toLocaleString()} for this installment.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Scheduled / outstanding: K{maxAmount.toLocaleString()}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
