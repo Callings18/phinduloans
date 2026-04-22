@@ -273,7 +273,7 @@ export function RecordHousePaymentDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !accountId || !Number(amount) || exceedsOutstanding}
+            disabled={isSubmitting || !accountId || !Number(amount) || exceedsOutstanding || isFutureDate}
           >
             {isSubmitting ? "Recording…" : "Record payment"}
           </Button>
