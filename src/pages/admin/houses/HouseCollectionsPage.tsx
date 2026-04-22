@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { BetaBadge } from "@/components/admin/BetaBadge";
-import { format, isPast } from "date-fns";
+import { format } from "date-fns";
 import { AlertTriangle, CheckCircle2, Banknote, Clock } from "lucide-react";
 
 export default function HouseCollectionsPage() {
@@ -54,7 +54,7 @@ export default function HouseCollectionsPage() {
   );
 
   const overdue = useMemo(() =>
-    (repayments ?? []).filter((r: any) => r.status !== "paid" && r.status !== "cancelled" && isPast(new Date(r.due_date)) && r.due_date !== todayStr),
+    (repayments ?? []).filter((r: any) => r.status !== "paid" && r.status !== "cancelled" && r.due_date && r.due_date < todayStr),
     [repayments, todayStr]
   );
 

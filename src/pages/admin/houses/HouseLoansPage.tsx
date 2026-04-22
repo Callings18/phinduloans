@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useHouseLoans } from "@/hooks/useHouseData";
-import { Search, Plus, Eye } from "lucide-react";
+import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
+import { Search, Plus, Eye, AlertTriangle } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
 import { format } from "date-fns";
 
@@ -24,10 +24,29 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 export default function HouseLoansPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const { data: loans, isLoading } = useHouseLoans(productCode);
+  const { data: repayments } = useHouseRepayments(productCode);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Build overdue stats per loan from repayments — a loan is "overdue" if it has any
+  // pending/overdue installment with due_date < today.
+  const overdueByLoan = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const map: Record<string, { count: number; amount: number; oldestDueDate: string | null }> = {};
+    (repayments ?? []).forEach((r: any) => {
+      if (r.status === "paid" || r.status === "cancelled") return;
+      if (!r.due_date || r.due_date >= today) return;
+      const entry = map[r.loan_id] ?? { count: 0, amount: 0, oldestDueDate: null };
+      entry.count += 1;
+      entry.amount += Number(r.amount || 0);
+      entry.oldestDueDate =
+        !entry.oldestDueDate || r.due_date < entry.oldestDueDate ? r.due_date : entry.oldestDueDate;
+      map[r.loan_id] = entry;
+    });
+    return map;
+  }, [repayments]);
 
   const filtered = useMemo(() => {
     if (!loans) return [];
@@ -38,16 +57,19 @@ export default function HouseLoansPage() {
         l.email?.toLowerCase().includes(q) ||
         l.nrc_number?.toLowerCase().includes(q) ||
         l.phone?.toLowerCase().includes(q);
-      const matchesStatus = statusFilter === "all" || l.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "overdue" ? Boolean(overdueByLoan[l.id]) : l.status === statusFilter);
       return matchesSearch && matchesStatus;
     });
-  }, [loans, search, statusFilter]);
+  }, [loans, search, statusFilter, overdueByLoan]);
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Stats
   const totalAmount = (loans ?? []).reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
   const activeCount = (loans ?? []).filter((l: any) => ["active", "disbursed"].includes(l.status)).length;
+  const overdueCount = Object.keys(overdueByLoan).length;
 
   const statusCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -55,12 +77,20 @@ export default function HouseLoansPage() {
     return map;
   }, [loans]);
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Loans</h2>
-          <p className="text-sm text-muted-foreground">{(loans ?? []).length} total · {activeCount} active · K{totalAmount.toLocaleString()} portfolio</p>
+          <p className="text-sm text-muted-foreground">
+            {(loans ?? []).length} total · {activeCount} active ·{" "}
+            <span className={overdueCount > 0 ? "text-destructive font-medium" : ""}>
+              {overdueCount} overdue
+            </span>{" "}
+            · K{totalAmount.toLocaleString()} portfolio
+          </p>
         </div>
         <Button asChild size="sm"><Link to={`/admin/houses/${productCode}/loans/create`}><Plus size={16} className="mr-1" /> Create Loan</Link></Button>
       </div>
@@ -70,6 +100,16 @@ export default function HouseLoansPage() {
         <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}>
           All ({(loans ?? []).length})
         </Button>
+        {overdueCount > 0 && (
+          <Button
+            size="sm"
+            variant={statusFilter === "overdue" ? "destructive" : "outline"}
+            onClick={() => { setStatusFilter("overdue"); setCurrentPage(1); }}
+            className={statusFilter !== "overdue" ? "border-destructive/50 text-destructive hover:bg-destructive/10" : ""}
+          >
+            <AlertTriangle size={12} className="mr-1" /> Overdue ({overdueCount})
+          </Button>
+        )}
         {Object.entries(statusCounts).sort().map(([status, count]) => (
           <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"} onClick={() => { setStatusFilter(status); setCurrentPage(1); }}>
             {statusConfig[status]?.label || status} ({count})
@@ -96,6 +136,7 @@ export default function HouseLoansPage() {
                   <TableHead>Amount</TableHead>
                   <TableHead>Term</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Overdue</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -103,8 +144,18 @@ export default function HouseLoansPage() {
               <TableBody>
                 {paginated.map((l: any) => {
                   const cfg = statusConfig[l.status] || statusConfig.pending;
+                  const od = overdueByLoan[l.id];
+                  const daysLate = od?.oldestDueDate
+                    ? Math.max(
+                        0,
+                        Math.floor(
+                          (new Date(todayStr).getTime() - new Date(od.oldestDueDate).getTime()) /
+                            (1000 * 60 * 60 * 24),
+                        ),
+                      )
+                    : 0;
                   return (
-                    <TableRow key={l.id}>
+                    <TableRow key={l.id} className={od ? "bg-destructive/5" : undefined}>
                       <TableCell>
                         <div>
                           <p className="font-medium text-sm">{l.full_name || l.email}</p>
@@ -114,6 +165,21 @@ export default function HouseLoansPage() {
                       <TableCell className="font-medium">K{Number(l.loan_amount || 0).toLocaleString()}</TableCell>
                       <TableCell className="text-sm">{l.loan_term_months} {l.term_unit || "months"}</TableCell>
                       <TableCell><Badge className={`${cfg.className} border text-xs`}>{cfg.label}</Badge></TableCell>
+                      <TableCell>
+                        {od ? (
+                          <div className="flex flex-col gap-0.5">
+                            <Badge variant="destructive" className="text-xs w-fit">
+                              <AlertTriangle size={10} className="mr-1" />
+                              {od.count} late · K{od.amount.toLocaleString()}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {daysLate} day{daysLate === 1 ? "" : "s"} late
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.created_at ? format(new Date(l.created_at), "dd MMM yyyy") : "—"}</TableCell>
                       <TableCell>
                         <Button asChild size="sm" variant="ghost">
@@ -124,7 +190,7 @@ export default function HouseLoansPage() {
                   );
                 })}
                 {paginated.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No loans found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No loans found.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
