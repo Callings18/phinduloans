@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useHouseRepayments, useHouseLoans } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
-import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
+import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { RecordHousePaymentDialog, type RecordHousePaymentValue } from "@/components/admin/houses/RecordHousePaymentDialog";
 import { format } from "date-fns";
@@ -81,23 +81,7 @@ export default function HouseCollectionsPage() {
       description: `K${receipt.repayment_amount?.toLocaleString()} from ${receipt.borrower_name}. Receipt: ${receipt.receipt_no}`,
     });
 
-    if (receipt.receipt_no) {
-      downloadRepaymentReceipt({
-        borrowerName: receipt.borrower_name || "",
-        borrowerPhone: receipt.borrower_phone || "",
-        borrowerEmail: receipt.borrower_email || "",
-        loanReference: receipt.loan_id?.slice(0, 8) || "",
-        loanAmount: receipt.loan_amount || 0,
-        repaymentAmount: receipt.repayment_amount || 0,
-        paymentDate: receipt.paid_date ? new Date(receipt.paid_date).toISOString() : new Date().toISOString(),
-        paymentMethod: receipt.payment_method || "cash",
-        transactionReference: receipt.receipt_no || "",
-        installmentNumber: receipt.installment_number || 0,
-        totalInstallments: receipt.total_installments || 0,
-        totalPaid: receipt.total_paid || 0,
-        outstandingBalance: receipt.outstanding_balance || 0,
-      });
-    }
+    downloadReceiptFromRpc(receipt, { loanReferenceFallback: receipt.loan_id?.slice(0, 8) });
   };
 
   const payMutation = useMutation({
