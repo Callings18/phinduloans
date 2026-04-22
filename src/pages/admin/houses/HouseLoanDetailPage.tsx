@@ -110,26 +110,6 @@ export default function HouseLoanDetailPage() {
     },
   });
 
-  const handleReceiptDownload = (receipt: PaymentReceiptData) => {
-    if (receipt.receipt_no) {
-      downloadRepaymentReceipt({
-        borrowerName: receipt.borrower_name || "",
-        borrowerPhone: receipt.borrower_phone || "",
-        borrowerEmail: receipt.borrower_email || "",
-        loanReference: loanId.slice(0, 8),
-        loanAmount: receipt.loan_amount || 0,
-        repaymentAmount: receipt.repayment_amount || 0,
-        paymentDate: new Date().toISOString(),
-        paymentMethod: receipt.payment_method || "cash",
-        transactionReference: receipt.receipt_no || "",
-        installmentNumber: receipt.installment_number || 0,
-        totalInstallments: receipt.total_installments || 0,
-        totalPaid: receipt.total_paid || 0,
-        outstandingBalance: receipt.outstanding_balance || 0,
-      });
-    }
-  };
-
   const payMutation = useMutation({
     mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
       if (!selectedAccount) throw new Error("Select the account to credit first");
@@ -146,7 +126,7 @@ export default function HouseLoanDetailPage() {
         title: receipt?.loan_completed ? "🎉 Loan fully paid!" : "✅ Payment recorded",
         description: `Receipt: ${receipt?.receipt_no}`,
       });
-      if (receipt) handleReceiptDownload(receipt);
+      downloadReceiptFromRpc(receipt, { loanReferenceFallback: loanId.slice(0, 8) });
     },
     onError: (e: Error) => {
       toast({ title: "Payment failed", description: e.message, variant: "destructive" });
