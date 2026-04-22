@@ -68,6 +68,7 @@ export function RecordHousePaymentDialog({
   const [accountId, setAccountId] = useState(defaultAccountId);
   const [transactionReference, setTransactionReference] = useState("");
   const [notes, setNotes] = useState("");
+  const [paidDate, setPaidDate] = useState<Date>(new Date());
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
@@ -89,12 +90,16 @@ export function RecordHousePaymentDialog({
       setAccountId(defaultAccountId);
       setTransactionReference("");
       setNotes("");
+      setPaidDate(new Date());
     }
   }, [open, repayment, defaultPaymentMethod, defaultAccountId]);
 
   const maxAmount = Number(repayment?.amount || 0);
   const numAmount = Number(amount);
   const exceedsOutstanding = numAmount > maxAmount + 0.001;
+  const todayStart = new Date();
+  todayStart.setHours(23, 59, 59, 999);
+  const isFutureDate = paidDate > todayStart;
 
   const handleSubmit = () => {
     if (!numAmount || numAmount <= 0) {
@@ -113,10 +118,15 @@ export function RecordHousePaymentDialog({
       });
       return;
     }
+    if (isFutureDate) {
+      toast({ title: "Invalid payment date", description: "Payment date cannot be in the future.", variant: "destructive" });
+      return;
+    }
     onSubmit({
       amount: numAmount,
       paymentMethod,
       accountId,
+      paidDate: format(paidDate, "yyyy-MM-dd"),
       transactionReference: transactionReference.trim() || undefined,
       notes: notes.trim() || undefined,
     });
