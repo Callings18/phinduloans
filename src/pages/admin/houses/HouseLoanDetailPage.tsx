@@ -272,11 +272,25 @@ export default function HouseLoanDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Button asChild variant="ghost" size="sm">
-        <Link to={`/admin/houses/${productCode}/loans`}>
-          <ArrowLeft size={14} className="mr-1" /> Back to loans
-        </Link>
-      </Button>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <Button asChild variant="ghost" size="sm">
+          <Link to={`/admin/houses/${productCode}/loans`}>
+            <ArrowLeft size={14} className="mr-1" /> Back to loans
+          </Link>
+        </Button>
+        <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
+          <FileText size={14} className="mr-1" /> Open full loan details
+        </Button>
+      </div>
+
+      <LoanDetailsModal
+        loan={loan as any}
+        open={fullDetailsOpen}
+        onOpenChange={(o) => {
+          setFullDetailsOpen(o);
+          if (!o) invalidateAll();
+        }}
+      />
 
       {/* Loan summary */}
       <Card>
