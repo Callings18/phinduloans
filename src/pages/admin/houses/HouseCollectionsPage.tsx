@@ -24,7 +24,7 @@ export default function HouseCollectionsPage() {
   const { toast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [selectedAccount, setSelectedAccount] = useState("");
-  const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
+  const [activeRepayment, setActiveRepayment] = useState<any | null>(null);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
