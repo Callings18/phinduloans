@@ -108,6 +108,7 @@ export default function HouseCollectionsPage() {
         paymentMethod: value.paymentMethod,
         accountId: value.accountId,
         transactionReference: value.transactionReference,
+        paidDate: value.paidDate,
       });
     },
     onSuccess: (receipt) => {
