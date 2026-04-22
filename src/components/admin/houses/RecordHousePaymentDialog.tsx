@@ -22,11 +22,16 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface RecordHousePaymentValue {
   amount: number;
   paymentMethod: string;
   accountId: string;
+  paidDate: string; // ISO yyyy-MM-dd
   transactionReference?: string;
   notes?: string;
 }
