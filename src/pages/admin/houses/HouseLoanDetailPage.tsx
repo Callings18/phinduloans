@@ -251,6 +251,14 @@ export default function HouseLoanDetailPage() {
   const paidCount = repayments.filter((r: any) => r.status === "paid").length;
   const pendingRepayments = repayments.filter((r: any) => r.status !== "paid" && r.status !== "cancelled");
 
+  const today = new Date();
+  const todayStr = format(today, "yyyy-MM-dd");
+  const overdueRows = pendingRepayments.filter((r: any) => r.due_date && r.due_date < todayStr);
+  const overdueAmount = overdueRows.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+  const oldestOverdueDays = overdueRows.length > 0
+    ? Math.max(...overdueRows.map((r: any) => differenceInCalendarDays(today, new Date(r.due_date))))
+    : 0;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
