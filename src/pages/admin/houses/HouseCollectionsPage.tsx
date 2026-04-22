@@ -54,7 +54,7 @@ export default function HouseCollectionsPage() {
   );
 
   const overdue = useMemo(() =>
-    (repayments ?? []).filter((r: any) => r.status !== "paid" && r.status !== "cancelled" && isPast(new Date(r.due_date)) && r.due_date !== todayStr),
+    (repayments ?? []).filter((r: any) => r.status !== "paid" && r.status !== "cancelled" && r.due_date && r.due_date < todayStr),
     [repayments, todayStr]
   );
 
