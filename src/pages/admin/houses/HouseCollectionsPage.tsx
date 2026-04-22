@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useHouseRepayments, useHouseLoans } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
-import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
+import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { RecordHousePaymentDialog, type RecordHousePaymentValue } from "@/components/admin/houses/RecordHousePaymentDialog";
 import { format } from "date-fns";
