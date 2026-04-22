@@ -232,27 +232,14 @@ export default function HouseCollectionsPage() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">#{r.installment_number}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          placeholder={String(r.amount)}
-                          className="w-20 h-7 text-xs"
-                          value={payAmounts[r.id] ?? ""}
-                          onChange={(e) => setPayAmounts((p) => ({ ...p, [r.id]: e.target.value }))}
-                        />
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-7 text-xs"
-                          disabled={payMutation.isPending || !selectedAccount}
-                          onClick={() => payMutation.mutate({
-                            repaymentId: r.id,
-                            amount: Number(payAmounts[r.id] || r.amount),
-                          })}
-                        >
-                          Pay
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        onClick={() => setActiveRepayment({ ...r, _borrowerName: loan?.full_name })}
+                      >
+                        Record payment
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -268,6 +255,17 @@ export default function HouseCollectionsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <RecordHousePaymentDialog
+        open={!!activeRepayment}
+        onOpenChange={(o) => { if (!o) setActiveRepayment(null); }}
+        repayment={activeRepayment}
+        borrowerName={activeRepayment?._borrowerName}
+        defaultPaymentMethod={paymentMethod}
+        defaultAccountId={selectedAccount}
+        isSubmitting={payMutation.isPending}
+        onSubmit={(value) => payMutation.mutate({ ...value, repaymentId: activeRepayment.id })}
+      />
     </div>
   );
 }
