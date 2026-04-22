@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 export interface RecordHousePaymentValue {
   amount: number;
@@ -56,6 +57,7 @@ export function RecordHousePaymentDialog({
   isSubmitting,
   onSubmit,
 }: RecordHousePaymentDialogProps) {
+  const { toast } = useToast();
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState(defaultPaymentMethod);
   const [accountId, setAccountId] = useState(defaultAccountId);
@@ -85,10 +87,27 @@ export function RecordHousePaymentDialog({
     }
   }, [open, repayment, defaultPaymentMethod, defaultAccountId]);
 
+  const maxAmount = Number(repayment?.amount || 0);
+  const numAmount = Number(amount);
+  const exceedsOutstanding = numAmount > maxAmount + 0.001;
+
   const handleSubmit = () => {
-    const numAmount = Number(amount);
-    if (!numAmount || numAmount <= 0) return;
-    if (!accountId) return;
+    if (!numAmount || numAmount <= 0) {
+      toast({ title: "Invalid amount", description: "Enter an amount greater than zero.", variant: "destructive" });
+      return;
+    }
+    if (!accountId) {
+      toast({ title: "Account required", description: "Select the account to credit.", variant: "destructive" });
+      return;
+    }
+    if (exceedsOutstanding) {
+      toast({
+        title: "Amount exceeds outstanding",
+        description: `Maximum allowed for this installment is K${maxAmount.toLocaleString()}. Adjust the amount and try again.`,
+        variant: "destructive",
+      });
+      return;
+    }
     onSubmit({
       amount: numAmount,
       paymentMethod,
@@ -125,14 +144,22 @@ export function RecordHousePaymentDialog({
               id="rp-amount"
               type="number"
               min="0"
+              max={maxAmount}
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              className={exceedsOutstanding ? "border-destructive" : ""}
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">
-              Scheduled: K{Number(repayment?.amount || 0).toLocaleString()}
-            </p>
+            {exceedsOutstanding ? (
+              <p className="text-xs text-destructive">
+                Cannot exceed outstanding K{maxAmount.toLocaleString()} for this installment.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Scheduled / outstanding: K{maxAmount.toLocaleString()}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -196,7 +223,7 @@ export function RecordHousePaymentDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !accountId || !Number(amount)}
+            disabled={isSubmitting || !accountId || !Number(amount) || exceedsOutstanding}
           >
             {isSubmitting ? "Recording…" : "Record payment"}
           </Button>
