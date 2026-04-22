@@ -16,8 +16,9 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { format } from "date-fns";
-import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import HouseLoanActions from "@/components/admin/houses/HouseLoanActions";
+import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
@@ -31,6 +32,7 @@ export default function HouseLoanDetailPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedDisbursementAccount, setSelectedDisbursementAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
+  const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
@@ -270,11 +272,25 @@ export default function HouseLoanDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Button asChild variant="ghost" size="sm">
-        <Link to={`/admin/houses/${productCode}/loans`}>
-          <ArrowLeft size={14} className="mr-1" /> Back to loans
-        </Link>
-      </Button>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <Button asChild variant="ghost" size="sm">
+          <Link to={`/admin/houses/${productCode}/loans`}>
+            <ArrowLeft size={14} className="mr-1" /> Back to loans
+          </Link>
+        </Button>
+        <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
+          <FileText size={14} className="mr-1" /> Open full loan details
+        </Button>
+      </div>
+
+      <LoanDetailsModal
+        loan={loan as any}
+        open={fullDetailsOpen}
+        onOpenChange={(o) => {
+          setFullDetailsOpen(o);
+          if (!o) invalidateAll();
+        }}
+      />
 
       {/* Loan summary */}
       <Card>
