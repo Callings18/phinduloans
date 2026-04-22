@@ -17,6 +17,7 @@ export interface RecordPaymentParams {
   paymentMethod?: string;
   accountId?: string | null;
   transactionReference?: string | null;
+  paidDate?: string | null; // ISO date "yyyy-MM-dd"
 }
 
 export interface PaymentReceiptData {
@@ -30,6 +31,7 @@ export interface PaymentReceiptData {
   loan_amount?: number;
   repayment_amount?: number;
   payment_method?: string;
+  paid_date?: string;
   installment_number?: number;
   total_installments?: number;
   total_paid?: number;
@@ -54,6 +56,7 @@ export async function recordLoanPayment(params: RecordPaymentParams): Promise<Pa
     p_payment_method: params.paymentMethod || "cash",
     p_account_id: params.accountId || null,
     p_transaction_reference: params.transactionReference || null,
+    p_paid_date: params.paidDate || null,
   });
   if (error) throw error;
   if (data && typeof data === "object" && !data.success) {
