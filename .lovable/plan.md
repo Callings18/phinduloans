@@ -1,79 +1,46 @@
 
 
-## Bring loan houses to full LMS parity + accounts reporting
+## Cleanup pass: overdue visibility + de-duplicate payment receipt logic
 
-Goal: every house behaves like the legacy admin loan flow (reloan, top-up, restructure, penalties, early settlement, schedule PDF), every disbursement and collection is tied to a funding account, and the Accounts module shows a true P&L with expenses and other income.
+Skipping the inline Pay button replacement on `HouseLoanDetailPage` (per your instruction — the "Credit to" selector flow is intentional). Focusing on the remaining issues from the review.
 
-### 1. Funding account is mandatory on every money movement
+### 1. Show overdue clearly on the loan detail schedule
 
-**House Disbursements page** (`HouseDisbursementsPage.tsx`)
-- Add an inline **"Funding account"** Select on every pending row (defaulting to the disbursement's `source_account_id` if one was set at loan creation).
-- "Disburse now" button is disabled until an account is picked.
-- Submit calls `complete_disbursement` RPC with `p_account_id` so the account is debited atomically and `account_transactions` gets a `disbursement` ledger row.
+In `HouseLoanDetailPage.tsx`, the repayments table currently shows generic status badges with no indication of how late an installment is. Add:
 
-**House Loan Detail page** (`HouseLoanDetailPage.tsx`)
-- Already enforces a funding account on disburse — keep.
-- Repayment "Pay" button: hard-disable until a "Credit to" account is selected (currently just warns). Show an inline error if user tries.
+- **Per-row overdue badge**: when `r.due_date < todayStr && status !== paid/cancelled`, render a red "Overdue" badge instead of "pending", plus a "X days late" hint next to the due date.
+- **Top summary line** above the schedule: `N overdue · K{amount} · oldest M days late` so staff see the situation at a glance without scanning every row.
+- **Light polish on the inline Pay row** (since we're keeping it): when an installment is overdue, highlight the row background subtly (`bg-destructive/5`) so the eye lands on it first.
 
-**House Collections page** (`HouseCollectionsPage.tsx`)
-- Same enforcement: "Pay" disabled and account selector highlighted in red until chosen.
+### 2. De-duplicate receipt-download logic
 
-**Marketeer collections** (`MarketeerDailyCollectionTracker.tsx`) — same enforcement pattern.
+Three near-identical copies of "generate receipt → download PDF → toast" exist in:
+- `HouseLoanDetailPage.tsx`
+- `HouseCollectionsPage.tsx`
+- `LoanDetailsModal.tsx`
 
-### 2. Restore the full legacy loan-actions toolbar inside each house
+Extract into one shared helper `src/utils/handlePaymentReceipt.ts` that takes the receipt payload + system settings and handles PDF generation, filename, and download. All three call sites switch to it. No behavior change — just less code to drift.
 
-`HouseLoanDetailPage.tsx` will gain the same actions the original `LoanDetailsModal` exposes, all routed through existing RPCs:
+### 3. Confirm Salary Advance "who is due" parity
 
-| Action | Backend used | When shown |
-|---|---|---|
-| Apply penalties | `apply_loan_penalties(p_loan_id)` | active / disbursed with overdue installments |
-| Early settlement quote + record | `calculate_early_settlement` then `record_loan_payment` per remaining row, debiting selected account | active |
-| Restructure (term, interest, frequency) | update `loan_applications` then regenerate via `createRepaymentScheduleForLoan` | active / disbursed |
-| Top-up (increase principal) | new disbursement against funding account using `complete_disbursement`, schedule regen | active |
-| Re-loan (new loan from completed) | duplicate `loan_applications` row, link `parent_loan_id`, route to disburse flow | completed |
-| Reverse last payment | flip latest paid `loan_repayments` back to `pending`, debit account back | admin-only |
-| Mark defaulted | `admin_mark_loan_defaulted(p_loan_id, p_reason)` | active / disbursed |
-| Download PDF schedule | `downloadLoanSchedule` (already added) | any with installments |
-| Loan history / events | read `loan_events` + `loan_status_transitions` | always |
-| Send borrower message | reuse staff messaging path | always |
+The shared `HouseLoansPage` already renders the Overdue column and filter pill, so Salary Advance inherits it automatically. I'll verify the route wiring renders the same component (no Salary-Advance-specific override) and, if the Collections page for that house is missing the top overdue summary card that Loans has, add a matching one for consistency.
 
-Each money-moving action requires an account selection in its dialog (top-up funding account, reversal target account, early settlement crediting account).
+### 4. Small dead-code sweep inside the touched files
 
-### 3. Accounts module = single source of financial truth
+Only inside files we're already editing — no broad page deletions:
+- Remove unused imports left over from prior refactors in `HouseLoanDetailPage.tsx`.
+- Remove the duplicated inline receipt-generation block once the shared helper is wired in.
 
-`AdminAccounts.tsx` and a new `AccountsReportTab`:
+### Files touched
 
-- Existing tabs (Accounts, Transaction History) stay.
-- New **"Profit & Loss"** tab built purely from `account_transactions` + `expenses`:
-  ```text
-  Income
-    Repayments (interest + principal split via loan_repayments.principal_paid)
-    Other income (account_transactions.transaction_type = 'other_income')
-  Expenses
-    Operating expenses (expenses table, status = paid)
-    Loan write-offs (loan_writeoffs.status = approved)
-  = Net Profit (period)
-  ```
-  Filters: date range + account.
-- New **"Other Income"** quick-action button: opens dialog → pick account → enter amount, source, note → inserts an `account_transactions` row of type `other_income` and credits the account balance (mirrors the existing "Add funds" path but tagged so P&L treats it as income, not capital injection).
-- Expenses (`AdminExpenses.tsx`) already debits accounts when marked paid via `admin_set_expense_status` — confirm and surface them in the new P&L report.
+- `src/utils/handlePaymentReceipt.ts` — new shared helper
+- `src/pages/admin/houses/HouseLoanDetailPage.tsx` — overdue badges + summary, row highlight, switch to shared receipt helper, drop unused imports
+- `src/pages/admin/houses/HouseCollectionsPage.tsx` — switch to shared receipt helper; add top overdue summary card if missing
+- `src/components/admin/LoanDetailsModal.tsx` — switch its receipt download to shared helper (no UX change)
 
-### 4. Cross-house consistency
+### Out of scope
 
-- All four houses (`SALARY_ADVANCE`, `COLLATERAL`, `BUSINESS`, `MOTOR_VEHICLE`, `MARKETEER`, `PAYDAY_SOFT`, `SALARY_ADVANCE_STAFF`) use the same `HouseLoanDetailPage` shell — adding actions there propagates to every house automatically.
-- House Reports page gains the same P&L block scoped to the house's loans (income from that house's repayments minus allocated expenses if `expenses.module = product_code`).
-
-### Technical details
-
-- New file: `src/components/admin/houses/HouseLoanActions.tsx` — collapsible toolbar of the actions above, reused from `HouseLoanDetailPage`.
-- New file: `src/components/admin/AccountsPnLReport.tsx` — date-range driven P&L using `account_transactions`, `expenses`, `loan_repayments`, `loan_writeoffs`.
-- New file: `src/components/admin/AddOtherIncomeDialog.tsx`.
-- Repository additions in `houseWorkflowRepository.ts`: `houseApplyPenalties`, `houseRestructureLoan`, `houseTopUpLoan`, `houseReloanFromCompleted`, `houseReversePayment`, `houseEarlySettlement`.
-- DB: no schema change needed — all RPCs already exist (`apply_loan_penalties`, `calculate_early_settlement`, `complete_disbursement`, `record_loan_payment`, `admin_mark_loan_defaulted`). One small migration to add a CHECK-tolerant `'other_income'` value to `account_transactions.transaction_type` if it's currently constrained, plus an index on `account_transactions(created_at, account_id)` for the P&L query.
-- Account selectors everywhere read from the same `accounts-active` query already cached, so balances refresh in real time after each transaction.
-
-### Out of scope (ask before doing)
-
-- Auto-allocating expenses to a specific loan house unless `expenses.module` already carries the product code.
-- Multi-currency P&L.
+- No changes to the inline Pay button / "Credit to" selector flow on the detail page (per your instruction).
+- No DB/RPC changes — `record_loan_payment` already supports everything.
+- No route or page deletions.
 
