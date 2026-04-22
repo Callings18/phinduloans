@@ -16,8 +16,9 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment, type PaymentReceiptData } from "@/services/repositories/houseWorkflowRepository";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { format } from "date-fns";
-import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import HouseLoanActions from "@/components/admin/houses/HouseLoanActions";
+import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
