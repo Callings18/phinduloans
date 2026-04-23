@@ -230,12 +230,12 @@ export default function HouseLoanDetailPage() {
           <div>
             <p className="text-xs text-muted-foreground">Progress</p>
             <p className="font-medium">
-              <span className="text-green-600">{paidCount}</span>/{repayments.length} installments
+              <span className="text-success">{paidCount}</span>/{repayments.length} installments
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Total Paid</p>
-            <p className="font-medium text-green-600">K{totalPaid.toLocaleString()}</p>
+            <p className="font-medium text-success">K{totalPaid.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Outstanding</p>
