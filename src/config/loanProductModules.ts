@@ -31,7 +31,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/SALARY_ADVANCE_STAFF/loans/create",
     housePath: "/admin/houses/SALARY_ADVANCE_STAFF",
     betaKey: "loan_create_salary_advance_staff",
-    enabled: false,
+    enabled: true,
   },
   {
     code: "PAYDAY_SOFT",
@@ -39,7 +39,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/PAYDAY_SOFT/loans/create",
     housePath: "/admin/houses/PAYDAY_SOFT",
     betaKey: "loan_create_payday_soft",
-    enabled: false,
+    enabled: true,
   },
   {
     code: "COLLATERAL",
@@ -47,7 +47,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/COLLATERAL/loans/create",
     housePath: "/admin/houses/COLLATERAL",
     betaKey: "loan_create_collateral",
-    enabled: false,
+    enabled: true,
   },
   {
     code: "BUSINESS",
@@ -55,7 +55,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/BUSINESS/loans/create",
     housePath: "/admin/houses/BUSINESS",
     betaKey: "loan_create_business",
-    enabled: false,
+    enabled: true,
   },
   {
     code: "MOTOR_VEHICLE",
@@ -63,7 +63,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/MOTOR_VEHICLE/loans/create",
     housePath: "/admin/houses/MOTOR_VEHICLE",
     betaKey: "loan_create_motor_vehicle",
-    enabled: false,
+    enabled: true,
   },
   {
     code: "MARKETEER",
