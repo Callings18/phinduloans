@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { notificationService } from "@/utils/notifications";
+import { notificationService } from "@/utils/notificationService";
 import { getSignedUrl } from "@/utils/storageHelpers";
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
