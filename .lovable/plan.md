@@ -1,46 +1,69 @@
 
 
-## Cleanup pass: overdue visibility + de-duplicate payment receipt logic
+## Stabilization plan: one clear workflow, no dead ends
 
-Skipping the inline Pay button replacement on `HouseLoanDetailPage` (per your instruction — the "Credit to" selector flow is intentional). Focusing on the remaining issues from the review.
+The system can do what the client needs — but the same action exists in 2-3 places with different rules, and several pages look interactive but are gated on hidden requirements. That's why "nothing works." Fix is **consolidation, not new features.**
 
-### 1. Show overdue clearly on the loan detail schedule
+### 1. Make every Pay button work the first time
 
-In `HouseLoanDetailPage.tsx`, the repayments table currently shows generic status badges with no indication of how late an installment is. Add:
+**Problem:** On `HouseLoanDetailPage`, each repayment row has a Pay button that's silently disabled until the user picks "Credit to" + "Method" at the top. No tooltip, no inline error.
 
-- **Per-row overdue badge**: when `r.due_date < todayStr && status !== paid/cancelled`, render a red "Overdue" badge instead of "pending", plus a "X days late" hint next to the due date.
-- **Top summary line** above the schedule: `N overdue · K{amount} · oldest M days late` so staff see the situation at a glance without scanning every row.
-- **Light polish on the inline Pay row** (since we're keeping it): when an installment is overdue, highlight the row background subtly (`bg-destructive/5`) so the eye lands on it first.
+**Fix:**
+- Keep the top "Method / Credit to" selectors (you said don't remove them).
+- When "Credit to" is empty, show an inline orange notice **above the schedule**: *"Select a 'Credit to' account above to enable Pay buttons"* — with a button that scrolls/focuses the selector.
+- On a disabled Pay button, add a tooltip: *"Choose a 'Credit to' account first."*
+- When the Pay amount exceeds the installment, show the same red border + toast already used in the dialog.
 
-### 2. De-duplicate receipt-download logic
+Result: Pay always either works or tells you exactly why it can't.
 
-Three near-identical copies of "generate receipt → download PDF → toast" exist in:
-- `HouseLoanDetailPage.tsx`
-- `HouseCollectionsPage.tsx`
-- `LoanDetailsModal.tsx`
+### 2. Remove duplicate disbursement & status flows
 
-Extract into one shared helper `src/utils/handlePaymentReceipt.ts` that takes the receipt payload + system settings and handles PDF generation, filename, and download. All three call sites switch to it. No behavior change — just less code to drift.
+**Problem:** Disbursement, approve/reject, default, and restructure exist in **three** places with subtle differences:
+- `HouseLoanDetailPage` "Servicing Actions" card
+- `HouseLoanActions` toolbar (also on detail page)
+- `LoanDetailsModal` ("Open full loan details")
 
-### 3. Confirm Salary Advance "who is due" parity
+Three buttons that do almost-the-same-thing is the #1 source of "it's broken."
 
-The shared `HouseLoansPage` already renders the Overdue column and filter pill, so Salary Advance inherits it automatically. I'll verify the route wiring renders the same component (no Salary-Advance-specific override) and, if the Collections page for that house is missing the top overdue summary card that Loans has, add a matching one for consistency.
+**Fix:** Pick `LoanDetailsModal` as the single source of truth (it's the most complete and the user already approved restoring it). On `HouseLoanDetailPage`:
+- Keep ONE prominent **"Open full loan details"** button (already there).
+- Keep the **Pay table** (collections workflow) and the **schedule download**.
+- **Remove** the duplicated "Servicing Actions" card and the `HouseLoanActions` toolbar from this page.
+- Top of page becomes a clean summary + "Open full loan details" + Pay table. Done.
 
-### 4. Small dead-code sweep inside the touched files
+### 3. Make "who is overdue" loud and obvious in every house
 
-Only inside files we're already editing — no broad page deletions:
-- Remove unused imports left over from prior refactors in `HouseLoanDetailPage.tsx`.
-- Remove the duplicated inline receipt-generation block once the shared helper is wired in.
+**Already done** on `HouseLoansPage` (red row, badge, days late) and `HouseCollectionsPage` (Overdue summary card, red badge per row). Verify Salary Advance + Marketeer routes use these same shared pages — confirmed from the routing they do.
+
+**Add** on `HouseLoanDetailPage`: the existing per-row red "Overdue" badge + "X days late" hint is already in code (lines ~256-260) but I'll confirm it's actually rendered in the table body when I implement.
+
+### 4. Hide houses you don't actually use
+
+**Problem:** `AdminHousesIndex` shows every product in `LOAN_PRODUCT_MODULES`. If only Salary Advance and Marketeer are real, the others are noise that look like they should work but don't have full data.
+
+**Fix:** Add a `enabled: true/false` flag per module in `loanProductModules.ts`. Default the unused ones to `false` so the houses index only shows the ones actually in use. You can flip them on later.
+
+### 5. Dead-code sweep (only files we touch)
+
+- Drop unused imports in `HouseLoanDetailPage.tsx` after removing the Servicing Actions card (`Select*`, `HouseLoanActions`, status mutation if no longer needed).
+- Remove the `selectedDisbursementAccount` / `disbursementMutation` / `statusMutation` blocks from this page (they move to the modal).
+- Net effect: ~120 lines of duplicate UI/logic removed from one file.
 
 ### Files touched
 
-- `src/utils/handlePaymentReceipt.ts` — new shared helper
-- `src/pages/admin/houses/HouseLoanDetailPage.tsx` — overdue badges + summary, row highlight, switch to shared receipt helper, drop unused imports
-- `src/pages/admin/houses/HouseCollectionsPage.tsx` — switch to shared receipt helper; add top overdue summary card if missing
-- `src/components/admin/LoanDetailsModal.tsx` — switch its receipt download to shared helper (no UX change)
+- `src/pages/admin/houses/HouseLoanDetailPage.tsx` — remove duplicate servicing actions, add inline "select Credit to" hint, tooltip on disabled Pay, confirm overdue badge in table body
+- `src/pages/admin/houses/AdminHousesIndex.tsx` — filter modules by `enabled`
+- `src/config/loanProductModules.ts` — add `enabled` flag per module
+- (Verify only, no edit) `HouseCollectionsPage.tsx`, `HouseLoansPage.tsx`
 
 ### Out of scope
 
-- No changes to the inline Pay button / "Credit to" selector flow on the detail page (per your instruction).
-- No DB/RPC changes — `record_loan_payment` already supports everything.
-- No route or page deletions.
+- No DB/RPC changes.
+- No changes to `LoanDetailsModal` itself (it's the source of truth).
+- No new pages, no new features. Pure consolidation.
+- Keeping the "Credit to / Method" top selector exactly as you asked.
+
+### Question before I start
+
+Which product houses should stay visible on the houses index? My default: **Salary Advance + Marketeer enabled, the rest hidden.** If you want a different set, tell me and I'll set it accordingly.
 
