@@ -13,6 +13,7 @@ export interface LoanProductModuleDefinition {
   createPath: string;
   housePath: string;
   betaKey: string;
+  enabled: boolean;
 }
 
 export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
@@ -22,6 +23,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/SALARY_ADVANCE/loans/create",
     housePath: "/admin/houses/SALARY_ADVANCE",
     betaKey: "loan_create_salary_advance",
+    enabled: true,
   },
   {
     code: "SALARY_ADVANCE_STAFF",
@@ -29,6 +31,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/SALARY_ADVANCE_STAFF/loans/create",
     housePath: "/admin/houses/SALARY_ADVANCE_STAFF",
     betaKey: "loan_create_salary_advance_staff",
+    enabled: false,
   },
   {
     code: "PAYDAY_SOFT",
@@ -36,6 +39,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/PAYDAY_SOFT/loans/create",
     housePath: "/admin/houses/PAYDAY_SOFT",
     betaKey: "loan_create_payday_soft",
+    enabled: false,
   },
   {
     code: "COLLATERAL",
@@ -43,6 +47,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/COLLATERAL/loans/create",
     housePath: "/admin/houses/COLLATERAL",
     betaKey: "loan_create_collateral",
+    enabled: false,
   },
   {
     code: "BUSINESS",
@@ -50,6 +55,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/BUSINESS/loans/create",
     housePath: "/admin/houses/BUSINESS",
     betaKey: "loan_create_business",
+    enabled: false,
   },
   {
     code: "MOTOR_VEHICLE",
@@ -57,6 +63,7 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/MOTOR_VEHICLE/loans/create",
     housePath: "/admin/houses/MOTOR_VEHICLE",
     betaKey: "loan_create_motor_vehicle",
+    enabled: false,
   },
   {
     code: "MARKETEER",
@@ -64,5 +71,6 @@ export const LOAN_PRODUCT_MODULES: LoanProductModuleDefinition[] = [
     createPath: "/admin/houses/MARKETEER/loans/create",
     housePath: "/admin/houses/MARKETEER",
     betaKey: "marketeer",
+    enabled: true,
   },
 ];

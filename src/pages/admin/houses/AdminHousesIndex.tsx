@@ -11,7 +11,7 @@ export default function AdminHousesIndex() {
         <h1 className="text-3xl font-bold text-foreground">Loan Product Houses</h1>
         <p className="text-muted-foreground text-sm">Open an independent product house and run full operations.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {LOAN_PRODUCT_MODULES.map((module) => (
+          {LOAN_PRODUCT_MODULES.filter((m) => m.enabled).map((module) => (
             <Card key={module.code}>
               <CardHeader><CardTitle>{module.name}</CardTitle></CardHeader>
               <CardContent>

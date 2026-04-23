@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,17 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useHouseLoans, useHouseProduct } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
-import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { calculateLoan } from "@/utils/loanCalculations";
-import { houseMarkDisbursementCompleted, houseSetLoanStatus, recordLoanPayment } from "@/services/repositories/houseWorkflowRepository";
+import { recordLoanPayment } from "@/services/repositories/houseWorkflowRepository";
 import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
-import { differenceInCalendarDays } from "date-fns";
-import { format } from "date-fns";
-import { ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
-import HouseLoanActions from "@/components/admin/houses/HouseLoanActions";
+import { differenceInCalendarDays, format } from "date-fns";
+import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 
 export default function HouseLoanDetailPage() {
@@ -31,9 +29,14 @@ export default function HouseLoanDetailPage() {
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [selectedAccount, setSelectedAccount] = useState("");
-  const [selectedDisbursementAccount, setSelectedDisbursementAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
+  const creditToRef = useRef<HTMLButtonElement | null>(null);
+
+  const focusCreditTo = () => {
+    creditToRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    creditToRef.current?.focus();
+  };
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts-active"],
@@ -76,20 +79,6 @@ export default function HouseLoanDetailPage() {
     },
   });
 
-  const { data: pendingDisbursement } = useQuery({
-    queryKey: ["house-loan-disbursement", loanId],
-    enabled: Boolean(loanId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("disbursements")
-        .select("id, status, source_account_id")
-        .eq("loan_id", loanId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).find((item: any) => !["completed", "failed", "cancelled"].includes(item.status)) ?? null;
-    },
-  });
-
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["house-loan-repayments", loanId] });
     queryClient.invalidateQueries({ queryKey: ["house-loan-disbursement", loanId] });
@@ -99,20 +88,13 @@ export default function HouseLoanDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
   };
 
-  const statusMutation = useMutation({
-    mutationFn: (status: string) => houseSetLoanStatus(loanId, status),
-    onSuccess: async () => {
-      invalidateAll();
-      toast({ title: "Loan updated" });
-    },
-    onError: (e: Error) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    },
-  });
-
   const payMutation = useMutation({
-    mutationFn: async ({ repaymentId, amount }: { repaymentId: string; amount: number }) => {
+    mutationFn: async ({ repaymentId, amount, expected }: { repaymentId: string; amount: number; expected: number }) => {
       if (!selectedAccount) throw new Error("Select the account to credit first");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid payment amount");
+      if (amount > expected * 1.5) {
+        throw new Error(`Amount K${amount.toLocaleString()} exceeds installment K${expected.toLocaleString()} by more than 50%`);
+      }
       return recordLoanPayment({
         repaymentId,
         amount,
@@ -130,72 +112,6 @@ export default function HouseLoanDetailPage() {
     },
     onError: (e: Error) => {
       toast({ title: "Payment failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const disbursementMutation = useMutation({
-    mutationFn: async () => {
-      if (!loan) throw new Error("Loan not found");
-      const accountId = pendingDisbursement?.source_account_id || selectedDisbursementAccount;
-      if (!accountId) throw new Error("Select the funding account to debit");
-
-      let disbursementId = pendingDisbursement?.id || null;
-      if (!disbursementId) {
-        const calc = calculateLoan(
-          Number(loan.loan_amount || 0),
-          Number(loan.loan_term_months || 0),
-          {
-            product_name: product?.name || null,
-            product_code: product?.product_code || productCode,
-            pricing_tiers: product?.pricing_tiers,
-            interest_rate: Number(product?.interest_rate || 0),
-            interest_period: (product?.interest_period as any) || null,
-            interest_type: (product?.interest_type as any) || null,
-            processing_fee_percent: product?.processing_fee_percent || 0,
-            enforcement_fee_percent: product?.enforcement_fee_percent || 0,
-            insurance_percent: product?.insurance_percent || 0,
-            vat_percent: product?.vat_percent || 0,
-            platform_fee_percent: product?.platform_fee_percent || 0,
-            term_unit: (product?.term_unit as any) || null,
-          },
-          ((loan.term_unit || product?.term_unit || "months") as any),
-        );
-
-        const { data: inserted, error: insertError } = await supabase
-          .from("disbursements")
-          .insert({
-            loan_id: loan.id,
-            amount: Number(calc.disbursementAmount || loan.loan_amount || 0),
-            disbursement_method: "cash",
-            status: "pending",
-            source_account_id: accountId,
-          })
-          .select("id")
-          .single();
-        if (insertError) throw insertError;
-        disbursementId = inserted.id;
-      }
-
-      await houseMarkDisbursementCompleted({ disbursementId, accountId });
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: Number(loan.loan_term_months || 0),
-          total_repayment: Number(loan.total_repayment || 0),
-          monthly_payment: Number((loan as any).monthly_payment || 0),
-          loan_product_id: (loan as any).loan_product_id || null,
-          term_unit: loan.term_unit || product?.term_unit || "months",
-        },
-        supabase,
-      );
-    },
-    onSuccess: () => {
-      invalidateAll();
-      toast({ title: "Disbursement completed and account debited" });
-    },
-    onError: (e: Error) => {
-      toast({ title: "Disbursement failed", description: e.message, variant: "destructive" });
     },
   });
 
