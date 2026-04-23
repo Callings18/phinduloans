@@ -42,23 +42,23 @@ export interface CompleteDisbursementParams {
  * This handles: marking repayment paid, crediting the account, auto-completing loan, audit logging.
  */
 export async function recordLoanPayment(params: RecordPaymentParams): Promise<PaymentReceiptData> {
-  const { data, error } = await (supabase.rpc as any)("record_loan_payment", {
-    p_repayment_id: params.repaymentId,
-    p_amount: params.amount,
-    p_payment_method: params.paymentMethod || "cash",
-    p_account_id: params.accountId || null,
-    p_transaction_reference: params.transactionReference || null,
-    p_paid_date: params.paidDate || null,
-  });
-  if (error) throw error;
-  if (data && typeof data === "object" && !data.success) {
-    throw new Error(data.error || "Payment recording failed");
-  }
-  return data as PaymentReceiptData;
+  const res = await callRpc<PaymentReceiptData>(
+    "record_loan_payment",
+    {
+      p_repayment_id: params.repaymentId,
+      p_amount: params.amount,
+      p_payment_method: params.paymentMethod || "cash",
+      p_account_id: params.accountId || null,
+      p_transaction_reference: params.transactionReference || null,
+      p_paid_date: params.paidDate || null,
+    },
+    "Payment recording failed",
+  );
+  if (!res.success) throw new Error(res.error);
+  return { success: true, ...res.data } as PaymentReceiptData;
 }
 
 export async function houseSetLoanStatus(loanId: string, status: string) {
-  // Use the existing transition_loan_status RPC
   const actionMap: Record<string, string> = {
     approved: "approve",
     disbursed: "disburse",
@@ -68,15 +68,12 @@ export async function houseSetLoanStatus(loanId: string, status: string) {
     defaulted: "default",
   };
   const action = actionMap[status] || status;
-  const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
-    p_loan_id: loanId,
-    p_action: action,
-    p_reason: null,
-  });
-  if (error) throw error;
-  if (data && typeof data === "object" && !data.success && !data.ok) {
-    throw new Error(data.error || "Status transition failed");
-  }
+  const res = await callRpc(
+    "transition_loan_status",
+    { p_loan_id: loanId, p_action: action, p_reason: null },
+    "Status transition failed",
+  );
+  if (!res.success) throw new Error(res.error);
 }
 
 export async function houseStageReview(loanId: string, stage: HouseReviewStage) {
@@ -86,25 +83,25 @@ export async function houseStageReview(loanId: string, stage: HouseReviewStage) 
     manager: "approve",
   };
   const action = actionMap[stage] || stage;
-  const { data, error } = await (supabase.rpc as any)("transition_loan_status", {
-    p_loan_id: loanId,
-    p_action: action,
-    p_reason: null,
-  });
-  if (error) throw error;
-  if (data && typeof data === "object" && !data.success && !data.ok) {
-    throw new Error(data.error || "Review action failed");
-  }
+  const res = await callRpc(
+    "transition_loan_status",
+    { p_loan_id: loanId, p_action: action, p_reason: null },
+    "Review action failed",
+  );
+  if (!res.success) throw new Error(res.error);
 }
 
 export async function houseMarkDisbursementCompleted(params: CompleteDisbursementParams) {
-  const { data, error } = await (supabase.rpc as any)("complete_disbursement", {
-    p_disbursement_id: params.disbursementId,
-    p_account_id: params.accountId,
-    p_transaction_reference: params.transactionReference || null,
-  });
-  if (error) throw error;
-  assertRpcOk(data, "Disbursement completion failed");
+  const res = await callRpc(
+    "complete_disbursement",
+    {
+      p_disbursement_id: params.disbursementId,
+      p_account_id: params.accountId,
+      p_transaction_reference: params.transactionReference || null,
+    },
+    "Disbursement completion failed",
+  );
+  if (!res.success) throw new Error(res.error);
 }
 
 export async function houseMarkRepaymentPaid(repaymentId: string) {
