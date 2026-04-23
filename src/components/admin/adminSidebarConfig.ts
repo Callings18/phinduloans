@@ -25,8 +25,6 @@ import {
   Receipt,
   ClipboardList,
   Percent,
-  Rocket,
-  CheckSquare,
   ToggleLeft,
 } from "lucide-react";
 
@@ -68,7 +66,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
         betaKey: "loans_by_product",
         children: [
           { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
-          { icon: LayoutGrid, label: "Loan Product Dashboards", path: "/admin/loan-product-dashboards", perm: { module: "loans", action: "view" }, betaKey: "product_dashboards" },
         ],
       },
     ],
@@ -87,8 +84,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: Banknote, label: "Repayments", path: "/admin/repayments", perm: { module: "repayments", action: "view" } },
       { icon: ListOrdered, label: "Bulk repayments", path: "/admin/bulk-repayments", perm: { module: "repayments", action: "view" } },
       { icon: Wallet, label: "Accounts", path: "/admin/accounts", perm: { module: "disbursement", action: "view" } },
-      // Wallets module hidden until built (was "Coming Soon"). Re-enable by restoring this entry.
-      // { icon: Wallet, label: "Wallets", path: "/admin/wallets", perm: { module: "wallets", action: "view" } },
       { icon: Receipt, label: "Expenses", path: "/admin/expenses", perm: { module: "expenses", action: "view" } },
     ],
   },
@@ -129,8 +124,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "Launch & operations",
     items: [
-      { icon: Rocket, label: "Production readiness", path: "/admin/production-readiness", adminOnly: true },
-      { icon: CheckSquare, label: "UAT checklist", path: "/admin/uat-checklist", adminOnly: true },
       { icon: ToggleLeft, label: "Feature flags", path: "/admin/feature-flags", adminOnly: true },
     ],
   },

@@ -12,7 +12,6 @@ const houseTabs = [
   { key: "dashboard", label: "Dashboard", icon: Home, path: "" },
   { key: "borrowers", label: "Borrowers", icon: Users, path: "borrowers" },
   { key: "loans", label: "Loans", icon: CreditCard, path: "loans" },
-  { key: "review", label: "Review", icon: ClipboardCheck, path: "review" },
   { key: "disbursements", label: "Disbursements", icon: Banknote, path: "disbursements" },
   { key: "collections", label: "Collections", icon: AlertTriangle, path: "collections" },
   { key: "reports", label: "Reports", icon: BarChart3, path: "reports" },
