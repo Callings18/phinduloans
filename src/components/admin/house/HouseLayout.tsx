@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Home, Users, CreditCard, ClipboardCheck, Banknote, AlertTriangle, BarChart3 } from "lucide-react";
+import { Home, Users, CreditCard, Banknote, AlertTriangle, BarChart3 } from "lucide-react";
 
 const houseTabs = [
   { key: "dashboard", label: "Dashboard", icon: Home, path: "" },
