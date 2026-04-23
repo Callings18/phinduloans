@@ -285,6 +285,8 @@ const defaultFormData = {
   max_guarantee_percent: 80,
   guarantee_fee_percent: 0,
   eligible_locations: null as string[] | null,
+  legal_fee_percent: 0,
+  legal_fee_deduction_mode: "none" as "none" | "upfront_net" | "added_to_repayment",
 };
 
 // Type for preview calculation result
@@ -708,6 +710,8 @@ const AdminLoanProducts = () => {
       max_guarantee_percent: product.max_guarantee_percent ?? 80,
       guarantee_fee_percent: product.guarantee_fee_percent ?? 0,
       eligible_locations: (product as any).eligible_locations || null,
+      legal_fee_percent: Number((product as any).legal_fee_percent ?? 0),
+      legal_fee_deduction_mode: (product as any).legal_fee_deduction_mode || "none",
     });
     setIsDialogOpen(true);
   };
@@ -774,6 +778,8 @@ const AdminLoanProducts = () => {
       max_guarantee_percent: formData.max_guarantee_percent,
       guarantee_fee_percent: formData.guarantee_fee_percent,
       eligible_locations: (formData as any).eligible_locations,
+      legal_fee_percent: (formData as any).legal_fee_percent ?? 0,
+      legal_fee_deduction_mode: (formData as any).legal_fee_deduction_mode ?? "none",
     };
 
     if (editingProduct) {
@@ -1297,7 +1303,14 @@ const AdminLoanProducts = () => {
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-sm">
                             <Percent size={14} className="text-muted-foreground" />
-                            {product.interest_rate}% <span className="text-xs text-muted-foreground">/{product.interest_period?.charAt(0)}</span>
+                            {product.interest_rate}%
+                            <span className="text-xs text-muted-foreground">
+                              {(() => {
+                                const p = (product.interest_period || "per_month").replace(/^per_/, "");
+                                const map: Record<string, string> = { day: "/day", week: "/week", month: "/month", year: "/year", loan: "/loan", daily: "/day", weekly: "/week", monthly: "/month", yearly: "/year" };
+                                return map[p] || `/${p}`;
+                              })()}
+                            </span>
                           </div>
                           <p className="text-xs text-muted-foreground capitalize">{product.interest_type}</p>
                         </div>
