@@ -2197,6 +2197,8 @@ export type Database = {
           late_fee_fixed_amount: number | null
           late_payment_penalty_percent: number | null
           legal_escalation_days: number | null
+          legal_fee_deduction_mode: string
+          legal_fee_percent: number
           max_age: number | null
           max_amount: number
           max_concurrent_loans: number | null
@@ -2269,6 +2271,8 @@ export type Database = {
           late_fee_fixed_amount?: number | null
           late_payment_penalty_percent?: number | null
           legal_escalation_days?: number | null
+          legal_fee_deduction_mode?: string
+          legal_fee_percent?: number
           max_age?: number | null
           max_amount?: number
           max_concurrent_loans?: number | null
@@ -2341,6 +2345,8 @@ export type Database = {
           late_fee_fixed_amount?: number | null
           late_payment_penalty_percent?: number | null
           legal_escalation_days?: number | null
+          legal_fee_deduction_mode?: string
+          legal_fee_percent?: number
           max_age?: number | null
           max_amount?: number
           max_concurrent_loans?: number | null
