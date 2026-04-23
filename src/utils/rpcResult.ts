@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { mapSupabaseError } from "@/utils/mapSupabaseError";
 
 export type RpcResult<T = Record<string, unknown>> =
-  | { success: true; data: T }
+  | { success: true; data: T; error?: undefined }
   | { success: false; error: string; data?: undefined };
 
 type RpcEnvelope = {
