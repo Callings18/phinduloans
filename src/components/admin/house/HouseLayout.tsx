@@ -6,13 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Home, Users, CreditCard, ClipboardCheck, Banknote, AlertTriangle, BarChart3 } from "lucide-react";
+import { Home, Users, CreditCard, Banknote, AlertTriangle, BarChart3 } from "lucide-react";
 
 const houseTabs = [
   { key: "dashboard", label: "Dashboard", icon: Home, path: "" },
   { key: "borrowers", label: "Borrowers", icon: Users, path: "borrowers" },
   { key: "loans", label: "Loans", icon: CreditCard, path: "loans" },
-  { key: "review", label: "Review", icon: ClipboardCheck, path: "review" },
   { key: "disbursements", label: "Disbursements", icon: Banknote, path: "disbursements" },
   { key: "collections", label: "Collections", icon: AlertTriangle, path: "collections" },
   { key: "reports", label: "Reports", icon: BarChart3, path: "reports" },

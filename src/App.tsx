@@ -41,7 +41,6 @@ import AdminPMIC from "./pages/admin/AdminPMIC";
 import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
-import AdminWallets from "./pages/admin/AdminWallets";
 import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
 import AdminPayrollTaxConfig from "./pages/admin/AdminPayrollTaxConfig";
@@ -49,13 +48,8 @@ import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
-import AdminProductionReadiness from "./pages/admin/AdminProductionReadiness";
-import AdminUatChecklist from "./pages/admin/AdminUatChecklist";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
-import AdminLoanProductDashboards from "./pages/admin/AdminLoanProductDashboards";
-import AdminLoanProductScopedDashboard from "./pages/admin/AdminLoanProductScopedDashboard";
 import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
-import MarketeerHouseDashboard from "./pages/admin/houses/MarketeerHouseDashboard";
 import HouseLayout from "./components/admin/house/HouseLayout";
 import HouseDashboardPage from "./pages/admin/houses/HouseDashboardPage";
 import HouseBorrowersPage from "./pages/admin/houses/HouseBorrowersPage";
@@ -240,31 +234,11 @@ function App() {
                       }
                     />
                     <Route
-                      path="loans/products/:productId/dashboard"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
-                            <AdminLoanProductScopedDashboard />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
                       path="loans"
                       element={
                         <ErrorBoundary>
                           <PermissionRoute permission={{ module: "loans", action: "view" }}>
                             <AdminLoans />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="loan-product-dashboards"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
-                            <AdminLoanProductDashboards />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -487,16 +461,6 @@ function App() {
                       }
                     />
                     <Route
-                      path="wallets"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "wallets", action: "view" }}>
-                            <AdminWallets />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
                       path="hr"
                       element={
                         <ErrorBoundary>
@@ -575,26 +539,6 @@ function App() {
                             ]}
                           >
                             <AdminCRBQueue />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="production-readiness"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminProductionReadiness />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="uat-checklist"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminUatChecklist />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
