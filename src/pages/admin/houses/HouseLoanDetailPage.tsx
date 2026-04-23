@@ -292,7 +292,7 @@ export default function HouseLoanDetailPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Credit to:</span>
             <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="Select account" /></SelectTrigger>
+              <SelectTrigger ref={creditToRef} className="w-44 h-8 text-xs"><SelectValue placeholder="Select account" /></SelectTrigger>
               <SelectContent>
                 {accounts.map((a: any) => (
                   <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
