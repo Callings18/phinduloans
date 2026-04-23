@@ -260,47 +260,20 @@ export default function HouseLoanDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Servicing actions */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Servicing Actions</CardTitle></CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {loan.status === "pending" && (
-            <>
-              <Button size="sm" onClick={() => statusMutation.mutate("approved")} disabled={statusMutation.isPending}>Approve</Button>
-              <Button size="sm" variant="destructive" onClick={() => statusMutation.mutate("rejected")} disabled={statusMutation.isPending}>Reject</Button>
-            </>
-          )}
-          {["approved", "contract_signing", "awaiting_disbursement"].includes(loan.status) && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={selectedDisbursementAccount} onValueChange={setSelectedDisbursementAccount}>
-                <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="Funding account" /></SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a: any) => (
-                    <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button size="sm" variant="outline" onClick={() => disbursementMutation.mutate()} disabled={disbursementMutation.isPending || (!pendingDisbursement?.source_account_id && !selectedDisbursementAccount)}>
-                {pendingDisbursement ? "Complete disbursement" : "Disburse from account"}
-              </Button>
-            </div>
-          )}
-          {loan.status === "disbursed" && (
-            <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("active")} disabled={statusMutation.isPending}>Activate</Button>
-          )}
-          {["active", "disbursed"].includes(loan.status) && (
-            <Button size="sm" variant="destructive" onClick={() => statusMutation.mutate("defaulted")} disabled={statusMutation.isPending}>Default</Button>
-          )}
-          {!["pending", "rejected", "completed", "defaulted"].includes(loan.status) && (
-            <span className="text-xs text-muted-foreground self-center ml-2">
-              Current: <strong>{loan.status?.replace(/_/g, " ")}</strong>
-            </span>
-          )}
-        </CardContent>
-      </Card>
+      {/* Servicing actions live in the full loan details modal — keeps a single source of truth */}
 
-      {/* Advanced loan actions toolbar (parity with legacy LoanDetailsModal) */}
-      <HouseLoanActions loan={loan} product={product} productCode={productCode} onChanged={invalidateAll} />
+      {/* Hint when Credit-to is missing */}
+      {pendingRepayments.length > 0 && !selectedAccount && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between gap-3 flex-wrap">
+            <span>Select a <strong>“Credit to”</strong> account below to enable the Pay buttons.</span>
+            <Button size="sm" variant="outline" onClick={focusCreditTo}>
+              Choose account
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Payment settings */}
       {pendingRepayments.length > 0 && (
