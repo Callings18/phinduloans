@@ -1,7 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { FlaskConical } from "lucide-react";
 
-export function BetaBadge({ className }: { className?: string }) {
+interface BetaBadgeProps {
+  className?: string;
+}
+
+const BetaBadge = ({ className }: BetaBadgeProps) => {
   return (
     <Badge
       variant="outline"
@@ -11,4 +15,7 @@ export function BetaBadge({ className }: { className?: string }) {
       Beta
     </Badge>
   );
-}
+};
+
+export { BetaBadge };
+export default BetaBadge;
