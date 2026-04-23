@@ -374,22 +374,34 @@ export default function HouseLoanDetailPage() {
                             value={payAmounts[r.id] ?? ""}
                             onChange={(e) => setPayAmounts((p) => ({ ...p, [r.id]: e.target.value }))}
                           />
-                          <Button
-                            size="sm"
-                            variant={isOverdue ? "destructive" : "outline"}
-                            className="h-7 text-xs"
-                            disabled={payMutation.isPending || !selectedAccount}
-                            onClick={() => payMutation.mutate({
-                              repaymentId: r.id,
-                              amount: Number(payAmounts[r.id] || r.amount),
-                            })}
-                          >
-                            Pay
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    size="sm"
+                                    variant={isOverdue ? "destructive" : "outline"}
+                                    className="h-7 text-xs"
+                                    disabled={payMutation.isPending || !selectedAccount}
+                                    onClick={() => payMutation.mutate({
+                                      repaymentId: r.id,
+                                      amount: Number(payAmounts[r.id] || r.amount),
+                                      expected: Number(r.amount || 0),
+                                    })}
+                                  >
+                                    Pay
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {!selectedAccount && (
+                                <TooltipContent>Choose a “Credit to” account first.</TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       )}
                       {r.status === "paid" && (
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <CheckCircle2 className="h-4 w-4 text-success" />
                       )}
                     </TableCell>
                   </TableRow>
