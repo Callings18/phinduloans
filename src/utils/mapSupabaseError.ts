@@ -33,6 +33,9 @@ export function mapSupabaseError(err: unknown, fallback = "Something went wrong.
   }
 
   if (code === "23505" || lower.includes("unique constraint") || lower.includes("duplicate key")) {
+    if (lower.includes("loan_applications_open_nrc_phone_uniq")) {
+      return "You already have an active loan application. Please wait for it to be processed before submitting another.";
+    }
     return "This record already exists or conflicts with an existing value.";
   }
 
