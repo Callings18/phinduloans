@@ -4044,6 +4044,7 @@ export type Database = {
         }
         Returns: Json
       }
+      cron_apply_daily_penalties: { Args: never; Returns: undefined }
       get_my_permissions: {
         Args: never
         Returns: {
