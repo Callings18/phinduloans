@@ -9,6 +9,7 @@ import { format, isPast } from "date-fns";
 import { Banknote, TrendingUp, AlertTriangle, CheckCircle2, Clock, Users } from "lucide-react";
 import MarketeerDailyCollectionTracker from "@/components/admin/marketeer/MarketeerDailyCollectionTracker";
 import MarketeerTierBreakdown from "@/components/admin/marketeer/MarketeerTierBreakdown";
+import HouseProductConfigCard from "@/components/admin/house/HouseProductConfigCard";
 
 type RepaymentSummaryRow = {
   amount: number | null;
@@ -155,6 +156,8 @@ export default function HouseDashboardPage() {
           </Card>
         </div>
       )}
+
+      <HouseProductConfigCard productCode={productCode} />
 
       {productCode === "MARKETEER" && (
         <>
