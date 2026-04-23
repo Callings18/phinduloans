@@ -1,15 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import { callRpc } from "@/utils/rpcResult";
 
 type HouseReviewStage = "loan_officer" | "finance" | "manager";
-
-function assertRpcOk(data: unknown, fallbackMessage: string) {
-  if (typeof data === "object" && data !== null && "ok" in data) {
-    const result = data as { ok?: boolean; error?: string };
-    if (result.ok === false) {
-      throw new Error(result.error || fallbackMessage);
-    }
-  }
-}
 
 export interface RecordPaymentParams {
   repaymentId: string;
