@@ -285,6 +285,8 @@ const defaultFormData = {
   max_guarantee_percent: 80,
   guarantee_fee_percent: 0,
   eligible_locations: null as string[] | null,
+  legal_fee_percent: 0,
+  legal_fee_deduction_mode: "none" as "none" | "upfront_net" | "added_to_repayment",
 };
 
 // Type for preview calculation result
@@ -708,6 +710,8 @@ const AdminLoanProducts = () => {
       max_guarantee_percent: product.max_guarantee_percent ?? 80,
       guarantee_fee_percent: product.guarantee_fee_percent ?? 0,
       eligible_locations: (product as any).eligible_locations || null,
+      legal_fee_percent: Number((product as any).legal_fee_percent ?? 0),
+      legal_fee_deduction_mode: (product as any).legal_fee_deduction_mode || "none",
     });
     setIsDialogOpen(true);
   };
@@ -774,6 +778,8 @@ const AdminLoanProducts = () => {
       max_guarantee_percent: formData.max_guarantee_percent,
       guarantee_fee_percent: formData.guarantee_fee_percent,
       eligible_locations: (formData as any).eligible_locations,
+      legal_fee_percent: (formData as any).legal_fee_percent ?? 0,
+      legal_fee_deduction_mode: (formData as any).legal_fee_deduction_mode ?? "none",
     };
 
     if (editingProduct) {
@@ -918,8 +924,8 @@ const AdminLoanProducts = () => {
                   </div>
                 </div>
 
-                {/* Row 3: Interest Rate & Processing Fee */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Row 3: Interest Rate, Period, Processing Fee */}
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Interest Rate (%) *</Label>
                     <Input
@@ -928,7 +934,23 @@ const AdminLoanProducts = () => {
                       value={formData.interest_rate}
                       onChange={(e) => setFormData({ ...formData, interest_rate: Number(e.target.value) })}
                     />
-                    <p className="text-xs text-muted-foreground">Rate per month</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Interest Period *</Label>
+                    <Select
+                      value={formData.interest_period || "per_month"}
+                      onValueChange={(v) => setFormData({ ...formData, interest_period: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="per_day">% per day</SelectItem>
+                        <SelectItem value="per_week">% per week</SelectItem>
+                        <SelectItem value="per_month">% per month</SelectItem>
+                        <SelectItem value="per_year">% per year</SelectItem>
+                        <SelectItem value="per_loan">% per loan (one-time)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">How the rate is applied</p>
                   </div>
                   <div className="space-y-2">
                     <Label>Processing Fee (%)</Label>
@@ -938,6 +960,36 @@ const AdminLoanProducts = () => {
                       value={formData.processing_fee_percent}
                       onChange={(e) => setFormData({ ...formData, processing_fee_percent: Number(e.target.value) })}
                     />
+                  </div>
+                </div>
+
+                {/* Row 3b: Legal Fee */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Legal/Enforcement Fee (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={(formData as any).legal_fee_percent ?? 0}
+                      onChange={(e) => setFormData({ ...formData, legal_fee_percent: Number(e.target.value) } as any)}
+                    />
+                    <p className="text-xs text-muted-foreground">Deducted upfront. Borrower receives loan minus this fee, but repays the full amount.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Legal Fee Mode</Label>
+                    <Select
+                      value={(formData as any).legal_fee_deduction_mode || "none"}
+                      onValueChange={(v) => setFormData({ ...formData, legal_fee_deduction_mode: v } as any)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No legal fee</SelectItem>
+                        <SelectItem value="upfront_net">Upfront — net disbursement, full repayment</SelectItem>
+                        <SelectItem value="added_to_repayment">Added to repayment</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -1251,7 +1303,14 @@ const AdminLoanProducts = () => {
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-sm">
                             <Percent size={14} className="text-muted-foreground" />
-                            {product.interest_rate}% <span className="text-xs text-muted-foreground">/{product.interest_period?.charAt(0)}</span>
+                            {product.interest_rate}%
+                            <span className="text-xs text-muted-foreground">
+                              {(() => {
+                                const p = (product.interest_period || "per_month").replace(/^per_/, "");
+                                const map: Record<string, string> = { day: "/day", week: "/week", month: "/month", year: "/year", loan: "/loan", daily: "/day", weekly: "/week", monthly: "/month", yearly: "/year" };
+                                return map[p] || `/${p}`;
+                              })()}
+                            </span>
                           </div>
                           <p className="text-xs text-muted-foreground capitalize">{product.interest_type}</p>
                         </div>
