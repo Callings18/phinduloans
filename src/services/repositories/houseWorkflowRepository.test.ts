@@ -93,6 +93,7 @@ describe("houseWorkflowRepository", () => {
       p_payment_method: "cash",
       p_account_id: null,
       p_transaction_reference: null,
+      p_paid_date: null,
     });
   });
 
