@@ -603,7 +603,21 @@ const AdminApplications = () => {
         throw new Error("Insufficient funds in selected account. Please top up and try again.");
       }
 
-      const { data: insertedDisbursement, error: disbError } = await supabase.from('disbursements').insert({
+      // Set disbursed_by/disbursed_at metadata BEFORE inserting disbursement.
+      // The DB trigger generate_repayment_schedule() will handle loan status → 'active'.
+      const { error: metaError } = await supabase
+        .from('loan_applications')
+        .update({
+          disbursed_by: user?.id,
+          disbursed_at: new Date().toISOString(),
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', selectedApp.id);
+
+      if (metaError) throw metaError;
+
+      const { error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
         amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
@@ -615,44 +629,6 @@ const AdminApplications = () => {
       }).select("id").single();
 
       if (disbError) throw disbError;
-
-      const { error: completeError } = await supabase
-        .from("disbursements")
-        .update({
-          status: "completed",
-          disbursed_at: new Date().toISOString(),
-        })
-        .eq("id", insertedDisbursement.id);
-      if (completeError) throw completeError;
-
-      const { data: freshLoan, error: loanFetchError } = await supabase
-        .from("loan_applications")
-        .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
-        .eq("id", selectedApp.id)
-        .single();
-      if (loanFetchError) throw loanFetchError;
-
-      await createRepaymentScheduleForLoan(freshLoan, supabase);
-
-      // Enforce state-machine transition via API route (no direct status mutation here).
-      await transitionLoanStatus({
-        loanId: selectedApp.id,
-        toStatus: "disbursed",
-        reasonCode: "disbursement_completed",
-        reasonText: "Loan disbursement completed by admin",
-      });
-
-      const { error: loanMetadataError } = await supabase
-        .from("loan_applications")
-        .update({
-          disbursed_by: user?.id,
-          disbursed_at: new Date().toISOString(),
-          approval_stage: "disbursed",
-        })
-        .eq("id", selectedApp.id);
-
-      if (loanMetadataError) throw loanMetadataError;
-
       await logAudit({
         action: "DISBURSE",
         entity_type: "loan_application",
@@ -1133,11 +1109,8 @@ const AdminApplications = () => {
       toast({ title: "Please select a funding account", variant: "destructive" });
       return;
     }
-    const sourceAccount = fundingAccounts.find((a) => a.id === disbursement.source_account_id);
-    if (sourceAccount && selectedApp && sourceAccount.balance < (selectedApp.loan_amount ?? 0)) {
-      toast({ title: "Insufficient funds", variant: "destructive" });
-      return;
-    }
+    // Balance check is done inside disburseMutation with fee-adjusted net amount
+    // and DB trigger validate_disbursement_balance provides a final safety net.
     if (!disbursement.transaction_reference) {
       toast({ title: "Please enter a transaction reference", variant: "destructive" });
       return;
