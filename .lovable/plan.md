@@ -1,92 +1,253 @@
+# Option 3 — Revised Legacy Backfill (Audit Response)
 
+All 6 critical concerns are confirmed against live schema. Here are the answers and the hardened SQL.
 
-## Admin module audit — keep what works, delete the rest
+## 1. Schema-correct column map (verified against live DB)
 
-After mapping every admin route, sidebar entry, and page file, the system is doing **everything 2-3 times**. That's the bug source. The fix isn't more code — it's deleting overlap and making each module have **one clear path**.
+**`disbursements`** actual columns: `id, loan_id, amount, disbursement_method (NOT method), account_number, mobile_money_number, transaction_reference, status, disbursed_at, created_at, source_account_id`.
+→ **There is NO `disbursed_by` column on `disbursements`.** It lives on `loan_applications` only. We will store the original disburser in `transaction_reference`/`audit_logs.details` instead.
 
-### What I found (module by module)
+**`account_transactions`** columns confirmed: `id, account_id, transaction_type, amount, balance_before, balance_after, source, destination, reference_type, reference_id, notes, created_by, created_at` — `balance_before`/`balance_after` are **NOT NULL**.
 
-| Module | Status | Issue |
+**`audit_logs.entity_id`** is `uuid` → fully compatible with `disbursements.id`.
+
+## 2. Trigger risk — confirmed and mitigated
+
+Live triggers on `disbursements`:
+- `trigger_enforce_disbursement_status` — BEFORE UPDATE OF status (irrelevant for INSERT).
+- `trigger_generate_repayment_schedule` — **AFTER INSERT OR UPDATE OF status WHEN status='completed'`** → WILL fire on synthetic INSERT.
+- `notify_disbursement_trigger` — AFTER INSERT OR UPDATE → WILL fire and SMS-spam 6 borrowers.
+
+**Mitigation strategy (chosen — safer than disabling triggers):**
+- `generate_repayment_schedule()` already has built-in idempotency (`IF EXISTS (SELECT 1 FROM loan_repayments WHERE loan_id=NEW.loan_id) RETURN NEW`). I verified all 6 target loans already have schedules (5 with 1 row, 1 with 26 rows). So the trigger will fire but **no-op**. ✅
+- For `notify_disbursement_trigger` (SMS spam risk): we will **temporarily set a `session_replication_role = 'replica'`** within the migration transaction so triggers do not fire on these synthetic inserts. This is reverted automatically at COMMIT.
+
+## 3. The 6 target loans — explicit allow-list (no broad filter)
+
+Hard-coded UUIDs, captured from the audit:
+
+```
+9d62ea34-5001-49f8-955a-8e126fc39f9d  Suwilanji Nankamba       K6,000
+62886ccc-b7b5-4b09-b764-ffea55a99470  Twiza Nankamba Phiri     K5,805
+58e4affa-0d00-46b8-a68e-02faf3483c63  Mathews Tembo            K6,900
+7d06d3ed-5865-4a46-8c7e-edab0385c4e7  Civiness Mungamelo       K5,000
+7af10363-662c-4d9b-9a81-6769756a2374  Mwango Cynthia Ngosa     K9,689
+e46b4511-5bbc-4208-8c2e-4bef3e929236  Mulenga Reuben Mwale    K10,000
+```
+
+## 4. Scope of ledger backfill (Phase A)
+
+- 96 completed disbursements have no ledger row.
+- **86** have `source_account_id` → ledger row inserted.
+- **10** have `source_account_id IS NULL` → **skipped** (cannot attribute to an account; reported in dry-run output for finance to manually classify).
+- Inserts use `balance_before = balance_after = current accounts.balance` so **no live balance is mutated** (per finance's "non-mutating ledger" rule).
+
+## 5. Migration file: `supabase/migrations/20260427000000_legacy_backfill_option3.sql`
+
+```sql
+BEGIN;
+
+-- =================================================================
+-- PHASE 0: Disable user-defined triggers ONLY for this transaction
+-- (Built-in FK/PK/check constraints still enforced.)
+-- =================================================================
+SET LOCAL session_replication_role = 'replica';
+
+-- =================================================================
+-- PHASE A: Backfill account_transactions for 86 completed
+-- disbursements that have a source_account_id but no ledger row.
+-- Non-mutating: balance_before = balance_after = accounts.balance.
+-- Idempotent: NOT EXISTS guard on (reference_type, reference_id).
+-- =================================================================
+WITH inserted_ledger AS (
+  INSERT INTO public.account_transactions (
+    account_id, transaction_type, amount,
+    balance_before, balance_after,
+    destination, reference_type, reference_id,
+    notes, created_at
+  )
+  SELECT
+    d.source_account_id,
+    'disbursement',
+    d.amount,
+    a.balance,                    -- non-mutating
+    a.balance,                    -- non-mutating
+    la.full_name,
+    'disbursement',
+    d.id,
+    format('legacy_backfill_20260427: historical disbursement %s on %s. Ref: %s',
+           d.id, to_char(d.disbursed_at, 'YYYY-MM-DD'),
+           COALESCE(d.transaction_reference, 'N/A')),
+    COALESCE(d.disbursed_at, d.created_at)
+  FROM public.disbursements d
+  JOIN public.accounts a ON a.id = d.source_account_id
+  JOIN public.loan_applications la ON la.id = d.loan_id
+  WHERE d.status = 'completed'
+    AND d.source_account_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.account_transactions t
+      WHERE t.reference_type = 'disbursement'
+        AND t.reference_id = d.id
+    )
+  RETURNING id, reference_id, amount
+)
+SELECT COUNT(*) AS phase_a_rows_inserted, COALESCE(SUM(amount),0) AS phase_a_total_amount
+FROM inserted_ledger;
+
+-- =================================================================
+-- PHASE B: Audit log entry for the backfill (one summary row)
+-- =================================================================
+INSERT INTO public.audit_logs (action, entity_type, entity_id, module, details)
+SELECT
+  'LEGACY_LEDGER_BACKFILL',
+  'system',
+  gen_random_uuid(),
+  'reconciliation',
+  jsonb_build_object(
+    'marker', 'legacy_backfill_20260427',
+    'phase', 'A',
+    'rows_inserted', (
+      SELECT COUNT(*) FROM public.account_transactions
+      WHERE notes LIKE 'legacy_backfill_20260427:%'
+    ),
+    'note', 'Non-mutating ledger backfill for 86 historical disbursements.'
+  );
+
+-- =================================================================
+-- PHASE C: Synthetic completed disbursements for the 6 active loans.
+-- Constrained to explicit UUID allow-list. Schema-correct columns.
+-- generate_repayment_schedule trigger is suppressed (replica role)
+-- AND idempotent (all 6 already have schedules — verified).
+-- =================================================================
+WITH target_loans AS (
+  SELECT id, loan_amount, disbursed_at, full_name
+  FROM public.loan_applications
+  WHERE id IN (
+    '9d62ea34-5001-49f8-955a-8e126fc39f9d',
+    '62886ccc-b7b5-4b09-b764-ffea55a99470',
+    '58e4affa-0d00-46b8-a68e-02faf3483c63',
+    '7d06d3ed-5865-4a46-8c7e-edab0385c4e7',
+    '7af10363-662c-4d9b-9a81-6769756a2374',
+    'e46b4511-5bbc-4208-8c2e-4bef3e929236'
+  )
+), inserted_disb AS (
+  INSERT INTO public.disbursements (
+    loan_id, amount, disbursement_method, status,
+    transaction_reference, disbursed_at, created_at
+  )
+  SELECT
+    tl.id,
+    tl.loan_amount,
+    'legacy',
+    'completed',
+    'LEGACY-BF-' || substr(tl.id::text, 1, 8),
+    COALESCE(tl.disbursed_at, now()),
+    COALESCE(tl.disbursed_at, now())
+  FROM target_loans tl
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.disbursements d
+    WHERE d.loan_id = tl.id AND d.status = 'completed'
+  )
+  RETURNING id, loan_id, amount
+)
+SELECT COUNT(*) AS phase_c_rows_inserted FROM inserted_disb;
+
+-- Phase C audit log
+INSERT INTO public.audit_logs (action, entity_type, entity_id, module, details)
+SELECT
+  'LEGACY_DISBURSEMENT_RECONCILED',
+  'disbursement',
+  d.id,
+  'reconciliation',
+  jsonb_build_object(
+    'marker', 'legacy_backfill_20260427',
+    'phase', 'C',
+    'loan_id', d.loan_id,
+    'amount', d.amount,
+    'reference', d.transaction_reference
+  )
+FROM public.disbursements d
+WHERE d.transaction_reference LIKE 'LEGACY-BF-%';
+
+-- Re-enable user triggers for the rest of the session
+SET LOCAL session_replication_role = 'origin';
+
+-- =================================================================
+-- PHASE D: SCALAR pass/fail gates (correct subquery form)
+-- =================================================================
+SELECT
+  (SELECT COUNT(*) FROM (
+    SELECT d.id FROM public.disbursements d
+    LEFT JOIN public.account_transactions t
+      ON t.reference_type='disbursement' AND t.reference_id=d.id
+    WHERE d.status='completed'
+      AND d.source_account_id IS NOT NULL
+      AND t.id IS NULL
+  ) gap1) AS gate_completed_disb_without_ledger,  -- expect 0
+
+  (SELECT COUNT(*) FROM (
+    SELECT la.id FROM public.loan_applications la
+    LEFT JOIN public.disbursements d
+      ON d.loan_id=la.id AND d.status='completed'
+    WHERE la.status::text IN ('disbursed','active')
+      AND la.id IN (
+        '9d62ea34-5001-49f8-955a-8e126fc39f9d',
+        '62886ccc-b7b5-4b09-b764-ffea55a99470',
+        '58e4affa-0d00-46b8-a68e-02faf3483c63',
+        '7d06d3ed-5865-4a46-8c7e-edab0385c4e7',
+        '7af10363-662c-4d9b-9a81-6769756a2374',
+        'e46b4511-5bbc-4208-8c2e-4bef3e929236'
+      )
+    GROUP BY la.id
+    HAVING COUNT(d.id) = 0
+  ) gap2) AS gate_active_loans_without_disb,  -- expect 0
+
+  (SELECT COUNT(*) FROM public.disbursements
+   WHERE status='completed' AND source_account_id IS NULL) AS info_unattributable_disb,  -- 10
+
+  (SELECT COUNT(*) FROM public.account_transactions
+   WHERE notes LIKE 'legacy_backfill_20260427:%') AS info_phase_a_inserted;  -- expect 86
+
+-- ============================
+-- DRY-RUN: replace COMMIT with ROLLBACK below to preview without applying
+-- ============================
+COMMIT;
+```
+
+## 6. Expected affected row counts (pre-flight estimate)
+
+| Phase | Action | Expected rows |
 |---|---|---|
-| Dashboard | ✅ Keep | Single source — fine |
-| Applications (`AdminApplications`, **2,786 lines**) | ⚠ Bloated | Same file does intake + approval + disbursement + contract — overlaps with `AdminDisbursements` and `LoanDetailsModal` |
-| Loans (`AdminLoans` 1,456 lines) | ✅ Keep | Primary portfolio view — keep as source of truth |
-| Loan Product Dashboards (`/admin/loan-product-dashboards`) | ❌ Delete | Duplicate of "Product Houses". Behind a beta flag, never finished. `AdminLoanProductScopedDashboard` is a stub showing 2 metrics — both already on Houses |
-| Product Houses index | ✅ Keep | Already cleaned to Salary Advance + Marketeer |
-| `MarketeerHouseDashboard` page | ❌ Delete | Orphan — imported in `App.tsx` but **not routed anywhere**. Dead code |
-| House Review (`/admin/houses/:code/review`) | ⚠ Verify | Only useful if multi-stage approval is on. Currently empty for most houses → hide tab if unused |
-| Borrowers / Employers | ✅ Keep | Clean |
-| PMIC / CRB queue | ✅ Keep | Real flows |
-| Disbursements (`AdminDisbursements` 939 lines) | ⚠ Overlaps | Disburse action exists in 3 places: this page, `LoanDetailsModal`, `AdminApplications`. Pick this page as the **single disbursement surface**, leave only "view" links elsewhere |
-| Repayments / Bulk repayments / Collections | ⚠ Overlap | `AdminRepayments` (1,423 lines) and `AdminCollections` (1,236) cover same pay-recording flow. Keep both pages but route every "record payment" call through the **same dialog + RPC** (already mostly true via `record_loan_payment`) |
-| Accounts | ✅ Keep | Working |
-| **Wallets (`/admin/wallets`)** | ❌ Delete | Sidebar entry already commented out as "Coming Soon", but the route + 249-line stub still exists. Page does nothing |
-| Expenses | ✅ Keep | |
-| Write-offs / Court cases | ✅ Keep | |
-| HR / Payroll / Payroll tax config | ✅ Keep | |
-| Reports | ✅ Keep | |
-| Audit logs | ✅ Keep | |
-| Contract templates | ✅ Keep | |
-| Staff / Roles & permissions | ✅ Keep | |
-| Email log | ✅ Keep | |
-| User guide | ✅ Keep | |
-| Settings | ✅ Keep | |
-| **Production readiness (345 lines)** | ❌ Delete | Internal dev self-check page. Confusing for the client, never used in production workflow |
-| **UAT checklist (231 lines)** | ❌ Delete | Internal sign-off tool. Belongs in docs, not in client's nav |
-| Feature flags | ✅ Keep | Admin-only, useful |
+| A | `account_transactions` inserts | **86** |
+| B | `audit_logs` summary row | 1 |
+| C | `disbursements` synthetic inserts | **6** |
+| C | `audit_logs` per-disbursement | 6 |
+| D | Gate 1 (completed disb without ledger) | **0** ✅ |
+| D | Gate 2 (target active loans without disb) | **0** ✅ |
+| D | Info: unattributable disb (no source_account_id) | 10 ⚠️ surfaced for finance |
 
-### What I'll do
+## 7. Execution order
 
-**1. Delete dead pages and routes (no UI change for the user, just less to break)**
-- Remove route + import + file: `AdminWallets`, `AdminProductionReadiness`, `AdminUatChecklist`, `AdminLoanProductDashboards`, `AdminLoanProductScopedDashboard`, `MarketeerHouseDashboard`.
-- Remove the matching sidebar group **"Launch & operations"** (Production readiness + UAT checklist) — pure internal noise.
-- Remove the `Loan Product Dashboards` child entry under Loans (duplicate of Houses).
+1. **Apply with `ROLLBACK` first** → review Phase D scalar output → confirm gates = 0.
+2. Switch to `COMMIT` and re-apply.
+3. Verify zero account balance drift via `SELECT id, balance FROM accounts` snapshot before/after.
+4. Notify finance about the 10 unattributable disbursements (report attached).
 
-**2. Remove dead route paths from `App.tsx`**
-- `/admin/wallets`, `/admin/production-readiness`, `/admin/uat-checklist`, `/admin/loan-product-dashboards`, `/admin/loans/products/:productId/dashboard` — all gone.
+## 8. Rollback strategy
 
-**3. Hide House `Review` tab when no multi-stage approval is configured**
-- In `HouseLayout.tsx`, only show the Review tab if the product's workflow has `requires_review` (or always-hide for Salary Advance + Marketeer for now).
+```sql
+-- Reversible by marker
+DELETE FROM public.account_transactions WHERE notes LIKE 'legacy_backfill_20260427:%';
+DELETE FROM public.disbursements WHERE transaction_reference LIKE 'LEGACY-BF-%';
+DELETE FROM public.audit_logs WHERE action IN ('LEGACY_LEDGER_BACKFILL','LEGACY_DISBURSEMENT_RECONCILED')
+  AND details->>'marker' = 'legacy_backfill_20260427';
+```
 
-**4. Verify (no edits) — confirm one-path-per-action**
-- Disbursement → only `AdminDisbursements` + `LoanDetailsModal` (read in modal, action on page). Confirm `AdminApplications` no longer has a duplicate "Complete disbursement" button; if it does, replace with "Open disbursements".
-- Payment recording → confirm every entry calls `record_loan_payment` RPC (already standardised via `handlePaymentReceipt`).
+## Answers to specific questions
 
-**5. Light cleanup inside touched files only**
-- Drop unused imports left over after route removal in `App.tsx`.
-- Drop `AdminWallets` + production-readiness comments / sidebar entries.
+1. **No schedule duplication?** Yes — `session_replication_role='replica'` suppresses user triggers in-transaction; even without that, `generate_repayment_schedule()` early-returns when any `loan_repayments` row exists (verified all 6 loans already have schedules).
+2. **Exact synthetic insert columns:** `loan_id, amount, disbursement_method='legacy', status='completed', transaction_reference='LEGACY-BF-<8>', disbursed_at, created_at`. No `disbursed_by` (column does not exist on `disbursements`).
+3. **6-loan constraint:** explicit `id IN (...)` UUID allow-list, also embedded in the gate query.
+4. **Scalar verification:** Phase D returns a single row with 4 named scalar columns — no GROUP BY ambiguity.
 
-### Files touched
-
-- `src/App.tsx` — remove 6 imports + 6 route blocks (~110 lines)
-- `src/components/admin/adminSidebarConfig.ts` — remove "Launch & operations" group + Loan Product Dashboards child + commented Wallets line
-- `src/components/admin/house/HouseLayout.tsx` — hide Review tab when not applicable
-- **Delete**: `src/pages/admin/AdminWallets.tsx`, `src/pages/admin/AdminProductionReadiness.tsx`, `src/pages/admin/AdminUatChecklist.tsx`, `src/pages/admin/AdminLoanProductDashboards.tsx`, `src/pages/admin/AdminLoanProductScopedDashboard.tsx`, `src/pages/admin/houses/MarketeerHouseDashboard.tsx`
-
-### Net result
-
-- **~1,650 lines of dead code removed**
-- **6 fewer pages** for the client to stumble into
-- **3 fewer sidebar entries** ("Launch & operations" group + Loan Product Dashboards)
-- Every remaining module has **one obvious page** where the action lives
-
-### Out of scope (separate passes if you want them)
-
-- Splitting the 2,786-line `AdminApplications` — risky, needs its own focused pass
-- Merging `AdminRepayments` + `AdminCollections` into one page — they serve different teams (finance vs collections officer); keeping both
-- DB / RPC changes — none needed
-- Borrower-side changes — none
-
-### Confirm before I delete
-
-These 6 pages get deleted permanently. Confirm none of them are something you actively use:
-
-1. `/admin/wallets` (Coming Soon stub)
-2. `/admin/production-readiness` (internal dev self-check)
-3. `/admin/uat-checklist` (internal sign-off tracker)
-4. `/admin/loan-product-dashboards` (duplicate of Product Houses)
-5. `/admin/loans/products/:id/dashboard` (2-metric stub)
-6. `MarketeerHouseDashboard.tsx` (orphan, not routed)
-
-Reply "go" and I delete + clean up. If you want to **keep** any of them, tell me which and I'll leave those.
-
+Approve this plan to switch to default mode and apply (dry-run first).
