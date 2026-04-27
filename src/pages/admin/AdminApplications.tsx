@@ -660,6 +660,9 @@ const AdminApplications = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       queryClient.invalidateQueries({ queryKey: ['disbursements'] });
       queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['active-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['account_transactions'] });
       if (selectedApp?.id) {
         queryClient.invalidateQueries({ queryKey: ['loan-repayments', selectedApp.id] });
       }
