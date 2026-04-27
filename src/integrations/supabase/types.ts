@@ -4005,6 +4005,15 @@ export type Database = {
       }
     }
     Functions: {
+      _test_complete_disbursement_as: {
+        Args: {
+          p_account_id: string
+          p_actor: string
+          p_disbursement_id: string
+          p_ref?: string
+        }
+        Returns: Json
+      }
       admin_approve_loan_writeoff: {
         Args: { p_writeoff_id: string }
         Returns: Json
