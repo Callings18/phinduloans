@@ -572,15 +572,20 @@ const AdminApplications = () => {
     },
   });
 
-  // Disburse mutation (requires source_account_id; balance checked in handleDisburse and DB trigger)
+  // Disburse mutation — UNIFIED PATH: creates a pending disbursement then completes via
+  // the atomic complete_disbursement RPC (same flow used by AdminDisbursements). All
+  // financial side-effects (account debit, ledger, loan status, audit, status transitions)
+  // happen inside the RPC transaction. No raw inserts or pre-writes to loan_applications.
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
+      if (!selectedApp) throw new Error("No application selected");
       const sourceAccount = fundingAccounts.find((a) => a.id === data.source_account_id);
       if (!sourceAccount) throw new Error("Source account not found");
 
-      // Calculate fees to deduct from disbursement
+      // Compute disbursement amount (gross) using the same fee config as AdminDisbursements.
+      // The complete_disbursement RPC will further apply legal_fee_deduction_mode internally.
       let feesToDeduct = 0;
-      if (selectedApp?.loan_product_id) {
+      if (selectedApp.loan_product_id) {
         const { data: product } = await supabase
           .from('loan_products')
           .select('processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent')
@@ -598,26 +603,18 @@ const AdminApplications = () => {
         }
       }
       const disbursementAmount = selectedApp.loan_amount - feesToDeduct;
-      
+
+      // Client-side preflight (server still enforces in RPC).
       if (sourceAccount.balance < disbursementAmount) {
-        throw new Error("Insufficient funds in selected account. Please top up and try again.");
+        throw new Error(
+          `Insufficient funds in ${sourceAccount.account_name}. Available: K${sourceAccount.balance.toLocaleString()}, Required: K${disbursementAmount.toLocaleString()}`
+        );
       }
 
-      // Set disbursed_by/disbursed_at metadata BEFORE inserting disbursement.
-      // The DB trigger generate_repayment_schedule() will handle loan status → 'active'.
-      const { error: metaError } = await supabase
-        .from('loan_applications')
-        .update({
-          disbursed_by: user?.id,
-          disbursed_at: new Date().toISOString(),
-          reviewed_by: user?.id,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedApp.id);
-
-      if (metaError) throw metaError;
-
-      const { error: disbError } = await supabase.from('disbursements').insert({
+      // 1) Create pending disbursement row (no financial side-effects yet).
+      //    Partial unique index uniq_disbursements_one_completed_per_loan blocks
+      //    a second non-top-up completion at the DB level.
+      const { data: inserted, error: disbError } = await supabase.from('disbursements').insert({
         loan_id: selectedApp.id,
         amount: disbursementAmount,
         disbursement_method: data.disbursement_method,
@@ -625,19 +622,37 @@ const AdminApplications = () => {
         mobile_money_number: data.mobile_money_number || null,
         transaction_reference: data.transaction_reference || null,
         status: 'pending',
-        source_account_id: data.source_account_id || null,
+        source_account_id: data.source_account_id,
       }).select("id").single();
-
       if (disbError) throw disbError;
+      const disbursementId = inserted!.id as string;
+
+      // 2) Complete via atomic RPC (debits account, writes ledger, advances loan
+      //    status, inserts audit + loan_status_transitions, sets disbursed_by/at).
+      const { data: rpcData, error: rpcError } = await supabase.rpc('complete_disbursement', {
+        p_disbursement_id: disbursementId,
+        p_account_id: data.source_account_id,
+        p_transaction_reference: data.transaction_reference || null,
+      });
+      if (rpcError) throw rpcError;
+      const result = rpcData as { success: boolean; error?: string } | null;
+      if (!result?.success) {
+        // RPC failed atomically — clean up the pending row so the loan stays disbursable.
+        await supabase.from('disbursements').delete().eq('id', disbursementId);
+        throw new Error(result?.error || 'Failed to complete disbursement');
+      }
+
       await logAudit({
         action: "DISBURSE",
         entity_type: "loan_application",
         entity_id: selectedApp.id,
         module: "disbursement",
         new_values: {
-          amount: selectedApp.loan_amount,
+          amount: disbursementAmount,
           disbursement_method: data.disbursement_method,
           source_account_id: data.source_account_id,
+          disbursement_id: disbursementId,
+          via: 'complete_disbursement_rpc',
         },
       });
     },
@@ -645,6 +660,9 @@ const AdminApplications = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       queryClient.invalidateQueries({ queryKey: ['disbursements'] });
       queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['active-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['account_transactions'] });
       if (selectedApp?.id) {
         queryClient.invalidateQueries({ queryKey: ['loan-repayments', selectedApp.id] });
       }

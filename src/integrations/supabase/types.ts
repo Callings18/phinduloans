@@ -1044,6 +1044,7 @@ export type Database = {
           disbursed_at: string | null
           disbursement_method: string
           id: string
+          is_top_up: boolean
           loan_id: string
           mobile_money_number: string | null
           source_account_id: string | null
@@ -1057,6 +1058,7 @@ export type Database = {
           disbursed_at?: string | null
           disbursement_method: string
           id?: string
+          is_top_up?: boolean
           loan_id: string
           mobile_money_number?: string | null
           source_account_id?: string | null
@@ -1070,6 +1072,7 @@ export type Database = {
           disbursed_at?: string | null
           disbursement_method?: string
           id?: string
+          is_top_up?: boolean
           loan_id?: string
           mobile_money_number?: string | null
           source_account_id?: string | null
