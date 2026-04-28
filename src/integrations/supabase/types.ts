@@ -2596,6 +2596,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          idempotency_key: string | null
           message: string | null
           provider_response: Json | null
           recipient: string
@@ -2609,6 +2610,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           message?: string | null
           provider_response?: Json | null
           recipient: string
@@ -2622,6 +2624,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           message?: string | null
           provider_response?: Json | null
           recipient?: string
@@ -4093,6 +4096,17 @@ export type Database = {
           p_required_action: string
         }
         Returns: undefined
+      }
+      notification_idempotency_key: {
+        Args: {
+          p_channel: string
+          p_entity_id?: string
+          p_event_type: string
+          p_status_to?: string
+          p_user_id: string
+          p_window_bucket?: string
+        }
+        Returns: string
       }
       officer_loan_stats: {
         Args: { p_period_end: string; p_period_start: string }
