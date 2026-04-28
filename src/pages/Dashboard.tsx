@@ -162,15 +162,9 @@ const Dashboard = () => {
         queryClient.invalidateQueries({ queryKey: ['user-loans', user.id] });
         queryClient.invalidateQueries({ queryKey: ['user-repayments', user.id] });
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notification_logs', filter: `user_id=eq.${user.id}` }, (payload) => {
-        const row = payload.new as any;
-        if (row?.title || row?.message) {
-          toast(row.title || "New notification", {
-            description: row.message,
-            duration: 7000,
-          });
-        }
-      })
+      // Note: in-app notification toasts now flow through NotificationCenter realtime
+      // subscription on `notification_inbox`. We no longer toast on `notification_logs`
+      // (delivery telemetry) inserts to avoid bulk-action toast floods.
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'borrower_document_vault', filter: `borrower_id=eq.${user.id}` }, (payload) => {
         const oldRow = payload.old as any;
         const newRow = payload.new as any;
