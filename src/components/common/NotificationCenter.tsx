@@ -36,9 +36,9 @@ interface Notification {
     title: string;
     message: string;
     type: "info" | "success" | "warning" | "error" | "loan" | "payment";
-    status: "unread" | "read";
+    is_read: boolean;
     created_at: string;
-    action_url?: string;
+    action_url?: string | null;
     metadata?: any;
 }
 
