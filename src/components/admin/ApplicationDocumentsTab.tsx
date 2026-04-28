@@ -244,7 +244,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
         docs.push({
           id: vDoc.id, docType: mappedType, label: vDoc.doc_label || vDoc.doc_type,
           fileUrl: url, source: "application_documents", uploadedBy: "borrower",
-          status: vDoc.is_verified ? "verified" : "uploaded", notes: vDoc.notes,
+          status: vDoc.is_verified ? "verified" : "pending", notes: vDoc.notes,
         });
       }
     }
@@ -409,7 +409,7 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
           mime_type: file.type,
           uploaded_by: "admin",
           loan_product_id: selectedApp?.loan_product_id || null,
-          status: "uploaded",
+          status: "pending",
         });
       if (insertError) throw insertError;
 
@@ -454,6 +454,8 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
       verified: "bg-success/20 text-success border-success/30",
       rejected: "bg-destructive/20 text-destructive border-destructive/30",
       uploaded: "bg-info/20 text-info border-info/30",
+      pending: "bg-info/20 text-info border-info/30",
+      submitted: "bg-warning/20 text-warning border-warning/30",
     };
     return (
       <Badge variant="outline" className={`text-[9px] px-1 py-0 ${config[status] || config.uploaded}`}>

@@ -46,6 +46,12 @@ interface LoanProduct {
   late_payment_penalty_percent: number | null;
   penalty_frequency: string | null;
   grace_period_days: number | null;
+  product_code?: string | null;
+  pricing_tiers?: unknown;
+  eligible_locations?: string[] | null;
+  repayment_anchor_rule?: string | null;
+  home_verification_required?: boolean | null;
+  physical_collateral_collection?: boolean | null;
 }
 
 interface RequiredDoc {
@@ -230,6 +236,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     if (!selectedProduct) return null;
     return calculateLoan(loanAmount, loanTerm, {
       product_name: selectedProduct.name,
+      product_code: selectedProduct.product_code,
+      pricing_tiers: selectedProduct.pricing_tiers,
       interest_rate: selectedProduct.interest_rate,
       interest_period: selectedProduct.interest_period as any,
       interest_type: selectedProduct.interest_type as any,
@@ -238,6 +246,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       insurance_percent: selectedProduct.insurance_percent,
       vat_percent: selectedProduct.vat_percent,
       platform_fee_percent: selectedProduct.platform_fee_percent,
+      term_unit: selectedProduct.term_unit as any,
     });
   }, [selectedProduct, loanAmount, loanTerm]);
 
@@ -256,12 +265,23 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
   const isProfileComplete = !!(profile?.full_name && profile?.phone && profile?.nrc_number);
   const productName = selectedProduct?.name || "";
+  const productCode = selectedProduct?.product_code || null;
   const isCollateralLoan = !!selectedProduct?.collateral_required;
   const isBusinessLoan = productName.toLowerCase().includes("business");
   const isSalaryAdvance = productName.toLowerCase().includes("salary");
+  const normalizedCity = (profile?.city || "").trim().toLowerCase();
+  const eligibleLocations = (selectedProduct?.eligible_locations || []).map((l) => l.trim().toLowerCase());
+  const hasLocationRestriction = eligibleLocations.length > 0;
+  const locationAllowed = !hasLocationRestriction || (normalizedCity && eligibleLocations.includes(normalizedCity));
+  const isPaydaySoft = productCode === "PAYDAY_SOFT";
+  const isMarketeer = productCode === "MARKETEER";
+  const termUnitLabel = selectedProduct?.term_unit || "months";
 
   const canProceedStep1 = !!selectedProduct;
-  const canProceedStep2 = !!loanPurpose && (
+  const canProceedStep2 = !!loanPurpose &&
+    locationAllowed &&
+    (!isPaydaySoft || loanTerm === 30) &&
+    (!isMarketeer || loanTerm === 26) && (
     (!isCollateralLoan || (collateralDescription && collateralValue)) &&
     (!isBusinessLoan || (businessName && businessTpin)) &&
     (!isSalaryAdvance || (employerName && monthlySalary))
@@ -296,6 +316,16 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     setIsSubmitting(true);
 
     try {
+      if (!locationAllowed) {
+        throw new Error(`This loan product is restricted to: ${selectedProduct.eligible_locations?.join(", ")}`);
+      }
+      if (isPaydaySoft && loanTerm !== 30) {
+        throw new Error("Payday Soft term must be exactly 30 days.");
+      }
+      if (isMarketeer && loanTerm !== 26) {
+        throw new Error("Marketeer term must be exactly 26 collection days.");
+      }
+
       const productSpecificData: Record<string, any> = {};
       if (isBusinessLoan) {
         productSpecificData.business_name = businessName;
@@ -349,7 +379,6 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
       // Auto-enroll borrower in the loan product's House roster (best-effort)
       try {
-        const productCode = (selectedProduct as any).product_code as string | null | undefined;
         if (productCode) {
           await (supabase.from as any)("product_house_borrowers").upsert(
             { product_code: productCode, borrower_id: user.id, added_by: user.id },
@@ -574,7 +603,10 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <Label>Loan Term</Label>
-              <span className="text-xl font-bold text-foreground">{loanTerm} month{loanTerm > 1 ? "s" : ""}</span>
+              <span className="text-xl font-bold text-foreground">
+                {loanTerm} {termUnitLabel}
+                {loanTerm > 1 && termUnitLabel !== "days" ? "s" : ""}
+              </span>
             </div>
             <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
           </div>
@@ -730,6 +762,15 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             </Card>
           )}
 
+          {hasLocationRestriction && !locationAllowed && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This product is only available in: {selectedProduct?.eligible_locations?.join(", ")}. Update your profile city before continuing.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <MobileStickyFormFooter>
             <Button variant="outline" onClick={() => setStep(0)}>
               <ArrowLeft size={16} className="mr-2" /> Back
@@ -823,7 +864,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             <CardContent className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div><span className="text-muted-foreground">Product:</span> <span className="font-medium ml-1">{selectedProduct.name}</span></div>
               <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium ml-1">{formatCurrency(loanAmount)}</span></div>
-              <div><span className="text-muted-foreground">Term:</span> <span className="font-medium ml-1">{loanTerm} months</span></div>
+              <div><span className="text-muted-foreground">Term:</span> <span className="font-medium ml-1">{loanTerm} {termUnitLabel}</span></div>
               <div><span className="text-muted-foreground">Purpose:</span> <span className="font-medium ml-1 capitalize">{loanPurpose.replace(/_/g, " ")}</span></div>
               <div><span className="text-muted-foreground">Monthly Payment:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.monthlyPayment)}</span></div>
               <div><span className="text-muted-foreground">Total Repayment:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.totalRepayment)}</span></div>

@@ -105,6 +105,7 @@ const DISBURSABLE_APPLICATION_STATUSES = ["approved", "awaiting_disbursement"] a
 
 const sourceConfig = {
   website: { label: "Website", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: "🌐" },
+  dashboard: { label: "Borrower Dashboard", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30", icon: "🧭" },
   internal: { label: "Internal", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: "🏢" },
   ussd: { label: "USSD", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: "📱" },
   mobile_app: { label: "Mobile App", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: "📲" },
@@ -412,7 +413,7 @@ const AdminApplications = () => {
               uploaded_by: user?.id || 'admin',
               loan_product_id: data.loanData.product_id || null,
               is_required: doc.is_mandatory ?? true,
-              status: 'uploaded',
+              status: 'pending',
             });
           }
         }
@@ -811,7 +812,7 @@ const AdminApplications = () => {
           current?.id === variables.id
             ? {
                 ...current,
-                status: "awaiting_disbursement",
+                status: "approved",
                 approval_stage: "approved",
                 approved_by: user?.id ?? current.approved_by,
                 approved_at: new Date().toISOString(),
@@ -1463,6 +1464,7 @@ const AdminApplications = () => {
                 <SelectContent>
                   <SelectItem value="all">All Sources</SelectItem>
                   <SelectItem value="website">🌐 Website</SelectItem>
+                  <SelectItem value="dashboard">🧭 Borrower Dashboard</SelectItem>
                   <SelectItem value="internal">🏢 Internal</SelectItem>
                   <SelectItem value="ussd">📱 USSD</SelectItem>
                   <SelectItem value="mobile_app">📲 Mobile App</SelectItem>

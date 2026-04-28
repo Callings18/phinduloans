@@ -37,6 +37,7 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; co
   rejected: { label: "Rejected", icon: XCircle, color: "text-destructive" },
   submitted: { label: "Submitted", icon: Clock, color: "text-warning" },
   pending: { label: "Pending", icon: Clock, color: "text-muted-foreground" },
+  uploaded: { label: "Pending Review", icon: Clock, color: "text-warning" },
 };
 
 // Defensive fallback for legacy rows whose `status` is null or an unknown value.
@@ -113,7 +114,7 @@ export default function DocumentChecklist({ loanId, userId }: DocumentChecklistP
   const rejectedDocs = documents.filter((d) => d.status === "rejected");
   const verifiedDocs = documents.filter((d) => d.status === "verified");
   const pendingDocs = documents.filter(
-    (d) => !d.status || d.status === "submitted" || d.status === "pending"
+    (d) => !d.status || d.status === "submitted" || d.status === "pending" || d.status === "uploaded"
   );
 
   return (

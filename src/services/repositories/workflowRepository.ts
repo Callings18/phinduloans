@@ -152,15 +152,11 @@ export async function reviewPaymentClaim(input: {
     return;
   }
 
-  const { error } = await supabase
-    .from("payment_claims")
-    .update({
-      status: input.decision,
-      review_comment: input.reviewComment ?? null,
-      decision_reason_code: input.decisionReasonCode ?? null,
-    })
-    .eq("id", input.claimId);
-  if (error) throw error;
+  // Safety: claim review should go through API workflow to avoid direct-write divergence
+  // from canonical repayment posting and audit side-effects.
+  throw new Error(
+    "Payment claim review requires API workflow. Enable VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL.",
+  );
 }
 
 export async function transitionLoanStatus(input: {

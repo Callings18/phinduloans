@@ -391,108 +391,35 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
 
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
-      const savedOriginalAmount = selectedRepayment.original_amount || selectedRepayment.amount;
-
-      // Only count UNPAID penalty portion (total penalty minus already-paid penalty)
-      const totalPenalty = Number(selectedRepayment.penalty_amount || 0);
-      const alreadyPaidPenalty = Number(selectedRepayment.penalty_paid || 0);
-      const remainingPenalty = Math.max(0, totalPenalty - alreadyPaidPenalty);
-      const dueAmount = selectedRepayment.amount + remainingPenalty;
-
-      // Calculate allocation (remaining penalty first, then principal/interest)
-      const penaltyPaid = Math.min(paidAmount, remainingPenalty);
-      const remainingAfterPenalty = paidAmount - penaltyPaid;
-      const principalPaid = remainingAfterPenalty;
-
-      let newStatus = "pending";
-      let adjustedAmount = selectedRepayment.amount;
-
-      if (paidAmount >= dueAmount) {
-        // Full payment or overpayment
-        newStatus = "paid";
-        adjustedAmount = Number(savedOriginalAmount); // restore original on full pay
-
-        // Handle overpayment - apply to next pending installments
-        if (paidAmount > dueAmount) {
-          let excess = paidAmount - dueAmount;
-          const pendingList = repayments?.filter(
-            r => (r.status === "pending" || r.status === "overdue") && r.id !== selectedRepayment.id
-          ) || [];
-
-          for (const np of pendingList) {
-            if (excess <= 0) break;
-            const npAmount = Number(np.amount);
-            const npOriginal = np.original_amount || np.amount;
-            const applied = Math.min(excess, npAmount);
-
-            if (applied >= npAmount) {
-              const { error: npFullErr } = await supabase
-                .from("loan_repayments")
-                .update({
-                  status: "paid",
-                  paid_date: new Date().toISOString().split("T")[0],
-                  payment_method: paymentMethod,
-                  principal_paid: Number(npOriginal),
-                  original_amount: npOriginal,
-                  amount: Number(npOriginal),
-                })
-                .eq("id", np.id);
-              if (npFullErr) throw npFullErr;
-            } else {
-              const { error: npPartErr } = await supabase
-                .from("loan_repayments")
-                .update({
-                  amount: npAmount - applied,
-                  original_amount: npOriginal,
-                  principal_paid: (Number(np.principal_paid) || 0) + applied,
-                })
-                .eq("id", np.id);
-              if (npPartErr) throw npPartErr;
-            }
-            excess -= applied;
-          }
-        }
-      } else {
-        // Partial payment - reduce amount owed
-        adjustedAmount = selectedRepayment.amount - remainingAfterPenalty;
-        newStatus = adjustedAmount > 0 ? "pending" : "paid";
-        if (newStatus === "paid") adjustedAmount = Number(savedOriginalAmount);
+      if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+        throw new Error("Payment amount must be greater than 0");
+      }
+      if (!selectedRepayment.destination_account_id) {
+        throw new Error("Destination account is required. Please use Admin Repayments if account is not configured.");
+      }
+      if (paidAmount > Number(selectedRepayment.amount)) {
+        throw new Error("Overpayment from Loan Details is disabled for safety. Use Admin Repayments to allocate across installments.");
+      }
+      if (Number(selectedRepayment.penalty_amount || 0) > Number(selectedRepayment.penalty_paid || 0)) {
+        throw new Error("This installment has pending penalties. Record payment via Admin Repayments for canonical allocation.");
       }
 
-      const { error } = await supabase
-        .from("loan_repayments")
-        .update({
-          status: newStatus,
-          paid_date: newStatus === "paid" ? new Date().toISOString().split("T")[0] : null,
-          payment_method: paymentMethod,
-          transaction_reference: transactionRef || null,
-          amount: adjustedAmount,
-          principal_paid: (Number(selectedRepayment.principal_paid) || 0) + principalPaid,
-          penalty_paid: alreadyPaidPenalty + penaltyPaid,
-          original_amount: savedOriginalAmount,
-        })
-        .eq("id", selectedRepayment.id);
-
-      if (error) throw error;
-
-      // Check if all repayments are paid — auto-complete loan (no contract signing requirement)
-      const { data: remainingUnpaid, error: remUnpaidErr } = await supabase
-        .from("loan_repayments")
-        .select("id")
-        .eq("loan_id", loan.id)
-        .in("status", ["pending", "overdue"]);
-      if (remUnpaidErr) throw remUnpaidErr;
-
-      if (remainingUnpaid && remainingUnpaid.length === 0) {
-        const { error: loanCompleteErr } = await supabase
-          .from("loan_applications")
-          .update({ status: "completed" as any })
-          .eq("id", loan.id);
-        if (loanCompleteErr) throw loanCompleteErr;
-        toast.success("🎉 All payments complete — loan marked as completed!");
+      const paidDate = new Date().toISOString().split("T")[0];
+      const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
+        p_repayment_id: selectedRepayment.id,
+        p_amount: paidAmount,
+        p_payment_method: paymentMethod,
+        p_account_id: selectedRepayment.destination_account_id,
+        p_transaction_reference: transactionRef || null,
+        p_paid_date: paidDate,
+      });
+      if (rpcError) throw rpcError;
+      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+      if (!rpcResult?.success) {
+        throw new Error(rpcResult?.error || "Failed to record payment");
       }
 
-      return { paidAmount, isPartial: paidAmount < dueAmount, isOverpayment: paidAmount > dueAmount };
+      return { paidAmount, isPartial: paidAmount < Number(selectedRepayment.amount), isOverpayment: false };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
