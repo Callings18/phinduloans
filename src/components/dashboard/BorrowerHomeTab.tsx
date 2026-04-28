@@ -268,9 +268,9 @@ export default function BorrowerHomeTab({
         />
       )}
 
-      {/* Indicative eligibility */}
+      {/* Indicative eligibility — monthly_income lives on loan_applications, not profiles */}
       <EligibilityWidget
-        monthlyIncome={profile?.monthly_income}
+        monthlyIncome={loans[0]?.monthly_income ?? undefined}
         hasActiveLoan={activeLoans.length > 0}
         onApply={() => onTabChange("apply")}
       />
