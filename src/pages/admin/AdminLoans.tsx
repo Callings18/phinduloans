@@ -455,130 +455,67 @@ const AdminLoans = () => {
 
       const destAccount = accounts.find(a => a.id === quickPaymentData.destination_account_id);
       if (!destAccount) throw new Error("Destination account not found");
+      let remaining = paidAmount;
+      let processedInstallments = 0;
+      const paidDate = new Date().toISOString().split("T")[0];
+      const txBase = quickPaymentData.transaction_reference || `PAY-${Date.now()}`;
 
-      // Preserve the original amount before any partial payments reduced it
-      const savedOriginalAmount = nextRepayment.original_amount || nextRepayment.amount;
-      const isFullPayment = paidAmount >= amountDue;
-
-      if (isFullPayment) {
-        const { error } = await supabase
-          .from("loan_repayments")
-          .update({
-            status: "paid",
-            paid_date: new Date().toISOString().split("T")[0],
-            payment_method: quickPaymentData.payment_method,
-            transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
-            principal_paid: Number(savedOriginalAmount),
-            original_amount: savedOriginalAmount,
-            amount: Number(savedOriginalAmount),
-          })
-          .eq("id", nextRepayment.id);
-        if (error) throw error;
-
-        // Handle overpayment — apply excess to next pending installment
-        if (paidAmount > amountDue) {
-          let excess = paidAmount - amountDue;
-          const { data: nextPendings } = await supabase
-            .from("loan_repayments")
-            .select("id, amount, original_amount, principal_paid")
-            .eq("loan_id", quickPaymentLoan.id)
-            .in("status", ["pending", "overdue"])
-            .neq("id", nextRepayment.id)
-            .order("due_date", { ascending: true });
-
-          for (const np of (nextPendings || [])) {
-            if (excess <= 0) break;
-            const npAmount = Number(np.amount);
-            const npOriginal = np.original_amount || np.amount;
-            const applied = Math.min(excess, npAmount);
-
-            if (applied >= npAmount) {
-              const { error: autoSettleErr } = await supabase
-                .from("loan_repayments")
-                .update({
-                  status: "paid",
-                  paid_date: new Date().toISOString().split("T")[0],
-                  payment_method: quickPaymentData.payment_method,
-                  principal_paid: Number(npOriginal),
-                  original_amount: npOriginal,
-                  amount: Number(npOriginal),
-                })
-                .eq("id", np.id);
-              if (autoSettleErr) throw autoSettleErr;
-            } else {
-              const { error: partialApplyErr } = await supabase
-                .from("loan_repayments")
-                .update({
-                  amount: npAmount - applied,
-                  original_amount: npOriginal,
-                  principal_paid: (Number(np.principal_paid) || 0) + applied,
-                })
-                .eq("id", np.id);
-              if (partialApplyErr) throw partialApplyErr;
-            }
-            excess -= applied;
-          }
-        }
-      } else {
-        const remainingAmount = amountDue - paidAmount;
-        const { error } = await supabase
-          .from("loan_repayments")
-          .update({
-            amount: remainingAmount,
-            payment_method: quickPaymentData.payment_method,
-            transaction_reference: quickPaymentData.transaction_reference || `PAY-${Date.now()}`,
-            principal_paid: (Number((nextRepayment as any).principal_paid) || 0) + paidAmount,
-            original_amount: savedOriginalAmount,
-          })
-          .eq("id", nextRepayment.id);
-        if (error) throw error;
-      }
-
-      // Record account transaction
-      const newBalance = destAccount.balance + paidAmount;
-      const { error: accountError } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance })
-        .eq("id", quickPaymentData.destination_account_id);
-      if (accountError) throw accountError;
-
-      const { error: txError } = await supabase.from("account_transactions").insert({
-        account_id: quickPaymentData.destination_account_id,
-        transaction_type: "repayment",
-        amount: paidAmount,
-        balance_before: destAccount.balance,
-        balance_after: newBalance,
-        reference_type: "loan_repayment",
-        reference_id: nextRepayment.id,
-        notes: `Loan repayment from ${quickPaymentLoan.full_name}`,
-      });
-      if (txError) throw txError;
-
-      // Check if all repayments are paid
-      const { data: remainingUnpaid } = await supabase
+      // Fetch current open installments and apply payment FIFO through the canonical RPC.
+      const { data: pendingInstallments, error: pendingError } = await supabase
         .from("loan_repayments")
-        .select("id")
+        .select("id, amount")
         .eq("loan_id", quickPaymentLoan.id)
-        .in("status", ["pending", "overdue"]);
+        .in("status", ["pending", "overdue", "partial"])
+        .order("due_date", { ascending: true });
+      if (pendingError) throw pendingError;
 
-      if (remainingUnpaid && remainingUnpaid.length === 0) {
-        await supabase
-          .from("loan_applications")
-          .update({ status: "completed" })
-          .eq("id", quickPaymentLoan.id);
+      for (const installment of pendingInstallments || []) {
+        if (remaining <= 0) break;
+        const installmentOutstanding = Number(installment.amount) || 0;
+        if (installmentOutstanding <= 0) continue;
+        const allocation = Math.min(remaining, installmentOutstanding);
+
+        const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
+          p_repayment_id: installment.id,
+          p_amount: allocation,
+          p_payment_method: quickPaymentData.payment_method,
+          p_account_id: quickPaymentData.destination_account_id,
+          p_transaction_reference: `${txBase}-${processedInstallments + 1}`,
+          p_paid_date: paidDate,
+        });
+        if (rpcError) throw rpcError;
+        const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+        if (!rpcResult?.success) {
+          throw new Error(rpcResult?.error || "Failed to record repayment");
+        }
+
+        remaining -= allocation;
+        processedInstallments += 1;
       }
 
-      return { paidAmount, isFullPayment };
+      if (processedInstallments === 0) {
+        throw new Error("No outstanding installments available for payment");
+      }
+
+      return {
+        paidAmount: paidAmount - remaining,
+        isFullPayment: remaining <= 0 && paidAmount <= amountDue,
+        overpayment: Math.max(remaining, 0),
+      };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["loan-due-dates"] });
       queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
       if (result.isFullPayment) {
         toast.success("Full payment recorded and deposited to account");
       } else {
         toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded and deposited`);
+      }
+      if (result.overpayment > 0) {
+        toast.warning(`K${result.overpayment.toLocaleString()} could not be allocated because no more open installments were available.`);
       }
       setIsQuickPaymentOpen(false);
       setQuickPaymentLoan(null);

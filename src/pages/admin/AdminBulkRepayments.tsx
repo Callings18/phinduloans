@@ -31,7 +31,6 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { 
   Users, 
   Search, 
@@ -92,7 +91,6 @@ const AdminBulkRepayments = () => {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   // Fetch borrowers
   const { data: borrowers, isLoading: loadingBorrowers } = useQuery({
@@ -224,101 +222,35 @@ const AdminBulkRepayments = () => {
       if (!destinationAccountId) throw new Error("Please select a destination account");
 
       const paidDate = format(new Date(), 'yyyy-MM-dd');
-      const destination = accounts.find(a => a.id === destinationAccountId);
-      if (!destination) throw new Error("Destination account not found");
+      const txBase = transactionRef || `BULK-${Date.now()}`;
+      let processed = 0;
 
-      // Credit destination account once with the full bulk payment.
-      const totalBulkAmount = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
-      const newBalance = Number(destination.balance) + totalBulkAmount;
-      const { error: accErr } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance })
-        .eq("id", destinationAccountId);
-      if (accErr) throw accErr;
-
-      const { error: txErr } = await supabase.from("account_transactions").insert({
-        account_id: destinationAccountId,
-        transaction_type: "repayment",
-        amount: totalBulkAmount,
-        balance_before: Number(destination.balance),
-        balance_after: newBalance,
-        reference_type: "bulk_loan_repayment",
-        reference_id: selectedBorrowerId || null,
-        notes: `Bulk repayment allocation for borrower ${selectedBorrowerId}`,
-        created_by: user?.id,
-      });
-      if (txErr) throw txErr;
-
-      // Update each repayment
-      const affectedLoanIds = new Set<string>();
-      for (const allocation of allocations) {
-        affectedLoanIds.add(allocation.loanId);
-        const isFullPayment = allocation.allocatedAmount >= allocation.originalAmount;
-
-        if (isFullPayment) {
-          // Mark as fully paid
-          const { error } = await supabase
-            .from('loan_repayments')
-            .update({
-              status: 'paid',
-              paid_date: paidDate,
-              payment_method: paymentMethod,
-              transaction_reference: transactionRef || `BULK-${Date.now()}`,
-              principal_paid: allocation.allocatedAmount,
-              original_amount: allocation.originalAmount,
-              amount: allocation.originalAmount,
-            })
-            .eq('id', allocation.repaymentId);
-
-          if (error) throw error;
-        } else {
-          // Partial payment - update amount and record partial
-          const { data: currentRep } = await supabase
-            .from('loan_repayments')
-            .select('amount, original_amount, principal_paid')
-            .eq('id', allocation.repaymentId)
-            .single();
-
-          const originalAmount = currentRep?.original_amount || currentRep?.amount || allocation.originalAmount;
-          const newAmount = allocation.originalAmount - allocation.allocatedAmount;
-          const existingPrincipalPaid = Number((currentRep as any)?.principal_paid) || 0;
-
-          const { error } = await supabase
-            .from('loan_repayments')
-            .update({
-              amount: newAmount,
-              original_amount: originalAmount,
-              payment_method: paymentMethod,
-              transaction_reference: transactionRef || `BULK-${Date.now()}`,
-              principal_paid: existingPrincipalPaid + allocation.allocatedAmount,
-            })
-            .eq('id', allocation.repaymentId);
-
-          if (error) throw error;
+      // Delegate repayment accounting/status transitions to canonical RPC per installment.
+      for (let idx = 0; idx < allocations.length; idx += 1) {
+        const allocation = allocations[idx];
+        const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
+          p_repayment_id: allocation.repaymentId,
+          p_amount: allocation.allocatedAmount,
+          p_payment_method: paymentMethod,
+          p_account_id: destinationAccountId,
+          p_transaction_reference: `${txBase}-${idx + 1}`,
+          p_paid_date: paidDate,
+        });
+        if (rpcError) throw rpcError;
+        const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+        if (!rpcResult?.success) {
+          throw new Error(rpcResult?.error || "Failed to process bulk repayment allocation");
         }
+        processed += 1;
       }
 
-      // Auto-complete loans with no pending/overdue installments left.
-      for (const loanId of affectedLoanIds) {
-        const { data: remaining } = await supabase
-          .from("loan_repayments")
-          .select("id")
-          .eq("loan_id", loanId)
-          .in("status", ["pending", "overdue"]);
-        if (remaining && remaining.length === 0) {
-          const { error: completeErr } = await supabase
-            .from("loan_applications")
-            .update({ status: "completed" })
-            .eq("id", loanId);
-          if (completeErr) throw completeErr;
-        }
-      }
-
-      return { processed: allocations.length };
+      return { processed };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['borrower-loans'] });
       queryClient.invalidateQueries({ queryKey: ['admin-repayments'] });
+      queryClient.invalidateQueries({ queryKey: ['active-accounts-bulk-repayments'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast({ 
         title: "Bulk Payment Processed", 
         description: `Successfully allocated payment across ${result.processed} installment(s)` 
