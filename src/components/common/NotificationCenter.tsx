@@ -208,8 +208,8 @@ const NotificationCenter: React.FC = () => {
     const markAsReadMutation = useMutation({
         mutationFn: async (notificationId: string) => {
             const { error } = await supabase
-                .from("notification_logs")
-                .update({ status: "read" })
+                .from("notification_inbox")
+                .update({ is_read: true, read_at: new Date().toISOString() })
                 .eq("id", notificationId);
             if (error) throw error;
         },
@@ -223,10 +223,10 @@ const NotificationCenter: React.FC = () => {
         mutationFn: async () => {
             if (!user?.id) return;
             const { error } = await supabase
-                .from("notification_logs")
-                .update({ status: "read" })
+                .from("notification_inbox")
+                .update({ is_read: true, read_at: new Date().toISOString() })
                 .eq("user_id", user.id)
-                .eq("status", "unread");
+                .eq("is_read", false);
             if (error) throw error;
         },
         onSuccess: () => {
@@ -238,7 +238,7 @@ const NotificationCenter: React.FC = () => {
     const deleteNotificationMutation = useMutation({
         mutationFn: async (notificationId: string) => {
             const { error } = await supabase
-                .from("notification_logs")
+                .from("notification_inbox")
                 .delete()
                 .eq("id", notificationId);
             if (error) throw error;
@@ -248,7 +248,7 @@ const NotificationCenter: React.FC = () => {
         },
     });
 
-    const unreadCount = notifications.filter((n) => n.status === "unread").length;
+    const unreadCount = notifications.filter((n) => !n.is_read).length;
 
     if (!user) return null;
 
