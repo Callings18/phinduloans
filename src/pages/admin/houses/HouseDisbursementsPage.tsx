@@ -27,8 +27,9 @@ export default function HouseDisbursementsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("accounts")
-        .select("id, account_name, balance")
+        .select("id, account_name, balance, is_protected")
         .eq("is_active", true)
+        .or("is_protected.is.null,is_protected.eq.false")
         .order("account_name");
       if (error) throw error;
       return data ?? [];

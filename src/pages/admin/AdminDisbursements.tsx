@@ -211,8 +211,9 @@ const AdminDisbursements = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("accounts")
-        .select("id, account_name, account_type, balance")
+        .select("id, account_name, account_type, balance, is_protected")
         .eq("is_active", true)
+        .or("is_protected.is.null,is_protected.eq.false")
         .order("account_name");
       
       if (error) throw error;
