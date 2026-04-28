@@ -20,7 +20,13 @@ import EligibilityWidget from "./EligibilityWidget";
 import ResumeApplicationBanner from "./ResumeApplicationBanner";
 import type { BorrowerTab } from "./BorrowerBottomNav";
 import type { LucideIcon } from "lucide-react";
-import type { BorrowerDashboardLoan } from "@/types/borrowerDashboard";
+import type {
+  BorrowerDashboardLoan,
+  BorrowerDashboardRepayment,
+  BorrowerDashboardProfile,
+  BorrowerDashboardKycInfo,
+} from "@/types/borrowerDashboard";
+import type { User } from "@supabase/supabase-js";
 
 type HomeNextStep = {
   title: string;
@@ -33,11 +39,11 @@ type HomeNextStep = {
 };
 
 interface BorrowerHomeTabProps {
-  user: any;
-  profile: any;
-  kycInfo?: any;
+  user: User | null;
+  profile: BorrowerDashboardProfile | null;
+  kycInfo?: BorrowerDashboardKycInfo | null;
   loans: BorrowerDashboardLoan[];
-  repayments: any[];
+  repayments: BorrowerDashboardRepayment[];
   activeLoans: BorrowerDashboardLoan[];
   kycVerified: boolean;
   isStaff: boolean;
@@ -262,9 +268,9 @@ export default function BorrowerHomeTab({
         />
       )}
 
-      {/* Indicative eligibility */}
+      {/* Indicative eligibility — monthly_income lives on loan_applications, not profiles */}
       <EligibilityWidget
-        monthlyIncome={profile?.monthly_income}
+        monthlyIncome={loans[0]?.monthly_income ?? undefined}
         hasActiveLoan={activeLoans.length > 0}
         onApply={() => onTabChange("apply")}
       />
