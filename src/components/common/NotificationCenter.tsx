@@ -357,7 +357,7 @@ const NotificationCenter: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex flex-col gap-1 shrink-0">
-                                    {notification.status === "unread" && (
+                                    {!notification.is_read && (
                                         <Button
                                             variant="ghost"
                                             size="icon"
