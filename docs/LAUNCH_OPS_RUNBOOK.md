@@ -197,3 +197,108 @@ Single environment (production Lovable Cloud project):
 
 - Platform Lead: _________________ Date: _______
 - Founder: _________________ Date: _______
+
+---
+
+## 8. Day 1–Day 7 Stabilization Operations Checklist
+
+7-day post-launch watch window. Owner: Platform Lead. Run the **Daily Fast Checks**
+every operating day, plus the dated milestone work below. Record any anomaly in
+§9 Stabilization Log.
+
+### 8.1 Daily Fast Checks (≤ 5 min, every day D1–D7)
+
+Run these as `read_query` against production. Pass = every result matches the
+expected column. Any fail → escalate per §2 P0 playbooks.
+
+| # | Check | Query | Expected |
+|---|-------|-------|----------|
+| 1 | Pending notification backlog | `SELECT COUNT(*) FROM public.notification_logs WHERE status='pending';` | < 100 |
+| 2 | Duplicate notification groups (24h) | `SELECT recipient,title,message,COUNT(*) c FROM public.notification_logs WHERE created_at > now()-interval '24 hours' GROUP BY 1,2,3 HAVING COUNT(*) > 1;` | 0 rows |
+| 3 | `PERMISSION_DENIED` spike | `SELECT COUNT(*) FROM public.audit_logs WHERE action ILIKE '%denied%' AND created_at > now()-interval '24 hours';` | within ±20% of trailing 7-day avg |
+| 4 | New underpaid-completed loans | `SELECT la.id FROM public.loan_applications la WHERE la.status='completed' AND la.updated_at > now()-interval '24 hours' AND COALESCE((SELECT SUM(principal_paid) FROM public.loan_repayments WHERE loan_id=la.id),0) < la.loan_amount;` | 0 rows |
+| 5 | Queue plan index-based | `EXPLAIN SELECT * FROM public.notification_logs WHERE status='pending' ORDER BY created_at LIMIT 50;` | uses `idx_notification_logs_status_created` |
+| 6 | Duplicate installments | `SELECT loan_id,installment_number,COUNT(*) c FROM public.loan_repayments GROUP BY 1,2 HAVING COUNT(*) > 1;` | 0 rows |
+| 7 | Cron heartbeat | `SELECT MAX(created_at) FROM public.notification_logs WHERE created_at > now()-interval '24 hours';` | < 1 hour old |
+
+### 8.2 Dated Milestones
+
+#### Day 1 — Launch + 24h
+- [ ] Run all Daily Fast Checks; baseline numbers logged in §9.
+- [ ] Confirm `cloud_status` = `ACTIVE_HEALTHY`.
+- [ ] Verify push/SMS providers (Brevo, ExciteSMS, Twilio) returning 2xx in edge function logs.
+- [ ] Borrower + staff smoke login confirmed.
+
+#### Day 2 — PITR Restore Drill
+- [ ] Execute §1 PITR Restore Drill into a scratch project.
+- [ ] Record `RTO`, `RPO`, timestamp, operator, outcome in §6 PITR Drill Log.
+- [ ] Pass criteria met → mark drill row PASS; fail → open P1 incident.
+
+#### Day 3 — Legacy Loan Reconciliation
+- [ ] Export the 13 legacy underpaid-completed loans:
+      ```sql
+      SELECT la.id, la.borrower_id, la.loan_amount,
+             COALESCE(SUM(lr.principal_paid),0) AS principal_paid,
+             la.loan_amount - COALESCE(SUM(lr.principal_paid),0) AS shortfall
+      FROM public.loan_applications la
+      LEFT JOIN public.loan_repayments lr ON lr.loan_id = la.id
+      WHERE la.status='completed'
+      GROUP BY la.id
+      HAVING la.loan_amount > COALESCE(SUM(lr.principal_paid),0);
+      ```
+- [ ] Finance decision sheet created (`reconcile` vs `write-off` per loan).
+- [ ] Apply corrections via compensating `account_transactions` + `loan_events` rows. **No deletes.**
+- [ ] Re-run Check #4 → expect 0 rows after corrections.
+
+#### Day 4 — Governance Sign-off
+- [ ] Platform Lead signs §7.
+- [ ] Founder signs §7.
+- [ ] Runbook version tagged in git (e.g., `runbook-v1.0-launch`).
+
+#### Day 5 — Duplicate Notification Monitor
+- [ ] Add daily-scheduled job (`pg_cron` or edge function) running Check #2 on 24h and 7d windows.
+- [ ] Wire alert: any post-fix duplicate group > 0 → notify Platform Lead via SMS + email.
+- [ ] Document monitor in §10.
+
+#### Day 6 — Regression Hardening
+- [ ] Add Check #4 ("new underpaid-completed = 0") to the Day 5 scheduled job set.
+- [ ] Confirm `record_loan_payment` reconciliation gate untouched since 2026-04-28 patch (`git log supabase/migrations | grep record_loan_payment`).
+- [ ] Spot-check a current active loan: principal sum < loan_amount → status MUST NOT be `completed`.
+
+#### Day 7 — Stabilization Verdict
+- [ ] Aggregate 7 days of Daily Fast Check results in §9.
+- [ ] If 0 incidents and all checks green → declare **stabilization complete**, transition to BAU monitoring cadence (weekly).
+- [ ] If any unresolved P0/P1 → extend watch window 7 more days, document reason.
+
+### 8.3 No-Go Trigger Recap (mirrors launch memo)
+
+If any of these surface during D1–D7, **stop the line** and execute §2:
+- New duplicate notification blast group after idempotency fix.
+- New underpaid loan auto-marked `completed`.
+- `anon` execute reappearing on sensitive RPCs.
+- `audit_logs` insert surface reopened to broad roles.
+- Queue path reverting to sequential scan with material latency regression.
+
+---
+
+## 9. Stabilization Log (D1–D7)
+
+| Day | Date | Operator | Check #1 | #2 | #3 | #4 | #5 | #6 | #7 | Incidents | Notes |
+|-----|------|----------|----------|----|----|----|----|----|----|-----------|-------|
+| D1  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | _ |
+| D2  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | PITR drill day |
+| D3  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | Legacy reconciliation |
+| D4  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | Sign-off |
+| D5  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | Monitor live |
+| D6  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | Regression hardening |
+| D7  | _pending_ | _pending_ | _ | _ | _ | _ | _ | _ | _ | _ | Verdict |
+
+---
+
+## 10. Active Monitors
+
+| Monitor | Schedule | Source | Alert channel | Owner |
+|---------|----------|--------|---------------|-------|
+| Duplicate notification groups (24h/7d) | _pending Day 5_ | pg_cron / edge fn | SMS + email to Platform Lead | Platform Lead |
+| New underpaid-completed loans | _pending Day 6_ | pg_cron / edge fn | SMS + email to Platform Lead | Platform Lead |
+| Notification queue depth | continuous | Daily Fast Check #1 | manual | Platform Lead |
