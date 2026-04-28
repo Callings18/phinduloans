@@ -62,26 +62,26 @@ const NotificationCenter: React.FC = () => {
     const [pushEnabled, setPushEnabled] = useState(false);
     const [showPushPrompt, setShowPushPrompt] = useState(false);
 
-    // Fetch notifications
+    // Fetch notifications from in-app inbox
     const { data: notifications = [], isLoading } = useQuery({
         queryKey: ["notifications", user?.id],
         queryFn: async () => {
             if (!user?.id) return [];
             const { data, error } = await supabase
-                .from("notification_logs")
+                .from("notification_inbox")
                 .select("*")
                 .eq("user_id", user.id)
                 .order("created_at", { ascending: false })
-                .limit(20);
+                .limit(50);
 
             if (error) {
                 console.error("Error fetching notifications:", error);
                 return [];
             }
-            return data as Notification[];
+            return (data ?? []) as unknown as Notification[];
         },
         enabled: !!user?.id,
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 60000,
     });
 
     // Check push notification permission status
