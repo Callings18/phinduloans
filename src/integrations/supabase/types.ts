@@ -24,6 +24,7 @@ export type Database = {
           created_by: string | null
           destination: string | null
           id: string
+          metadata: Json
           notes: string | null
           reference_id: string | null
           reference_type: string | null
@@ -39,6 +40,7 @@ export type Database = {
           created_by?: string | null
           destination?: string | null
           id?: string
+          metadata?: Json
           notes?: string | null
           reference_id?: string | null
           reference_type?: string | null
@@ -54,6 +56,7 @@ export type Database = {
           created_by?: string | null
           destination?: string | null
           id?: string
+          metadata?: Json
           notes?: string | null
           reference_id?: string | null
           reference_type?: string | null
@@ -80,6 +83,7 @@ export type Database = {
           currency: string
           id: string
           is_active: boolean | null
+          is_protected: boolean
           notes: string | null
           updated_at: string
         }
@@ -92,6 +96,7 @@ export type Database = {
           currency?: string
           id?: string
           is_active?: boolean | null
+          is_protected?: boolean
           notes?: string | null
           updated_at?: string
         }
@@ -104,6 +109,7 @@ export type Database = {
           currency?: string
           id?: string
           is_active?: boolean | null
+          is_protected?: boolean
           notes?: string | null
           updated_at?: string
         }
