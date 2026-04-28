@@ -1,65 +1,44 @@
-## Marketeer-only import — deduplicated
+## Activate Dorcus Banda's loan + post her K100 day-1 payment
 
-Scope is now **only the `Marketeer Loans` sheet** (74 rows). I've already cross-checked every name against the live database to avoid duplicates.
+She got the Marketeer loan offline on **24 April 2026** with K2,000 principal, K2,600 total (30% / 26 daily installments of K100), and has paid **K100 on day 1**. The system has her as `pending` with no schedule. We need to bring her in line with field reality without breaking ledger parity.
 
-### What's already in the system (skip these)
+### Excel evidence (Marketeer Loans sheet, row 86)
+- Date marker above her row: **24th APRIL, 2026**
+- Principal 2,000 / Interest 600 / Total 2,600 / Daily repayment 100
+- Day-1 collection cell: **100** (only one day-cell filled)
 
-9 of the 74 Excel rows are already live in the database under `MARKETEER`, with matching principal and an active 26-day schedule. Most are mid-collection.
+### Current DB state
+- loan_id: `d8200188-d6e8-407d-b747-fab2a8628e88`
+- status: `pending`, term_unit: `days`, loan_term_months: 26
+- product: MARKETEER, source: `internal`, no schedule rows yet, no disbursement row
 
-| # | Excel name | DB name | Principal | Status | Posted payments | Total paid |
-|---|---|---|---|---|---|---|
-| 1 | Chisenga Lucy | Chisenga Lucy | 1,500 | active | 11/26 | 825 |
-| 2 | Civiness Mungamelo | Civiness mungamelo | 5,000 | active | 2/26 | 500 |
-| 3 | Dorcus banda | dorcus banda | 2,000 | pending | 0/0 | 0 |
-| 4 | Kapepe Ireen | Kapepe Ireen | 2,500 | active | 11/26 | 1,375 |
-| 5 | Maureen Chandala | maureen chandalala | 1,000 | active | 4/26 | 200 |
-| 6 | Munyinda Sauka Febby | Munyinda Sauka Febb | 1,000 | active | 11/26 | 550 |
-| 7 | Rose Bwalya | Rose Bwalya | 2,000 | active | 11/26 | 1,100 |
-| 8 | Shambweka Ireen | Shambweka Ireen | 1,000 | active | 11/26 | 530 |
-| 9 | Tikambenji Tembo | Tikambenji Tembo | 200 | active | 11/26 | 110 |
+### Why this needs a one-off SQL migration (not the UI)
 
-These will be **skipped entirely** — no new loan, no new disbursement, no new repayments. They're flagged in the import report so collections can manually reconcile any per-day cells from the Excel that didn't get posted yet, but the script will not touch them.
+The canonical `complete_disbursement` RPC always writes `disbursed_at = now()`, and the schedule trigger uses `CURRENT_DATE` as the anchor. Putting it through the normal admin flow today would start her schedule on **28 Apr** instead of **24 Apr**, mis-aligning every installment by 4 days and making her day-1 payment look 4 days late.
 
-> One outlier worth your eye: **Dorcus banda** is sitting at `pending` in the DB with no schedule. Either approve it manually or tell me to advance it through the standard `pending → approved → disbursed → active` chain as part of this run. I will not touch it without explicit say-so.
+### Migration steps (single transaction)
 
-### What gets imported (65 new loans)
+1. Insert a `disbursements` row: K2,000 against ZANACO BANK, `status='completed'`, `disbursed_at='2026-04-24 12:00 UTC'`, `transaction_reference='OFFLINE-IMPORT-DORCUS-2026-04-24'`.
+2. Insert matching `account_transactions` debit row against ZANACO (–K2,000).
+3. Update `loan_applications`: `status='active'`, `disbursed_at='2026-04-24 12:00 UTC'`, `approval_stage='disbursed'`, `approved_at='2026-04-24 12:00 UTC'`.
+4. Insert `loan_status_transitions` rows for the audit trail: pending→approved→awaiting_disbursement→disbursed→active, all timestamped 24 Apr.
+5. **Manually generate the 26-day Marketeer schedule** anchored at 24 Apr (skipping Sundays), bypassing the trigger.
+6. Mark installment #1 as `paid`: `amount=100, principal_paid≈77, interest_paid≈23, paid_date='2026-04-24', payment_method='cash', transaction_reference='OFFLINE-IMPORT-DORCUS-DAY1'`.
+7. Insert matching `account_transactions` credit row against ZANACO (+K100).
+8. Log both events to `audit_logs` with action `OFFLINE_IMPORT_BACKDATED`.
 
-The remaining **65 Marketeer rows** are new and will be created end-to-end:
-
-1. **Placeholder borrower** per name (sentinel NRC `IMP{seq}/26/N`, placeholder phone, `kyc_status='pending_offline_import'`, `city='Lusaka'`).
-2. **Loan application** with full Marketeer binding: `product_code='MARKETEER'`, `term_unit='days'`, `repayment_frequency='daily'`, `loan_amount`, `total_repayment`, `interest_rate=30`, `loan_term_months=26` (the canonical Marketeer collection window per `MARKETEER_COLLECTION_DAYS`), `application_source='offline_import_2026_marketeer'`.
-3. **Approve → awaiting_disbursement → complete_disbursement** RPC against the funding account. The existing `generate_repayment_schedule` trigger then auto-creates the 26-day daily schedule (skipping Sundays).
-4. **Back-dated disbursement date** taken from the nearest preceding date marker in the sheet (14 Apr → 27 Apr 2026). Loans before the first marker (rows 2–5: Shambweka, Kapepe, Rose, plus Pe — but Shambweka/Kapepe/Rose are duplicates, so only **Pe** at row 5 has no marker → I'll use 14 Apr 2026 as default and flag it).
-5. **Back-dated payments** per loan: for each numeric per-day cell, post a payment via `record_loan_payment` against the matching installment in order. Cells with `nil`, `to pay 40`, etc. → not posted (logged as notes). If a cell exceeds installment outstanding → cap at outstanding, log surplus to report.
-
-### Funding account
-Default: **`ZANACO BANK`** (only account with material balance). Total new principal will be ~K90k–K130k (estimating from the 65 rows). Since the live Zanaco balance is K57,845, I'll insert one funding top-up ledger entry equal to the total new principal before disbursing — tagged `import_topup_marketeer_2026` for easy reversal/audit.
-
-If you'd rather use `mobile money`, `Stanbic`, `UAT Operating`, or `Cash`, say so before I run.
+### Net Zanaco impact
+–K2,000 (disbursement) + K100 (day-1 collection) = **–K1,900** → 57,845 → **55,945**.
 
 ### Idempotency
+Guard at top: `IF EXISTS (SELECT 1 FROM disbursements WHERE loan_id='<dorcus>' AND transaction_reference='OFFLINE-IMPORT-DORCUS-2026-04-24') THEN RAISE NOTICE 'already imported'; RETURN; END IF;`. Re-runs are no-ops.
 
-The migration carries an `import_row_key` per row (sheet+row index, e.g. `MKT-7`) saved into `loan_applications.notes` JSON. Re-running the migration is a no-op for any row whose `import_row_key` already exists. The 9 existing-loan names are also added to a hard skip-list inside the migration, double-locked by exact name match against current MARKETEER loans.
+### What I will NOT do
+- Touch any other Marketeer loan (the broader 65-loan import is still pending separate approval).
+- Disable notification triggers — they will fire and silently fail on placeholder contact details. Tell me if you'd rather I wrap the run in `SET LOCAL session_replication_role = replica`.
 
-### Build error fix (bundled)
-
-Same commit will fix the `LoanDetailsModal.tsx` build error (lines 397, 412) by adding `destination_account_id?: string | null` to the local `Repayment` interface and including it in the SELECT that loads repayments.
-
-### Deliverables
-
-1. **Idempotent SQL migration** for the 65 new Marketeer loans + funding top-up + per-loan back-dated payments.
-2. **`/mnt/documents/marketeer_import_report.csv`** — every Excel row (all 74) with: action taken (`SKIPPED_DUPLICATE` / `IMPORTED` / `NEEDS_MANUAL` for Dorcus), new loan id, principal, total repayment, marker date used, count of back-dated payments posted, count of cells flagged.
-3. **`/mnt/documents/marketeer_payments_posted.csv`** — every payment that was back-dated, with installment #, due date, amount, paid date.
-4. **Smoke checks** I'll paste back after run:
-   - `count(*) FROM loan_applications WHERE application_source='offline_import_2026_marketeer'` → expect 65
-   - sum(loan_amount) for those 65 vs Excel sum
-   - zero trigger errors in `audit_logs` for the import window
-   - Zanaco balance change = total principal disbursed (net of repayments collected back)
-
-### What I'm not doing
-
-- No notification suppression toggling — placeholder borrowers have synthetic phone/email so SMS/email triggers will fire-and-fail-silently. Tell me if you want `SET LOCAL session_replication_role = replica` wrapped around the import.
-- No touching the 9 existing loans (no schedule edits, no payment top-ups). Their per-day cells in the Excel may diverge from what's already posted in the DB — that's a reconciliation conversation for collections, not this import.
-- No fuzzy auto-merge of new placeholders against borrowers in *other* product houses. Exact-match-only against MARKETEER loans (already done above).
-
-Confirm and I'll run the migration. If you want a different funding account, want Dorcus included in the run, or want notifications suppressed, say so now.
+### Post-run verification
+- `loan_applications` status = `active`, `disbursed_at` = 24 Apr.
+- 26 schedule rows, installment #1 status `paid` with `paid_date = 24 Apr`.
+- `account_transactions` rows tie out: disbursement debit + day-1 credit linked to her loan.
+- ZANACO balance moves from 57,845 to 55,945.
