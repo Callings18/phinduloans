@@ -2595,44 +2595,53 @@ export type Database = {
       notification_logs: {
         Row: {
           created_at: string
+          error_message: string | null
           id: string
           idempotency_key: string | null
           message: string | null
           provider_response: Json | null
           recipient: string
+          retry_count: number
           sent_at: string | null
           status: string | null
           subject: string | null
           title: string | null
           type: string
+          updated_at: string
           user_id: string | null
         }
         Insert: {
           created_at?: string
+          error_message?: string | null
           id?: string
           idempotency_key?: string | null
           message?: string | null
           provider_response?: Json | null
           recipient: string
+          retry_count?: number
           sent_at?: string | null
           status?: string | null
           subject?: string | null
           title?: string | null
           type: string
+          updated_at?: string
           user_id?: string | null
         }
         Update: {
           created_at?: string
+          error_message?: string | null
           id?: string
           idempotency_key?: string | null
           message?: string | null
           provider_response?: Json | null
           recipient?: string
+          retry_count?: number
           sent_at?: string | null
           status?: string | null
           subject?: string | null
           title?: string | null
           type?: string
+          updated_at?: string
           user_id?: string | null
         }
         Relationships: []
