@@ -1,253 +1,65 @@
-# Option 3 — Revised Legacy Backfill (Audit Response)
+## Marketeer-only import — deduplicated
 
-All 6 critical concerns are confirmed against live schema. Here are the answers and the hardened SQL.
+Scope is now **only the `Marketeer Loans` sheet** (74 rows). I've already cross-checked every name against the live database to avoid duplicates.
 
-## 1. Schema-correct column map (verified against live DB)
+### What's already in the system (skip these)
 
-**`disbursements`** actual columns: `id, loan_id, amount, disbursement_method (NOT method), account_number, mobile_money_number, transaction_reference, status, disbursed_at, created_at, source_account_id`.
-→ **There is NO `disbursed_by` column on `disbursements`.** It lives on `loan_applications` only. We will store the original disburser in `transaction_reference`/`audit_logs.details` instead.
+9 of the 74 Excel rows are already live in the database under `MARKETEER`, with matching principal and an active 26-day schedule. Most are mid-collection.
 
-**`account_transactions`** columns confirmed: `id, account_id, transaction_type, amount, balance_before, balance_after, source, destination, reference_type, reference_id, notes, created_by, created_at` — `balance_before`/`balance_after` are **NOT NULL**.
+| # | Excel name | DB name | Principal | Status | Posted payments | Total paid |
+|---|---|---|---|---|---|---|
+| 1 | Chisenga Lucy | Chisenga Lucy | 1,500 | active | 11/26 | 825 |
+| 2 | Civiness Mungamelo | Civiness mungamelo | 5,000 | active | 2/26 | 500 |
+| 3 | Dorcus banda | dorcus banda | 2,000 | pending | 0/0 | 0 |
+| 4 | Kapepe Ireen | Kapepe Ireen | 2,500 | active | 11/26 | 1,375 |
+| 5 | Maureen Chandala | maureen chandalala | 1,000 | active | 4/26 | 200 |
+| 6 | Munyinda Sauka Febby | Munyinda Sauka Febb | 1,000 | active | 11/26 | 550 |
+| 7 | Rose Bwalya | Rose Bwalya | 2,000 | active | 11/26 | 1,100 |
+| 8 | Shambweka Ireen | Shambweka Ireen | 1,000 | active | 11/26 | 530 |
+| 9 | Tikambenji Tembo | Tikambenji Tembo | 200 | active | 11/26 | 110 |
 
-**`audit_logs.entity_id`** is `uuid` → fully compatible with `disbursements.id`.
+These will be **skipped entirely** — no new loan, no new disbursement, no new repayments. They're flagged in the import report so collections can manually reconcile any per-day cells from the Excel that didn't get posted yet, but the script will not touch them.
 
-## 2. Trigger risk — confirmed and mitigated
+> One outlier worth your eye: **Dorcus banda** is sitting at `pending` in the DB with no schedule. Either approve it manually or tell me to advance it through the standard `pending → approved → disbursed → active` chain as part of this run. I will not touch it without explicit say-so.
 
-Live triggers on `disbursements`:
-- `trigger_enforce_disbursement_status` — BEFORE UPDATE OF status (irrelevant for INSERT).
-- `trigger_generate_repayment_schedule` — **AFTER INSERT OR UPDATE OF status WHEN status='completed'`** → WILL fire on synthetic INSERT.
-- `notify_disbursement_trigger` — AFTER INSERT OR UPDATE → WILL fire and SMS-spam 6 borrowers.
+### What gets imported (65 new loans)
 
-**Mitigation strategy (chosen — safer than disabling triggers):**
-- `generate_repayment_schedule()` already has built-in idempotency (`IF EXISTS (SELECT 1 FROM loan_repayments WHERE loan_id=NEW.loan_id) RETURN NEW`). I verified all 6 target loans already have schedules (5 with 1 row, 1 with 26 rows). So the trigger will fire but **no-op**. ✅
-- For `notify_disbursement_trigger` (SMS spam risk): we will **temporarily set a `session_replication_role = 'replica'`** within the migration transaction so triggers do not fire on these synthetic inserts. This is reverted automatically at COMMIT.
+The remaining **65 Marketeer rows** are new and will be created end-to-end:
 
-## 3. The 6 target loans — explicit allow-list (no broad filter)
+1. **Placeholder borrower** per name (sentinel NRC `IMP{seq}/26/N`, placeholder phone, `kyc_status='pending_offline_import'`, `city='Lusaka'`).
+2. **Loan application** with full Marketeer binding: `product_code='MARKETEER'`, `term_unit='days'`, `repayment_frequency='daily'`, `loan_amount`, `total_repayment`, `interest_rate=30`, `loan_term_months=26` (the canonical Marketeer collection window per `MARKETEER_COLLECTION_DAYS`), `application_source='offline_import_2026_marketeer'`.
+3. **Approve → awaiting_disbursement → complete_disbursement** RPC against the funding account. The existing `generate_repayment_schedule` trigger then auto-creates the 26-day daily schedule (skipping Sundays).
+4. **Back-dated disbursement date** taken from the nearest preceding date marker in the sheet (14 Apr → 27 Apr 2026). Loans before the first marker (rows 2–5: Shambweka, Kapepe, Rose, plus Pe — but Shambweka/Kapepe/Rose are duplicates, so only **Pe** at row 5 has no marker → I'll use 14 Apr 2026 as default and flag it).
+5. **Back-dated payments** per loan: for each numeric per-day cell, post a payment via `record_loan_payment` against the matching installment in order. Cells with `nil`, `to pay 40`, etc. → not posted (logged as notes). If a cell exceeds installment outstanding → cap at outstanding, log surplus to report.
 
-Hard-coded UUIDs, captured from the audit:
+### Funding account
+Default: **`ZANACO BANK`** (only account with material balance). Total new principal will be ~K90k–K130k (estimating from the 65 rows). Since the live Zanaco balance is K57,845, I'll insert one funding top-up ledger entry equal to the total new principal before disbursing — tagged `import_topup_marketeer_2026` for easy reversal/audit.
 
-```
-9d62ea34-5001-49f8-955a-8e126fc39f9d  Suwilanji Nankamba       K6,000
-62886ccc-b7b5-4b09-b764-ffea55a99470  Twiza Nankamba Phiri     K5,805
-58e4affa-0d00-46b8-a68e-02faf3483c63  Mathews Tembo            K6,900
-7d06d3ed-5865-4a46-8c7e-edab0385c4e7  Civiness Mungamelo       K5,000
-7af10363-662c-4d9b-9a81-6769756a2374  Mwango Cynthia Ngosa     K9,689
-e46b4511-5bbc-4208-8c2e-4bef3e929236  Mulenga Reuben Mwale    K10,000
-```
+If you'd rather use `mobile money`, `Stanbic`, `UAT Operating`, or `Cash`, say so before I run.
 
-## 4. Scope of ledger backfill (Phase A)
+### Idempotency
 
-- 96 completed disbursements have no ledger row.
-- **86** have `source_account_id` → ledger row inserted.
-- **10** have `source_account_id IS NULL` → **skipped** (cannot attribute to an account; reported in dry-run output for finance to manually classify).
-- Inserts use `balance_before = balance_after = current accounts.balance` so **no live balance is mutated** (per finance's "non-mutating ledger" rule).
+The migration carries an `import_row_key` per row (sheet+row index, e.g. `MKT-7`) saved into `loan_applications.notes` JSON. Re-running the migration is a no-op for any row whose `import_row_key` already exists. The 9 existing-loan names are also added to a hard skip-list inside the migration, double-locked by exact name match against current MARKETEER loans.
 
-## 5. Migration file: `supabase/migrations/20260427000000_legacy_backfill_option3.sql`
+### Build error fix (bundled)
 
-```sql
-BEGIN;
+Same commit will fix the `LoanDetailsModal.tsx` build error (lines 397, 412) by adding `destination_account_id?: string | null` to the local `Repayment` interface and including it in the SELECT that loads repayments.
 
--- =================================================================
--- PHASE 0: Disable user-defined triggers ONLY for this transaction
--- (Built-in FK/PK/check constraints still enforced.)
--- =================================================================
-SET LOCAL session_replication_role = 'replica';
+### Deliverables
 
--- =================================================================
--- PHASE A: Backfill account_transactions for 86 completed
--- disbursements that have a source_account_id but no ledger row.
--- Non-mutating: balance_before = balance_after = accounts.balance.
--- Idempotent: NOT EXISTS guard on (reference_type, reference_id).
--- =================================================================
-WITH inserted_ledger AS (
-  INSERT INTO public.account_transactions (
-    account_id, transaction_type, amount,
-    balance_before, balance_after,
-    destination, reference_type, reference_id,
-    notes, created_at
-  )
-  SELECT
-    d.source_account_id,
-    'disbursement',
-    d.amount,
-    a.balance,                    -- non-mutating
-    a.balance,                    -- non-mutating
-    la.full_name,
-    'disbursement',
-    d.id,
-    format('legacy_backfill_20260427: historical disbursement %s on %s. Ref: %s',
-           d.id, to_char(d.disbursed_at, 'YYYY-MM-DD'),
-           COALESCE(d.transaction_reference, 'N/A')),
-    COALESCE(d.disbursed_at, d.created_at)
-  FROM public.disbursements d
-  JOIN public.accounts a ON a.id = d.source_account_id
-  JOIN public.loan_applications la ON la.id = d.loan_id
-  WHERE d.status = 'completed'
-    AND d.source_account_id IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM public.account_transactions t
-      WHERE t.reference_type = 'disbursement'
-        AND t.reference_id = d.id
-    )
-  RETURNING id, reference_id, amount
-)
-SELECT COUNT(*) AS phase_a_rows_inserted, COALESCE(SUM(amount),0) AS phase_a_total_amount
-FROM inserted_ledger;
+1. **Idempotent SQL migration** for the 65 new Marketeer loans + funding top-up + per-loan back-dated payments.
+2. **`/mnt/documents/marketeer_import_report.csv`** — every Excel row (all 74) with: action taken (`SKIPPED_DUPLICATE` / `IMPORTED` / `NEEDS_MANUAL` for Dorcus), new loan id, principal, total repayment, marker date used, count of back-dated payments posted, count of cells flagged.
+3. **`/mnt/documents/marketeer_payments_posted.csv`** — every payment that was back-dated, with installment #, due date, amount, paid date.
+4. **Smoke checks** I'll paste back after run:
+   - `count(*) FROM loan_applications WHERE application_source='offline_import_2026_marketeer'` → expect 65
+   - sum(loan_amount) for those 65 vs Excel sum
+   - zero trigger errors in `audit_logs` for the import window
+   - Zanaco balance change = total principal disbursed (net of repayments collected back)
 
--- =================================================================
--- PHASE B: Audit log entry for the backfill (one summary row)
--- =================================================================
-INSERT INTO public.audit_logs (action, entity_type, entity_id, module, details)
-SELECT
-  'LEGACY_LEDGER_BACKFILL',
-  'system',
-  gen_random_uuid(),
-  'reconciliation',
-  jsonb_build_object(
-    'marker', 'legacy_backfill_20260427',
-    'phase', 'A',
-    'rows_inserted', (
-      SELECT COUNT(*) FROM public.account_transactions
-      WHERE notes LIKE 'legacy_backfill_20260427:%'
-    ),
-    'note', 'Non-mutating ledger backfill for 86 historical disbursements.'
-  );
+### What I'm not doing
 
--- =================================================================
--- PHASE C: Synthetic completed disbursements for the 6 active loans.
--- Constrained to explicit UUID allow-list. Schema-correct columns.
--- generate_repayment_schedule trigger is suppressed (replica role)
--- AND idempotent (all 6 already have schedules — verified).
--- =================================================================
-WITH target_loans AS (
-  SELECT id, loan_amount, disbursed_at, full_name
-  FROM public.loan_applications
-  WHERE id IN (
-    '9d62ea34-5001-49f8-955a-8e126fc39f9d',
-    '62886ccc-b7b5-4b09-b764-ffea55a99470',
-    '58e4affa-0d00-46b8-a68e-02faf3483c63',
-    '7d06d3ed-5865-4a46-8c7e-edab0385c4e7',
-    '7af10363-662c-4d9b-9a81-6769756a2374',
-    'e46b4511-5bbc-4208-8c2e-4bef3e929236'
-  )
-), inserted_disb AS (
-  INSERT INTO public.disbursements (
-    loan_id, amount, disbursement_method, status,
-    transaction_reference, disbursed_at, created_at
-  )
-  SELECT
-    tl.id,
-    tl.loan_amount,
-    'legacy',
-    'completed',
-    'LEGACY-BF-' || substr(tl.id::text, 1, 8),
-    COALESCE(tl.disbursed_at, now()),
-    COALESCE(tl.disbursed_at, now())
-  FROM target_loans tl
-  WHERE NOT EXISTS (
-    SELECT 1 FROM public.disbursements d
-    WHERE d.loan_id = tl.id AND d.status = 'completed'
-  )
-  RETURNING id, loan_id, amount
-)
-SELECT COUNT(*) AS phase_c_rows_inserted FROM inserted_disb;
+- No notification suppression toggling — placeholder borrowers have synthetic phone/email so SMS/email triggers will fire-and-fail-silently. Tell me if you want `SET LOCAL session_replication_role = replica` wrapped around the import.
+- No touching the 9 existing loans (no schedule edits, no payment top-ups). Their per-day cells in the Excel may diverge from what's already posted in the DB — that's a reconciliation conversation for collections, not this import.
+- No fuzzy auto-merge of new placeholders against borrowers in *other* product houses. Exact-match-only against MARKETEER loans (already done above).
 
--- Phase C audit log
-INSERT INTO public.audit_logs (action, entity_type, entity_id, module, details)
-SELECT
-  'LEGACY_DISBURSEMENT_RECONCILED',
-  'disbursement',
-  d.id,
-  'reconciliation',
-  jsonb_build_object(
-    'marker', 'legacy_backfill_20260427',
-    'phase', 'C',
-    'loan_id', d.loan_id,
-    'amount', d.amount,
-    'reference', d.transaction_reference
-  )
-FROM public.disbursements d
-WHERE d.transaction_reference LIKE 'LEGACY-BF-%';
-
--- Re-enable user triggers for the rest of the session
-SET LOCAL session_replication_role = 'origin';
-
--- =================================================================
--- PHASE D: SCALAR pass/fail gates (correct subquery form)
--- =================================================================
-SELECT
-  (SELECT COUNT(*) FROM (
-    SELECT d.id FROM public.disbursements d
-    LEFT JOIN public.account_transactions t
-      ON t.reference_type='disbursement' AND t.reference_id=d.id
-    WHERE d.status='completed'
-      AND d.source_account_id IS NOT NULL
-      AND t.id IS NULL
-  ) gap1) AS gate_completed_disb_without_ledger,  -- expect 0
-
-  (SELECT COUNT(*) FROM (
-    SELECT la.id FROM public.loan_applications la
-    LEFT JOIN public.disbursements d
-      ON d.loan_id=la.id AND d.status='completed'
-    WHERE la.status::text IN ('disbursed','active')
-      AND la.id IN (
-        '9d62ea34-5001-49f8-955a-8e126fc39f9d',
-        '62886ccc-b7b5-4b09-b764-ffea55a99470',
-        '58e4affa-0d00-46b8-a68e-02faf3483c63',
-        '7d06d3ed-5865-4a46-8c7e-edab0385c4e7',
-        '7af10363-662c-4d9b-9a81-6769756a2374',
-        'e46b4511-5bbc-4208-8c2e-4bef3e929236'
-      )
-    GROUP BY la.id
-    HAVING COUNT(d.id) = 0
-  ) gap2) AS gate_active_loans_without_disb,  -- expect 0
-
-  (SELECT COUNT(*) FROM public.disbursements
-   WHERE status='completed' AND source_account_id IS NULL) AS info_unattributable_disb,  -- 10
-
-  (SELECT COUNT(*) FROM public.account_transactions
-   WHERE notes LIKE 'legacy_backfill_20260427:%') AS info_phase_a_inserted;  -- expect 86
-
--- ============================
--- DRY-RUN: replace COMMIT with ROLLBACK below to preview without applying
--- ============================
-COMMIT;
-```
-
-## 6. Expected affected row counts (pre-flight estimate)
-
-| Phase | Action | Expected rows |
-|---|---|---|
-| A | `account_transactions` inserts | **86** |
-| B | `audit_logs` summary row | 1 |
-| C | `disbursements` synthetic inserts | **6** |
-| C | `audit_logs` per-disbursement | 6 |
-| D | Gate 1 (completed disb without ledger) | **0** ✅ |
-| D | Gate 2 (target active loans without disb) | **0** ✅ |
-| D | Info: unattributable disb (no source_account_id) | 10 ⚠️ surfaced for finance |
-
-## 7. Execution order
-
-1. **Apply with `ROLLBACK` first** → review Phase D scalar output → confirm gates = 0.
-2. Switch to `COMMIT` and re-apply.
-3. Verify zero account balance drift via `SELECT id, balance FROM accounts` snapshot before/after.
-4. Notify finance about the 10 unattributable disbursements (report attached).
-
-## 8. Rollback strategy
-
-```sql
--- Reversible by marker
-DELETE FROM public.account_transactions WHERE notes LIKE 'legacy_backfill_20260427:%';
-DELETE FROM public.disbursements WHERE transaction_reference LIKE 'LEGACY-BF-%';
-DELETE FROM public.audit_logs WHERE action IN ('LEGACY_LEDGER_BACKFILL','LEGACY_DISBURSEMENT_RECONCILED')
-  AND details->>'marker' = 'legacy_backfill_20260427';
-```
-
-## Answers to specific questions
-
-1. **No schedule duplication?** Yes — `session_replication_role='replica'` suppresses user triggers in-transaction; even without that, `generate_repayment_schedule()` early-returns when any `loan_repayments` row exists (verified all 6 loans already have schedules).
-2. **Exact synthetic insert columns:** `loan_id, amount, disbursement_method='legacy', status='completed', transaction_reference='LEGACY-BF-<8>', disbursed_at, created_at`. No `disbursed_by` (column does not exist on `disbursements`).
-3. **6-loan constraint:** explicit `id IN (...)` UUID allow-list, also embedded in the gate query.
-4. **Scalar verification:** Phase D returns a single row with 4 named scalar columns — no GROUP BY ambiguity.
-
-Approve this plan to switch to default mode and apply (dry-run first).
+Confirm and I'll run the migration. If you want a different funding account, want Dorcus included in the run, or want notifications suppressed, say so now.

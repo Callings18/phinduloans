@@ -4165,6 +4165,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       transition_loan_status: {
         Args: { p_action: string; p_loan_id: string; p_reason?: string }
         Returns: Json
