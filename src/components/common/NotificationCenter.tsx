@@ -103,24 +103,23 @@ const NotificationCenter: React.FC = () => {
         checkPushStatus();
     }, [user?.id]);
 
-    // Subscribe to realtime notifications
+    // Subscribe to realtime inbox
     useEffect(() => {
         if (!user?.id) return;
 
         const channel = supabase
-            .channel(`notifications-${user.id}`)
+            .channel(`inbox-${user.id}`)
             .on(
                 "postgres_changes",
                 {
                     event: "INSERT",
                     schema: "public",
-                    table: "notification_logs",
+                    table: "notification_inbox",
                     filter: `user_id=eq.${user.id}`,
                 },
                 (payload) => {
                     queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
-                    
-                    // Show toast notification for new notifications
+
                     const newNotification = payload.new as Notification;
                     toast({
                         title: newNotification.title,
@@ -128,7 +127,6 @@ const NotificationCenter: React.FC = () => {
                         duration: 5000,
                     });
 
-                    // Show browser push notification if enabled
                     if (pushEnabled) {
                         pushNotificationManager.showNotification({
                             title: newNotification.title,
@@ -144,7 +142,7 @@ const NotificationCenter: React.FC = () => {
                 {
                     event: "UPDATE",
                     schema: "public",
-                    table: "notification_logs",
+                    table: "notification_inbox",
                     filter: `user_id=eq.${user.id}`,
                 },
                 () => {
