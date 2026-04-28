@@ -190,6 +190,7 @@ interface Repayment {
   reversed_at?: string | null;
   reversal_reason?: string | null;
   original_amount?: number;
+  destination_account_id?: string | null;
 }
 
 interface Props {
