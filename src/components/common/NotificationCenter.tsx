@@ -36,9 +36,9 @@ interface Notification {
     title: string;
     message: string;
     type: "info" | "success" | "warning" | "error" | "loan" | "payment";
-    status: "unread" | "read";
+    is_read: boolean;
     created_at: string;
-    action_url?: string;
+    action_url?: string | null;
     metadata?: any;
 }
 
@@ -62,26 +62,26 @@ const NotificationCenter: React.FC = () => {
     const [pushEnabled, setPushEnabled] = useState(false);
     const [showPushPrompt, setShowPushPrompt] = useState(false);
 
-    // Fetch notifications
+    // Fetch notifications from in-app inbox
     const { data: notifications = [], isLoading } = useQuery({
         queryKey: ["notifications", user?.id],
         queryFn: async () => {
             if (!user?.id) return [];
             const { data, error } = await supabase
-                .from("notification_logs")
+                .from("notification_inbox")
                 .select("*")
                 .eq("user_id", user.id)
                 .order("created_at", { ascending: false })
-                .limit(20);
+                .limit(50);
 
             if (error) {
                 console.error("Error fetching notifications:", error);
                 return [];
             }
-            return data as Notification[];
+            return (data ?? []) as unknown as Notification[];
         },
         enabled: !!user?.id,
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 60000,
     });
 
     // Check push notification permission status
@@ -103,24 +103,23 @@ const NotificationCenter: React.FC = () => {
         checkPushStatus();
     }, [user?.id]);
 
-    // Subscribe to realtime notifications
+    // Subscribe to realtime inbox
     useEffect(() => {
         if (!user?.id) return;
 
         const channel = supabase
-            .channel(`notifications-${user.id}`)
+            .channel(`inbox-${user.id}`)
             .on(
                 "postgres_changes",
                 {
                     event: "INSERT",
                     schema: "public",
-                    table: "notification_logs",
+                    table: "notification_inbox",
                     filter: `user_id=eq.${user.id}`,
                 },
                 (payload) => {
                     queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
-                    
-                    // Show toast notification for new notifications
+
                     const newNotification = payload.new as Notification;
                     toast({
                         title: newNotification.title,
@@ -128,7 +127,6 @@ const NotificationCenter: React.FC = () => {
                         duration: 5000,
                     });
 
-                    // Show browser push notification if enabled
                     if (pushEnabled) {
                         pushNotificationManager.showNotification({
                             title: newNotification.title,
@@ -144,7 +142,7 @@ const NotificationCenter: React.FC = () => {
                 {
                     event: "UPDATE",
                     schema: "public",
-                    table: "notification_logs",
+                    table: "notification_inbox",
                     filter: `user_id=eq.${user.id}`,
                 },
                 () => {
@@ -210,8 +208,8 @@ const NotificationCenter: React.FC = () => {
     const markAsReadMutation = useMutation({
         mutationFn: async (notificationId: string) => {
             const { error } = await supabase
-                .from("notification_logs")
-                .update({ status: "read" })
+                .from("notification_inbox")
+                .update({ is_read: true, read_at: new Date().toISOString() })
                 .eq("id", notificationId);
             if (error) throw error;
         },
@@ -225,10 +223,10 @@ const NotificationCenter: React.FC = () => {
         mutationFn: async () => {
             if (!user?.id) return;
             const { error } = await supabase
-                .from("notification_logs")
-                .update({ status: "read" })
+                .from("notification_inbox")
+                .update({ is_read: true, read_at: new Date().toISOString() })
                 .eq("user_id", user.id)
-                .eq("status", "unread");
+                .eq("is_read", false);
             if (error) throw error;
         },
         onSuccess: () => {
@@ -240,7 +238,7 @@ const NotificationCenter: React.FC = () => {
     const deleteNotificationMutation = useMutation({
         mutationFn: async (notificationId: string) => {
             const { error } = await supabase
-                .from("notification_logs")
+                .from("notification_inbox")
                 .delete()
                 .eq("id", notificationId);
             if (error) throw error;
@@ -250,7 +248,7 @@ const NotificationCenter: React.FC = () => {
         },
     });
 
-    const unreadCount = notifications.filter((n) => n.status === "unread").length;
+    const unreadCount = notifications.filter((n) => !n.is_read).length;
 
     if (!user) return null;
 
@@ -343,7 +341,7 @@ const NotificationCenter: React.FC = () => {
                                 key={notification.id}
                                 className={cn(
                                     "flex gap-3 px-3 py-3 border-b border-border/30 hover:bg-secondary/50 transition-colors",
-                                    notification.status === "unread" && "bg-primary/5"
+                                    !notification.is_read && "bg-primary/5"
                                 )}
                             >
                                 <div className="shrink-0 mt-0.5">
@@ -359,7 +357,7 @@ const NotificationCenter: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex flex-col gap-1 shrink-0">
-                                    {notification.status === "unread" && (
+                                    {!notification.is_read && (
                                         <Button
                                             variant="ghost"
                                             size="icon"
