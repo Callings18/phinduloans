@@ -884,7 +884,8 @@ const handler = async (req: Request): Promise<Response> => {
         status: 403, headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
-    const { type, to, message, subject, title, userId, htmlContent, eventType, mediaUrl } = request;
+    let { type, to, message, subject, title, userId, htmlContent, eventType, mediaUrl } = request;
+    const notifyAdmins = (request as any).notifyAdmins === true;
 
     const settings = await getNotificationSettings(supabase);
 
@@ -895,6 +896,21 @@ const handler = async (req: Request): Promise<Response> => {
         JSON.stringify({ success: true, result }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
+    }
+
+    // Resolve admin recipient from settings when notifyAdmins is true and `to` is empty
+    if (notifyAdmins && (!to || to.trim() === "")) {
+      if (type === "email") to = settings.admin_email || "";
+      else if (type === "sms") to = settings.admin_phone || "";
+      else if (type === "whatsapp") to = settings.admin_whatsapp || settings.admin_phone || "";
+
+      if (!to) {
+        console.warn(`[send-notification] notifyAdmins requested for ${type} but no admin recipient configured in settings`);
+        return new Response(
+          JSON.stringify({ success: false, message: `No admin ${type} recipient configured` }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
     }
 
     if (!type || !to || !message) {
