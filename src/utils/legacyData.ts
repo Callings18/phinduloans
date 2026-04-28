@@ -43,6 +43,8 @@ export function safeAmount(
   options: { currency?: string; fallback?: string } = {},
 ): string {
   const { currency = "ZMW", fallback = LEGACY_FALLBACKS.amount } = options;
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "string" && value.trim() === "") return fallback;
   const n = typeof value === "string" ? Number(value) : (value as number);
   if (typeof n !== "number" || !Number.isFinite(n)) return fallback;
   try {
