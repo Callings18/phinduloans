@@ -39,6 +39,9 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; co
   pending: { label: "Pending", icon: Clock, color: "text-muted-foreground" },
 };
 
+// Defensive fallback for legacy rows whose `status` is null or an unknown value.
+const FALLBACK_STATUS_CONFIG = { label: "Unknown", icon: Clock, color: "text-muted-foreground" } as const;
+
 export default function DocumentChecklist({ loanId, userId }: DocumentChecklistProps) {
   const [uploading, setUploading] = useState<string | null>(null);
 
@@ -129,9 +132,14 @@ export default function DocumentChecklist({ loanId, userId }: DocumentChecklistP
       </CardHeader>
       <CardContent className="space-y-3">
         {documents.map((doc) => {
-          const config = statusConfig[doc.status || "pending"];
+          const statusKey = doc.status ?? "pending";
+          const config = statusConfig[statusKey] ?? FALLBACK_STATUS_CONFIG;
           const StatusIcon = config.icon;
           const isRejected = doc.status === "rejected";
+          const docLabel =
+            (doc.doc_label && doc.doc_label.trim()) ||
+            (doc.doc_type && doc.doc_type.trim()) ||
+            "Untitled document";
 
           return (
             <div
@@ -148,7 +156,7 @@ export default function DocumentChecklist({ loanId, userId }: DocumentChecklistP
                 <StatusIcon size={18} className={`${config.color} mt-0.5`} />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium text-sm">{doc.doc_label}</p>
+                    <p className="font-medium text-sm">{docLabel}</p>
                     <Badge
                       variant="outline"
                       className={`text-xs ${config.color} border-current`}
