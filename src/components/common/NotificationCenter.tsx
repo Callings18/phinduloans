@@ -341,7 +341,7 @@ const NotificationCenter: React.FC = () => {
                                 key={notification.id}
                                 className={cn(
                                     "flex gap-3 px-3 py-3 border-b border-border/30 hover:bg-secondary/50 transition-colors",
-                                    notification.status === "unread" && "bg-primary/5"
+                                    !notification.is_read && "bg-primary/5"
                                 )}
                             >
                                 <div className="shrink-0 mt-0.5">
