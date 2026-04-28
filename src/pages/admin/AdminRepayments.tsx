@@ -203,114 +203,21 @@ const AdminRepayments = () => {
       if (claimId && !canApprovePaymentClaim) {
         throw new Error("Approval permission required to verify borrower payment claims.");
       }
-
-      const amountDue = Number(repayment.amount);
-      const savedOriginalAmount = repayment.original_amount || repayment.amount;
-      const isFullPayment = paidAmount >= amountDue;
-      const remainingAmount = isFullPayment ? 0 : amountDue - paidAmount;
-
-      // Get destination account
-      const destAccount = accounts.find(a => a.id === destinationAccountId);
-      if (!destAccount) throw new Error("Destination account not found");
-
-      if (isFullPayment) {
-        // Full payment - mark as paid, restore original amount
-        const { error } = await supabase
-          .from("loan_repayments")
-          .update({
-            status: "paid",
-            paid_date: new Date().toISOString().split("T")[0],
-            payment_method: paymentMethod,
-            transaction_reference: transactionRef || `PAY-${Date.now()}`,
-            principal_paid: Number(savedOriginalAmount),
-            original_amount: savedOriginalAmount,
-            amount: Number(savedOriginalAmount), // restore to original
-          })
-          .eq("id", repaymentId);
-
-        if (error) throw error;
-
-        // Handle overpayment — cascade excess to next pending installments
-        if (paidAmount > amountDue) {
-          let excess = paidAmount - amountDue;
-          const { data: nextPendings } = await supabase
-            .from("loan_repayments")
-            .select("id, amount, original_amount, principal_paid")
-            .eq("loan_id", repayment.loan_id)
-            .in("status", ["pending", "overdue"])
-            .neq("id", repaymentId)
-            .order("due_date", { ascending: true });
-
-          for (const np of (nextPendings || [])) {
-            if (excess <= 0) break;
-            const npAmount = Number(np.amount);
-            const npOriginal = np.original_amount || np.amount;
-            const applied = Math.min(excess, npAmount);
-
-            if (applied >= npAmount) {
-              const { error: autoErr } = await supabase
-                .from("loan_repayments")
-                .update({
-                  status: "paid",
-                  paid_date: new Date().toISOString().split("T")[0],
-                  payment_method: paymentMethod,
-                  principal_paid: Number(npOriginal),
-                  original_amount: npOriginal,
-                  amount: Number(npOriginal),
-                })
-                .eq("id", np.id);
-              if (autoErr) throw autoErr;
-            } else {
-              const { error: partialErr } = await supabase
-                .from("loan_repayments")
-                .update({
-                  amount: npAmount - applied,
-                  original_amount: npOriginal,
-                  principal_paid: (Number(np.principal_paid) || 0) + applied,
-                })
-                .eq("id", np.id);
-              if (partialErr) throw partialErr;
-            }
-            excess -= applied;
-          }
-        }
-      } else {
-        // Partial payment - reduce amount owed, keep pending
-        const { error } = await supabase
-          .from("loan_repayments")
-          .update({
-            amount: remainingAmount,
-            payment_method: paymentMethod,
-            transaction_reference: transactionRef || `PAY-${Date.now()}`,
-            principal_paid: (Number(repayment.principal_paid) || 0) + paidAmount,
-            original_amount: savedOriginalAmount,
-          })
-          .eq("id", repaymentId);
-
-        if (error) throw error;
-      }
-
-      // Add payment to destination account balance
-      const newBalance = destAccount.balance + paidAmount;
-      const { error: accountError } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance })
-        .eq("id", destinationAccountId);
-
-      if (accountError) throw accountError;
-
-      // Record account transaction
-      const { error: txError } = await supabase.from("account_transactions").insert({
-        account_id: destinationAccountId,
-        transaction_type: "repayment",
-        amount: paidAmount,
-        balance_before: destAccount.balance,
-        balance_after: newBalance,
-        reference_type: "loan_repayment",
-        reference_id: repaymentId,
-        notes: `Loan repayment from ${repayment.loan_applications?.full_name || 'borrower'}`,
+      const amountDue = Number(repayment.amount) || 0;
+      const paidDate = new Date().toISOString().split("T")[0];
+      const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
+        p_repayment_id: repaymentId,
+        p_amount: paidAmount,
+        p_payment_method: paymentMethod,
+        p_account_id: destinationAccountId,
+        p_transaction_reference: transactionRef || `PAY-${Date.now()}`,
+        p_paid_date: paidDate,
       });
-      if (txError) throw txError;
+      if (rpcError) throw rpcError;
+      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+      if (!rpcResult?.success) {
+        throw new Error(rpcResult?.error || "Failed to record payment");
+      }
 
       if (claimId) {
         await reviewPaymentClaim({
@@ -321,7 +228,7 @@ const AdminRepayments = () => {
         });
       }
 
-      return { repayment, paidAmount, isFullPayment };
+      return { repayment, paidAmount, isFullPayment: paidAmount >= amountDue };
     },
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
@@ -337,28 +244,6 @@ const AdminRepayments = () => {
         toast.success("Full payment recorded and deposited to account");
       } else {
         toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded and deposited`);
-      }
-
-      // Auto-complete loan if all repayments are now paid (check pending AND overdue)
-      if (isFullPayment && repayment) {
-        try {
-          const { data: remainingUnpaid } = await supabase
-            .from("loan_repayments")
-            .select("id")
-            .eq("loan_id", repayment.loan_id)
-            .in("status", ["pending", "overdue"]);
-
-          if (remainingUnpaid && remainingUnpaid.length === 0) {
-            await supabase
-              .from("loan_applications")
-              .update({ status: "completed" })
-              .eq("id", repayment.loan_id);
-            toast.success("🎉 All repayments complete — loan marked as completed!");
-            queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-          }
-        } catch (err) {
-          console.error("Auto-complete check failed:", err);
-        }
       }
 
       // Send SMS confirmation
@@ -614,43 +499,7 @@ const AdminRepayments = () => {
     try {
     switch (actionId) {
       case 'mark_paid':
-        // Bulk mark as paid with correct principal_paid/original_amount
-        const bulkLoanIds = new Set<string>();
-        for (const id of selectedRepayments) {
-          const rep = repayments?.find(r => r.id === id);
-          if (!rep) continue;
-          const origAmt = rep.original_amount || rep.amount;
-          const { error: repErr } = await supabase.from('loan_repayments').update({
-            status: 'paid',
-            paid_date: new Date().toISOString().split('T')[0],
-            transaction_reference: `BULK-${Date.now()}`,
-            principal_paid: Number(origAmt),
-            original_amount: origAmt,
-            amount: Number(origAmt),
-          }).eq('id', id);
-          if (repErr) throw repErr;
-          bulkLoanIds.add(rep.loan_id);
-        }
-        // Check auto-completion for each affected loan
-        for (const loanId of bulkLoanIds) {
-          const { data: remaining } = await supabase
-            .from("loan_repayments")
-            .select("id")
-            .eq("loan_id", loanId)
-            .in("status", ["pending", "overdue"]);
-          if (remaining && remaining.length === 0) {
-            const { error: completeErr } = await supabase
-              .from("loan_applications")
-              .update({ status: "completed" })
-              .eq("id", loanId);
-            if (completeErr) throw completeErr;
-          }
-        }
-        await queryClient.invalidateQueries({ queryKey: ['admin-repayments'] });
-        await queryClient.invalidateQueries({ queryKey: ['admin-all-loans'] });
-        await queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
-        toast.success(`${selectedRepayments.length} repayments marked as paid`);
-        setSelectedRepayments([]);
+        toast.error("Bulk 'Mark Paid' is disabled to prevent non-atomic posting. Use Bulk Repayments or per-row Record Payment.");
         break;
 
       case 'send_reminder':
@@ -893,7 +742,7 @@ const AdminRepayments = () => {
           <BulkActions
             selectedIds={selectedRepayments}
             onAction={handleBulkAction}
-            actions={canRecordPayment ? defaultRepaymentActions : defaultRepaymentActions.filter((a) => a.id !== "mark_paid")}
+            actions={defaultRepaymentActions.filter((a) => a.id !== "mark_paid")}
             entityName="repayments"
             onClearSelection={() => setSelectedRepayments([])}
           />
