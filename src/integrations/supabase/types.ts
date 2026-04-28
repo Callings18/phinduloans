@@ -4084,6 +4084,16 @@ export type Database = {
         Args: { p_action: string; p_device_info?: Json; p_ip_address?: string }
         Returns: undefined
       }
+      log_permission_denied: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_extra?: Json
+          p_module: string
+          p_required_action: string
+        }
+        Returns: undefined
+      }
       officer_loan_stats: {
         Args: { p_period_end: string; p_period_start: string }
         Returns: {
