@@ -871,6 +871,13 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               {loanCalc.feesDeductedUpfront > 0 && (
                 <div><span className="text-muted-foreground">You Receive:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.disbursementAmount)}</span></div>
               )}
+              {isCollateralLoan && (
+                <div className="col-span-1 sm:col-span-2 mt-2 rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <div className="font-medium text-foreground">Collateral Loan Pricing</div>
+                  <div>30% total interest over 6 months (equivalent to 5% per month, flat).</div>
+                  <div>6 equal monthly installments. Term is fixed at 6 months.</div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
