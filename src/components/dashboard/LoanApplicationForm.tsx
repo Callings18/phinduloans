@@ -404,6 +404,50 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       if (insertError) throw insertError;
       const applicationId = newApp.id;
 
+      // Persist multi-borrower structure for COLLATERAL loans only
+      if (isCollateralLoan) {
+        const borrowerRows = [
+          {
+            loan_application_id: applicationId,
+            customer_id: primaryBorrower.customer_id || user.id,
+            full_name: primaryBorrower.full_name,
+            nrc_number: primaryBorrower.nrc_number,
+            phone: primaryBorrower.phone || null,
+            address: primaryBorrower.address || null,
+            role: "PRIMARY_BORROWER" as const,
+            is_signatory: primaryBorrower.is_signatory,
+            created_by: user.id,
+          },
+          ...coBorrowers.map((b) => ({
+            loan_application_id: applicationId,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "CO_BORROWER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user.id,
+          })),
+          ...absoluteOwners.map((b) => ({
+            loan_application_id: applicationId,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "ABSOLUTE_OWNER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user.id,
+          })),
+        ];
+        const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(borrowerRows);
+        if (borrowersErr) {
+          console.error("Failed to insert loan_borrowers:", borrowersErr);
+        }
+      }
+
+
       // Auto-enroll borrower in the loan product's House roster (best-effort)
       try {
         if (productCode) {
