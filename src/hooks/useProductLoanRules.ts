@@ -72,8 +72,12 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
   },
   COLLATERAL: {
     checklist: ["NRC", "Selfie holding NRC", "Collateral photos (physical collection required)"],
-    validate() {
-      return [];
+    validate(values) {
+      const errors: string[] = [];
+      if (values.termValue < 1 || values.termValue > 6) {
+        errors.push("Collateral loan term must be between 1 and 6 months.");
+      }
+      return errors;
     },
   },
   BUSINESS: {
