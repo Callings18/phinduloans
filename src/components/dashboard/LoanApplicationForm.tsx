@@ -299,12 +299,17 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const isMarketeer = productCode === "MARKETEER";
   const termUnitLabel = selectedProduct?.term_unit || "months";
 
+  const collateralBorrowersValidation = useMemo(
+    () => validateCollateralBorrowers(primaryBorrower, coBorrowers, absoluteOwners),
+    [primaryBorrower, coBorrowers, absoluteOwners],
+  );
+
   const canProceedStep1 = !!selectedProduct;
   const canProceedStep2 = !!loanPurpose &&
     locationAllowed &&
     (!isPaydaySoft || loanTerm === 30) &&
     (!isMarketeer || loanTerm === 26) && (
-    (!isCollateralLoan || (collateralDescription && collateralValue)) &&
+    (!isCollateralLoan || (collateralDescription && collateralValue && collateralBorrowersValidation.isValid)) &&
     (!isBusinessLoan || (businessName && businessTpin)) &&
     (!isSalaryAdvance || (employerName && monthlySalary))
   );
