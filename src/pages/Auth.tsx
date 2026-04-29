@@ -86,6 +86,13 @@ const Auth = () => {
     return "unknown_signin_error";
   };
 
+  const classifySignupError = (message: string) => {
+    const normalized = message.toLowerCase();
+    if (normalized.includes("already registered")) return "already_registered";
+    if (normalized.includes("rate") || normalized.includes("limit")) return "rate_limited";
+    return "unknown_signup_error";
+  };
+
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -189,18 +196,27 @@ const Auth = () => {
         const signupResult = await signUp(email, password, fullName);
         const { error } = signupResult;
         if (error) {
+          const classification = classifySignupError(error.message || "");
           setAuthDiagnostic({
             step: "signup",
-            classification: "signup_failed",
+            classification,
             message: error.message,
             at: new Date().toISOString(),
           });
-          if (error.message.includes("already registered")) {
+          if (classification === "already_registered") {
             toast({
               title: "Account Exists",
               description: "This email is already registered. Please log in instead.",
               variant: "destructive",
             });
+          } else if (classification === "rate_limited") {
+            toast({
+              title: "Email signup temporarily limited",
+              description:
+                "Too many email signup attempts right now. Use SMS OTP signup now, or wait a few minutes and retry email.",
+              variant: "destructive",
+            });
+            setLoginMode("phone_otp");
           } else {
             toast({
               title: "Signup Failed",
@@ -339,7 +355,7 @@ const Auth = () => {
           {/* Auth Form */}
           <div className="glass rounded-3xl p-8 shadow-card animate-slide-up">
             {/* Login mode selector - only show for login */}
-            {isLogin && (
+            {isLogin ? (
               <div className="flex gap-1 p-1 rounded-lg bg-muted/50 mb-6">
                 <button
                   type="button"
@@ -366,12 +382,31 @@ const Auth = () => {
                   SMS OTP
                 </button>
               </div>
+            ) : (
+              <div className="flex gap-1 p-1 rounded-lg bg-muted/50 mb-6">
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("password"); setErrors({}); setOtpSentTo(null); }}
+                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${loginMode === "password" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Mail size={14} />
+                  Email Signup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("phone_otp"); setErrors({}); setOtpSentTo(null); }}
+                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${loginMode === "phone_otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Phone size={14} />
+                  SMS OTP Signup
+                </button>
+              </div>
             )}
 
             {/* Phone OTP mode - uses ExciteSMS via edge functions */}
-            {isLogin && loginMode === "phone_otp" ? (
+            {loginMode === "phone_otp" ? (
               <PhoneAuthForm
-                purpose="login"
+                purpose={isLogin ? "login" : "signup"}
                 onSuccess={handlePhoneAuthSuccess}
                 onSwitchToEmail={() => { setLoginMode("password"); setErrors({}); }}
               />
