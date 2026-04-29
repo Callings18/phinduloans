@@ -312,6 +312,7 @@ function EditProductConfigDialog({
             <Select
               value={form.interest_period ?? "monthly"}
               onValueChange={(v) => setForm({ ...form, interest_period: v })}
+              disabled={productCode === "COLLATERAL"}
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -319,9 +320,14 @@ function EditProductConfigDialog({
                 <SelectItem value="weekly">Weekly</SelectItem>
                 <SelectItem value="monthly">Monthly</SelectItem>
                 <SelectItem value="yearly">Yearly</SelectItem>
-                <SelectItem value="per_loan">Per loan</SelectItem>
+                <SelectItem value="per_loan">Per loan (total over loan)</SelectItem>
               </SelectContent>
             </Select>
+            {productCode === "COLLATERAL" && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Locked to "Per loan" — Collateral charges 30% total once, regardless of term.
+              </p>
+            )}
           </div>
 
           <div>
