@@ -679,7 +679,26 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 {loanTerm > 1 && termUnitLabel !== "days" ? "s" : ""}
               </span>
             </div>
-            <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
+            {isCollateralLoan ? (
+              <>
+                <Select value={String(loanTerm)} onValueChange={(v) => setLoanTerm(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} {n === 1 ? "month" : "months"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Collateral loans carry a <strong>fixed 30% total interest</strong> regardless of term. Pick 1–6 months —
+                  your monthly installment changes, the total cost stays the same.
+                </p>
+              </>
+            ) : (
+              <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
+            )}
           </div>
 
           <div className="space-y-2">
