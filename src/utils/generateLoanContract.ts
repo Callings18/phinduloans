@@ -443,18 +443,47 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - margin - 50, yPos);
   yPos += 15;
 
-  addSection('1. PARTIES TO THIS AGREEMENT', [
-    'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
-    '',
-    'LENDER: Phindu Credit Solutions Limited',
-    'Address: Lusaka, Zambia',
-    '',
-    `BORROWER: ${loan.full_name}`,
-    `NRC Number: ${loan.nrc_number}`,
-    `Phone: ${loan.phone}`,
-    `Email: ${loan.email}`,
-    `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
-  ]);
+  if (parties.isCollateral && parties.borrowers.length > 0) {
+    const partyLines: string[] = [
+      'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
+      '',
+      'LENDER: Phindu Credit Solutions Limited',
+      'Address: Lusaka, Zambia',
+      '',
+      'BORROWERS (jointly and severally liable):',
+    ];
+    parties.jointBorrowers.forEach((b, i) => {
+      const roleLabel = b.role === 'PRIMARY_BORROWER' ? 'Primary Borrower' : 'Co-Borrower';
+      partyLines.push('');
+      partyLines.push(`${i + 1}. ${roleLabel}: ${b.full_name}`);
+      partyLines.push(`   NRC: ${b.nrc_number}${b.phone ? ` | Phone: ${b.phone}` : ''}`);
+      if (b.address) partyLines.push(`   Address: ${b.address}`);
+    });
+    if (parties.absoluteOwners.length > 0) {
+      partyLines.push('');
+      partyLines.push('ABSOLUTE OWNER(S) OF COLLATERAL:');
+      parties.absoluteOwners.forEach((b, i) => {
+        partyLines.push('');
+        partyLines.push(`${i + 1}. ${b.full_name}`);
+        partyLines.push(`   NRC: ${b.nrc_number}${b.phone ? ` | Phone: ${b.phone}` : ''}`);
+        if (b.address) partyLines.push(`   Address: ${b.address}`);
+      });
+    }
+    addSection('1. PARTIES TO THIS AGREEMENT', partyLines);
+  } else {
+    addSection('1. PARTIES TO THIS AGREEMENT', [
+      'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
+      '',
+      'LENDER: Phindu Credit Solutions Limited',
+      'Address: Lusaka, Zambia',
+      '',
+      `BORROWER: ${loan.full_name}`,
+      `NRC Number: ${loan.nrc_number}`,
+      `Phone: ${loan.phone}`,
+      `Email: ${loan.email}`,
+      `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
+    ]);
+  }
 
   let sectionNum = 2;
 
