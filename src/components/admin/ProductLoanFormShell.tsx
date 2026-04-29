@@ -932,7 +932,7 @@ export default function ProductLoanFormShell({
               <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
               <Button
                 onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0}
+                  disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
               >
                 {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
               </Button>
