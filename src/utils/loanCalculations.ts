@@ -231,9 +231,12 @@ export function calculateLoan(
       totalInterest = calculateReducingBalanceInterest(principal, monthlyRate, termMonths);
     } else {
       // Flat interest:
-      // - Business Loan - Short Term: one-time flat interest over the full term (as agreed by business)
-      // - All other products: recurring interest by period
-      totalInterest = isBusinessShortTerm
+      // - interest_period = 'per_loan': total rate is one-time over the full term
+      //   (regardless of how many months). e.g. Collateral 30% flat / loan.
+      // - Business Loan - Short Term (legacy name match): same one-time semantics.
+      // - All other products: recurring interest by period.
+      const isPerLoanFlat = (interestPeriod as string) === 'per_loan' || isBusinessShortTerm;
+      totalInterest = isPerLoanFlat
         ? principal * (product.interest_rate / 100)
         : calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);
       monthlyPayment = (principal + totalInterest) / termMonths;
