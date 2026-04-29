@@ -47,6 +47,25 @@ export const PhoneAuthForm = ({ purpose, onSuccess, onSwitchToEmail }: PhoneAuth
     }
   }, [countdown]);
 
+  const parseInvokeError = async (error: unknown): Promise<string> => {
+    const fallback = "Failed to send OTP";
+    if (!error || typeof error !== "object") return fallback;
+
+    const errorWithMessage = error as { message?: string; context?: { json?: () => Promise<{ error?: string; message?: string }> } };
+    const context = errorWithMessage.context;
+    if (context?.json) {
+      try {
+        const payload = await context.json();
+        if (payload?.error) return payload.error;
+        if (payload?.message) return payload.message;
+      } catch {
+        // ignore context parse issues and fall back to message
+      }
+    }
+
+    return errorWithMessage.message || fallback;
+  };
+
   const handleSendOTP = async () => {
     try {
       phoneSchema.parse(phone);
@@ -64,14 +83,18 @@ export const PhoneAuthForm = ({ purpose, onSuccess, onSwitchToEmail }: PhoneAuth
         body: { phone, purpose },
       });
 
-      if (error) throw error;
+      if (error) {
+        const parsedMessage = await parseInvokeError(error);
+        throw new Error(parsedMessage);
+      }
       if (!data?.success) throw new Error(data?.error || "Failed to send OTP");
 
       toast.success("OTP sent to your phone!");
       setMode('otp_verify');
       setCountdown(60);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to send OTP");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to send OTP";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

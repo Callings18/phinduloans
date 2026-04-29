@@ -67,7 +67,7 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
 
 async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promise<any> {
   if (!creds.apiToken) {
-    throw new Error("SMS provider not configured");
+    throw new Error("SMS provider not configured. Set ExciteSMS token in notification settings or EXCITESMS_API_TOKEN.");
   }
 
   const phone = formatPhoneNumber(to).replace("+", "");
@@ -203,8 +203,8 @@ serve(async (req) => {
 
     await sendSMS_ExciteSMS(formattedPhone, message, creds);
 
-    // Log the notification
-    await supabase.from("notification_logs").insert({
+    // Log best-effort only; do not fail OTP flow if notification_logs write fails.
+    const { error: notificationLogError } = await supabase.from("notification_logs").insert({
       type: "sms",
       recipient: formattedPhone,
       title: "OTP Verification",
@@ -212,6 +212,9 @@ serve(async (req) => {
       status: "sent",
       sent_at: new Date().toISOString(),
     });
+    if (notificationLogError) {
+      console.error("[OTP] notification_logs insert failed (non-blocking):", notificationLogError);
+    }
 
     console.log(`[OTP] Successfully sent to ${formattedPhone}`);
 
@@ -226,8 +229,9 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     console.error("[OTP] Error:", error);
+    const message = error instanceof Error ? error.message : "Failed to send verification code. Please try again.";
     return new Response(
-      JSON.stringify({ success: false, error: "Failed to send verification code. Please try again." }),
+      JSON.stringify({ success: false, error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
