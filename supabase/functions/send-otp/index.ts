@@ -53,8 +53,10 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
   const providers = providersData?.value || {};
   const config = configData?.value || {};
 
-  const apiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
-  const correctedApiUrl = apiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com");
+  const rawApiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
+  const correctedApiUrl = rawApiUrl
+    .replace("gateway.excitesms.tech", "gateway.excitesms.com")
+    .replace(/\/+$/, ""); // strip trailing slashes so `${apiUrl}/sms/send` doesn't become `//sms/send`
 
   return {
     apiUrl: correctedApiUrl,
