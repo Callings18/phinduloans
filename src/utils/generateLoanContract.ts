@@ -242,9 +242,7 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     replacements['{{joint_liability_clause}}'] = '';
   }
 
-  // Re-open the const for the loop below (no-op object spread for clarity)
-  const _replacementsRef = replacements;
-  void _replacementsRef;
+  // (placeholders ready)
 
   let result = content;
   for (const [placeholder, value] of Object.entries(replacements)) {
