@@ -200,6 +200,14 @@ export default function ProductLoanFormShell({
     [rules, employmentType, city, loanAmount, termValue, businessMonths, isCivilServantConfirmed, hasLocalAuthorityCompliance]
   );
 
+  const collateralBorrowersValidation = useMemo(
+    () =>
+      productCode === "COLLATERAL"
+        ? validateCollateralBorrowers(primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries)
+        : { isValid: true, errors: [] as string[], warnings: [] as string[], signatoryCount: 0 },
+    [productCode, primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries],
+  );
+
   const isMarketeer = productCode === "MARKETEER";
   const isSalaryAdvanceFamily = productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF";
   const usesDailySchedule = termUnit === "days";
