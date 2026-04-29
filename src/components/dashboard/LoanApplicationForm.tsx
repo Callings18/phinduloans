@@ -780,7 +780,19 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             </Card>
           )}
 
-          {/* Business fields */}
+          {/* Collateral: Co-Borrowers + Absolute Owners (collateral loans only) */}
+          {isCollateralLoan && (
+            <CollateralBorrowersSection
+              primary={primaryBorrower}
+              coBorrowers={coBorrowers}
+              absoluteOwners={absoluteOwners}
+              onPrimaryChange={setPrimaryBorrower}
+              onCoBorrowersChange={setCoBorrowers}
+              onAbsoluteOwnersChange={setAbsoluteOwners}
+              primaryLocked
+            />
+          )}
+
           {isBusinessLoan && (
             <Card className="border-border/50">
               <CardHeader className="pb-3">
