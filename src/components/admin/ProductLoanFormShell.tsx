@@ -23,6 +23,11 @@ import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addDays, format } from "date-fns";
 import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2 } from "lucide-react";
+import CollateralBorrowersSection, {
+  type CollateralBorrowerEntry,
+  makeBlankBorrower,
+  validateCollateralBorrowers,
+} from "@/components/loans/CollateralBorrowersSection";
 
 type Borrower = {
   id: string;
@@ -101,6 +106,13 @@ export default function ProductLoanFormShell({
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
   const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
 
+  // --- Collateral multi-borrower (COLLATERAL product only) ---
+  const [primaryBorrowerEntry, setPrimaryBorrowerEntry] = useState<CollateralBorrowerEntry>(() =>
+    makeBlankBorrower("PRIMARY_BORROWER"),
+  );
+  const [coBorrowerEntries, setCoBorrowerEntries] = useState<CollateralBorrowerEntry[]>([]);
+  const [absoluteOwnerEntries, setAbsoluteOwnerEntries] = useState<CollateralBorrowerEntry[]>([]);
+
   // Failure recovery state — captures last error and any partially created loan id
   // so the user can retry the submit or roll back the orphaned draft in one click.
   const [lastError, setLastError] = useState<string | null>(null);
@@ -160,6 +172,17 @@ export default function ProductLoanFormShell({
       if (selectedBorrower.job_title) setJobTitle(selectedBorrower.job_title);
       if (selectedBorrower.net_income) setMonthlyIncome(String(selectedBorrower.net_income));
       if (selectedBorrower.employment_type) setEmploymentType(selectedBorrower.employment_type as any);
+
+      // Sync primary borrower entry for collateral multi-borrower section
+      setPrimaryBorrowerEntry((prev) => ({
+        ...prev,
+        customer_id: selectedBorrower.id,
+        full_name: selectedBorrower.full_name || "",
+        nrc_number: selectedBorrower.nrc_number || "",
+        phone: selectedBorrower.phone || "",
+        address: selectedBorrower.address || "",
+        is_signatory: true,
+      }));
     }
   }, [selectedBorrower]);
 
@@ -175,6 +198,14 @@ export default function ProductLoanFormShell({
         hasLocalAuthorityCompliance,
       }),
     [rules, employmentType, city, loanAmount, termValue, businessMonths, isCivilServantConfirmed, hasLocalAuthorityCompliance]
+  );
+
+  const collateralBorrowersValidation = useMemo(
+    () =>
+      productCode === "COLLATERAL"
+        ? validateCollateralBorrowers(primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries)
+        : { isValid: true, errors: [] as string[], warnings: [] as string[], signatoryCount: 0 },
+    [productCode, primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries],
   );
 
   const isMarketeer = productCode === "MARKETEER";
@@ -316,6 +347,9 @@ export default function ProductLoanFormShell({
         throw new Error("Repayment start date must be tomorrow or later.");
       }
       if (validationErrors.length > 0) throw new Error(validationErrors[0]);
+      if (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid) {
+        throw new Error(collateralBorrowersValidation.errors[0] || "Borrowers section incomplete.");
+      }
 
       const activeProduct = product?.id ? product : await resolveProduct(productCode);
       if (activeProduct?.id) {
@@ -425,7 +459,47 @@ export default function ProductLoanFormShell({
         .single();
       if (error) throw error;
 
-      // Upload documents to storage after loan is created
+      // Persist multi-borrower structure for COLLATERAL only (DB trigger also enforces this)
+      if (productCode === "COLLATERAL" && inserted?.id) {
+        const rows = [
+          {
+            loan_application_id: inserted.id,
+            customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
+            full_name: primaryBorrowerEntry.full_name,
+            nrc_number: primaryBorrowerEntry.nrc_number,
+            phone: primaryBorrowerEntry.phone || null,
+            address: primaryBorrowerEntry.address || null,
+            role: "PRIMARY_BORROWER" as const,
+            is_signatory: primaryBorrowerEntry.is_signatory,
+            created_by: user?.id ?? null,
+          },
+          ...coBorrowerEntries.map((b) => ({
+            loan_application_id: inserted.id,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "CO_BORROWER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user?.id ?? null,
+          })),
+          ...absoluteOwnerEntries.map((b) => ({
+            loan_application_id: inserted.id,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "ABSOLUTE_OWNER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user?.id ?? null,
+          })),
+        ];
+        const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(rows);
+        if (borrowersErr) console.error("Failed to insert loan_borrowers:", borrowersErr);
+      }
+
       if (inserted?.id) {
         setPendingLoanId(inserted.id);
         setDocUploading(true);
@@ -813,7 +887,19 @@ export default function ProductLoanFormShell({
               </CardContent>
             </Card>
 
-            {/* Admin Notes */}
+            {/* Collateral: Co-Borrowers + Absolute Owners (collateral loans only) */}
+            {productCode === "COLLATERAL" && (
+              <CollateralBorrowersSection
+                primary={primaryBorrowerEntry}
+                coBorrowers={coBorrowerEntries}
+                absoluteOwners={absoluteOwnerEntries}
+                onPrimaryChange={setPrimaryBorrowerEntry}
+                onCoBorrowersChange={setCoBorrowerEntries}
+                onAbsoluteOwnersChange={setAbsoluteOwnerEntries}
+                primaryLocked={!!selectedBorrower}
+              />
+            )}
+
             <Card>
               <CardContent className="pt-4 pb-4">
                 <Label className="text-xs font-semibold">Admin Notes</Label>
@@ -846,7 +932,7 @@ export default function ProductLoanFormShell({
               <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
               <Button
                 onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0}
+                  disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
               >
                 {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
               </Button>
@@ -871,7 +957,7 @@ export default function ProductLoanFormShell({
                   <Button
                     size="sm"
                     onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || validationErrors.length > 0}
+                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retry
                   </Button>

@@ -23,6 +23,11 @@ import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/l
 import { useToast } from "@/hooks/use-toast";
 import { LOAN_APPLICATION_IDENTITY_DOC_TYPES } from "@/constants/borrowerKycDocs";
 import { MobileStickyFormFooter } from "@/components/common/ResponsiveDataViews";
+import CollateralBorrowersSection, {
+  type CollateralBorrowerEntry,
+  makeBlankBorrower,
+  validateCollateralBorrowers,
+} from "@/components/loans/CollateralBorrowersSection";
 
 interface LoanProduct {
   id: string;
@@ -106,6 +111,13 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const [collateralDescription, setCollateralDescription] = useState("");
   const [collateralValue, setCollateralValue] = useState("");
   const [collateralImages, setCollateralImages] = useState<File[]>([]);
+
+  // Collateral: multi-borrower structure (Co-Borrowers + Absolute Owners)
+  const [primaryBorrower, setPrimaryBorrower] = useState<CollateralBorrowerEntry>(() =>
+    makeBlankBorrower("PRIMARY_BORROWER"),
+  );
+  const [coBorrowers, setCoBorrowers] = useState<CollateralBorrowerEntry[]>([]);
+  const [absoluteOwners, setAbsoluteOwners] = useState<CollateralBorrowerEntry[]>([]);
 
   // Business
   const [businessName, setBusinessName] = useState("");
@@ -222,6 +234,16 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     if (profile) {
       if (profile.employer_name) setEmployerName(profile.employer_name);
       if (profile.net_income) setMonthlySalary(String(profile.net_income));
+      // Sync the locked primary borrower from profile (used by collateral multi-borrower section)
+      setPrimaryBorrower((prev) => ({
+        ...prev,
+        customer_id: profile.id,
+        full_name: profile.full_name || "",
+        nrc_number: profile.nrc_number || "",
+        phone: profile.phone || "",
+        address: profile.address || "",
+        is_signatory: true,
+      }));
     }
   }, [profile]);
 
@@ -277,12 +299,17 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const isMarketeer = productCode === "MARKETEER";
   const termUnitLabel = selectedProduct?.term_unit || "months";
 
+  const collateralBorrowersValidation = useMemo(
+    () => validateCollateralBorrowers(primaryBorrower, coBorrowers, absoluteOwners),
+    [primaryBorrower, coBorrowers, absoluteOwners],
+  );
+
   const canProceedStep1 = !!selectedProduct;
   const canProceedStep2 = !!loanPurpose &&
     locationAllowed &&
     (!isPaydaySoft || loanTerm === 30) &&
     (!isMarketeer || loanTerm === 26) && (
-    (!isCollateralLoan || (collateralDescription && collateralValue)) &&
+    (!isCollateralLoan || (collateralDescription && collateralValue && collateralBorrowersValidation.isValid)) &&
     (!isBusinessLoan || (businessName && businessTpin)) &&
     (!isSalaryAdvance || (employerName && monthlySalary))
   );
@@ -376,6 +403,50 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
       if (insertError) throw insertError;
       const applicationId = newApp.id;
+
+      // Persist multi-borrower structure for COLLATERAL loans only
+      if (isCollateralLoan) {
+        const borrowerRows = [
+          {
+            loan_application_id: applicationId,
+            customer_id: primaryBorrower.customer_id || user.id,
+            full_name: primaryBorrower.full_name,
+            nrc_number: primaryBorrower.nrc_number,
+            phone: primaryBorrower.phone || null,
+            address: primaryBorrower.address || null,
+            role: "PRIMARY_BORROWER" as const,
+            is_signatory: primaryBorrower.is_signatory,
+            created_by: user.id,
+          },
+          ...coBorrowers.map((b) => ({
+            loan_application_id: applicationId,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "CO_BORROWER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user.id,
+          })),
+          ...absoluteOwners.map((b) => ({
+            loan_application_id: applicationId,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "ABSOLUTE_OWNER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user.id,
+          })),
+        ];
+        const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(borrowerRows);
+        if (borrowersErr) {
+          console.error("Failed to insert loan_borrowers:", borrowersErr);
+        }
+      }
+
 
       // Auto-enroll borrower in the loan product's House roster (best-effort)
       try {
@@ -608,7 +679,26 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 {loanTerm > 1 && termUnitLabel !== "days" ? "s" : ""}
               </span>
             </div>
-            <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
+            {isCollateralLoan ? (
+              <>
+                <Select value={String(loanTerm)} onValueChange={(v) => setLoanTerm(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} {n === 1 ? "month" : "months"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Collateral loans carry a <strong>fixed 30% total interest</strong> regardless of term. Pick 1–6 months —
+                  your monthly installment changes, the total cost stays the same.
+                </p>
+              </>
+            ) : (
+              <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
+            )}
           </div>
 
           <div className="space-y-2">
@@ -690,7 +780,19 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             </Card>
           )}
 
-          {/* Business fields */}
+          {/* Collateral: Co-Borrowers + Absolute Owners (collateral loans only) */}
+          {isCollateralLoan && (
+            <CollateralBorrowersSection
+              primary={primaryBorrower}
+              coBorrowers={coBorrowers}
+              absoluteOwners={absoluteOwners}
+              onPrimaryChange={setPrimaryBorrower}
+              onCoBorrowersChange={setCoBorrowers}
+              onAbsoluteOwnersChange={setAbsoluteOwners}
+              primaryLocked
+            />
+          )}
+
           {isBusinessLoan && (
             <Card className="border-border/50">
               <CardHeader className="pb-3">

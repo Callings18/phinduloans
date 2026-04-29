@@ -91,6 +91,81 @@ const fetchActiveTemplate = async (loanProductId?: string | null): Promise<Contr
   }
 };
 
+// ─── Multi-borrower (Collateral only) helpers ───────────────────────────────
+interface LoanBorrowerRow {
+  id: string;
+  full_name: string;
+  nrc_number: string;
+  phone: string | null;
+  address: string | null;
+  role: 'PRIMARY_BORROWER' | 'CO_BORROWER' | 'ABSOLUTE_OWNER' | 'GUARANTOR';
+  is_signatory: boolean;
+}
+
+interface CollateralPartiesContext {
+  isCollateral: boolean;
+  borrowers: LoanBorrowerRow[];
+  signatories: LoanBorrowerRow[];
+  absoluteOwners: LoanBorrowerRow[];
+  jointBorrowers: LoanBorrowerRow[]; // primary + co
+}
+
+const fetchCollateralParties = async (loan: LoanData): Promise<CollateralPartiesContext> => {
+  const empty: CollateralPartiesContext = {
+    isCollateral: false,
+    borrowers: [],
+    signatories: [],
+    absoluteOwners: [],
+    jointBorrowers: [],
+  };
+  if (!loan.loan_product_id) return empty;
+  try {
+    const { data: product } = await supabase
+      .from('loan_products')
+      .select('product_code')
+      .eq('id', loan.loan_product_id)
+      .maybeSingle();
+    if ((product as any)?.product_code !== 'COLLATERAL') return empty;
+
+    const { data: rows } = await supabase
+      .from('loan_borrowers')
+      .select('id, full_name, nrc_number, phone, address, role, is_signatory')
+      .eq('loan_application_id', loan.id);
+
+    const borrowers = (rows || []) as LoanBorrowerRow[];
+    return {
+      isCollateral: true,
+      borrowers,
+      signatories: borrowers.filter((b) => b.is_signatory),
+      absoluteOwners: borrowers.filter((b) => b.role === 'ABSOLUTE_OWNER'),
+      jointBorrowers: borrowers.filter((b) => b.role === 'PRIMARY_BORROWER' || b.role === 'CO_BORROWER'),
+    };
+  } catch (e) {
+    console.warn('fetchCollateralParties failed:', e);
+    return empty;
+  }
+};
+
+const formatBorrowersBlock = (rows: LoanBorrowerRow[]): string => {
+  if (!rows.length) return '';
+  return rows
+    .map((b, i) => {
+      const roleLabel =
+        b.role === 'PRIMARY_BORROWER'
+          ? 'Primary Borrower'
+          : b.role === 'CO_BORROWER'
+          ? 'Co-Borrower'
+          : b.role === 'ABSOLUTE_OWNER'
+          ? 'Absolute Owner'
+          : 'Guarantor';
+      return `${i + 1}. ${b.full_name} | NRC: ${b.nrc_number} | ${roleLabel}${b.phone ? ` | Phone: ${b.phone}` : ''}`;
+    })
+    .join('\n');
+};
+
+const JOINT_LIABILITY_CLAUSE =
+  'All Borrowers and Co-Borrowers named in this Agreement are jointly and severally liable for the full repayment of the loan, including principal, interest, fees, and any penalties. The Lender may pursue any one or more of them for the entire outstanding amount.';
+
 // Replace placeholders in template content with actual loan data
 const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
@@ -151,6 +226,23 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     '{{monthly_income}}': loan.monthly_income.toLocaleString(),
     '{{contract_number}}': `PCS-${loan.id.slice(0, 8).toUpperCase()}`,
   };
+
+  // Collateral-only multi-borrower placeholders
+  const parties = await fetchCollateralParties(loan);
+  if (parties.isCollateral) {
+    replacements['{{borrowers_block}}'] = formatBorrowersBlock(parties.jointBorrowers) || loan.full_name;
+    replacements['{{absolute_owners_block}}'] =
+      parties.absoluteOwners.length > 0
+        ? formatBorrowersBlock(parties.absoluteOwners)
+        : 'N/A';
+    replacements['{{joint_liability_clause}}'] = JOINT_LIABILITY_CLAUSE;
+  } else {
+    replacements['{{borrowers_block}}'] = `${loan.full_name} | NRC: ${loan.nrc_number}`;
+    replacements['{{absolute_owners_block}}'] = 'N/A';
+    replacements['{{joint_liability_clause}}'] = '';
+  }
+
+  // (placeholders ready)
 
   let result = content;
   for (const [placeholder, value] of Object.entries(replacements)) {
@@ -259,6 +351,8 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   const contentWidth = pageWidth - margin * 2;
   let yPos = 20;
 
+  // Fetch multi-borrower context (collateral only)
+  const parties = await fetchCollateralParties(loan);
   const centerText = (text: string, y: number, fontSize: number = 12) => {
     doc.setFontSize(fontSize);
     const textWidth = doc.getStringUnitWidth(text) * fontSize / doc.internal.scaleFactor;
@@ -349,18 +443,47 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - margin - 50, yPos);
   yPos += 15;
 
-  addSection('1. PARTIES TO THIS AGREEMENT', [
-    'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
-    '',
-    'LENDER: Phindu Credit Solutions Limited',
-    'Address: Lusaka, Zambia',
-    '',
-    `BORROWER: ${loan.full_name}`,
-    `NRC Number: ${loan.nrc_number}`,
-    `Phone: ${loan.phone}`,
-    `Email: ${loan.email}`,
-    `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
-  ]);
+  if (parties.isCollateral && parties.borrowers.length > 0) {
+    const partyLines: string[] = [
+      'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
+      '',
+      'LENDER: Phindu Credit Solutions Limited',
+      'Address: Lusaka, Zambia',
+      '',
+      'BORROWERS (jointly and severally liable):',
+    ];
+    parties.jointBorrowers.forEach((b, i) => {
+      const roleLabel = b.role === 'PRIMARY_BORROWER' ? 'Primary Borrower' : 'Co-Borrower';
+      partyLines.push('');
+      partyLines.push(`${i + 1}. ${roleLabel}: ${b.full_name}`);
+      partyLines.push(`   NRC: ${b.nrc_number}${b.phone ? ` | Phone: ${b.phone}` : ''}`);
+      if (b.address) partyLines.push(`   Address: ${b.address}`);
+    });
+    if (parties.absoluteOwners.length > 0) {
+      partyLines.push('');
+      partyLines.push('ABSOLUTE OWNER(S) OF COLLATERAL:');
+      parties.absoluteOwners.forEach((b, i) => {
+        partyLines.push('');
+        partyLines.push(`${i + 1}. ${b.full_name}`);
+        partyLines.push(`   NRC: ${b.nrc_number}${b.phone ? ` | Phone: ${b.phone}` : ''}`);
+        if (b.address) partyLines.push(`   Address: ${b.address}`);
+      });
+    }
+    addSection('1. PARTIES TO THIS AGREEMENT', partyLines);
+  } else {
+    addSection('1. PARTIES TO THIS AGREEMENT', [
+      'This Loan Agreement ("Agreement") is entered into as of the date stated above between:',
+      '',
+      'LENDER: Phindu Credit Solutions Limited',
+      'Address: Lusaka, Zambia',
+      '',
+      `BORROWER: ${loan.full_name}`,
+      `NRC Number: ${loan.nrc_number}`,
+      `Phone: ${loan.phone}`,
+      `Email: ${loan.email}`,
+      `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
+    ]);
+  }
 
   let sectionNum = 2;
 
@@ -438,8 +561,14 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     sectionNum++;
   }
 
+  // Joint and several liability clause (collateral only)
+  if (parties.isCollateral) {
+    addSection(`${sectionNum}. JOINT AND SEVERAL LIABILITY`, [JOINT_LIABILITY_CLAUSE]);
+    sectionNum++;
+  }
+
   addSection('DECLARATION', [
-    'By signing below, I, the undersigned, hereby acknowledge that I have read and understood all the terms and conditions of this Loan Agreement. I understand the Responsibilities, interest rates, fees, repayment schedule and any other associated costs.',
+    'By signing below, the undersigned hereby acknowledge that they have read and understood all the terms and conditions of this Loan Agreement, including the responsibilities, interest rates, fees, repayment schedule, and any other associated costs.',
   ]);
 
   if (yPos > 220) {
@@ -450,24 +579,60 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   yPos += 5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  
-  doc.text('Borrower Signature: ......................   Date: ....../......./..........', margin, yPos);
-  yPos += 10;
-  
-  // If borrower signature provided, embed it
-  if (options?.borrowerSignatureDataUrl) {
-    try {
-      doc.addImage(options.borrowerSignatureDataUrl, 'PNG', margin, yPos - 5, 60, 20);
-      yPos += 20;
-    } catch (e) {
-      yPos += 5;
-    }
-  }
-  
-  doc.text(`Name: ${loan.full_name}`, margin, yPos);
-  yPos += 10;
 
-  doc.text('I further surrender the authority to Phindu Credit Solutions to recover the loan amount by all means', margin, yPos);
+  // Build the list of signatories
+  const signatories: Array<{ name: string; nrc: string; role: string; signatureDataUrl?: string }> =
+    parties.isCollateral && parties.signatories.length > 0
+      ? parties.signatories.map((b, i) => ({
+          name: b.full_name,
+          nrc: b.nrc_number,
+          role:
+            b.role === 'PRIMARY_BORROWER'
+              ? 'Primary Borrower'
+              : b.role === 'CO_BORROWER'
+              ? 'Co-Borrower'
+              : 'Absolute Owner',
+          // Only embed the signature image for the first primary borrower (the user who signed in-app)
+          signatureDataUrl: i === 0 && b.role === 'PRIMARY_BORROWER' ? options?.borrowerSignatureDataUrl : undefined,
+        }))
+      : [
+          {
+            name: loan.full_name,
+            nrc: loan.nrc_number,
+            role: 'Borrower',
+            signatureDataUrl: options?.borrowerSignatureDataUrl,
+          },
+        ];
+
+  signatories.forEach((s, idx) => {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${idx + 1}. ${s.role.toUpperCase()}`, margin, yPos);
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Name: ${s.name}`, margin, yPos);
+    yPos += 5;
+    doc.text(`NRC: ${s.nrc}`, margin, yPos);
+    yPos += 8;
+    doc.text('Signature: ____________________________   Date: ____/____/______', margin, yPos);
+    if (s.signatureDataUrl) {
+      try {
+        doc.addImage(s.signatureDataUrl, 'PNG', margin + 25, yPos - 5, 60, 18);
+      } catch {
+        /* ignore */
+      }
+    }
+    yPos += 14;
+  });
+
+  if (yPos > 240) {
+    doc.addPage();
+    yPos = 20;
+  }
+  doc.text('I/We further surrender the authority to Phindu Credit Solutions to recover the loan amount by all means', margin, yPos);
   yPos += 5;
   doc.text('necessary: property grabbing/seizure, DDACC, next of kin, payslip deductions.', margin, yPos);
   yPos += 15;
@@ -479,6 +644,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   doc.text('Name: ____________________', margin, yPos);
   yPos += 5;
   doc.text('Date: ____________________', margin, yPos);
+
 
   // Footer on all pages
   const lastPage = doc.internal.pages.length;
