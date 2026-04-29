@@ -234,6 +234,16 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     if (profile) {
       if (profile.employer_name) setEmployerName(profile.employer_name);
       if (profile.net_income) setMonthlySalary(String(profile.net_income));
+      // Sync the locked primary borrower from profile (used by collateral multi-borrower section)
+      setPrimaryBorrower((prev) => ({
+        ...prev,
+        customer_id: profile.id,
+        full_name: profile.full_name || "",
+        nrc_number: profile.nrc_number || "",
+        phone: profile.phone || "",
+        address: profile.address || "",
+        is_signatory: true,
+      }));
     }
   }, [profile]);
 
