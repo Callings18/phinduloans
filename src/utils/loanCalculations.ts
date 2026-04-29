@@ -283,6 +283,15 @@ export function calculateLoan(
     }
   }
   
+  // For per_loan products, derive a display monthly rate from the total interest %
+  // (e.g. 30% over 3 months => 10% / month effective).
+  if ((interestPeriod as string) === 'per_loan') {
+    const termMonthsDisplay = termUnit === 'weeks' ? termValue / 4.33 : termValue;
+    if (termMonthsDisplay > 0) {
+      monthlyRate = product.interest_rate / termMonthsDisplay;
+    }
+  }
+
   return {
     principal,
     monthlyInterestRate: monthlyRate,
