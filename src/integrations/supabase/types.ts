@@ -1891,6 +1891,73 @@ export type Database = {
           },
         ]
       }
+      loan_borrowers: {
+        Row: {
+          address: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          full_name: string
+          id: string
+          is_signatory: boolean
+          loan_application_id: string
+          nrc_number: string
+          phone: string | null
+          role: Database["public"]["Enums"]["loan_borrower_role"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          full_name: string
+          id?: string
+          is_signatory?: boolean
+          loan_application_id: string
+          nrc_number: string
+          phone?: string | null
+          role: Database["public"]["Enums"]["loan_borrower_role"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          full_name?: string
+          id?: string
+          is_signatory?: boolean
+          loan_application_id?: string
+          nrc_number?: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["loan_borrower_role"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_borrowers_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_borrowers_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "loan_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_borrowers_loan_application_id_fkey"
+            columns: ["loan_application_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_loans_view"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       loan_collateral_images: {
         Row: {
           created_at: string | null
@@ -4252,6 +4319,11 @@ export type Database = {
         | "auditor"
         | "support"
       employment_type: "employed" | "self_employed" | "contract" | "other"
+      loan_borrower_role:
+        | "PRIMARY_BORROWER"
+        | "CO_BORROWER"
+        | "ABSOLUTE_OWNER"
+        | "GUARANTOR"
       loan_status:
         | "pending"
         | "under_review"
@@ -4405,6 +4477,12 @@ export const Constants = {
         "support",
       ],
       employment_type: ["employed", "self_employed", "contract", "other"],
+      loan_borrower_role: [
+        "PRIMARY_BORROWER",
+        "CO_BORROWER",
+        "ABSOLUTE_OWNER",
+        "GUARANTOR",
+      ],
       loan_status: [
         "pending",
         "under_review",
