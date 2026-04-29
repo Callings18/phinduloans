@@ -876,7 +876,19 @@ export default function ProductLoanFormShell({
               </CardContent>
             </Card>
 
-            {/* Admin Notes */}
+            {/* Collateral: Co-Borrowers + Absolute Owners (collateral loans only) */}
+            {productCode === "COLLATERAL" && (
+              <CollateralBorrowersSection
+                primary={primaryBorrowerEntry}
+                coBorrowers={coBorrowerEntries}
+                absoluteOwners={absoluteOwnerEntries}
+                onPrimaryChange={setPrimaryBorrowerEntry}
+                onCoBorrowersChange={setCoBorrowerEntries}
+                onAbsoluteOwnersChange={setAbsoluteOwnerEntries}
+                primaryLocked={!!selectedBorrower}
+              />
+            )}
+
             <Card>
               <CardContent className="pt-4 pb-4">
                 <Label className="text-xs font-semibold">Admin Notes</Label>
