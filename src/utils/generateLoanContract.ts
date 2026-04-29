@@ -351,6 +351,8 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   const contentWidth = pageWidth - margin * 2;
   let yPos = 20;
 
+  // Fetch multi-borrower context (collateral only)
+  const parties = await fetchCollateralParties(loan);
   const centerText = (text: string, y: number, fontSize: number = 12) => {
     doc.setFontSize(fontSize);
     const textWidth = doc.getStringUnitWidth(text) * fontSize / doc.internal.scaleFactor;
