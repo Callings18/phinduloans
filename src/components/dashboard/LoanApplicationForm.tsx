@@ -112,6 +112,13 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const [collateralValue, setCollateralValue] = useState("");
   const [collateralImages, setCollateralImages] = useState<File[]>([]);
 
+  // Collateral: multi-borrower structure (Co-Borrowers + Absolute Owners)
+  const [primaryBorrower, setPrimaryBorrower] = useState<CollateralBorrowerEntry>(() =>
+    makeBlankBorrower("PRIMARY_BORROWER"),
+  );
+  const [coBorrowers, setCoBorrowers] = useState<CollateralBorrowerEntry[]>([]);
+  const [absoluteOwners, setAbsoluteOwners] = useState<CollateralBorrowerEntry[]>([]);
+
   // Business
   const [businessName, setBusinessName] = useState("");
   const [businessTpin, setBusinessTpin] = useState("");
