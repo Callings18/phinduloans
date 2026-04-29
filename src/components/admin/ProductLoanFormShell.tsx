@@ -743,8 +743,21 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">
                       Tenure ({termUnit})
                       {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed)</span>}
+                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(1–6 months)</span>}
                     </Label>
-                    <Input className="h-9" type="number" value={termValue} onChange={(e) => setTermValue(e.target.value)} disabled={isMarketeer} />
+                    {productCode === "COLLATERAL" ? (
+                      <select
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        value={termValue}
+                        onChange={(e) => setTermValue(e.target.value)}
+                      >
+                        {[1, 2, 3, 4, 5, 6].map((m) => (
+                          <option key={m} value={m}>{m} {m === 1 ? "month" : "months"}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input className="h-9" type="number" value={termValue} onChange={(e) => setTermValue(e.target.value)} disabled={isMarketeer} />
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Purpose *</Label>
