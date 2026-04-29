@@ -957,7 +957,7 @@ export default function ProductLoanFormShell({
                   <Button
                     size="sm"
                     onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || validationErrors.length > 0}
+                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retry
                   </Button>
