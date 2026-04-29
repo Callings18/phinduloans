@@ -448,7 +448,47 @@ export default function ProductLoanFormShell({
         .single();
       if (error) throw error;
 
-      // Upload documents to storage after loan is created
+      // Persist multi-borrower structure for COLLATERAL only (DB trigger also enforces this)
+      if (productCode === "COLLATERAL" && inserted?.id) {
+        const rows = [
+          {
+            loan_application_id: inserted.id,
+            customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
+            full_name: primaryBorrowerEntry.full_name,
+            nrc_number: primaryBorrowerEntry.nrc_number,
+            phone: primaryBorrowerEntry.phone || null,
+            address: primaryBorrowerEntry.address || null,
+            role: "PRIMARY_BORROWER" as const,
+            is_signatory: primaryBorrowerEntry.is_signatory,
+            created_by: user?.id ?? null,
+          },
+          ...coBorrowerEntries.map((b) => ({
+            loan_application_id: inserted.id,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "CO_BORROWER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user?.id ?? null,
+          })),
+          ...absoluteOwnerEntries.map((b) => ({
+            loan_application_id: inserted.id,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "ABSOLUTE_OWNER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user?.id ?? null,
+          })),
+        ];
+        const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(rows);
+        if (borrowersErr) console.error("Failed to insert loan_borrowers:", borrowersErr);
+      }
+
       if (inserted?.id) {
         setPendingLoanId(inserted.id);
         setDocUploading(true);
