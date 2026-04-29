@@ -106,6 +106,13 @@ export default function ProductLoanFormShell({
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
   const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
 
+  // --- Collateral multi-borrower (COLLATERAL product only) ---
+  const [primaryBorrowerEntry, setPrimaryBorrowerEntry] = useState<CollateralBorrowerEntry>(() =>
+    makeBlankBorrower("PRIMARY_BORROWER"),
+  );
+  const [coBorrowerEntries, setCoBorrowerEntries] = useState<CollateralBorrowerEntry[]>([]);
+  const [absoluteOwnerEntries, setAbsoluteOwnerEntries] = useState<CollateralBorrowerEntry[]>([]);
+
   // Failure recovery state — captures last error and any partially created loan id
   // so the user can retry the submit or roll back the orphaned draft in one click.
   const [lastError, setLastError] = useState<string | null>(null);
