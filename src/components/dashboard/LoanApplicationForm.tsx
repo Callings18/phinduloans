@@ -23,6 +23,11 @@ import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@/utils/l
 import { useToast } from "@/hooks/use-toast";
 import { LOAN_APPLICATION_IDENTITY_DOC_TYPES } from "@/constants/borrowerKycDocs";
 import { MobileStickyFormFooter } from "@/components/common/ResponsiveDataViews";
+import CollateralBorrowersSection, {
+  type CollateralBorrowerEntry,
+  makeBlankBorrower,
+  validateCollateralBorrowers,
+} from "@/components/loans/CollateralBorrowersSection";
 
 interface LoanProduct {
   id: string;
