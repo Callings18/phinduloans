@@ -6,7 +6,7 @@
 
 import { calculateMarketeerLoan, getMarketeerTiersOrDefault } from "@/lib/marketeerCalculations";
 
-export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'per_loan';
 export type InterestType = 'flat' | 'reducing';
 export type PenaltyFrequency = 'daily' | 'weekly' | 'monthly' | 'one_time';
 export type TermUnit = 'days' | 'weeks' | 'months' | 'years';
@@ -82,6 +82,10 @@ export function normalizeToMonthlyRate(rate: number, period: InterestPeriod = 'm
     case 'yearly':
       // Yearly rate ÷ 12 = monthly rate
       return rate / 12;
+    case 'per_loan':
+      // Total over loan; not normalizable to a per-period rate without knowing term.
+      // Return 0 here so callers don't accidentally show a misleading per-month rate.
+      return 0;
     default:
       return rate; // Default to monthly
   }
@@ -231,9 +235,12 @@ export function calculateLoan(
       totalInterest = calculateReducingBalanceInterest(principal, monthlyRate, termMonths);
     } else {
       // Flat interest:
-      // - Business Loan - Short Term: one-time flat interest over the full term (as agreed by business)
-      // - All other products: recurring interest by period
-      totalInterest = isBusinessShortTerm
+      // - interest_period = 'per_loan': total rate is one-time over the full term
+      //   (regardless of how many months). e.g. Collateral 30% flat / loan.
+      // - Business Loan - Short Term (legacy name match): same one-time semantics.
+      // - All other products: recurring interest by period.
+      const isPerLoanFlat = (interestPeriod as string) === 'per_loan' || isBusinessShortTerm;
+      totalInterest = isPerLoanFlat
         ? principal * (product.interest_rate / 100)
         : calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);
       monthlyPayment = (principal + totalInterest) / termMonths;
@@ -276,6 +283,15 @@ export function calculateLoan(
     }
   }
   
+  // For per_loan products, derive a display monthly rate from the total interest %
+  // (e.g. 30% over 3 months => 10% / month effective).
+  if ((interestPeriod as string) === 'per_loan') {
+    const termMonthsDisplay = termUnit === 'weeks' ? termValue / 4.33 : termValue;
+    if (termMonthsDisplay > 0) {
+      monthlyRate = product.interest_rate / termMonthsDisplay;
+    }
+  }
+
   return {
     principal,
     monthlyInterestRate: monthlyRate,
