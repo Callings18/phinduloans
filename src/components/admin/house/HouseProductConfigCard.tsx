@@ -196,8 +196,14 @@ export default function HouseProductConfigCard({ productCode }: { productCode: s
           ) : null}
         </div>
 
-        {legalPct > 0 && legalMode === "upfront_net" ? (
+        {data.interest_period === "per_loan" ? (
           <p className="mt-4 text-xs text-muted-foreground border-t pt-3">
+            <span className="font-medium text-foreground">{Number(data.interest_rate ?? 0)}% flat interest</span> charged once on the principal — regardless of term.
+            Split evenly across {data.min_term_months}{data.max_term_months !== data.min_term_months ? `–${data.max_term_months}` : ""} {termUnit} of equal installments.
+          </p>
+        ) : null}
+        {legalPct > 0 && legalMode === "upfront_net" ? (
+          <p className="mt-2 text-xs text-muted-foreground">
             Borrower receives loan amount minus {legalPct}% legal fee on disbursement, but repays the full amount.
           </p>
         ) : null}
