@@ -801,6 +801,13 @@ export default function ProductLoanFormShell({
                     {preview.dailyRate && (
                       <p className="text-[10px] text-muted-foreground text-center mt-1">Daily rate: {preview.dailyRate}/day</p>
                     )}
+                    {productCode === "COLLATERAL" && Number(termValue) > 0 && (
+                      <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2">
+                        <span className="font-medium text-foreground">30% flat interest, charged once on the principal</span> — regardless of term.
+                        Split across {termValue} {Number(termValue) === 1 ? "month" : "months"} =
+                        <span className="font-medium"> {(30 / Number(termValue)).toFixed(2)}% / month</span> effective.
+                      </p>
+                    )}
                   </div>
                 )}
               </CardContent>
