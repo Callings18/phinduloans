@@ -91,6 +91,81 @@ const fetchActiveTemplate = async (loanProductId?: string | null): Promise<Contr
   }
 };
 
+// ─── Multi-borrower (Collateral only) helpers ───────────────────────────────
+interface LoanBorrowerRow {
+  id: string;
+  full_name: string;
+  nrc_number: string;
+  phone: string | null;
+  address: string | null;
+  role: 'PRIMARY_BORROWER' | 'CO_BORROWER' | 'ABSOLUTE_OWNER' | 'GUARANTOR';
+  is_signatory: boolean;
+}
+
+interface CollateralPartiesContext {
+  isCollateral: boolean;
+  borrowers: LoanBorrowerRow[];
+  signatories: LoanBorrowerRow[];
+  absoluteOwners: LoanBorrowerRow[];
+  jointBorrowers: LoanBorrowerRow[]; // primary + co
+}
+
+const fetchCollateralParties = async (loan: LoanData): Promise<CollateralPartiesContext> => {
+  const empty: CollateralPartiesContext = {
+    isCollateral: false,
+    borrowers: [],
+    signatories: [],
+    absoluteOwners: [],
+    jointBorrowers: [],
+  };
+  if (!loan.loan_product_id) return empty;
+  try {
+    const { data: product } = await supabase
+      .from('loan_products')
+      .select('product_code')
+      .eq('id', loan.loan_product_id)
+      .maybeSingle();
+    if ((product as any)?.product_code !== 'COLLATERAL') return empty;
+
+    const { data: rows } = await supabase
+      .from('loan_borrowers')
+      .select('id, full_name, nrc_number, phone, address, role, is_signatory')
+      .eq('loan_application_id', loan.id);
+
+    const borrowers = (rows || []) as LoanBorrowerRow[];
+    return {
+      isCollateral: true,
+      borrowers,
+      signatories: borrowers.filter((b) => b.is_signatory),
+      absoluteOwners: borrowers.filter((b) => b.role === 'ABSOLUTE_OWNER'),
+      jointBorrowers: borrowers.filter((b) => b.role === 'PRIMARY_BORROWER' || b.role === 'CO_BORROWER'),
+    };
+  } catch (e) {
+    console.warn('fetchCollateralParties failed:', e);
+    return empty;
+  }
+};
+
+const formatBorrowersBlock = (rows: LoanBorrowerRow[]): string => {
+  if (!rows.length) return '';
+  return rows
+    .map((b, i) => {
+      const roleLabel =
+        b.role === 'PRIMARY_BORROWER'
+          ? 'Primary Borrower'
+          : b.role === 'CO_BORROWER'
+          ? 'Co-Borrower'
+          : b.role === 'ABSOLUTE_OWNER'
+          ? 'Absolute Owner'
+          : 'Guarantor';
+      return `${i + 1}. ${b.full_name} | NRC: ${b.nrc_number} | ${roleLabel}${b.phone ? ` | Phone: ${b.phone}` : ''}`;
+    })
+    .join('\n');
+};
+
+const JOINT_LIABILITY_CLAUSE =
+  'All Borrowers and Co-Borrowers named in this Agreement are jointly and severally liable for the full repayment of the loan, including principal, interest, fees, and any penalties. The Lender may pursue any one or more of them for the entire outstanding amount.';
+
 // Replace placeholders in template content with actual loan data
 const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
