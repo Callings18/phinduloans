@@ -172,6 +172,17 @@ export default function ProductLoanFormShell({
       if (selectedBorrower.job_title) setJobTitle(selectedBorrower.job_title);
       if (selectedBorrower.net_income) setMonthlyIncome(String(selectedBorrower.net_income));
       if (selectedBorrower.employment_type) setEmploymentType(selectedBorrower.employment_type as any);
+
+      // Sync primary borrower entry for collateral multi-borrower section
+      setPrimaryBorrowerEntry((prev) => ({
+        ...prev,
+        customer_id: selectedBorrower.id,
+        full_name: selectedBorrower.full_name || "",
+        nrc_number: selectedBorrower.nrc_number || "",
+        phone: selectedBorrower.phone || "",
+        address: selectedBorrower.address || "",
+        is_signatory: true,
+      }));
     }
   }, [selectedBorrower]);
 
