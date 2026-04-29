@@ -82,6 +82,10 @@ export function normalizeToMonthlyRate(rate: number, period: InterestPeriod = 'm
     case 'yearly':
       // Yearly rate ÷ 12 = monthly rate
       return rate / 12;
+    case 'per_loan':
+      // Total over loan; not normalizable to a per-period rate without knowing term.
+      // Return 0 here so callers don't accidentally show a misleading per-month rate.
+      return 0;
     default:
       return rate; // Default to monthly
   }
