@@ -347,6 +347,9 @@ export default function ProductLoanFormShell({
         throw new Error("Repayment start date must be tomorrow or later.");
       }
       if (validationErrors.length > 0) throw new Error(validationErrors[0]);
+      if (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid) {
+        throw new Error(collateralBorrowersValidation.errors[0] || "Borrowers section incomplete.");
+      }
 
       const activeProduct = product?.id ? product : await resolveProduct(productCode);
       if (activeProduct?.id) {
