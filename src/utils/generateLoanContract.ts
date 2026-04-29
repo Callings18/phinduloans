@@ -227,6 +227,25 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     '{{contract_number}}': `PCS-${loan.id.slice(0, 8).toUpperCase()}`,
   };
 
+  // Collateral-only multi-borrower placeholders
+  const parties = await fetchCollateralParties(loan);
+  if (parties.isCollateral) {
+    replacements['{{borrowers_block}}'] = formatBorrowersBlock(parties.jointBorrowers) || loan.full_name;
+    replacements['{{absolute_owners_block}}'] =
+      parties.absoluteOwners.length > 0
+        ? formatBorrowersBlock(parties.absoluteOwners)
+        : 'N/A';
+    replacements['{{joint_liability_clause}}'] = JOINT_LIABILITY_CLAUSE;
+  } else {
+    replacements['{{borrowers_block}}'] = `${loan.full_name} | NRC: ${loan.nrc_number}`;
+    replacements['{{absolute_owners_block}}'] = 'N/A';
+    replacements['{{joint_liability_clause}}'] = '';
+  }
+
+  // Re-open the const for the loop below (no-op object spread for clarity)
+  const _replacementsRef = replacements;
+  void _replacementsRef;
+
   let result = content;
   for (const [placeholder, value] of Object.entries(replacements)) {
     result = result.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
