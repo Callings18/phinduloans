@@ -561,8 +561,14 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     sectionNum++;
   }
 
+  // Joint and several liability clause (collateral only)
+  if (parties.isCollateral) {
+    addSection(`${sectionNum}. JOINT AND SEVERAL LIABILITY`, [JOINT_LIABILITY_CLAUSE]);
+    sectionNum++;
+  }
+
   addSection('DECLARATION', [
-    'By signing below, I, the undersigned, hereby acknowledge that I have read and understood all the terms and conditions of this Loan Agreement. I understand the Responsibilities, interest rates, fees, repayment schedule and any other associated costs.',
+    'By signing below, the undersigned hereby acknowledge that they have read and understood all the terms and conditions of this Loan Agreement, including the responsibilities, interest rates, fees, repayment schedule, and any other associated costs.',
   ]);
 
   if (yPos > 220) {
@@ -573,24 +579,60 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   yPos += 5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  
-  doc.text('Borrower Signature: ......................   Date: ....../......./..........', margin, yPos);
-  yPos += 10;
-  
-  // If borrower signature provided, embed it
-  if (options?.borrowerSignatureDataUrl) {
-    try {
-      doc.addImage(options.borrowerSignatureDataUrl, 'PNG', margin, yPos - 5, 60, 20);
-      yPos += 20;
-    } catch (e) {
-      yPos += 5;
-    }
-  }
-  
-  doc.text(`Name: ${loan.full_name}`, margin, yPos);
-  yPos += 10;
 
-  doc.text('I further surrender the authority to Phindu Credit Solutions to recover the loan amount by all means', margin, yPos);
+  // Build the list of signatories
+  const signatories: Array<{ name: string; nrc: string; role: string; signatureDataUrl?: string }> =
+    parties.isCollateral && parties.signatories.length > 0
+      ? parties.signatories.map((b, i) => ({
+          name: b.full_name,
+          nrc: b.nrc_number,
+          role:
+            b.role === 'PRIMARY_BORROWER'
+              ? 'Primary Borrower'
+              : b.role === 'CO_BORROWER'
+              ? 'Co-Borrower'
+              : 'Absolute Owner',
+          // Only embed the signature image for the first primary borrower (the user who signed in-app)
+          signatureDataUrl: i === 0 && b.role === 'PRIMARY_BORROWER' ? options?.borrowerSignatureDataUrl : undefined,
+        }))
+      : [
+          {
+            name: loan.full_name,
+            nrc: loan.nrc_number,
+            role: 'Borrower',
+            signatureDataUrl: options?.borrowerSignatureDataUrl,
+          },
+        ];
+
+  signatories.forEach((s, idx) => {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${idx + 1}. ${s.role.toUpperCase()}`, margin, yPos);
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Name: ${s.name}`, margin, yPos);
+    yPos += 5;
+    doc.text(`NRC: ${s.nrc}`, margin, yPos);
+    yPos += 8;
+    doc.text('Signature: ____________________________   Date: ____/____/______', margin, yPos);
+    if (s.signatureDataUrl) {
+      try {
+        doc.addImage(s.signatureDataUrl, 'PNG', margin + 25, yPos - 5, 60, 18);
+      } catch {
+        /* ignore */
+      }
+    }
+    yPos += 14;
+  });
+
+  if (yPos > 240) {
+    doc.addPage();
+    yPos = 20;
+  }
+  doc.text('I/We further surrender the authority to Phindu Credit Solutions to recover the loan amount by all means', margin, yPos);
   yPos += 5;
   doc.text('necessary: property grabbing/seizure, DDACC, next of kin, payslip deductions.', margin, yPos);
   yPos += 15;
@@ -602,6 +644,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   doc.text('Name: ____________________', margin, yPos);
   yPos += 5;
   doc.text('Date: ____________________', margin, yPos);
+
 
   // Footer on all pages
   const lastPage = doc.internal.pages.length;
