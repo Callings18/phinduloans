@@ -47,12 +47,32 @@ export const makeBlankBorrower = (role: CollateralBorrowerRole): CollateralBorro
   is_signatory: true,
 });
 
+export interface RowFieldErrors {
+  full_name?: string;
+  nrc_number?: string;
+  role?: string;
+}
+
 export interface CollateralBorrowersValidation {
   isValid: boolean;
   errors: string[];
   warnings: string[];
   signatoryCount: number;
+  rowErrors: Record<string, RowFieldErrors>; // keyed by entry.uid
+  duplicateNrcs: Set<string>;
 }
+
+const ALLOWED_ROLES: CollateralBorrowerRole[] = ["PRIMARY_BORROWER", "CO_BORROWER", "ABSOLUTE_OWNER"];
+
+const validateRow = (b: CollateralBorrowerEntry, label: string): RowFieldErrors => {
+  const errs: RowFieldErrors = {};
+  if (!b.full_name.trim()) errs.full_name = `${label}: full name is required.`;
+  if (!b.nrc_number.trim()) errs.nrc_number = `${label}: NRC is required.`;
+  else if (!NRC_REGEX.test(b.nrc_number.trim()))
+    errs.nrc_number = `${label}: NRC must be in the format 000000/00/0.`;
+  if (!ALLOWED_ROLES.includes(b.role)) errs.role = `${label}: invalid role.`;
+  return errs;
+};
 
 export const validateCollateralBorrowers = (
   primary: CollateralBorrowerEntry,
@@ -61,21 +81,35 @@ export const validateCollateralBorrowers = (
 ): CollateralBorrowersValidation => {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const rowErrors: Record<string, RowFieldErrors> = {};
 
-  if (!primary.full_name.trim() || !primary.nrc_number.trim()) {
-    errors.push("Primary Borrower full name and NRC are required.");
+  const primaryErrs = validateRow(primary, "Primary Borrower");
+  if (Object.keys(primaryErrs).length) {
+    rowErrors[primary.uid] = primaryErrs;
+    Object.values(primaryErrs).forEach((m) => m && errors.push(m));
   }
-  if (primary.nrc_number && !NRC_REGEX.test(primary.nrc_number.trim())) {
-    errors.push("Primary Borrower NRC must be in the format 000000/00/0.");
+  if (primary.role !== "PRIMARY_BORROWER") {
+    rowErrors[primary.uid] = { ...(rowErrors[primary.uid] || {}), role: "Primary Borrower role mismatch." };
+    errors.push("Primary Borrower role mismatch.");
   }
 
-  const allExtras = [...coBorrowers, ...absoluteOwners];
-  allExtras.forEach((b, i) => {
-    const label = b.role === "CO_BORROWER" ? `Co-Borrower #${i + 1}` : `Absolute Owner`;
-    if (!b.full_name.trim()) errors.push(`${label}: full name is required.`);
-    if (!b.nrc_number.trim()) errors.push(`${label}: NRC is required.`);
-    if (b.nrc_number && !NRC_REGEX.test(b.nrc_number.trim())) {
-      errors.push(`${label}: NRC must be in the format 000000/00/0.`);
+  coBorrowers.forEach((b, i) => {
+    const label = `Co-Borrower #${i + 1}`;
+    const errs = validateRow(b, label);
+    if (b.role !== "CO_BORROWER") errs.role = `${label}: must have role Co-Borrower.`;
+    if (Object.keys(errs).length) {
+      rowErrors[b.uid] = errs;
+      Object.values(errs).forEach((m) => m && errors.push(m));
+    }
+  });
+
+  absoluteOwners.forEach((b, i) => {
+    const label = `Absolute Owner #${i + 1}`;
+    const errs = validateRow(b, label);
+    if (b.role !== "ABSOLUTE_OWNER") errs.role = `${label}: must have role Absolute Owner.`;
+    if (Object.keys(errs).length) {
+      rowErrors[b.uid] = errs;
+      Object.values(errs).forEach((m) => m && errors.push(m));
     }
   });
 
@@ -85,18 +119,29 @@ export const validateCollateralBorrowers = (
     absoluteOwners.filter((b) => b.is_signatory).length;
   if (signatoryCount < 1) errors.push("At least one signatory is required.");
 
-  // Duplicate NRC warning
+  // Duplicate NRC detection (warning + per-row highlight)
   const nrcCounts = new Map<string, number>();
   [primary, ...coBorrowers, ...absoluteOwners].forEach((b) => {
     const key = b.nrc_number.trim();
-    if (!key) return;
+    if (!key || !NRC_REGEX.test(key)) return;
     nrcCounts.set(key, (nrcCounts.get(key) || 0) + 1);
   });
+  const duplicateNrcs = new Set<string>();
   for (const [nrc, count] of nrcCounts.entries()) {
-    if (count > 1) warnings.push(`The NRC ${nrc} appears more than once across roles.`);
+    if (count > 1) {
+      duplicateNrcs.add(nrc);
+      warnings.push(`The NRC ${nrc} appears more than once across roles.`);
+    }
   }
 
-  return { isValid: errors.length === 0, errors, warnings, signatoryCount };
+  return {
+    isValid: errors.length === 0,
+    errors: Array.from(new Set(errors)),
+    warnings,
+    signatoryCount,
+    rowErrors,
+    duplicateNrcs,
+  };
 };
 
 const Row = ({
