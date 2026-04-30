@@ -358,7 +358,14 @@ export default function HouseLoanDetailPage() {
                         <span className="block text-xs text-destructive">{daysLate}d late</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-medium">K{Number(r.amount || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      K{Number(r.amount || 0).toLocaleString()}
+                      {Number(r.principal_paid || 0) > 0 && r.status !== "paid" && (
+                        <span className="block text-xs text-success">
+                          paid K{Number(r.principal_paid).toLocaleString()} · due K{Math.max(Number(r.amount) - Number(r.principal_paid), 0).toLocaleString()}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={r.status === "paid" ? "default" : r.status === "cancelled" ? "secondary" : isOverdue ? "destructive" : "outline"}
