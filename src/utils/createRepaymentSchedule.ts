@@ -4,7 +4,7 @@
  */
 import { format, addMonths } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { skipSundays } from "@/lib/marketeerCalculations";
+import { getBusinessCalendar, nextBusinessDay } from "@/lib/businessCalendar";
 
 export interface LoanForSchedule {
   id: string;
