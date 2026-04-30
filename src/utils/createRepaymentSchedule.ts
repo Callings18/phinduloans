@@ -106,11 +106,26 @@ export async function createRepaymentScheduleForLoan(
   }> = [];
   // Use date-only (noon UTC) to prevent timezone-related off-by-one issues.
   // If a repayment_start_date is provided, that date becomes installment #1 due date.
+  // For MARKETEER specifically, collections never start on the disbursement day —
+  // installment #1 must be the day AFTER (skipping Sundays). If the explicit
+  // start date is today or earlier, we bump it forward to tomorrow.
   const startDate =
     loan.repayment_start_date && !Number.isNaN(new Date(loan.repayment_start_date).getTime())
       ? new Date(loan.repayment_start_date)
       : new Date();
   startDate.setHours(12, 0, 0, 0);
+
+  if (isMarketeer) {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    if (startDate.getTime() <= today.getTime()) {
+      startDate.setDate(today.getDate() + 1);
+    }
+    // Never collect on a Sunday
+    const adjusted = skipSundays(startDate);
+    startDate.setTime(adjusted.getTime());
+  }
+
   const hasExplicitStartDate =
     Boolean(loan.repayment_start_date) && !Number.isNaN(new Date(loan.repayment_start_date as string).getTime());
 
