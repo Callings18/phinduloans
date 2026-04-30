@@ -559,16 +559,18 @@ const AdminRepayments = () => {
   const today = new Date();
   const stats = {
     total: repayments?.length || 0,
-    pending: repayments?.filter((r) => r.status === "pending").length || 0,
+    pending: repayments?.filter((r) => r.status === "pending" || r.status === "partial").length || 0,
     paid: repayments?.filter((r) => r.status === "paid").length || 0,
+    // Overdue = anything not yet fully paid/cancelled whose due date has passed
     overdue: repayments?.filter((r) =>
-      r.status === "pending" && isAfter(today, new Date(r.due_date))
+      r.status !== "paid" && r.status !== "cancelled" && isAfter(today, new Date(r.due_date))
     ).length || 0,
+    // Total collected = principal_paid across paid + partial rows (real cash in)
     totalCollected: repayments
-      ?.filter((r) => r.status === "paid")
-      .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0,
+      ?.reduce((sum, r) => sum + Number(r.principal_paid || (r.status === "paid" ? (r.original_amount || r.amount) : 0) || 0), 0) || 0,
+    // Total still due = original − principal_paid for everything not paid/cancelled
     totalPending: repayments
-      ?.filter((r) => r.status === "pending")
+      ?.filter((r) => r.status !== "paid" && r.status !== "cancelled")
       .reduce((sum, r) => {
         const original = Number(r.original_amount || r.amount);
         const paid = Number(r.principal_paid || 0);
