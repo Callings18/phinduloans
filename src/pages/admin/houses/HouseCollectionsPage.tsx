@@ -58,17 +58,34 @@ export default function HouseCollectionsPage() {
     [repayments, todayStr]
   );
 
-  const paidToday = useMemo(() =>
-    (repayments ?? []).filter((r: any) => r.status === "paid" && r.paid_date === todayStr),
-    [repayments, todayStr]
+  // Anything updated today with cash applied (paid in full OR partial today)
+  const paidToday = useMemo(
+    () =>
+      (repayments ?? []).filter((r: any) => {
+        const stamp = r.paid_date || r.last_payment_date;
+        return (
+          (r.status === "paid" || (r.status === "partial" && Number(r.principal_paid || 0) > 0)) &&
+          stamp === todayStr
+        );
+      }),
+    [repayments, todayStr],
   );
 
   const totalDue = todayDue.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
-  const totalOverdue = overdue.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
-  const totalCollectedToday = paidToday.reduce((s: number, r: any) => s + Number(r.principal_paid || r.amount || 0), 0);
+  const totalOverdue = overdue.reduce(
+    (s: number, r: any) => s + Math.max(Number(r.amount || 0) - Number(r.principal_paid || 0), 0),
+    0,
+  );
+  const totalCollectedToday = paidToday.reduce(
+    (s: number, r: any) => s + Number(r.principal_paid || r.amount || 0),
+    0,
+  );
   const totalOutstanding = (repayments ?? [])
     .filter((r: any) => r.status !== "paid" && r.status !== "cancelled")
-    .reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+    .reduce(
+      (s: number, r: any) => s + Math.max(Number(r.amount || 0) - Number(r.principal_paid || 0), 0),
+      0,
+    );
 
   const handlePaymentSuccess = (receipt: PaymentReceiptData) => {
     queryClient.invalidateQueries({ queryKey: ["house-repayments", productCode] });
