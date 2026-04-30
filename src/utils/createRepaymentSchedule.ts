@@ -45,19 +45,22 @@ export async function createRepaymentScheduleForLoan(
   let termUnit = loan.term_unit ?? "months";
   let interestPeriod = "monthly";
   let repaymentFrequency = "monthly";
+  let productCode: string | null = null;
 
   if (loan.loan_product_id) {
     const { data: product } = await supabase
       .from("loan_products")
-      .select("term_unit, interest_period, repayment_frequency")
+      .select("term_unit, interest_period, repayment_frequency, product_code")
       .eq("id", loan.loan_product_id)
       .single();
     if (product) {
       termUnit = (product as any).term_unit ?? termUnit;
       interestPeriod = (product as any).interest_period ?? interestPeriod;
       repaymentFrequency = (product as any).repayment_frequency ?? repaymentFrequency;
+      productCode = (product as any).product_code ?? null;
     }
   }
+  const isMarketeer = productCode === "MARKETEER";
 
   const isDaily =
     termUnit === "days" ||
@@ -103,17 +106,36 @@ export async function createRepaymentScheduleForLoan(
   }> = [];
   // Use date-only (noon UTC) to prevent timezone-related off-by-one issues.
   // If a repayment_start_date is provided, that date becomes installment #1 due date.
+  // For MARKETEER specifically, collections never start on the disbursement day —
+  // installment #1 must be the day AFTER (skipping Sundays). If the explicit
+  // start date is today or earlier, we bump it forward to tomorrow.
   const startDate =
     loan.repayment_start_date && !Number.isNaN(new Date(loan.repayment_start_date).getTime())
       ? new Date(loan.repayment_start_date)
       : new Date();
   startDate.setHours(12, 0, 0, 0);
+
+  if (isMarketeer) {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    if (startDate.getTime() <= today.getTime()) {
+      startDate.setDate(today.getDate() + 1);
+    }
+    // Never collect on a Sunday
+    const adjusted = skipSundays(startDate);
+    startDate.setTime(adjusted.getTime());
+  }
+
   const hasExplicitStartDate =
     Boolean(loan.repayment_start_date) && !Number.isNaN(new Date(loan.repayment_start_date as string).getTime());
 
+  // For Marketeer we always anchor installment #1 on startDate (which is
+  // already the day-after-disbursement, Sunday-skipped) — equivalent to
+  // hasExplicitStartDate semantics.
+  const anchorOnStart = hasExplicitStartDate || isMarketeer;
   for (let i = 1; i <= numInstallments; i++) {
     let dueDate: Date;
-    const offset = hasExplicitStartDate ? i - 1 : i;
+    const offset = anchorOnStart ? i - 1 : i;
     if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
