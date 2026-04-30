@@ -88,6 +88,29 @@ export default function HouseLoanDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
   };
 
+  // Realtime: refresh totals/schedule the moment a repayment row changes
+  // (covers payments recorded from the global Repayments page or modal).
+  useEffect(() => {
+    if (!loanId) return;
+    const channel = supabase
+      .channel(`loan-detail-${loanId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_repayments", filter: `loan_id=eq.${loanId}` },
+        () => invalidateAll(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_applications", filter: `id=eq.${loanId}` },
+        () => invalidateAll(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loanId]);
+
   const payMutation = useMutation({
     mutationFn: async ({ repaymentId, amount, expected }: { repaymentId: string; amount: number; expected: number }) => {
       if (!selectedAccount) throw new Error("Select the account to credit first");
