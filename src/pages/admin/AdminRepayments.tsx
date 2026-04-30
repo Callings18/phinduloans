@@ -254,9 +254,11 @@ const AdminRepayments = () => {
           .select("status, principal_paid, original_amount, amount")
           .eq("loan_id", repayment.loan_id);
         const loanRepayments = refreshedRepayments || [];
-        const totalPaid = loanRepayments
-          .filter(r => r.status === "paid")
-          .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+        // Sum principal_paid across ALL rows so partial payments count toward outstanding.
+        const totalPaid = loanRepayments.reduce(
+          (sum, r) => sum + Number(r.principal_paid || (r.status === "paid" ? (r.original_amount || r.amount) : 0) || 0),
+          0,
+        );
         const totalDue = loanRepayments.reduce((sum, r) => sum + Number(r.original_amount || r.amount), 0);
         const remainingBalance = Math.max(0, totalDue - totalPaid);
 
