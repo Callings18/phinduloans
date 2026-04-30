@@ -45,19 +45,22 @@ export async function createRepaymentScheduleForLoan(
   let termUnit = loan.term_unit ?? "months";
   let interestPeriod = "monthly";
   let repaymentFrequency = "monthly";
+  let productCode: string | null = null;
 
   if (loan.loan_product_id) {
     const { data: product } = await supabase
       .from("loan_products")
-      .select("term_unit, interest_period, repayment_frequency")
+      .select("term_unit, interest_period, repayment_frequency, product_code")
       .eq("id", loan.loan_product_id)
       .single();
     if (product) {
       termUnit = (product as any).term_unit ?? termUnit;
       interestPeriod = (product as any).interest_period ?? interestPeriod;
       repaymentFrequency = (product as any).repayment_frequency ?? repaymentFrequency;
+      productCode = (product as any).product_code ?? null;
     }
   }
+  const isMarketeer = productCode === "MARKETEER";
 
   const isDaily =
     termUnit === "days" ||
