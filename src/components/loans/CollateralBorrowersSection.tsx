@@ -47,12 +47,32 @@ export const makeBlankBorrower = (role: CollateralBorrowerRole): CollateralBorro
   is_signatory: true,
 });
 
+export interface RowFieldErrors {
+  full_name?: string;
+  nrc_number?: string;
+  role?: string;
+}
+
 export interface CollateralBorrowersValidation {
   isValid: boolean;
   errors: string[];
   warnings: string[];
   signatoryCount: number;
+  rowErrors: Record<string, RowFieldErrors>; // keyed by entry.uid
+  duplicateNrcs: Set<string>;
 }
+
+const ALLOWED_ROLES: CollateralBorrowerRole[] = ["PRIMARY_BORROWER", "CO_BORROWER", "ABSOLUTE_OWNER"];
+
+const validateRow = (b: CollateralBorrowerEntry, label: string): RowFieldErrors => {
+  const errs: RowFieldErrors = {};
+  if (!b.full_name.trim()) errs.full_name = `${label}: full name is required.`;
+  if (!b.nrc_number.trim()) errs.nrc_number = `${label}: NRC is required.`;
+  else if (!NRC_REGEX.test(b.nrc_number.trim()))
+    errs.nrc_number = `${label}: NRC must be in the format 000000/00/0.`;
+  if (!ALLOWED_ROLES.includes(b.role)) errs.role = `${label}: invalid role.`;
+  return errs;
+};
 
 export const validateCollateralBorrowers = (
   primary: CollateralBorrowerEntry,
@@ -61,21 +81,35 @@ export const validateCollateralBorrowers = (
 ): CollateralBorrowersValidation => {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const rowErrors: Record<string, RowFieldErrors> = {};
 
-  if (!primary.full_name.trim() || !primary.nrc_number.trim()) {
-    errors.push("Primary Borrower full name and NRC are required.");
+  const primaryErrs = validateRow(primary, "Primary Borrower");
+  if (Object.keys(primaryErrs).length) {
+    rowErrors[primary.uid] = primaryErrs;
+    Object.values(primaryErrs).forEach((m) => m && errors.push(m));
   }
-  if (primary.nrc_number && !NRC_REGEX.test(primary.nrc_number.trim())) {
-    errors.push("Primary Borrower NRC must be in the format 000000/00/0.");
+  if (primary.role !== "PRIMARY_BORROWER") {
+    rowErrors[primary.uid] = { ...(rowErrors[primary.uid] || {}), role: "Primary Borrower role mismatch." };
+    errors.push("Primary Borrower role mismatch.");
   }
 
-  const allExtras = [...coBorrowers, ...absoluteOwners];
-  allExtras.forEach((b, i) => {
-    const label = b.role === "CO_BORROWER" ? `Co-Borrower #${i + 1}` : `Absolute Owner`;
-    if (!b.full_name.trim()) errors.push(`${label}: full name is required.`);
-    if (!b.nrc_number.trim()) errors.push(`${label}: NRC is required.`);
-    if (b.nrc_number && !NRC_REGEX.test(b.nrc_number.trim())) {
-      errors.push(`${label}: NRC must be in the format 000000/00/0.`);
+  coBorrowers.forEach((b, i) => {
+    const label = `Co-Borrower #${i + 1}`;
+    const errs = validateRow(b, label);
+    if (b.role !== "CO_BORROWER") errs.role = `${label}: must have role Co-Borrower.`;
+    if (Object.keys(errs).length) {
+      rowErrors[b.uid] = errs;
+      Object.values(errs).forEach((m) => m && errors.push(m));
+    }
+  });
+
+  absoluteOwners.forEach((b, i) => {
+    const label = `Absolute Owner #${i + 1}`;
+    const errs = validateRow(b, label);
+    if (b.role !== "ABSOLUTE_OWNER") errs.role = `${label}: must have role Absolute Owner.`;
+    if (Object.keys(errs).length) {
+      rowErrors[b.uid] = errs;
+      Object.values(errs).forEach((m) => m && errors.push(m));
     }
   });
 
@@ -85,18 +119,29 @@ export const validateCollateralBorrowers = (
     absoluteOwners.filter((b) => b.is_signatory).length;
   if (signatoryCount < 1) errors.push("At least one signatory is required.");
 
-  // Duplicate NRC warning
+  // Duplicate NRC detection (warning + per-row highlight)
   const nrcCounts = new Map<string, number>();
   [primary, ...coBorrowers, ...absoluteOwners].forEach((b) => {
     const key = b.nrc_number.trim();
-    if (!key) return;
+    if (!key || !NRC_REGEX.test(key)) return;
     nrcCounts.set(key, (nrcCounts.get(key) || 0) + 1);
   });
+  const duplicateNrcs = new Set<string>();
   for (const [nrc, count] of nrcCounts.entries()) {
-    if (count > 1) warnings.push(`The NRC ${nrc} appears more than once across roles.`);
+    if (count > 1) {
+      duplicateNrcs.add(nrc);
+      warnings.push(`The NRC ${nrc} appears more than once across roles.`);
+    }
   }
 
-  return { isValid: errors.length === 0, errors, warnings, signatoryCount };
+  return {
+    isValid: errors.length === 0,
+    errors: Array.from(new Set(errors)),
+    warnings,
+    signatoryCount,
+    rowErrors,
+    duplicateNrcs,
+  };
 };
 
 const Row = ({
@@ -105,20 +150,34 @@ const Row = ({
   onRemove,
   roleLocked,
   index,
+  fieldErrors,
+  isDuplicateNrc,
+  readOnlyFields,
 }: {
   entry: CollateralBorrowerEntry;
   onChange: (next: CollateralBorrowerEntry) => void;
   onRemove?: () => void;
   roleLocked?: boolean;
   index?: number;
+  fieldErrors?: RowFieldErrors;
+  isDuplicateNrc?: boolean;
+  readOnlyFields?: boolean;
 }) => {
   const update = <K extends keyof CollateralBorrowerEntry>(k: K, v: CollateralBorrowerEntry[K]) =>
     onChange({ ...entry, [k]: v });
 
+  const hasError = !!fieldErrors && Object.keys(fieldErrors).length > 0;
+  const containerCls = hasError
+    ? "rounded-lg border border-destructive/60 bg-destructive/5 p-4 space-y-3 ring-1 ring-destructive/30"
+    : "rounded-lg border border-border/60 bg-card/40 p-4 space-y-3";
+
+  const fieldErrCls = (msg?: string) =>
+    msg ? "border-destructive focus-visible:ring-destructive" : "";
+
   return (
-    <div className="rounded-lg border border-border/60 bg-card/40 p-4 space-y-3">
+    <div className={containerCls}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={entry.role === "PRIMARY_BORROWER" ? "default" : "secondary"}>
             {entry.role === "PRIMARY_BORROWER"
               ? "Primary Borrower"
@@ -129,6 +188,16 @@ const Row = ({
           {entry.is_signatory && (
             <Badge variant="outline" className="text-xs">
               <ShieldCheck className="w-3 h-3 mr-1" /> Signatory
+            </Badge>
+          )}
+          {hasError && (
+            <Badge variant="destructive" className="text-xs">
+              <AlertCircle className="w-3 h-3 mr-1" /> Needs attention
+            </Badge>
+          )}
+          {isDuplicateNrc && (
+            <Badge variant="outline" className="text-xs border-warning text-warning">
+              Duplicate NRC
             </Badge>
           )}
         </div>
@@ -145,7 +214,13 @@ const Row = ({
             value={entry.full_name}
             onChange={(e) => update("full_name", e.target.value)}
             placeholder="As per NRC"
+            className={fieldErrCls(fieldErrors?.full_name)}
+            aria-invalid={!!fieldErrors?.full_name}
+            readOnly={readOnlyFields}
           />
+          {fieldErrors?.full_name && (
+            <p className="text-xs text-destructive mt-1">{fieldErrors.full_name}</p>
+          )}
         </div>
         <div>
           <Label>NRC Number *</Label>
@@ -153,17 +228,29 @@ const Row = ({
             value={entry.nrc_number}
             onChange={(e) => update("nrc_number", e.target.value)}
             placeholder="000000/00/0"
+            className={fieldErrCls(fieldErrors?.nrc_number)}
+            aria-invalid={!!fieldErrors?.nrc_number}
+            readOnly={readOnlyFields}
           />
+          {fieldErrors?.nrc_number && (
+            <p className="text-xs text-destructive mt-1">{fieldErrors.nrc_number}</p>
+          )}
+          {!fieldErrors?.nrc_number && isDuplicateNrc && (
+            <p className="text-xs text-warning mt-1">This NRC is used by another party.</p>
+          )}
         </div>
         <div>
           <Label>Phone</Label>
-          <Input value={entry.phone} onChange={(e) => update("phone", e.target.value)} placeholder="+260..." />
+          <Input value={entry.phone} onChange={(e) => update("phone", e.target.value)} placeholder="+260..." readOnly={readOnlyFields} />
         </div>
         <div>
           <Label>Address</Label>
-          <Input value={entry.address} onChange={(e) => update("address", e.target.value)} placeholder="Physical address" />
+          <Input value={entry.address} onChange={(e) => update("address", e.target.value)} placeholder="Physical address" readOnly={readOnlyFields} />
         </div>
       </div>
+      {fieldErrors?.role && (
+        <p className="text-xs text-destructive">{fieldErrors.role}</p>
+      )}
       <div className="flex items-center gap-2">
         <Checkbox
           id={`sig-${entry.uid}`}
@@ -214,27 +301,63 @@ export default function CollateralBorrowersSection({
         <div className="space-y-2">
           <h4 className="text-sm font-semibold text-foreground">Primary Borrower</h4>
           {primaryLocked ? (
-            <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge>Primary Borrower</Badge>
-                <Badge variant="outline" className="text-xs">
-                  <ShieldCheck className="w-3 h-3 mr-1" /> Signatory
-                </Badge>
-              </div>
-              <div className="text-sm">
-                <div>
-                  <span className="text-muted-foreground">Name:</span> {primary.full_name || "—"}
+            (() => {
+              const errs = validation.rowErrors[primary.uid];
+              const dup = validation.duplicateNrcs.has(primary.nrc_number.trim());
+              const hasErr = !!errs && Object.keys(errs).length > 0;
+              return (
+                <div
+                  className={
+                    hasErr
+                      ? "rounded-lg border border-destructive/60 bg-destructive/5 p-4 space-y-2 ring-1 ring-destructive/30"
+                      : "rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2"
+                  }
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge>Primary Borrower</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      <ShieldCheck className="w-3 h-3 mr-1" /> Signatory
+                    </Badge>
+                    {hasErr && (
+                      <Badge variant="destructive" className="text-xs">
+                        <AlertCircle className="w-3 h-3 mr-1" /> Needs attention
+                      </Badge>
+                    )}
+                    {dup && (
+                      <Badge variant="outline" className="text-xs border-warning text-warning">
+                        Duplicate NRC
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Name:</span> {primary.full_name || "—"}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">NRC:</span> {primary.nrc_number || "—"}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Phone:</span> {primary.phone || "—"}
+                    </div>
+                  </div>
+                  {hasErr && (
+                    <ul className="text-xs text-destructive list-disc pl-4">
+                      {Object.values(errs!).filter(Boolean).map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">NRC:</span> {primary.nrc_number || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Phone:</span> {primary.phone || "—"}
-                </div>
-              </div>
-            </div>
+              );
+            })()
           ) : (
-            <Row entry={primary} onChange={onPrimaryChange} roleLocked />
+            <Row
+              entry={primary}
+              onChange={onPrimaryChange}
+              roleLocked
+              fieldErrors={validation.rowErrors[primary.uid]}
+              isDuplicateNrc={validation.duplicateNrcs.has(primary.nrc_number.trim())}
+            />
           )}
         </div>
 
@@ -265,6 +388,8 @@ export default function CollateralBorrowersSection({
                 onCoBorrowersChange(copy);
               }}
               onRemove={() => onCoBorrowersChange(coBorrowers.filter((_, idx) => idx !== i))}
+              fieldErrors={validation.rowErrors[cb.uid]}
+              isDuplicateNrc={validation.duplicateNrcs.has(cb.nrc_number.trim())}
             />
           ))}
         </div>
@@ -296,6 +421,8 @@ export default function CollateralBorrowersSection({
                 onAbsoluteOwnersChange(copy);
               }}
               onRemove={() => onAbsoluteOwnersChange(absoluteOwners.filter((_, idx) => idx !== i))}
+              fieldErrors={validation.rowErrors[ao.uid]}
+              isDuplicateNrc={validation.duplicateNrcs.has(ao.nrc_number.trim())}
             />
           ))}
         </div>
