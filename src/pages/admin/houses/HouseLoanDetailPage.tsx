@@ -162,9 +162,15 @@ export default function HouseLoanDetailPage() {
 
   if (!loan) return <p className="text-sm text-muted-foreground p-4">Loan not found.</p>;
 
-  const totalPaid = repayments.filter((r: any) => r.status === "paid").reduce((s: number, r: any) => s + Number(r.principal_paid || r.amount || 0), 0);
+  // Sum principal_paid across ALL installments (paid, partial, pending) so partial
+  // payments show on the summary card immediately — not only fully-paid rows.
+  const totalPaid = repayments.reduce(
+    (s: number, r: any) => s + Number(r.principal_paid || (r.status === "paid" ? r.amount : 0) || 0),
+    0,
+  );
   const outstanding = Math.max(Number(loan.total_repayment || loan.loan_amount || 0) - totalPaid, 0);
   const paidCount = repayments.filter((r: any) => r.status === "paid").length;
+  const partialCount = repayments.filter((r: any) => r.status === "partial").length;
   const pendingRepayments = repayments.filter((r: any) => r.status !== "paid" && r.status !== "cancelled");
 
   const today = new Date();
