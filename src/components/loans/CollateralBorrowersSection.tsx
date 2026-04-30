@@ -301,27 +301,63 @@ export default function CollateralBorrowersSection({
         <div className="space-y-2">
           <h4 className="text-sm font-semibold text-foreground">Primary Borrower</h4>
           {primaryLocked ? (
-            <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge>Primary Borrower</Badge>
-                <Badge variant="outline" className="text-xs">
-                  <ShieldCheck className="w-3 h-3 mr-1" /> Signatory
-                </Badge>
-              </div>
-              <div className="text-sm">
-                <div>
-                  <span className="text-muted-foreground">Name:</span> {primary.full_name || "—"}
+            (() => {
+              const errs = validation.rowErrors[primary.uid];
+              const dup = validation.duplicateNrcs.has(primary.nrc_number.trim());
+              const hasErr = !!errs && Object.keys(errs).length > 0;
+              return (
+                <div
+                  className={
+                    hasErr
+                      ? "rounded-lg border border-destructive/60 bg-destructive/5 p-4 space-y-2 ring-1 ring-destructive/30"
+                      : "rounded-lg border border-border/60 bg-muted/20 p-4 space-y-2"
+                  }
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge>Primary Borrower</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      <ShieldCheck className="w-3 h-3 mr-1" /> Signatory
+                    </Badge>
+                    {hasErr && (
+                      <Badge variant="destructive" className="text-xs">
+                        <AlertCircle className="w-3 h-3 mr-1" /> Needs attention
+                      </Badge>
+                    )}
+                    {dup && (
+                      <Badge variant="outline" className="text-xs border-warning text-warning">
+                        Duplicate NRC
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Name:</span> {primary.full_name || "—"}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">NRC:</span> {primary.nrc_number || "—"}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Phone:</span> {primary.phone || "—"}
+                    </div>
+                  </div>
+                  {hasErr && (
+                    <ul className="text-xs text-destructive list-disc pl-4">
+                      {Object.values(errs!).filter(Boolean).map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">NRC:</span> {primary.nrc_number || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Phone:</span> {primary.phone || "—"}
-                </div>
-              </div>
-            </div>
+              );
+            })()
           ) : (
-            <Row entry={primary} onChange={onPrimaryChange} roleLocked />
+            <Row
+              entry={primary}
+              onChange={onPrimaryChange}
+              roleLocked
+              fieldErrors={validation.rowErrors[primary.uid]}
+              isDuplicateNrc={validation.duplicateNrcs.has(primary.nrc_number.trim())}
+            />
           )}
         </div>
 
@@ -352,6 +388,8 @@ export default function CollateralBorrowersSection({
                 onCoBorrowersChange(copy);
               }}
               onRemove={() => onCoBorrowersChange(coBorrowers.filter((_, idx) => idx !== i))}
+              fieldErrors={validation.rowErrors[cb.uid]}
+              isDuplicateNrc={validation.duplicateNrcs.has(cb.nrc_number.trim())}
             />
           ))}
         </div>
@@ -383,6 +421,8 @@ export default function CollateralBorrowersSection({
                 onAbsoluteOwnersChange(copy);
               }}
               onRemove={() => onAbsoluteOwnersChange(absoluteOwners.filter((_, idx) => idx !== i))}
+              fieldErrors={validation.rowErrors[ao.uid]}
+              isDuplicateNrc={validation.duplicateNrcs.has(ao.nrc_number.trim())}
             />
           ))}
         </div>
