@@ -928,14 +928,22 @@ export default function ProductLoanFormShell({
             )}
 
             {/* Submit */}
-            <div className="flex items-center justify-between pt-1">
-              <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
-              <Button
-                onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
-              >
-                {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
-              </Button>
+            <div className="flex flex-col gap-2 pt-1">
+              {productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid && (
+                <p className="text-xs text-destructive text-right">
+                  Fix {collateralBorrowersValidation.errors.length} borrower issue
+                  {collateralBorrowersValidation.errors.length === 1 ? "" : "s"} above before submitting.
+                </p>
+              )}
+              <div className="flex items-center justify-between">
+                <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
+                <Button
+                  onClick={() => createMutation.mutate()}
+                    disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
+                >
+                  {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
+                </Button>
+              </div>
             </div>
 
             {/* Failure recovery: one-click retry + rollback */}
