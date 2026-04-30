@@ -150,20 +150,34 @@ const Row = ({
   onRemove,
   roleLocked,
   index,
+  fieldErrors,
+  isDuplicateNrc,
+  readOnlyFields,
 }: {
   entry: CollateralBorrowerEntry;
   onChange: (next: CollateralBorrowerEntry) => void;
   onRemove?: () => void;
   roleLocked?: boolean;
   index?: number;
+  fieldErrors?: RowFieldErrors;
+  isDuplicateNrc?: boolean;
+  readOnlyFields?: boolean;
 }) => {
   const update = <K extends keyof CollateralBorrowerEntry>(k: K, v: CollateralBorrowerEntry[K]) =>
     onChange({ ...entry, [k]: v });
 
+  const hasError = !!fieldErrors && Object.keys(fieldErrors).length > 0;
+  const containerCls = hasError
+    ? "rounded-lg border border-destructive/60 bg-destructive/5 p-4 space-y-3 ring-1 ring-destructive/30"
+    : "rounded-lg border border-border/60 bg-card/40 p-4 space-y-3";
+
+  const fieldErrCls = (msg?: string) =>
+    msg ? "border-destructive focus-visible:ring-destructive" : "";
+
   return (
-    <div className="rounded-lg border border-border/60 bg-card/40 p-4 space-y-3">
+    <div className={containerCls}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={entry.role === "PRIMARY_BORROWER" ? "default" : "secondary"}>
             {entry.role === "PRIMARY_BORROWER"
               ? "Primary Borrower"
@@ -174,6 +188,16 @@ const Row = ({
           {entry.is_signatory && (
             <Badge variant="outline" className="text-xs">
               <ShieldCheck className="w-3 h-3 mr-1" /> Signatory
+            </Badge>
+          )}
+          {hasError && (
+            <Badge variant="destructive" className="text-xs">
+              <AlertCircle className="w-3 h-3 mr-1" /> Needs attention
+            </Badge>
+          )}
+          {isDuplicateNrc && (
+            <Badge variant="outline" className="text-xs border-warning text-warning">
+              Duplicate NRC
             </Badge>
           )}
         </div>
@@ -190,7 +214,13 @@ const Row = ({
             value={entry.full_name}
             onChange={(e) => update("full_name", e.target.value)}
             placeholder="As per NRC"
+            className={fieldErrCls(fieldErrors?.full_name)}
+            aria-invalid={!!fieldErrors?.full_name}
+            readOnly={readOnlyFields}
           />
+          {fieldErrors?.full_name && (
+            <p className="text-xs text-destructive mt-1">{fieldErrors.full_name}</p>
+          )}
         </div>
         <div>
           <Label>NRC Number *</Label>
@@ -198,17 +228,29 @@ const Row = ({
             value={entry.nrc_number}
             onChange={(e) => update("nrc_number", e.target.value)}
             placeholder="000000/00/0"
+            className={fieldErrCls(fieldErrors?.nrc_number)}
+            aria-invalid={!!fieldErrors?.nrc_number}
+            readOnly={readOnlyFields}
           />
+          {fieldErrors?.nrc_number && (
+            <p className="text-xs text-destructive mt-1">{fieldErrors.nrc_number}</p>
+          )}
+          {!fieldErrors?.nrc_number && isDuplicateNrc && (
+            <p className="text-xs text-warning mt-1">This NRC is used by another party.</p>
+          )}
         </div>
         <div>
           <Label>Phone</Label>
-          <Input value={entry.phone} onChange={(e) => update("phone", e.target.value)} placeholder="+260..." />
+          <Input value={entry.phone} onChange={(e) => update("phone", e.target.value)} placeholder="+260..." readOnly={readOnlyFields} />
         </div>
         <div>
           <Label>Address</Label>
-          <Input value={entry.address} onChange={(e) => update("address", e.target.value)} placeholder="Physical address" />
+          <Input value={entry.address} onChange={(e) => update("address", e.target.value)} placeholder="Physical address" readOnly={readOnlyFields} />
         </div>
       </div>
+      {fieldErrors?.role && (
+        <p className="text-xs text-destructive">{fieldErrors.role}</p>
+      )}
       <div className="flex items-center gap-2">
         <Checkbox
           id={`sig-${entry.uid}`}
