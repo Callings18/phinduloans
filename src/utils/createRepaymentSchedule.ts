@@ -4,7 +4,7 @@
  */
 import { format, addMonths } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { skipSundays } from "@/lib/marketeerCalculations";
+import { getBusinessCalendar, nextBusinessDay } from "@/lib/businessCalendar";
 
 export interface LoanForSchedule {
   id: string;
@@ -105,10 +105,11 @@ export async function createRepaymentScheduleForLoan(
     status: string;
   }> = [];
   // Use date-only (noon UTC) to prevent timezone-related off-by-one issues.
-  // If a repayment_start_date is provided, that date becomes installment #1 due date.
-  // For MARKETEER specifically, collections never start on the disbursement day —
-  // installment #1 must be the day AFTER (skipping Sundays). If the explicit
-  // start date is today or earlier, we bump it forward to tomorrow.
+  // For MARKETEER, installment #1 must be the day AFTER disbursement.
+  // For ALL products, no installment may land on a non-working day (Sunday by
+  // default — admin-configurable in Settings → Calendar). Holidays are skipped too.
+  const calendar = await getBusinessCalendar();
+
   const startDate =
     loan.repayment_start_date && !Number.isNaN(new Date(loan.repayment_start_date).getTime())
       ? new Date(loan.repayment_start_date)
@@ -121,8 +122,10 @@ export async function createRepaymentScheduleForLoan(
     if (startDate.getTime() <= today.getTime()) {
       startDate.setDate(today.getDate() + 1);
     }
-    // Never collect on a Sunday
-    const adjusted = skipSundays(startDate);
+  }
+  // For daily/weekly cadences, push the anchor off any non-working day.
+  if (isDaily || isWeekly) {
+    const adjusted = nextBusinessDay(startDate, calendar);
     startDate.setTime(adjusted.getTime());
   }
 
@@ -130,8 +133,7 @@ export async function createRepaymentScheduleForLoan(
     Boolean(loan.repayment_start_date) && !Number.isNaN(new Date(loan.repayment_start_date as string).getTime());
 
   // For Marketeer we always anchor installment #1 on startDate (which is
-  // already the day-after-disbursement, Sunday-skipped) — equivalent to
-  // hasExplicitStartDate semantics.
+  // already the day-after-disbursement, business-day adjusted).
   const anchorOnStart = hasExplicitStartDate || isMarketeer;
   for (let i = 1; i <= numInstallments; i++) {
     let dueDate: Date;
@@ -139,13 +141,14 @@ export async function createRepaymentScheduleForLoan(
     if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
-      // No collections on Sundays — push to Monday
-      dueDate = skipSundays(dueDate);
+      dueDate = nextBusinessDay(dueDate, calendar);
     } else if (isWeekly) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset * 7);
+      dueDate = nextBusinessDay(dueDate, calendar);
     } else {
       dueDate = addMonths(startDate, offset);
+      dueDate = nextBusinessDay(dueDate, calendar);
     }
     repaymentRecords.push({
       loan_id: loan.id,

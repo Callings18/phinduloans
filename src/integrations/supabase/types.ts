@@ -4138,6 +4138,7 @@ export type Database = {
       }
     }
     Functions: {
+      _get_business_calendar: { Args: never; Returns: Json }
       admin_approve_loan_writeoff: {
         Args: { p_writeoff_id: string }
         Returns: Json
@@ -4222,6 +4223,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_non_working_day: { Args: { d: string }; Returns: boolean }
       loan_product_code_for_loan: {
         Args: { p_loan_id: string }
         Returns: string
@@ -4240,6 +4242,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      next_business_day: { Args: { d: string }; Returns: string }
       notification_idempotency_key: {
         Args: {
           p_channel: string
@@ -4298,6 +4301,13 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      shift_pending_repayments_to_business_days: {
+        Args: never
+        Returns: {
+          loans_touched: number
+          shifted_count: number
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
