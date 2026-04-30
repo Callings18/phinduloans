@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -88,6 +88,29 @@ export default function HouseLoanDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
   };
 
+  // Realtime: refresh totals/schedule the moment a repayment row changes
+  // (covers payments recorded from the global Repayments page or modal).
+  useEffect(() => {
+    if (!loanId) return;
+    const channel = supabase
+      .channel(`loan-detail-${loanId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_repayments", filter: `loan_id=eq.${loanId}` },
+        () => invalidateAll(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_applications", filter: `id=eq.${loanId}` },
+        () => invalidateAll(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loanId]);
+
   const payMutation = useMutation({
     mutationFn: async ({ repaymentId, amount, expected }: { repaymentId: string; amount: number; expected: number }) => {
       if (!selectedAccount) throw new Error("Select the account to credit first");
@@ -162,9 +185,15 @@ export default function HouseLoanDetailPage() {
 
   if (!loan) return <p className="text-sm text-muted-foreground p-4">Loan not found.</p>;
 
-  const totalPaid = repayments.filter((r: any) => r.status === "paid").reduce((s: number, r: any) => s + Number(r.principal_paid || r.amount || 0), 0);
+  // Sum principal_paid across ALL installments (paid, partial, pending) so partial
+  // payments show on the summary card immediately — not only fully-paid rows.
+  const totalPaid = repayments.reduce(
+    (s: number, r: any) => s + Number(r.principal_paid || (r.status === "paid" ? r.amount : 0) || 0),
+    0,
+  );
   const outstanding = Math.max(Number(loan.total_repayment || loan.loan_amount || 0) - totalPaid, 0);
   const paidCount = repayments.filter((r: any) => r.status === "paid").length;
+  const partialCount = repayments.filter((r: any) => r.status === "partial").length;
   const pendingRepayments = repayments.filter((r: any) => r.status !== "paid" && r.status !== "cancelled");
 
   const today = new Date();
@@ -231,6 +260,9 @@ export default function HouseLoanDetailPage() {
             <p className="text-xs text-muted-foreground">Progress</p>
             <p className="font-medium">
               <span className="text-success">{paidCount}</span>/{repayments.length} installments
+              {partialCount > 0 && (
+                <span className="ml-1 text-xs text-warning">({partialCount} partial)</span>
+              )}
             </p>
           </div>
           <div>
@@ -349,7 +381,14 @@ export default function HouseLoanDetailPage() {
                         <span className="block text-xs text-destructive">{daysLate}d late</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-medium">K{Number(r.amount || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      K{Number(r.amount || 0).toLocaleString()}
+                      {Number(r.principal_paid || 0) > 0 && r.status !== "paid" && (
+                        <span className="block text-xs text-success">
+                          paid K{Number(r.principal_paid).toLocaleString()} · due K{Math.max(Number(r.amount) - Number(r.principal_paid), 0).toLocaleString()}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={r.status === "paid" ? "default" : r.status === "cancelled" ? "secondary" : isOverdue ? "destructive" : "outline"}
