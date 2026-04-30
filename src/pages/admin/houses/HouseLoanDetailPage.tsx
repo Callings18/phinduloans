@@ -237,6 +237,9 @@ export default function HouseLoanDetailPage() {
             <p className="text-xs text-muted-foreground">Progress</p>
             <p className="font-medium">
               <span className="text-success">{paidCount}</span>/{repayments.length} installments
+              {partialCount > 0 && (
+                <span className="ml-1 text-xs text-warning">({partialCount} partial)</span>
+              )}
             </p>
           </div>
           <div>
