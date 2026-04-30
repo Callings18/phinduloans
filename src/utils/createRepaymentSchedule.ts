@@ -129,9 +129,13 @@ export async function createRepaymentScheduleForLoan(
   const hasExplicitStartDate =
     Boolean(loan.repayment_start_date) && !Number.isNaN(new Date(loan.repayment_start_date as string).getTime());
 
+  // For Marketeer we always anchor installment #1 on startDate (which is
+  // already the day-after-disbursement, Sunday-skipped) — equivalent to
+  // hasExplicitStartDate semantics.
+  const anchorOnStart = hasExplicitStartDate || isMarketeer;
   for (let i = 1; i <= numInstallments; i++) {
     let dueDate: Date;
-    const offset = hasExplicitStartDate ? i - 1 : i;
+    const offset = anchorOnStart ? i - 1 : i;
     if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
