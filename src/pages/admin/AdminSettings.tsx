@@ -33,6 +33,8 @@ import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonito
 import NotificationSettingsPanel from "@/components/admin/NotificationSettingsPanel";
 import { NotificationProvidersSettings } from "@/components/admin/NotificationProvidersSettings";
 import ProviderTestSendCard from "@/components/admin/ProviderTestSendCard";
+import CalendarSettings from "@/components/admin/CalendarSettings";
+import { CalendarDays } from "lucide-react";
 
 interface PaymentSettings {
   id: string;
@@ -285,7 +287,14 @@ const AdminSettings = () => {
             <TabsTrigger value="integrations" className="gap-2">
               <Shield size={16} /> Integrations
             </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2">
+              <CalendarDays size={16} /> Calendar
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="calendar">
+            <CalendarSettings />
+          </TabsContent>
 
           {/* General Settings */}
           <TabsContent value="general">
