@@ -163,6 +163,7 @@ export async function createRepaymentScheduleForLoan(
   // already the day-after-disbursement, business-day adjusted).
   const anchorOnStart = hasExplicitStartDate || isMarketeer;
   for (let i = 1; i <= numInstallments; i++) {
+    if (lockedNumbers.has(i)) continue; // skip slots already taken by paid/partial rows
     let dueDate: Date;
     const offset = anchorOnStart ? i - 1 : i;
     if (isDaily) {
