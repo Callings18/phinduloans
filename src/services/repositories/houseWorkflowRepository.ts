@@ -226,6 +226,7 @@ export async function houseRestructureLoan(params: RestructureParams) {
       term_unit: params.termUnit || "months",
     },
     supabase,
+    { regenerateRemaining: true },
   );
 
   await supabase.from("audit_logs").insert({
@@ -320,6 +321,7 @@ export async function houseTopUpLoan(params: TopUpParams) {
       term_unit: params.termUnit || "months",
     },
     supabase,
+    { regenerateRemaining: true },
   );
 
   await supabase.from("audit_logs").insert({
