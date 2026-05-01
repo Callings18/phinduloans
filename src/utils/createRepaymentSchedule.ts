@@ -188,10 +188,12 @@ export async function createRepaymentScheduleForLoan(
     });
   }
 
-  const { error: insertError } = await supabase
-    .from("loan_repayments")
-    .insert(repaymentRecords);
-  if (insertError) throw insertError;
+  if (repaymentRecords.length > 0) {
+    const { error: insertError } = await supabase
+      .from("loan_repayments")
+      .insert(repaymentRecords);
+    if (insertError) throw insertError;
+  }
 
   const { error: updateError } = await supabase
     .from("loan_applications")
