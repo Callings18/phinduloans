@@ -25,10 +25,13 @@ export async function createRepaymentScheduleForLoan(
   loan: LoanForSchedule,
   supabase: SupabaseClient
 ): Promise<void> {
+  // Only treat ACTIVE installments (pending/overdue/partial/paid) as "existing".
+  // Cancelled rows from a previous restructure/top-up must NOT block regeneration.
   const { count: existingRepaymentsCount, error: existingRepaymentsError } = await supabase
     .from("loan_repayments")
     .select("id", { count: "exact", head: true })
-    .eq("loan_id", loan.id);
+    .eq("loan_id", loan.id)
+    .in("status", ["pending", "overdue", "partial", "paid"]);
 
   if (existingRepaymentsError) throw existingRepaymentsError;
 
