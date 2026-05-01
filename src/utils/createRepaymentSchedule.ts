@@ -20,29 +20,53 @@ export interface LoanForSchedule {
 /**
  * Build repayment records and insert into loan_repayments, then set loan status to active.
  * Fetches loan_product for term_unit, interest_period, repayment_frequency when loan_product_id is set.
+ *
+ * When `options.regenerateRemaining` is true (used by Restructure / Top-up), the helper:
+ *   - DOES NOT early-exit when previous repayments exist
+ *   - Skips installment numbers already taken by paid/partial rows
+ *   - Generates only the remaining installments needed to reach the new total term
+ * Caller is responsible for cancelling existing pending/overdue rows beforehand.
  */
 export async function createRepaymentScheduleForLoan(
   loan: LoanForSchedule,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  options: { regenerateRemaining?: boolean } = {}
 ): Promise<void> {
-  // Only treat ACTIVE installments (pending/overdue/partial/paid) as "existing".
-  // Cancelled rows from a previous restructure/top-up must NOT block regeneration.
-  const { count: existingRepaymentsCount, error: existingRepaymentsError } = await supabase
+  const regenerate = options.regenerateRemaining === true;
+
+  // Find existing rows that must NOT be overwritten (paid/partial keep their installment_number).
+  const { data: keepRows, error: keepErr } = await supabase
     .from("loan_repayments")
-    .select("id", { count: "exact", head: true })
+    .select("installment_number, status")
     .eq("loan_id", loan.id)
-    .in("status", ["pending", "overdue", "partial", "paid"]);
+    .in("status", ["paid", "partial", "pending", "overdue"]);
+  if (keepErr) throw keepErr;
 
-  if (existingRepaymentsError) throw existingRepaymentsError;
+  const lockedNumbers = new Set<number>(
+    (keepRows || [])
+      .filter((r: any) => r.status === "paid" || r.status === "partial")
+      .map((r: any) => Number(r.installment_number))
+  );
+  const activeRemaining = (keepRows || []).filter(
+    (r: any) => r.status === "pending" || r.status === "overdue"
+  ).length;
 
-  if ((existingRepaymentsCount ?? 0) > 0) {
-    const { error: ensureActiveError } = await supabase
-      .from("loan_applications")
-      .update({ status: "active" })
-      .eq("id", loan.id)
-      .neq("status", "active");
-    if (ensureActiveError) throw ensureActiveError;
-    return;
+  if (!regenerate) {
+    // Original guard: if any active/historical rows already exist, just ensure loan is active and return.
+    if ((keepRows?.length ?? 0) > 0) {
+      const { error: ensureActiveError } = await supabase
+        .from("loan_applications")
+        .update({ status: "active" })
+        .eq("id", loan.id)
+        .neq("status", "active");
+      if (ensureActiveError) throw ensureActiveError;
+      return;
+    }
+  } else if (activeRemaining > 0) {
+    // Restructure/top-up callers MUST cancel pending/overdue first; bail loudly if they didn't.
+    throw new Error(
+      "Cannot regenerate schedule while pending/overdue installments still exist. Cancel them first."
+    );
   }
 
   let termUnit = loan.term_unit ?? "months";
