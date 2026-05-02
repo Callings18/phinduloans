@@ -978,6 +978,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           monthly_payment: newLoan.monthly_payment,
           loan_product_id: newLoan.loan_product_id,
           term_unit: termUnit,
+          repayment_start_date: reloanDate,
         },
         supabase
       );
