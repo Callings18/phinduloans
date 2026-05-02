@@ -403,10 +403,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error("Destination account is required. Please use Admin Repayments if account is not configured.");
       }
       if (paidAmount > Number(selectedRepayment.amount)) {
-        throw new Error("Overpayment from Loan Details is disabled for safety. Use Admin Repayments to allocate across installments.");
+        throw new Error("Overpayment is disabled here. Open Admin → Repayments to allocate this payment across multiple installments.");
       }
       if (Number(selectedRepayment.penalty_amount || 0) > Number(selectedRepayment.penalty_paid || 0)) {
-        throw new Error("This installment has pending penalties. Record payment via Admin Repayments for canonical allocation.");
+        throw new Error("This installment has pending penalties. Open Admin → Repayments to record the payment with proper penalty/principal split.");
       }
 
       const paidDate = new Date().toISOString().split("T")[0];
