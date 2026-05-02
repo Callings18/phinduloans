@@ -2965,15 +2965,31 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-destructive">Undo Disbursement</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.</p>
+                {hasAnyPaymentRecorded && (
+                  <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive text-sm font-medium">
+                    Blocked: payments totalling K{totalPaidIncludingPartial.toLocaleString()} have already been recorded on this loan.
+                    Reverse those payments from <strong>Admin → Repayments</strong> before undoing the disbursement, otherwise funds will be orphaned.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => undoDisbursementMutation.mutate()}
+              disabled={hasAnyPaymentRecorded || undoDisbursementMutation.isPending}
+              onClick={(e) => {
+                if (hasAnyPaymentRecorded) {
+                  e.preventDefault();
+                  toast.error("Reverse recorded payments first before undoing disbursement.");
+                  return;
+                }
+                undoDisbursementMutation.mutate();
+              }}
             >
               {undoDisbursementMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Undo Disbursement
