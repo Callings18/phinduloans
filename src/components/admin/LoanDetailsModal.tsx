@@ -1065,6 +1065,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       setReloanTopUpAmount("");
       setReloanReason("");
       setReloanSourceAccountId("");
+      setReloanFreshPrincipal("");
+      setReloanFreshTermMonths("");
+      setReloanDate(format(new Date(), "yyyy-MM-dd"));
       setIsReloanOpen(false);
       onOpenChange(false);
     },
