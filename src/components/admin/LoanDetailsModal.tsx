@@ -1869,7 +1869,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </Card>
                   <Card className="bg-muted/30">
                     <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">Monthly Payment</p>
+                      <p className="text-xs text-muted-foreground">{installmentCadenceWord} Payment</p>
                       <p className="text-lg font-bold">K{Number(loan.monthly_payment || 0).toLocaleString()}</p>
                     </CardContent>
                   </Card>
