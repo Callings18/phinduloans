@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
