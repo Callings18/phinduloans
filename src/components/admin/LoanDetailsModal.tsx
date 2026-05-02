@@ -3068,13 +3068,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       {/* Reloan Confirmation Dialog */}
       <AlertDialog open={isReloanOpen} onOpenChange={setIsReloanOpen}>
-        <AlertDialogContent className="sm:max-w-lg">
-          <AlertDialogHeader>
+        <AlertDialogContent className="sm:max-w-lg max-h-[88vh] overflow-hidden p-0 flex flex-col">
+          <AlertDialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <AlertDialogTitle className="flex items-center gap-2">
               <ArrowRight size={20} /> Reloan — {loan.full_name}
             </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-4">
+            <AlertDialogDescription className="sr-only">
+              Review reloan eligibility, date, and new terms before confirming.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
+            <div className="space-y-4">
                 {/* Financial Breakdown */}
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
                   <h4 className="font-semibold text-foreground">Loan Financial Summary</h4>
@@ -3237,14 +3241,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </div>
                 )}
 
-                <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
+            </div>
+          </div>
+          <AlertDialogFooter className="shrink-0 border-t bg-background px-6 py-4">
+            <AlertDialogCancel disabled={reloanMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => reloanMutation.mutate()}
+              onClick={(event) => {
+                event.preventDefault();
+                reloanMutation.mutate();
+              }}
               disabled={
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
