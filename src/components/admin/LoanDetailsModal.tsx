@@ -1691,7 +1691,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `Loan Details:\n` +
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
       `- Amount: K${loan.loan_amount.toLocaleString()}\n` +
-      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n\n` +
       `Please contact us if you have any questions.\n\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
@@ -1713,7 +1713,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
       `- Principal: K${loan.loan_amount.toLocaleString()}\n` +
       `- Interest Rate: ${loan.interest_rate}%\n` +
-      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n` +
       `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
       `Please contact us if you have any questions.\n\n` +
@@ -1751,7 +1751,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       return;
     }
 
-    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
+    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
     try {
       const { data, error } = await supabase.functions.invoke("excite-sms", {
