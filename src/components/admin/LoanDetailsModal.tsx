@@ -922,7 +922,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       };
       const newCalc = calculateLoan(
         newPrincipal,
-        loan.loan_term_months,
+        newTermMonths,
         productForCalc,
         termUnit as any
       );
