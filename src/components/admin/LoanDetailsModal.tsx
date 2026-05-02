@@ -3212,7 +3212,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         </div>
                       </>
                     )}
-                    <div className="grid grid-cols-2 gap-y-1">
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Adjust New Term ({(loan as any).term_unit || "months"}) — leave blank to keep current</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder={`Default ${loan.loan_term_months}`}
+                        value={reloanFreshTermMonths}
+                        onChange={(e) => setReloanFreshTermMonths(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-1 pt-2">
                       <span className="text-muted-foreground">Carry-forward Outstanding</span>
                       <span className="text-right font-medium">K{totalOutstanding.toLocaleString()}</span>
                       <span className="text-muted-foreground">Optional Top-Up</span>
@@ -3220,7 +3230,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <span className="text-muted-foreground font-semibold">Projected New Principal</span>
                       <span className="text-right font-bold">K{reloanProjectedPrincipal.toLocaleString()}</span>
                       <span className="text-muted-foreground">Term</span>
-                      <span className="text-right font-medium">{loan.loan_term_months} months @ {loan.interest_rate}%</span>
+                      <span className="text-right font-medium">{Number(reloanFreshTermMonths) > 0 ? Number(reloanFreshTermMonths) : loan.loan_term_months} {(loan as any).term_unit || "months"} @ {loan.interest_rate}%</span>
                       <span className="text-muted-foreground">Disbursement</span>
                       <span className="text-right font-medium">{reloanTopUpNumeric > 0 ? "Optional top-up net disbursement after fees" : "None — funds already with borrower"}</span>
                     </div>
