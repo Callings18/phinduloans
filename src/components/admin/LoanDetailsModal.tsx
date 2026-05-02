@@ -229,6 +229,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [reloanTopUpAmount, setReloanTopUpAmount] = useState("");
   const [reloanReason, setReloanReason] = useState("");
   const [reloanSourceAccountId, setReloanSourceAccountId] = useState("");
+  // New: allow reloan from fully-paid loans by entering a fresh principal/term, plus a chosen reloan date
+  const [reloanFreshPrincipal, setReloanFreshPrincipal] = useState("");
+  const [reloanFreshTermMonths, setReloanFreshTermMonths] = useState("");
+  const [reloanDate, setReloanDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState("");
   const [topUpReason, setTopUpReason] = useState("");
@@ -811,9 +815,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
 
-      if (outstandingBalance <= 0) {
-        throw new Error("No outstanding balance to reloan. The borrower has fully paid.");
+      const isFreshReloan = outstandingBalance <= 0;
+      const freshPrincipalNum = Number(reloanFreshPrincipal || 0);
+      const freshTermNum = Number(reloanFreshTermMonths || 0);
+      if (isFreshReloan) {
+        if (!Number.isFinite(freshPrincipalNum) || freshPrincipalNum <= 0) {
+          throw new Error("Enter a new principal amount for the reloan");
+        }
+        if (!Number.isFinite(freshTermNum) || freshTermNum <= 0) {
+          throw new Error("Enter a new term for the reloan");
+        }
       }
+      if (!reloanDate) throw new Error("Select the reloan date");
 
       const optionalTopUpAmount = Number(reloanTopUpAmount || 0);
       if (!Number.isFinite(optionalTopUpAmount) || optionalTopUpAmount < 0) {
@@ -877,16 +890,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         }
       }
 
-      // New principal is carry-forward outstanding + optional extra cash top-up.
+      // New principal: when there's outstanding, carry it forward + optional top-up.
+      // When fully paid (fresh reloan), use the admin-entered principal.
       const outstandingPrincipal = outstandingBalance;
-      const newPrincipal = outstandingPrincipal + optionalTopUpAmount;
+      const newPrincipal = isFreshReloan
+        ? freshPrincipalNum
+        : outstandingPrincipal + optionalTopUpAmount;
+      const newTermMonths = isFreshReloan ? freshTermNum : loan.loan_term_months;
+      // Backdate-friendly timestamps from the chosen reloan date (noon UTC for date-only safety)
+      const reloanIso = new Date(`${reloanDate}T12:00:00Z`).toISOString();
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
         .from("loan_applications")
         .update({
           status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${reloanDate}]: ${isFreshReloan ? `Fresh reloan with new principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""}`} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
         })
         .eq("id", loan.id);
       if (closeError) throw closeError;
@@ -903,7 +922,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       };
       const newCalc = calculateLoan(
         newPrincipal,
-        loan.loan_term_months,
+        newTermMonths,
         productForCalc,
         termUnit as any
       );
@@ -927,7 +946,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           employment_duration: loan.employment_duration || null,
           monthly_income: loan.monthly_income || 0,
           loan_amount: newPrincipal,
-          loan_term_months: loan.loan_term_months,
+          loan_term_months: newTermMonths,
           term_unit: termUnit,
           interest_rate: interestRate,
           monthly_payment: newCalc.monthlyPayment,
@@ -936,12 +955,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           loan_product_id: loan.loan_product_id || null,
           parent_loan_id: loan.id,
           status: "active" as any,
-          source: "internal",
-          admin_notes: `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()}: carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}. Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
+          source: "reloan",
+          repayment_start_date: reloanDate,
+          admin_notes: `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()} on ${reloanDate}: ${isFreshReloan ? `Fresh reloan principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}.`} Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
           disbursed_by: user?.id ?? null,
-          disbursed_at: new Date().toISOString(),
+          disbursed_at: reloanIso,
           approved_by: user?.id ?? null,
-          approved_at: new Date().toISOString(),
+          approved_at: reloanIso,
         })
         .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id")
         .single();
@@ -958,6 +978,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           monthly_payment: newLoan.monthly_payment,
           loan_product_id: newLoan.loan_product_id,
           term_unit: termUnit,
+          repayment_start_date: reloanDate,
         },
         supabase
       );
@@ -1044,6 +1065,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       setReloanTopUpAmount("");
       setReloanReason("");
       setReloanSourceAccountId("");
+      setReloanFreshPrincipal("");
+      setReloanFreshTermMonths("");
+      setReloanDate(format(new Date(), "yyyy-MM-dd"));
       setIsReloanOpen(false);
       onOpenChange(false);
     },
@@ -3046,8 +3070,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                     )}
                     {totalOutstanding <= 0 ? (
-                      <div className="flex items-center gap-2 text-destructive">
-                        <XCircle size={16} /> No outstanding balance — nothing to reloan
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> No outstanding balance — eligible for fresh reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
@@ -3057,7 +3081,58 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </div>
                 </div>
 
-                {/* New Loan Terms */}
+                {/* Reloan date — applies to both fresh and carry-forward */}
+                {totalPenalties === 0 && (
+                  <div className="rounded-lg border p-4 space-y-2 text-sm">
+                    <Label className="text-xs">Reloan date *</Label>
+                    <Input
+                      type="date"
+                      value={reloanDate}
+                      onChange={(e) => setReloanDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">Used as the disbursement date and as the schedule start (first installment due date is derived from this).</p>
+                  </div>
+                )}
+
+                {/* Fresh reloan inputs (when previous loan fully paid) */}
+                {totalOutstanding <= 0 && totalPenalties === 0 && (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
+                    <h4 className="font-semibold text-foreground">Fresh Reloan Terms</h4>
+                    <p className="text-xs text-muted-foreground">Previous loan is fully paid. Enter a new principal and term to start a new loan for this borrower.</p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <Label className="text-xs">New Principal (K) *</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="e.g. 10000"
+                          value={reloanFreshPrincipal}
+                          onChange={(e) => setReloanFreshPrincipal(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">New Term ({(loan as any).term_unit || "months"}) *</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder={`e.g. ${loan.loan_term_months}`}
+                          value={reloanFreshTermMonths}
+                          onChange={(e) => setReloanFreshTermMonths(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Reason (Optional)</Label>
+                      <Input
+                        placeholder="Reason for reloan"
+                        value={reloanReason}
+                        onChange={(e) => setReloanReason(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Carry-forward Reloan Terms */}
                 {totalOutstanding > 0 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
@@ -3124,7 +3199,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
-              disabled={reloanMutation.isPending || totalPenalties > 0 || totalOutstanding <= 0 || (reloanTopUpNumeric > 0 && !reloanSourceAccountId)}
+              disabled={
+                reloanMutation.isPending ||
+                totalPenalties > 0 ||
+                !reloanDate ||
+                (totalOutstanding <= 0 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
+                (reloanTopUpNumeric > 0 && !reloanSourceAccountId)
+              }
             >
               {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
               Confirm Reloan
