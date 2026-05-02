@@ -3070,8 +3070,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </div>
                     )}
                     {totalOutstanding <= 0 ? (
-                      <div className="flex items-center gap-2 text-destructive">
-                        <XCircle size={16} /> No outstanding balance — nothing to reloan
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> No outstanding balance — eligible for fresh reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
@@ -3081,7 +3081,58 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </div>
                 </div>
 
-                {/* New Loan Terms */}
+                {/* Reloan date — applies to both fresh and carry-forward */}
+                {totalPenalties === 0 && (
+                  <div className="rounded-lg border p-4 space-y-2 text-sm">
+                    <Label className="text-xs">Reloan date *</Label>
+                    <Input
+                      type="date"
+                      value={reloanDate}
+                      onChange={(e) => setReloanDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">Used as the disbursement date and as the schedule start (first installment due date is derived from this).</p>
+                  </div>
+                )}
+
+                {/* Fresh reloan inputs (when previous loan fully paid) */}
+                {totalOutstanding <= 0 && totalPenalties === 0 && (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
+                    <h4 className="font-semibold text-foreground">Fresh Reloan Terms</h4>
+                    <p className="text-xs text-muted-foreground">Previous loan is fully paid. Enter a new principal and term to start a new loan for this borrower.</p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <Label className="text-xs">New Principal (K) *</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="e.g. 10000"
+                          value={reloanFreshPrincipal}
+                          onChange={(e) => setReloanFreshPrincipal(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">New Term ({(loan as any).term_unit || "months"}) *</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder={`e.g. ${loan.loan_term_months}`}
+                          value={reloanFreshTermMonths}
+                          onChange={(e) => setReloanFreshTermMonths(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Reason (Optional)</Label>
+                      <Input
+                        placeholder="Reason for reloan"
+                        value={reloanReason}
+                        onChange={(e) => setReloanReason(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Carry-forward Reloan Terms */}
                 {totalOutstanding > 0 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
@@ -3148,7 +3199,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
-              disabled={reloanMutation.isPending || totalPenalties > 0 || totalOutstanding <= 0 || (reloanTopUpNumeric > 0 && !reloanSourceAccountId)}
+              disabled={
+                reloanMutation.isPending ||
+                totalPenalties > 0 ||
+                !reloanDate ||
+                (totalOutstanding <= 0 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
+                (reloanTopUpNumeric > 0 && !reloanSourceAccountId)
+              }
             >
               {reloanMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
               Confirm Reloan
