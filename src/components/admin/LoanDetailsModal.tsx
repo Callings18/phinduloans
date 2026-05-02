@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -1632,8 +1633,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
-  const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
-  const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
+  // Overdue / next-due include "partial" rows so quick-actions and KPIs reflect partially-paid installments correctly.
+  const _isUnpaidStatus = (s?: string) => s === "pending" || s === "partial" || s === "overdue";
+  const overdueCount = repayments?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed && new Date(r.due_date) < new Date()).length || 0;
+  // Next due = oldest still-owing installment (partial/overdue first, then upcoming pending).
+  const nextDue = repayments
+    ?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+
+  // Dynamic installment cadence label (Daily / Weekly / Monthly) based on loan term unit.
+  const installmentLabel = borrowerInstallmentLabel(loan as any);
+  const installmentColumnTitle = borrowerSchedulePaymentColumnTitle(loan as any);
+  const installmentCadenceWord = installmentLabel.replace(" installment", ""); // "Daily" | "Weekly" | "Monthly"
+
+  // Has any actual money been collected on this loan? Used to gate destructive actions like Undo Disbursement.
+  const hasAnyPaymentRecorded = (paidRepayments.length > 0) || (partialPaymentsOnPending > 0);
 
   // Helper functions for schedule and contract
   const handleDownloadSchedule = () => {
@@ -1677,7 +1691,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `Loan Details:\n` +
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
       `- Amount: K${loan.loan_amount.toLocaleString()}\n` +
-      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n\n` +
       `Please contact us if you have any questions.\n\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
@@ -1699,7 +1713,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
       `- Principal: K${loan.loan_amount.toLocaleString()}\n` +
       `- Interest Rate: ${loan.interest_rate}%\n` +
-      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n` +
       `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
       `Please contact us if you have any questions.\n\n` +
@@ -1737,7 +1751,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       return;
     }
 
-    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
+    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
     try {
       const { data, error } = await supabase.functions.invoke("excite-sms", {
@@ -1855,7 +1869,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </Card>
                   <Card className="bg-muted/30">
                     <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">Monthly Payment</p>
+                      <p className="text-xs text-muted-foreground">{installmentCadenceWord} Payment</p>
                       <p className="text-lg font-bold">K{Number(loan.monthly_payment || 0).toLocaleString()}</p>
                     </CardContent>
                   </Card>
@@ -1982,11 +1996,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         )}
                         {repayments && repayments.length > 0 && (
                           <Button size="sm" onClick={() => {
-                            const nextPending = repayments.find(r => r.status === "pending");
-                            if (nextPending) {
-                              setSelectedRepayment(nextPending);
-                              setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                            // Allocate to the oldest still-owing row (partial > overdue > pending) — never skip a partially-paid installment.
+                            const next = [...repayments]
+                              .filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+                              .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+                            if (next) {
+                              setSelectedRepayment(next);
+                              const remainingPrincipal = Math.max(Number(next.amount || 0) - Number(next.principal_paid || 0), 0);
+                              const remainingPenalty = Math.max(0, Number(next.penalty_amount || 0) - Number(next.penalty_paid || 0));
+                              setPaymentAmount((remainingPrincipal + remainingPenalty).toString());
                               setIsRecordPaymentOpen(true);
+                            } else {
+                              toast.info("No outstanding installments");
                             }
                           }}>
                             <CreditCard size={14} className="mr-1" /> Record Payment
@@ -2150,13 +2171,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </Button>
                     ) : (
                       <Button size="sm" onClick={() => {
-                        const nextPending = repayments.find(r => r.status === "pending");
-                        if (nextPending) {
-                          setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                        const next = [...repayments]
+                          .filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+                          .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+                        if (next) {
+                          setSelectedRepayment(next);
+                          const remainingPrincipal = Math.max(Number(next.amount || 0) - Number(next.principal_paid || 0), 0);
+                          const remainingPenalty = Math.max(0, Number(next.penalty_amount || 0) - Number(next.penalty_paid || 0));
+                          setPaymentAmount((remainingPrincipal + remainingPenalty).toString());
                           setIsRecordPaymentOpen(true);
                         } else {
-                          toast.info("No pending repayments");
+                          toast.info("No outstanding installments");
                         }
                       }}>
                         <CreditCard size={14} className="mr-1" /> Record Payment
@@ -2940,15 +2965,31 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-destructive">Undo Disbursement</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.</p>
+                {hasAnyPaymentRecorded && (
+                  <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive text-sm font-medium">
+                    Blocked: payments totalling K{totalPaidIncludingPartial.toLocaleString()} have already been recorded on this loan.
+                    Reverse those payments from <strong>Admin → Repayments</strong> before undoing the disbursement, otherwise funds will be orphaned.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => undoDisbursementMutation.mutate()}
+              disabled={hasAnyPaymentRecorded || undoDisbursementMutation.isPending}
+              onClick={(e) => {
+                if (hasAnyPaymentRecorded) {
+                  e.preventDefault();
+                  toast.error("Reverse recorded payments first before undoing disbursement.");
+                  return;
+                }
+                undoDisbursementMutation.mutate();
+              }}
             >
               {undoDisbursementMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Undo Disbursement
