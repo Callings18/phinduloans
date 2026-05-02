@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, Fil
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 
 export default function HouseLoanDetailPage() {
+  const navigate = useNavigate();
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
   const { data: loans } = useHouseLoans(productCode);
   const { data: product } = useHouseProduct(productCode);
@@ -62,6 +63,32 @@ export default function HouseLoanDetailPage() {
         .order("due_date", { ascending: true });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  const { data: linkedBorrowers = [] } = useQuery({
+    queryKey: ["house-loan-borrowers", loanId],
+    enabled: Boolean(loanId),
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase.from as any)("loan_borrowers")
+        .select("customer_id, role, is_signatory")
+        .eq("loan_id", loanId);
+      if (error) throw error;
+      const parties = (rows || []) as Array<{ customer_id: string; role: string; is_signatory: boolean }>;
+      if (parties.length === 0) return [];
+
+      const ids = Array.from(new Set(parties.map((p) => p.customer_id)));
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, nrc_number")
+        .in("id", ids);
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+      return parties.map((party) => ({
+        ...party,
+        full_name: profileMap.get(party.customer_id)?.full_name || "Unknown",
+        nrc_number: profileMap.get(party.customer_id)?.nrc_number || "N/A",
+      }));
     },
   });
 
@@ -194,6 +221,8 @@ export default function HouseLoanDetailPage() {
   const outstanding = Math.max(Number(loan.total_repayment || loan.loan_amount || 0) - totalPaid, 0);
   const paidCount = repayments.filter((r: any) => r.status === "paid").length;
   const partialCount = repayments.filter((r: any) => r.status === "partial").length;
+  const isCollateral = (product?.product_code || "").toUpperCase() === "COLLATERAL";
+  const collateralInterest = isCollateral ? Number(loan.loan_amount || 0) * 0.30 : Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
   const pendingRepayments = repayments.filter((r: any) => r.status !== "paid" && r.status !== "cancelled");
 
   const today = new Date();
@@ -224,6 +253,10 @@ export default function HouseLoanDetailPage() {
           setFullDetailsOpen(o);
           if (!o) invalidateAll();
         }}
+        onRequestOpenLoan={(id) => {
+          if (id === loanId) return;
+          navigate(`/admin/houses/${encodeURIComponent(productCode)}/loans/${encodeURIComponent(id)}`);
+        }}
       />
 
       {/* Loan summary */}
@@ -249,6 +282,10 @@ export default function HouseLoanDetailPage() {
           <div>
             <p className="text-xs text-muted-foreground">Total Repayment</p>
             <p className="font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Interest</p>
+            <p className="font-medium">K{collateralInterest.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Status</p>
@@ -291,6 +328,36 @@ export default function HouseLoanDetailPage() {
           </div>
         </CardContent>
       </Card>
+      {isCollateral && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Collateral terms: <strong>30% total interest over 6 months</strong>, equivalent to 5% per month for display, with 6 equal monthly installments.
+          </AlertDescription>
+        </Alert>
+      )}
+      {isCollateral && linkedBorrowers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Borrower & Owner Parties</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {linkedBorrowers.map((party, idx) => (
+              <div key={`${party.customer_id}-${party.role}-${idx}`} className="flex items-center justify-between text-sm border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                <div>
+                  <p className="font-medium">{party.full_name}</p>
+                  <p className="text-xs text-muted-foreground">NRC: {party.nrc_number}</p>
+                </div>
+                <div className="text-right">
+                  <Badge variant="outline">{party.role.replace(/_/g, " ")}</Badge>
+                  <p className="text-xs text-muted-foreground mt-1">{party.is_signatory ? "Signatory" : "Non-signatory"}</p>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground pt-2">Repayment schedule remains single at loan level and applies jointly to all liable parties.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Servicing actions live in the full loan details modal — keeps a single source of truth */}
 

@@ -73,7 +73,6 @@ import {
   ArrowRight,
   Shield,
   FolderCheck,
-  XCircle as XCircleIcon,
   Download,
   Share2,
   Send,
@@ -84,10 +83,6 @@ import {
   Eye,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import DocumentVerificationTab from "./DocumentVerificationTab";
-import GuarantorTab from "./GuarantorTab";
-import ApprovalWorkflowTab from "./ApprovalWorkflowTab";
-import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
 import { logAudit } from "@/utils/auditLog";
@@ -101,22 +96,6 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
-
-/** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
-const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
-  pending: ["under_review", "rejected"],
-  under_review: ["approved", "rejected", "crb_failed", "pmic_pending"],
-  approved: ["contract_signing"],
-  contract_signing: [],
-  awaiting_disbursement: [],
-  disbursed: ["active"],
-  active: ["defaulted"], // "completed" is auto-set when fully paid
-  completed: [],
-  defaulted: [],
-  rejected: [],
-  crb_failed: [],
-  pmic_pending: [],
-};
 
 interface Loan {
   id: string;
@@ -197,6 +176,33 @@ interface Props {
   loan: Loan | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When provided, timeline/chain "view loan" navigates instead of a generic toast. */
+  onRequestOpenLoan?: (loanId: string) => void;
+}
+
+function netPenaltyOnRepayment(rep: {
+  penalty_amount?: number | null;
+  penalty_paid?: number | null;
+}): number {
+  return Math.max(0, Number(rep.penalty_amount || 0) - Number(rep.penalty_paid || 0));
+}
+
+function isRepaymentOpenForPayment(rep: Repayment): boolean {
+  return rep.status === "pending" || rep.status === "overdue";
+}
+
+function isRepaymentOverdueUi(rep: Repayment): boolean {
+  if (rep.is_reversed || rep.status === "paid") return false;
+  if (rep.status === "overdue") return true;
+  if (rep.status === "pending" && new Date(rep.due_date) < new Date()) return true;
+  return false;
+}
+
+function findNextPayableRepayment(repayments: Repayment[] | undefined): Repayment | undefined {
+  if (!repayments?.length) return undefined;
+  const candidates = repayments.filter((r) => !r.is_reversed && isRepaymentOpenForPayment(r));
+  if (!candidates.length) return undefined;
+  return [...candidates].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 }
 
 interface EarlySettlement {
@@ -207,11 +213,17 @@ interface EarlySettlement {
   total_payoff_amount: number;
 }
 
-export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
+export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOpenLoan }: Props) {
   const { user, isAdmin } = useAuth();
   const { can } = usePermissions();
-  const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
+  const canLedgerOps = can("loans", "edit") || canFinanceApprove;
+
+  const assertLedgerOps = () => {
+    if (!canLedgerOps) {
+      throw new Error("You don't have permission for this action.");
+    }
+  };
   const [activeTab, setActiveTab] = useState("overview");
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
@@ -394,6 +406,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const recordPaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
+      assertLedgerOps();
 
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
@@ -455,6 +468,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reversePaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedPaidRepayment || !loan) throw new Error("No repayment selected");
+      assertLedgerOps();
 
       const { error } = await supabase
         .from("loan_repayments")
@@ -511,6 +525,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const applyPenaltiesMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
 
       // Use the database function to apply penalties
       const { data, error } = await supabase.rpc("apply_loan_penalties", {
@@ -556,6 +571,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const processEarlySettlementMutation = useMutation({
     mutationFn: async () => {
       if (!loan || !earlySettlement) throw new Error("No loan or settlement data");
+      assertLedgerOps();
 
       // Fetch pending AND overdue repayments to set principal_paid correctly
       const { data: pendingRepsForSettle } = await supabase
@@ -567,7 +583,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // Mark each pending repayment as paid with correct principal_paid
       for (const pr of (pendingRepsForSettle || [])) {
         const origAmt = pr.original_amount || pr.amount;
-        await supabase
+        const { error: rowErr } = await supabase
           .from("loan_repayments")
           .update({
             status: "paid",
@@ -578,10 +594,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             amount: Number(origAmt),
           })
           .eq("id", pr.id);
+        if (rowErr) throw rowErr;
       }
-      const repaymentError = null; // handled per-row above
-
-      if (repaymentError) throw repaymentError;
 
       // Update loan with settlement info
       const { error: loanError } = await supabase
@@ -623,6 +637,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const generateScheduleMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
       await createRepaymentScheduleForLoan(
         {
           id: loan.id,
@@ -651,6 +666,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const disburseLoanFromDetailMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
       if (!disburseSourceAccountId) throw new Error("Select a source account");
 
       // Fetch product fees
@@ -786,6 +802,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
 
       // Fetch all repayments to calculate what's been paid
       const { data: allReps } = await supabase
@@ -1080,6 +1097,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const topUpMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
       const additionalAmount = Number(topUpAmount);
       if (!additionalAmount || additionalAmount <= 0) throw new Error("Enter a valid top-up amount");
       if (!topUpSourceAccountId) throw new Error("Select a source account");
@@ -1283,6 +1301,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const restructureLoanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
@@ -1439,6 +1458,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const undoDisbursementMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
+      assertLedgerOps();
 
       // Find the disbursement to refund the source account
       const { data: disbursementRecord } = await supabase
@@ -1526,30 +1546,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Update loan status mutation (Move to)
-  const updateStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      if (!loan) throw new Error("No loan selected");
-      // Permission check: only users with approve permission can move to approved
-      if (status === "approved" && !canApprove) {
-        throw new Error("You don't have permission to approve loans");
-      }
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: status as any })
-        .eq("id", loan.id);
-      if (error) throw error;
-    },
-    onSuccess: (_, newStatus) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-      toast.success(`Moved to ${getCanonicalStatusLabel(newStatus)}`);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update status");
-    },
-  });
-
   // Save notes mutation
   const saveNotesMutation = useMutation({
     mutationFn: async () => {
@@ -1595,9 +1591,26 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const totalOutstanding = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
-  const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
-  const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
-  const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
+  const progressPercentage = Math.min(
+    100,
+    loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0
+  );
+  const overdueCount = repayments?.filter((r) => isRepaymentOverdueUi(r)).length || 0;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const nextDue = repayments?.find((r) => {
+    if (r.is_reversed || !isRepaymentOpenForPayment(r)) return false;
+    const d = new Date(r.due_date);
+    d.setHours(0, 0, 0, 0);
+    return d >= startOfToday;
+  });
+  const displayTermUnit = (loan as any).term_unit || loanProduct?.term_unit || "months";
+  const termLabel =
+    displayTermUnit === "weeks"
+      ? `${loan.loan_term_months} weeks`
+      : displayTermUnit === "days"
+        ? `${loan.loan_term_months} days`
+        : `${loan.loan_term_months} months`;
 
   // Helper functions for schedule and contract
   const handleDownloadSchedule = () => {
@@ -1779,7 +1792,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold text-primary">K{Number(loan.loan_amount).toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">{loan.loan_term_months} months @ {loan.interest_rate}%</p>
+                <p className="text-sm text-muted-foreground">{termLabel} @ {loan.interest_rate}%</p>
               </div>
             </div>
           </DialogHeader>
@@ -1845,7 +1858,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             This loan has been approved and is waiting for funds to be disbursed. 
                             No repayment schedule or interest will be generated until disbursement is completed.
                           </p>
-                          <Button size="sm" className="mt-3" onClick={() => setIsDisburseOpen(true)}>
+                          <Button size="sm" className="mt-3" disabled={!canLedgerOps} onClick={() => setIsDisburseOpen(true)}>
                             <Banknote size={14} className="mr-1" /> Disburse Funds
                           </Button>
                         </div>
@@ -1932,7 +1945,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <CardContent className="flex flex-wrap gap-2">
                     {/* Disburse button for awaiting_disbursement / approved */}
                     {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
-                      <Button size="sm" onClick={() => setIsDisburseOpen(true)}>
+                      <Button size="sm" disabled={!canLedgerOps} onClick={() => setIsDisburseOpen(true)}>
                         <Banknote size={14} className="mr-1" /> Disburse Funds
                       </Button>
                     )}
@@ -1940,16 +1953,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     {!isPreDisbursement && (
                       <>
                         {(!repayments || repayments.length === 0) && (
-                          <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
+                          <Button size="sm" disabled={!canLedgerOps} onClick={() => setIsGenerateScheduleOpen(true)}>
                             <Plus size={14} className="mr-1" /> Generate Schedule
                           </Button>
                         )}
                         {repayments && repayments.length > 0 && (
-                          <Button size="sm" onClick={() => {
-                            const nextPending = repayments.find(r => r.status === "pending");
-                            if (nextPending) {
-                              setSelectedRepayment(nextPending);
-                              setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                          <Button size="sm" disabled={!canLedgerOps} onClick={() => {
+                            const nextPayable = findNextPayableRepayment(repayments);
+                            if (nextPayable) {
+                              setSelectedRepayment(nextPayable);
+                              setPaymentAmount(
+                                (Number(nextPayable.amount) + netPenaltyOnRepayment(nextPayable)).toString()
+                              );
                               setIsRecordPaymentOpen(true);
                             }
                           }}>
@@ -1957,7 +1972,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           </Button>
                         )}
                         {overdueCount > 0 && (
-                          <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
+                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsApplyPenaltiesOpen(true)}>
                             <AlertCircle size={14} className="mr-1" /> Apply Penalties
                           </Button>
                         )}
@@ -1967,22 +1982,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed") && (
-                          <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
+                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsRestructureOpen(true)}>
                             <RefreshCw size={14} className="mr-1" /> Restructure
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed") && (
-                          <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
+                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsReloanOpen(true)}>
                             <ArrowRight size={14} className="mr-1" /> Reloan
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed") && (
-                          <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
+                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsTopUpOpen(true)}>
                             <Plus size={14} className="mr-1" /> Top Up
                           </Button>
                         )}
                         {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
-                          <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
+                          <Button size="sm" variant="destructive" disabled={!canLedgerOps} onClick={() => setIsUndoDisbursementOpen(true)}>
                             <Undo2 size={14} className="mr-1" /> Undo Disbursement
                           </Button>
                         )}
@@ -2058,22 +2073,37 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
                         onClick={async () => {
-                          const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
-                          await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                          try {
+                            const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
+                            await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                            toast.success("SMS sent");
+                          } catch (e: unknown) {
+                            toast.error(e instanceof Error ? e.message : "Failed to send SMS");
+                          }
                         }}>
                         <Smartphone size={14} className="mr-1" /> SMS
                       </Button>
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.email}
                         onClick={async () => {
-                          const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
-                          await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
+                          try {
+                            const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+                            await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
+                            toast.success("Email sent");
+                          } catch (e: unknown) {
+                            toast.error(e instanceof Error ? e.message : "Failed to send email");
+                          }
                         }}>
                         <Mail size={14} className="mr-1" /> Email
                       </Button>
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
                         onClick={async () => {
-                          const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
-                          await sendWhatsAppDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                          try {
+                            const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
+                            await sendWhatsAppDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
+                            toast.success("WhatsApp message sent");
+                          } catch (e: unknown) {
+                            toast.error(e instanceof Error ? e.message : "Failed to send WhatsApp");
+                          }
                         }}>
                         <Send size={14} className="mr-1" /> WhatsApp
                       </Button>
@@ -2104,20 +2134,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <h3 className="font-semibold">Repayment Schedule</h3>
                   <div className="flex gap-2">
                     {overdueCount > 0 && (
-                      <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
+                      <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsApplyPenaltiesOpen(true)}>
                         <AlertCircle size={14} className="mr-1" /> Apply Penalties
                       </Button>
                     )}
                     {(!repayments || repayments.length === 0) ? (
-                      <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
+                      <Button size="sm" disabled={!canLedgerOps} onClick={() => setIsGenerateScheduleOpen(true)}>
                         <Plus size={14} className="mr-1" /> Generate Schedule
                       </Button>
                     ) : (
-                      <Button size="sm" onClick={() => {
-                        const nextPending = repayments.find(r => r.status === "pending");
-                        if (nextPending) {
-                          setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                      <Button size="sm" disabled={!canLedgerOps} onClick={() => {
+                        const nextPayable = findNextPayableRepayment(repayments);
+                        if (nextPayable) {
+                          setSelectedRepayment(nextPayable);
+                          setPaymentAmount(
+                            (Number(nextPayable.amount) + netPenaltyOnRepayment(nextPayable)).toString()
+                          );
                           setIsRecordPaymentOpen(true);
                         } else {
                           toast.info("No pending repayments");
@@ -2173,9 +2205,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         {repayments.map((rep) => {
                           const today = new Date();
                           const dueDate = new Date(rep.due_date);
-                          const isOverdue = rep.status === "pending" && dueDate < today;
-                          const isDue = rep.status === "pending" && dueDate.toDateString() === today.toDateString();
-                          const isUpcoming = rep.status === "pending" && dueDate > today;
+                          const isOverdue = isRepaymentOverdueUi(rep);
+                          const isDue =
+                            isRepaymentOpenForPayment(rep) &&
+                            !isOverdue &&
+                            dueDate.toDateString() === today.toDateString();
+                          const isUpcoming =
+                            isRepaymentOpenForPayment(rep) && !isOverdue && dueDate > today;
                           const daysOverdue = isOverdue ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
                           
                           const displayStatus = rep.is_reversed 
@@ -2187,7 +2223,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 : rep.status === "paid"
                                   ? "paid"
                                   : "pending";
-                          const totalDue = rep.amount + Math.max(0, (rep.penalty_amount || 0) - (rep.penalty_paid || 0));
+                          const totalDue = Number(rep.amount) + netPenaltyOnRepayment(rep);
 
                           // Format date based on frequency
                           const dateFormat = isDaily ? "MMM dd, yyyy" : isWeekly ? "MMM dd, yyyy" : "MMM dd, yyyy";
@@ -2283,9 +2319,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">
-                                  {rep.status === "pending" && !rep.is_reversed && (
+                                  {isRepaymentOpenForPayment(rep) && !rep.is_reversed && (
                                     <Button
                                       size="sm"
+                                      disabled={!canLedgerOps}
                                       variant={isOverdue ? "destructive" : isDue ? "default" : "outline"}
                                       onClick={() => {
                                         setSelectedRepayment(rep);
@@ -2409,7 +2446,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No Repayment Schedule</h3>
                     <p className="text-muted-foreground mb-4">Generate a repayment schedule for this loan</p>
-                    <Button onClick={() => setIsGenerateScheduleOpen(true)}>
+                    <Button disabled={!canLedgerOps} onClick={() => setIsGenerateScheduleOpen(true)}>
                       <Plus size={16} className="mr-2" /> Generate Schedule
                     </Button>
                   </div>
@@ -2534,8 +2571,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   loanId={loan.id}
                   parentLoanId={(loan as any).parent_loan_id}
                   onViewLoan={(id) => {
-                    // Close current and signal parent to open the other loan
-                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                    if (onRequestOpenLoan) {
+                      onRequestOpenLoan(id);
+                    } else {
+                      toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                    }
                   }}
                 />
 
@@ -2543,7 +2583,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 <LoanHistoryTimeline
                   loanId={loan.id}
                   onViewLoan={(id) => {
-                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                    if (onRequestOpenLoan) {
+                      onRequestOpenLoan(id);
+                    } else {
+                      toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
+                    }
                   }}
                 />
               </TabsContent>
@@ -2577,16 +2621,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <span className="font-medium">K{Number(selectedRepayment.principal_paid).toLocaleString()}</span>
                 </div>
               )}
-              {selectedRepayment?.penalty_amount && selectedRepayment.penalty_amount > 0 && (
+              {selectedRepayment && netPenaltyOnRepayment(selectedRepayment) > 0 && (
                 <div className="flex justify-between text-destructive">
-                  <span className="text-sm">Penalty</span>
-                  <span className="font-medium">K{Number(selectedRepayment.penalty_amount).toLocaleString()}</span>
+                  <span className="text-sm">Penalty (unpaid)</span>
+                  <span className="font-medium">K{netPenaltyOnRepayment(selectedRepayment).toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between border-t border-border pt-2">
                 <span className="font-medium">Total Due</span>
                 <span className="text-lg font-bold">
-                  K{((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)).toLocaleString()}
+                  K{selectedRepayment
+                    ? (Number(selectedRepayment.amount) + netPenaltyOnRepayment(selectedRepayment)).toLocaleString()
+                    : "0"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -2603,37 +2649,33 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 placeholder="Enter payment amount"
               />
               <p className="text-xs text-muted-foreground">
-                Pay less for partial payment • Pay more for advance payment
+                Pay less than total due for a partial payment. Amounts above the installment total must be recorded on Admin Repayments.
               </p>
             </div>
 
-            {paymentAmount && Number(paymentAmount) !== (selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0) && (
-              <div className={`p-3 rounded-lg border ${Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
-                <div className="flex items-center gap-2">
-                  {Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? (
-                    <>
-                      <AlertTriangle size={16} className="text-warning" />
-                      <div>
-                        <p className="text-sm font-medium">Partial Payment</p>
-                        <p className="text-xs text-muted-foreground">
-                          Remaining K{(((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) - Number(paymentAmount)).toLocaleString()} will stay pending
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRight size={16} className="text-info" />
-                      <div>
-                        <p className="text-sm font-medium">Overpayment</p>
-                        <p className="text-xs text-muted-foreground">
-                          Excess K{(Number(paymentAmount) - ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0))).toLocaleString()} will be applied to next installment
-                        </p>
-                      </div>
-                    </>
-                  )}
+            {selectedRepayment &&
+              paymentAmount &&
+              Number(paymentAmount) > 0 &&
+              Number(paymentAmount) <
+                Number(selectedRepayment.amount) + netPenaltyOnRepayment(selectedRepayment) && (
+                <div className="p-3 rounded-lg border bg-warning/10 border-warning/20">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-warning" />
+                    <div>
+                      <p className="text-sm font-medium">Partial Payment</p>
+                      <p className="text-xs text-muted-foreground">
+                        Remaining K
+                        {(
+                          Number(selectedRepayment.amount) +
+                          netPenaltyOnRepayment(selectedRepayment) -
+                          Number(paymentAmount)
+                        ).toLocaleString()}{" "}
+                        will stay pending on this installment.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             <div className="space-y-2">
               <Label>Payment Method</Label>
@@ -2662,7 +2704,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => setIsRecordPaymentOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => recordPaymentMutation.mutate()}
-                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
+                disabled={!canLedgerOps || recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
               >
                 {recordPaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
                 Record Payment
@@ -2719,7 +2761,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button
                 variant="destructive"
                 onClick={() => reversePaymentMutation.mutate()}
-                disabled={reversePaymentMutation.isPending || !reversalReason}
+                disabled={!canLedgerOps || reversePaymentMutation.isPending || !reversalReason}
               >
                 {reversePaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <RotateCcw size={14} className="mr-1" />}
                 Reverse Payment
@@ -2787,7 +2829,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 <Button variant="outline" onClick={() => setIsEarlySettlementOpen(false)}>Cancel</Button>
                 <Button
                   onClick={() => processEarlySettlementMutation.mutate()}
-                  disabled={processEarlySettlementMutation.isPending}
+                  disabled={!canLedgerOps || processEarlySettlementMutation.isPending}
                 >
                   {processEarlySettlementMutation.isPending ? (
                     <Loader2 className="animate-spin mr-1" size={14} />
@@ -2816,7 +2858,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => applyPenaltiesMutation.mutate()}
-              disabled={applyPenaltiesMutation.isPending}
+              disabled={!canLedgerOps || applyPenaltiesMutation.isPending}
             >
               {applyPenaltiesMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Apply Penalties
@@ -2870,7 +2912,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => setIsRestructureOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => restructureLoanMutation.mutate()}
-                disabled={restructureLoanMutation.isPending || !restructureReason}
+                disabled={!canLedgerOps || restructureLoanMutation.isPending || !restructureReason}
               >
                 {restructureLoanMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <RefreshCw size={14} className="mr-1" />}
                 Restructure Loan
@@ -2891,7 +2933,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => generateScheduleMutation.mutate()}>
+            <AlertDialogAction
+              disabled={!canLedgerOps || generateScheduleMutation.isPending}
+              onClick={() => generateScheduleMutation.mutate()}
+            >
               {generateScheduleMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Generate
             </AlertDialogAction>
@@ -2912,6 +2957,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!canLedgerOps || undoDisbursementMutation.isPending}
               onClick={() => undoDisbursementMutation.mutate()}
             >
               {undoDisbursementMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
@@ -3200,6 +3246,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogAction
               onClick={() => reloanMutation.mutate()}
               disabled={
+                !canLedgerOps ||
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
                 !reloanDate ||
@@ -3265,7 +3312,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => setIsTopUpOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => topUpMutation.mutate()}
-                disabled={topUpMutation.isPending || !topUpAmount || !topUpSourceAccountId}
+                disabled={!canLedgerOps || topUpMutation.isPending || !topUpAmount || !topUpSourceAccountId}
               >
                 {topUpMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
                 Confirm Top-Up
@@ -3352,7 +3399,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => setIsDisburseOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => disburseLoanFromDetailMutation.mutate()}
-                disabled={disburseLoanFromDetailMutation.isPending || !disburseSourceAccountId}
+                disabled={!canLedgerOps || disburseLoanFromDetailMutation.isPending || !disburseSourceAccountId}
               >
                 {disburseLoanFromDetailMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
                 <Banknote size={14} className="mr-1" /> Confirm Disbursement
