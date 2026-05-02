@@ -229,6 +229,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [reloanTopUpAmount, setReloanTopUpAmount] = useState("");
   const [reloanReason, setReloanReason] = useState("");
   const [reloanSourceAccountId, setReloanSourceAccountId] = useState("");
+  // New: allow reloan from fully-paid loans by entering a fresh principal/term, plus a chosen reloan date
+  const [reloanFreshPrincipal, setReloanFreshPrincipal] = useState("");
+  const [reloanFreshTermMonths, setReloanFreshTermMonths] = useState("");
+  const [reloanDate, setReloanDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState("");
   const [topUpReason, setTopUpReason] = useState("");
