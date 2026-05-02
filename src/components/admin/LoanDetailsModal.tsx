@@ -815,9 +815,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
 
-      if (outstandingBalance <= 0) {
-        throw new Error("No outstanding balance to reloan. The borrower has fully paid.");
+      const isFreshReloan = outstandingBalance <= 0;
+      const freshPrincipalNum = Number(reloanFreshPrincipal || 0);
+      const freshTermNum = Number(reloanFreshTermMonths || 0);
+      if (isFreshReloan) {
+        if (!Number.isFinite(freshPrincipalNum) || freshPrincipalNum <= 0) {
+          throw new Error("Enter a new principal amount for the reloan");
+        }
+        if (!Number.isFinite(freshTermNum) || freshTermNum <= 0) {
+          throw new Error("Enter a new term for the reloan");
+        }
       }
+      if (!reloanDate) throw new Error("Select the reloan date");
 
       const optionalTopUpAmount = Number(reloanTopUpAmount || 0);
       if (!Number.isFinite(optionalTopUpAmount) || optionalTopUpAmount < 0) {
