@@ -2171,13 +2171,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </Button>
                     ) : (
                       <Button size="sm" onClick={() => {
-                        const nextPending = repayments.find(r => r.status === "pending");
-                        if (nextPending) {
-                          setSelectedRepayment(nextPending);
-                          setPaymentAmount((nextPending.amount + Math.max(0, (nextPending.penalty_amount || 0) - (nextPending.penalty_paid || 0))).toString());
+                        const next = [...repayments]
+                          .filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+                          .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+                        if (next) {
+                          setSelectedRepayment(next);
+                          const remainingPrincipal = Math.max(Number(next.amount || 0) - Number(next.principal_paid || 0), 0);
+                          const remainingPenalty = Math.max(0, Number(next.penalty_amount || 0) - Number(next.penalty_paid || 0));
+                          setPaymentAmount((remainingPrincipal + remainingPenalty).toString());
                           setIsRecordPaymentOpen(true);
                         } else {
-                          toast.info("No pending repayments");
+                          toast.info("No outstanding installments");
                         }
                       }}>
                         <CreditCard size={14} className="mr-1" /> Record Payment
