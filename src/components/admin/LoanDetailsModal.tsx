@@ -794,15 +794,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("loan_id", loan.id);
 
       const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
-      const pendingReps = (allReps || []).filter(r => r.status === "pending" || r.status === "overdue");
-      
-      // Calculate total paid (principal_paid from paid installments + partial payments on pending)
-      const totalPaidFromPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-      const totalPartialOnPending = pendingReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      // CRITICAL: include `partial` rows so partial payments are not lost in reloan math
+      const pendingReps = (allReps || []).filter(r => ["pending", "overdue", "partial"].includes(r.status));
+
+      // Total ever paid = full-paid principal + partial principal_paid still sitting on open rows
+      const totalPaidFromPaid = paidReps.reduce(
+        (sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount),
+        0
+      );
+      const totalPartialOnPending = pendingReps.reduce(
+        (sum, r) => sum + Number(r.principal_paid || 0),
+        0
+      );
       const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
-      
-      // Outstanding carry-forward = remaining installment balances (after any partial payments)
-      const outstandingBalance = pendingReps.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+      // Carry-forward = remaining installment balances NET of partial payments already applied
+      const outstandingBalance = pendingReps.reduce(
+        (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
+        0
+      );
       
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
