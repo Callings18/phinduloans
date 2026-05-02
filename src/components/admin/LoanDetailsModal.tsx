@@ -1633,8 +1633,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
-  const overdueCount = repayments?.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length || 0;
-  const nextDue = repayments?.find(r => r.status === "pending" && new Date(r.due_date) >= new Date());
+  // Overdue / next-due include "partial" rows so quick-actions and KPIs reflect partially-paid installments correctly.
+  const _isUnpaidStatus = (s?: string) => s === "pending" || s === "partial" || s === "overdue";
+  const overdueCount = repayments?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed && new Date(r.due_date) < new Date()).length || 0;
+  // Next due = oldest still-owing installment (partial/overdue first, then upcoming pending).
+  const nextDue = repayments
+    ?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+
+  // Dynamic installment cadence label (Daily / Weekly / Monthly) based on loan term unit.
+  const installmentLabel = borrowerInstallmentLabel(loan as any);
+  const installmentColumnTitle = borrowerSchedulePaymentColumnTitle(loan as any);
+  const installmentCadenceWord = installmentLabel.replace(" installment", ""); // "Daily" | "Weekly" | "Monthly"
+
+  // Has any actual money been collected on this loan? Used to gate destructive actions like Undo Disbursement.
+  const hasAnyPaymentRecorded = (paidRepayments.length > 0) || (partialPaymentsOnPending > 0);
 
   // Helper functions for schedule and contract
   const handleDownloadSchedule = () => {
