@@ -946,7 +946,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           employment_duration: loan.employment_duration || null,
           monthly_income: loan.monthly_income || 0,
           loan_amount: newPrincipal,
-          loan_term_months: loan.loan_term_months,
+          loan_term_months: newTermMonths,
           term_unit: termUnit,
           interest_rate: interestRate,
           monthly_payment: newCalc.monthlyPayment,
@@ -955,12 +955,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           loan_product_id: loan.loan_product_id || null,
           parent_loan_id: loan.id,
           status: "active" as any,
-          source: "internal",
-          admin_notes: `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()}: carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}. Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
+          source: "reloan",
+          repayment_start_date: reloanDate,
+          admin_notes: `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()} on ${reloanDate}: ${isFreshReloan ? `Fresh reloan principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}.`} Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
           disbursed_by: user?.id ?? null,
-          disbursed_at: new Date().toISOString(),
+          disbursed_at: reloanIso,
           approved_by: user?.id ?? null,
-          approved_at: new Date().toISOString(),
+          approved_at: reloanIso,
         })
         .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id")
         .single();
