@@ -905,7 +905,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .from("loan_applications")
         .update({
           status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${format(new Date(), "yyyy-MM-dd")}]: Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${reloanDate}]: ${isFreshReloan ? `Fresh reloan with new principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""}`} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
         })
         .eq("id", loan.id);
       if (closeError) throw closeError;
