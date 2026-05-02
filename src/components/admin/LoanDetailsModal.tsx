@@ -106,9 +106,9 @@ import LoanChain from "./LoanChain";
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
   pending: ["under_review", "rejected"],
   under_review: ["approved", "rejected", "crb_failed", "pmic_pending"],
-  approved: ["contract_signing"],
-  contract_signing: [],
-  awaiting_disbursement: [],
+  approved: ["contract_signing", "awaiting_disbursement"],
+  contract_signing: ["awaiting_disbursement", "approved"],
+  awaiting_disbursement: ["disbursed", "approved"],
   disbursed: ["active"],
   active: ["defaulted"], // "completed" is auto-set when fully paid
   completed: [],
@@ -451,10 +451,57 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Payment reversal mutation
+  // Payment reversal mutation — also debits the destination account so balances stay consistent.
   const reversePaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedPaidRepayment || !loan) throw new Error("No repayment selected");
+      if (!reversalReason.trim()) throw new Error("Reversal reason is required");
+
+      const refundAmount = Number(selectedPaidRepayment.principal_paid || selectedPaidRepayment.amount || 0);
+
+      // 1. Locate the account_transactions row that booked this repayment
+      const { data: tx } = await supabase
+        .from("account_transactions")
+        .select("id, account_id, amount, balance_after")
+        .eq("reference_type", "repayment")
+        .eq("reference_id", selectedPaidRepayment.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // 2. Refund / debit the account
+      if (tx && tx.account_id && refundAmount > 0) {
+        const { data: account, error: accErr } = await supabase
+          .from("accounts")
+          .select("id, balance")
+          .eq("id", tx.account_id)
+          .maybeSingle();
+        if (accErr) throw accErr;
+        if (account) {
+          const balanceBefore = Number(account.balance);
+          const balanceAfter = balanceBefore - refundAmount;
+          if (balanceAfter < 0) {
+            throw new Error(`Cannot reverse: account balance (K${balanceBefore.toLocaleString()}) is less than the refund (K${refundAmount.toLocaleString()}).`);
+          }
+          const { error: balErr } = await supabase
+            .from("accounts")
+            .update({ balance: balanceAfter, updated_at: new Date().toISOString() })
+            .eq("id", account.id);
+          if (balErr) throw balErr;
+          await supabase.from("account_transactions").insert({
+            account_id: account.id,
+            transaction_type: "adjustment_debit",
+            amount: refundAmount,
+            balance_before: balanceBefore,
+            balance_after: balanceAfter,
+            destination: "Payment reversal",
+            reference_type: "repayment_reversal",
+            reference_id: selectedPaidRepayment.id,
+            notes: `Reversal of installment #${selectedPaidRepayment.installment_number ?? "?"} for ${loan.full_name}: ${reversalReason}`,
+            created_by: user?.id,
+          });
+        }
+      }
 
       const { error } = await supabase
         .from("loan_repayments")
@@ -484,14 +531,20 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         if (revLoanStatusErr) throw revLoanStatusErr;
       }
 
-      // Log the reversal
       const { error: revCollErr } = await supabase.from("collection_activities").insert({
         loan_id: loan.id,
         activity_type: "payment_reversal",
-        notes: `Payment of K${selectedPaidRepayment.amount.toLocaleString()} reversed. Reason: ${reversalReason}`,
-        outcome: "Payment reverted to pending",
+        notes: `Payment of K${refundAmount.toLocaleString()} reversed. Reason: ${reversalReason}`,
+        outcome: tx ? "Payment reverted; account debited" : "Payment reverted (no source account on record)",
       });
       if (revCollErr) throw revCollErr;
+
+      await logAudit({
+        action: "PAYMENT_REVERSED",
+        entity_type: "repayment",
+        entity_id: selectedPaidRepayment.id,
+        details: { amount: refundAmount, reason: reversalReason, loan_id: loan.id, account_id: tx?.account_id || null },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -906,7 +959,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const newPrincipal = isFreshReloan
         ? freshPrincipalNum
         : outstandingPrincipal + optionalTopUpAmount;
-      const newTermMonths = isFreshReloan ? freshTermNum : loan.loan_term_months;
+      // Carry-forward reloans default to the parent's term, but admins may override
+      // by entering a value in the "New Term" input (reloanFreshTermMonths).
+      const newTermMonths = isFreshReloan
+        ? freshTermNum
+        : (Number.isFinite(freshTermNum) && freshTermNum > 0 ? freshTermNum : loan.loan_term_months);
       // Backdate-friendly timestamps from the chosen reloan date (noon UTC for date-only safety)
       const reloanIso = new Date(`${reloanDate}T12:00:00Z`).toISOString();
 
@@ -994,6 +1051,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       );
 
       if (optionalTopUpAmount > 0 && sourceAccount) {
+        // Create a disbursements row so this top-up shows up in reports and PMIC exports.
+        const { error: disbInsertErr } = await supabase.from("disbursements").insert({
+          loan_id: newLoan.id,
+          amount: topUpNetDisbursement,
+          disbursement_method: "cash",
+          status: "completed",
+          source_account_id: sourceAccount.id,
+          disbursed_at: reloanIso,
+          transaction_reference: `RELOAN-TOPUP-${newLoan.id.slice(0, 8).toUpperCase()}`,
+          is_top_up: true,
+        });
+        if (disbInsertErr) throw disbInsertErr;
+
         const sourceBalanceAfter = Number(sourceAccount.balance) - topUpNetDisbursement;
         const { error: sourceUpdateError } = await supabase
           .from("accounts")
@@ -1170,43 +1240,28 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("id", loan.id);
       if (loanErr) throw loanErr;
 
-      // Delete pending repayments and regenerate
+      // Cancel all open rows so the shared scheduler can rebuild a clean tail.
       const { error: delPendingErr } = await supabase
         .from("loan_repayments")
-        .delete()
+        .update({ status: "cancelled" })
         .eq("loan_id", loan.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "overdue"]);
       if (delPendingErr) throw delPendingErr;
 
-      const { data: paidReps } = await supabase
-        .from("loan_repayments")
-        .select("installment_number, amount, principal_paid, original_amount")
-        .eq("loan_id", loan.id)
-        .eq("status", "paid")
-        .order("installment_number", { ascending: false });
-
-      const lastPaidInstallment = paidReps?.[0]?.installment_number || 0;
-      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-      const remainingTotal = newTotal - paidTotal;
-      const remainingInstallments = loan.loan_term_months - lastPaidInstallment;
-      const newInstallmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
-
-      const repaymentRecords = [];
-      const startDate = new Date();
-      for (let i = 1; i <= remainingInstallments; i++) {
-        repaymentRecords.push({
-          loan_id: loan.id,
+      // Use the shared scheduler so business-calendar / holidays / product cadence are respected.
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
           user_id: loan.user_id,
-          amount: newInstallmentAmount,
-          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
-          installment_number: lastPaidInstallment + i,
-          status: "pending",
-        });
-      }
-      if (repaymentRecords.length > 0) {
-        const { error } = await supabase.from("loan_repayments").insert(repaymentRecords);
-        if (error) throw error;
-      }
+          loan_term_months: loan.loan_term_months,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+          loan_product_id: loan.loan_product_id || null,
+          term_unit: termUnit,
+        },
+        supabase,
+        { regenerateRemaining: true },
+      );
 
       // Deduct from source account
       const newBalance = freshAccount.balance - netDisbursement;
@@ -1340,71 +1395,42 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (loanError) throw loanError;
 
-      // Delete pending repayments and regenerate
-      await supabase
+      // Cancel all open rows (pending/overdue) so the shared scheduler can rebuild a clean tail.
+      // Partial rows keep their installment_number — the scheduler skips locked numbers.
+      const { error: cancelErr } = await supabase
         .from("loan_repayments")
-        .delete()
+        .update({ status: "cancelled" })
         .eq("loan_id", loan.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "overdue"]);
+      if (cancelErr) throw cancelErr;
 
-      // Get paid count to continue numbering
-      const { data: paidRepayments } = await supabase
-        .from("loan_repayments")
-        .select("installment_number")
-        .eq("loan_id", loan.id)
-        .eq("status", "paid")
-        .order("installment_number", { ascending: false });
-
-      const lastPaidInstallment = paidRepayments?.[0]?.installment_number || 0;
-      const remainingInstallments = newTerm - lastPaidInstallment;
-      
-      // Calculate remaining amount (total - already paid)
-      const { data: paidReps } = await supabase
-        .from("loan_repayments")
-        .select("amount, principal_paid, original_amount")
-        .eq("loan_id", loan.id)
-        .eq("status", "paid");
-      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-      const remainingTotal = newTotal - paidTotal;
-      const installmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
-
-      // Determine schedule interval
-      const isWeekly = termUnit === 'weeks' || interestPeriod === 'weekly';
-      const isDaily = termUnit === 'days' || interestPeriod === 'daily';
-
-      // Generate new schedule
-      const repaymentRecords = [];
-      const startDate = new Date();
-
-      for (let i = 1; i <= remainingInstallments; i++) {
-        let dueDate = new Date(startDate);
-        if (isDaily) {
-          dueDate.setDate(dueDate.getDate() + i);
-          // Skip Sundays — no collections on Sundays
-          while (dueDate.getDay() === 0) {
-            dueDate.setDate(dueDate.getDate() + 1);
-          }
-        } else if (isWeekly) {
-          dueDate.setDate(dueDate.getDate() + i * 7);
-        } else {
-          dueDate.setMonth(dueDate.getMonth() + i);
-        }
-        repaymentRecords.push({
-          loan_id: loan.id,
+      // Use the shared scheduler so business-calendar / holidays / product cadence are respected.
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
           user_id: loan.user_id,
-          amount: installmentAmount,
-          due_date: format(dueDate, "yyyy-MM-dd"),
-          installment_number: lastPaidInstallment + i,
-          status: "pending",
-        });
-      }
+          loan_term_months: newTerm,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+          loan_product_id: loan.loan_product_id || null,
+          term_unit: termUnit,
+        },
+        supabase,
+        { regenerateRemaining: true },
+      );
 
-      if (repaymentRecords.length > 0) {
-        const { error } = await supabase
-          .from("loan_repayments")
-          .insert(repaymentRecords);
-        if (error) throw error;
-      }
+      await logAudit({
+        action: "LOAN_RESTRUCTURED",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: {
+          new_term: newTerm,
+          new_interest_rate: newRate,
+          new_total_repayment: newTotal,
+          new_monthly_payment: newMonthly,
+          reason: restructureReason,
+        },
+      });
 
       // Record loan event for history timeline
       await supabase.from("loan_events" as any).insert({
