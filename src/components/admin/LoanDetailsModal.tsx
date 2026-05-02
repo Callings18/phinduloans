@@ -890,9 +890,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         }
       }
 
-      // New principal is carry-forward outstanding + optional extra cash top-up.
+      // New principal: when there's outstanding, carry it forward + optional top-up.
+      // When fully paid (fresh reloan), use the admin-entered principal.
       const outstandingPrincipal = outstandingBalance;
-      const newPrincipal = outstandingPrincipal + optionalTopUpAmount;
+      const newPrincipal = isFreshReloan
+        ? freshPrincipalNum
+        : outstandingPrincipal + optionalTopUpAmount;
+      const newTermMonths = isFreshReloan ? freshTermNum : loan.loan_term_months;
+      // Backdate-friendly timestamps from the chosen reloan date (noon UTC for date-only safety)
+      const reloanIso = new Date(`${reloanDate}T12:00:00Z`).toISOString();
 
       // Mark current loan as completed
       const { error: closeError } = await supabase
