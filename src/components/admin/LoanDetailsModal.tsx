@@ -1858,9 +1858,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-4 w-full">
+            <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="text-xs">
+                <FolderOpen size={14} className="mr-1 hidden sm:inline" /> Documents
               </TabsTrigger>
               <TabsTrigger value="repayments" className="text-xs">
                 <Receipt size={14} className="mr-1 hidden sm:inline" /> Repayments
