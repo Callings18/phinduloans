@@ -1029,8 +1029,18 @@ const AdminRepayments = () => {
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Remaining Due</span>
-                    <span className="font-bold text-foreground">K{Number(selectedRepayment.amount).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Principal Due</span>
+                    <span className="font-bold text-foreground">K{principalRemaining(selectedRepayment).toLocaleString()}</span>
+                  </div>
+                  {penaltyRemaining(selectedRepayment) > 0 && (
+                    <div className="flex justify-between text-destructive">
+                      <span className="text-muted-foreground">Unpaid Penalty</span>
+                      <span className="font-bold">K{penaltyRemaining(selectedRepayment).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-border/50 pt-2">
+                    <span className="text-muted-foreground">Total Remaining</span>
+                    <span className="font-bold text-foreground">K{totalRemaining(selectedRepayment).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Due Date</span>
@@ -1071,15 +1081,33 @@ const AdminRepayments = () => {
                         type="number"
                         step="0.01"
                         min="1"
-                        max={selectedRepayment.amount}
+                        max={totalRemaining(selectedRepayment)}
                         value={paymentData.amount}
                         onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                        placeholder={`Full amount: K${Number(selectedRepayment.amount).toLocaleString()}`}
+                        placeholder={`Full amount: K${totalRemaining(selectedRepayment).toLocaleString()}`}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Enter amount received. Leave empty to record full payment of K{Number(selectedRepayment.amount).toLocaleString()}
+                        Enter amount received. Leave empty to record full payment of K{totalRemaining(selectedRepayment).toLocaleString()}
                       </p>
                     </div>
+
+                    {penaltyRemaining(selectedRepayment) > 0 && (
+                      <div className="space-y-2">
+                        <Label>Penalty Portion</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max={penaltyRemaining(selectedRepayment)}
+                          value={paymentData.penalty_amount}
+                          onChange={(e) => setPaymentData({ ...paymentData, penalty_amount: e.target.value })}
+                          placeholder={`Penalty paid: K${penaltyRemaining(selectedRepayment).toLocaleString()}`}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          This portion clears penalties first; the balance is applied to principal.
+                        </p>
+                      </div>
+                    )}
 
                     {/* NEW: Destination Account Selection */}
                     <div className="space-y-2">
