@@ -196,8 +196,10 @@ export default function ProductLoanFormShell({
         businessMonths: Number(businessMonths || 0),
         isCivilServantConfirmed,
         hasLocalAuthorityCompliance,
+        productMinAmount: product?.min_amount ?? null,
+        productMaxAmount: product?.max_amount ?? null,
       }),
-    [rules, employmentType, city, loanAmount, termValue, businessMonths, isCivilServantConfirmed, hasLocalAuthorityCompliance]
+    [rules, employmentType, city, loanAmount, termValue, businessMonths, isCivilServantConfirmed, hasLocalAuthorityCompliance, product?.min_amount, product?.max_amount]
   );
 
   const collateralBorrowersValidation = useMemo(
@@ -217,7 +219,7 @@ export default function ProductLoanFormShell({
     if (!isMarketeer || !product || !loanAmount) return null;
     const principal = Number(loanAmount || 0);
     if (principal <= 0) return null;
-    const tiers = getMarketeerTiersOrDefault((product as any).pricing_tiers);
+    const tiers = getMarketeerTiersOrDefault((product as any).pricing_tiers, product.min_amount, product.max_amount);
     return calculateMarketeerLoan(principal, tiers);
   }, [isMarketeer, product, loanAmount]);
 
