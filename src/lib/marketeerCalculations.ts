@@ -54,9 +54,16 @@ export interface MarketeerCalculationResult {
   durationDays: number;
 }
 
-export function getMarketeerTiersOrDefault(raw: unknown): MarketeerTier[] {
+export function getMarketeerTiersOrDefault(raw: unknown, productMinAmount?: number | null, productMaxAmount?: number | null): MarketeerTier[] {
   const parsed = parseMarketeerTiers(raw);
-  return parsed.length > 0 ? parsed : MARKETEER_DEFAULT_TIERS;
+  const tiers = parsed.length > 0 ? parsed : MARKETEER_DEFAULT_TIERS;
+  const minAmount = Number(productMinAmount || 0);
+  const maxAmount = Number(productMaxAmount || 0);
+  return tiers.map((tier, index) => ({
+    ...tier,
+    minPrincipal: index === 0 && minAmount > 0 ? Math.min(tier.minPrincipal, minAmount) : tier.minPrincipal,
+    maxPrincipal: maxAmount > 0 ? Math.min(tier.maxPrincipal, maxAmount) : tier.maxPrincipal,
+  }));
 }
 
 /**

@@ -1055,15 +1055,6 @@ const AdminLoans = () => {
           setIsDetailsOpen(open);
           if (!open) setSelectedLoan(null);
         }}
-        onRequestOpenLoan={(id) => {
-          const hit = loans.find((l) => l.id === id);
-          if (hit) {
-            setSelectedLoan(hit);
-            setIsDetailsOpen(true);
-          } else {
-            toast.info("That loan is not on the current page — use search or change filters in the Loans list.");
-          }
-        }}
       />
 
       {/* Edit Loan Dialog */}

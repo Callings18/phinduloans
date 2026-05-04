@@ -8,6 +8,8 @@ export interface ProductLoanFormValues {
   businessMonths: number;
   isCivilServantConfirmed: boolean;
   hasLocalAuthorityCompliance: boolean;
+  productMinAmount?: number | null;
+  productMaxAmount?: number | null;
 }
 
 export interface ProductLoanRuleSet {
@@ -15,29 +17,7 @@ export interface ProductLoanRuleSet {
   validate: (values: ProductLoanFormValues) => string[];
 }
 
-// Optional product-level overrides loaded from the database. Fields that are
-// not provided fall back to the hard-coded product policy below. This lets
-// admins tune product limits (e.g., Marketeer min K500 instead of K1000) via
-// the Loan Products screen without needing a code change.
-export interface ProductLimitsOverride {
-  min_amount?: number | null;
-  max_amount?: number | null;
-}
-
-function formatK(n: number): string {
-  return `K${Math.round(n).toLocaleString()}`;
-}
-
-function makeProductRules(overrides?: ProductLimitsOverride): Record<LoanProductCode, ProductLoanRuleSet> {
-  // Default Marketeer band when the product hasn't been customised in the DB.
-  const marketeerMin = Number.isFinite(Number(overrides?.min_amount)) && Number(overrides?.min_amount) > 0
-    ? Number(overrides!.min_amount)
-    : 1000;
-  const marketeerMax = Number.isFinite(Number(overrides?.max_amount)) && Number(overrides?.max_amount) > 0
-    ? Number(overrides!.max_amount)
-    : 10000;
-
-  return {
+const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
   SALARY_ADVANCE: {
     checklist: [
       "NRC",
@@ -148,12 +128,14 @@ function makeProductRules(overrides?: ProductLimitsOverride): Record<LoanProduct
     ],
     validate(values) {
       const errors: string[] = [];
+      const minAmount = Number(values.productMinAmount || 1000);
+      const maxAmount = Number(values.productMaxAmount || 10000);
       if (!values.hasLocalAuthorityCompliance) {
         errors.push("Local authority compliance must be confirmed for Marketeer loans.");
       }
       if (values.businessMonths < 6) errors.push("Business must exist for at least 6 months.");
-      if (values.loanAmount < marketeerMin || values.loanAmount > marketeerMax) {
-        errors.push(`Marketeer loan amount must be between ${formatK(marketeerMin)} and ${formatK(marketeerMax)}.`);
+      if (values.loanAmount < minAmount || values.loanAmount > maxAmount) {
+        errors.push(`Marketeer loan amount must be between K${minAmount.toLocaleString()} and K${maxAmount.toLocaleString()}.`);
       }
       if (values.termValue !== 26) {
         errors.push("Marketeer term is fixed at 26 collection days (Sundays excluded).");
@@ -161,12 +143,8 @@ function makeProductRules(overrides?: ProductLimitsOverride): Record<LoanProduct
       return errors;
     },
   },
-  };
-}
+};
 
-export function useProductLoanRules(
-  productCode: LoanProductCode,
-  overrides?: ProductLimitsOverride,
-): ProductLoanRuleSet {
-  return makeProductRules(overrides)[productCode];
+export function useProductLoanRules(productCode: LoanProductCode): ProductLoanRuleSet {
+  return productRules[productCode];
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,15 +16,11 @@ import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { recordLoanPayment } from "@/services/repositories/houseWorkflowRepository";
 import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { differenceInCalendarDays, format } from "date-fns";
-import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText, Pencil } from "lucide-react";
+import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
-import EditPendingLoanDialog from "@/components/loans/EditPendingLoanDialog";
-import { usePermissions } from "@/hooks/usePermissions";
-
-const EDITABLE_LOAN_STATUSES = new Set(["pending", "under_review", "pmic_pending", "crb_failed"]);
+import LoanDocumentsCard from "@/components/admin/LoanDocumentsCard";
 
 export default function HouseLoanDetailPage() {
-  const navigate = useNavigate();
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
   const { data: loans } = useHouseLoans(productCode);
   const { data: product } = useHouseProduct(productCode);
@@ -36,9 +32,6 @@ export default function HouseLoanDetailPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
-  const [editPendingOpen, setEditPendingOpen] = useState(false);
-  const { can } = usePermissions();
-  const canEditLoans = can("loans", "edit") || can("loans", "update");
   const creditToRef = useRef<HTMLButtonElement | null>(null);
 
   const focusCreditTo = () => {
@@ -70,32 +63,6 @@ export default function HouseLoanDetailPage() {
         .order("due_date", { ascending: true });
       if (error) throw error;
       return data ?? [];
-    },
-  });
-
-  const { data: linkedBorrowers = [] } = useQuery({
-    queryKey: ["house-loan-borrowers", loanId],
-    enabled: Boolean(loanId),
-    queryFn: async () => {
-      const { data: rows, error } = await (supabase.from as any)("loan_borrowers")
-        .select("customer_id, role, is_signatory")
-        .eq("loan_id", loanId);
-      if (error) throw error;
-      const parties = (rows || []) as Array<{ customer_id: string; role: string; is_signatory: boolean }>;
-      if (parties.length === 0) return [];
-
-      const ids = Array.from(new Set(parties.map((p) => p.customer_id)));
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, nrc_number")
-        .in("id", ids);
-      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
-
-      return parties.map((party) => ({
-        ...party,
-        full_name: profileMap.get(party.customer_id)?.full_name || "Unknown",
-        nrc_number: profileMap.get(party.customer_id)?.nrc_number || "N/A",
-      }));
     },
   });
 
@@ -228,8 +195,6 @@ export default function HouseLoanDetailPage() {
   const outstanding = Math.max(Number(loan.total_repayment || loan.loan_amount || 0) - totalPaid, 0);
   const paidCount = repayments.filter((r: any) => r.status === "paid").length;
   const partialCount = repayments.filter((r: any) => r.status === "partial").length;
-  const isCollateral = (product?.product_code || "").toUpperCase() === "COLLATERAL";
-  const collateralInterest = isCollateral ? Number(loan.loan_amount || 0) * 0.30 : Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
   const pendingRepayments = repayments.filter((r: any) => r.status !== "paid" && r.status !== "cancelled");
 
   const today = new Date();
@@ -248,16 +213,9 @@ export default function HouseLoanDetailPage() {
             <ArrowLeft size={14} className="mr-1" /> Back to loans
           </Link>
         </Button>
-        <div className="flex items-center gap-2">
-          {canEditLoans && EDITABLE_LOAN_STATUSES.has(loan.status) && (
-            <Button size="sm" variant="outline" onClick={() => setEditPendingOpen(true)}>
-              <Pencil size={14} className="mr-1" /> Edit Pending Loan
-            </Button>
-          )}
-          <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
-            <FileText size={14} className="mr-1" /> Open full loan details
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
+          <FileText size={14} className="mr-1" /> Open full loan details
+        </Button>
       </div>
 
       <LoanDetailsModal
@@ -267,118 +225,81 @@ export default function HouseLoanDetailPage() {
           setFullDetailsOpen(o);
           if (!o) invalidateAll();
         }}
-        onRequestOpenLoan={(id) => {
-          if (id === loanId) return;
-          navigate(`/admin/houses/${encodeURIComponent(productCode)}/loans/${encodeURIComponent(id)}`);
-        }}
       />
 
-      <EditPendingLoanDialog
-        loan={loan as any}
-        open={editPendingOpen}
-        onOpenChange={setEditPendingOpen}
-        onSaved={invalidateAll}
-      />
+      {/* Loan summary — modern hero */}
+      <Card className="overflow-hidden border-border/50 bg-gradient-to-br from-primary/15 via-primary/5 to-background">
+        <CardContent className="p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Loan</p>
+              <h2 className="text-xl md:text-2xl font-bold leading-tight">
+                {loan.full_name || borrowerProfile?.full_name || loan.email || "—"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {loan.phone || borrowerProfile?.phone || "—"} · {loan.city || borrowerProfile?.city || "—"} · NRC {loan.nrc_number || borrowerProfile?.nrc_number || "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Principal</p>
+              <p className="text-3xl font-bold text-primary">K{Number(loan.loan_amount || 0).toLocaleString()}</p>
+              <Badge
+                variant={loan.status === "active" ? "default" : loan.status === "completed" ? "secondary" : "outline"}
+                className="mt-1 capitalize"
+              >
+                {loan.status?.replace(/_/g, " ")}
+              </Badge>
+            </div>
+          </div>
 
-      {/* Loan summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote size={18} /> Loan Detail
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Borrower</p>
-            <p className="font-medium">{loan.full_name || loan.email}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Phone</p>
-            <p className="font-medium">{loan.phone || borrowerProfile?.phone || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Principal</p>
-            <p className="font-medium">K{Number(loan.loan_amount || 0).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Repayment</p>
-            <p className="font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Interest</p>
-            <p className="font-medium">K{collateralInterest.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Status</p>
-            <Badge variant={loan.status === "active" ? "default" : loan.status === "completed" ? "secondary" : "outline"}>
-              {loan.status?.replace(/_/g, " ")}
-            </Badge>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Progress</p>
-            <p className="font-medium">
-              <span className="text-success">{paidCount}</span>/{repayments.length} installments
-              {partialCount > 0 && (
-                <span className="ml-1 text-xs text-warning">({partialCount} partial)</span>
-              )}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Paid</p>
-            <p className="font-medium text-success">K{totalPaid.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Outstanding</p>
-            <p className="font-medium text-destructive">K{outstanding.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Term</p>
-            <p className="font-medium">{loan.loan_term_months} {loan.term_unit || "months"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">NRC</p>
-            <p className="font-medium">{loan.nrc_number || borrowerProfile?.nrc_number || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Created</p>
-            <p className="font-medium text-sm">{loan.created_at ? format(new Date(loan.created_at), "dd MMM yyyy") : "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">City</p>
-            <p className="font-medium">{loan.city || borrowerProfile?.city || "—"}</p>
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Total Repayment</p>
+              <p className="font-bold mt-0.5">K{Number(loan.total_repayment || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Total Paid</p>
+              <p className="font-bold text-success mt-0.5">K{totalPaid.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Outstanding</p>
+              <p className="font-bold text-destructive mt-0.5">K{outstanding.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Progress</p>
+              <p className="font-bold mt-0.5">
+                <span className="text-success">{paidCount}</span>
+                <span className="text-muted-foreground">/{repayments.length}</span>
+                {partialCount > 0 && <span className="ml-1 text-xs text-warning">({partialCount} partial)</span>}
+              </p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Term</p>
+              <p className="font-bold mt-0.5">{loan.loan_term_months} {loan.term_unit || "months"}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Created</p>
+              <p className="font-bold mt-0.5 text-sm">{loan.created_at ? format(new Date(loan.created_at), "dd MMM yyyy") : "—"}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="font-medium mt-0.5 text-sm truncate">{loan.email || borrowerProfile?.email || "—"}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Employer</p>
+              <p className="font-medium mt-0.5 text-sm truncate">
+                {borrowerProfile?.employer_name || "—"}
+                {borrowerProfile?.employment_type && (
+                  <span className="block text-xs text-muted-foreground">{borrowerProfile.employment_type}</span>
+                )}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
-      {isCollateral && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Collateral terms: <strong>30% total interest over 6 months</strong>, equivalent to 5% per month for display, with 6 equal monthly installments.
-          </AlertDescription>
-        </Alert>
-      )}
-      {isCollateral && linkedBorrowers.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Borrower & Owner Parties</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {linkedBorrowers.map((party, idx) => (
-              <div key={`${party.customer_id}-${party.role}-${idx}`} className="flex items-center justify-between text-sm border-b border-border/40 pb-2 last:border-0 last:pb-0">
-                <div>
-                  <p className="font-medium">{party.full_name}</p>
-                  <p className="text-xs text-muted-foreground">NRC: {party.nrc_number}</p>
-                </div>
-                <div className="text-right">
-                  <Badge variant="outline">{party.role.replace(/_/g, " ")}</Badge>
-                  <p className="text-xs text-muted-foreground mt-1">{party.is_signatory ? "Signatory" : "Non-signatory"}</p>
-                </div>
-              </div>
-            ))}
-            <p className="text-xs text-muted-foreground pt-2">Repayment schedule remains single at loan level and applies jointly to all liable parties.</p>
-          </CardContent>
-        </Card>
-      )}
+
+      {/* Documents */}
+      <LoanDocumentsCard loan={loan} />
 
       {/* Servicing actions live in the full loan details modal — keeps a single source of truth */}
 

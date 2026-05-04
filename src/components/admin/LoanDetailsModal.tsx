@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -73,16 +74,22 @@ import {
   ArrowRight,
   Shield,
   FolderCheck,
+  XCircle as XCircleIcon,
   Download,
   Share2,
   Send,
   FileDown,
   Edit,
+  Trash2,
   Smartphone,
   Upload,
   Eye,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import DocumentVerificationTab from "./DocumentVerificationTab";
+import GuarantorTab from "./GuarantorTab";
+import ApprovalWorkflowTab from "./ApprovalWorkflowTab";
+import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
 import { logAudit } from "@/utils/auditLog";
@@ -96,6 +103,26 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
+import LoanDocumentsCard from "./LoanDocumentsCard";
+import EditPendingLoanDialog from "./EditPendingLoanDialog";
+import { FolderOpen } from "lucide-react";
+
+/** Allowed next stages per current status (Move to). Admins get full control,
+ *  including reversals (e.g., approved → pending) for pre-disbursement loans. */
+const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
+  pending: ["under_review", "approved", "rejected"],
+  under_review: ["pending", "approved", "rejected", "crb_failed", "pmic_pending"],
+  approved: ["pending", "under_review", "contract_signing", "awaiting_disbursement", "rejected"],
+  contract_signing: ["pending", "approved", "awaiting_disbursement", "rejected"],
+  awaiting_disbursement: ["pending", "approved", "contract_signing", "rejected"],
+  disbursed: ["active", "approved"], // "approved" used by Undo Disbursement
+  active: ["defaulted"], // "completed" is auto-set when fully paid
+  completed: [],
+  defaulted: ["active"],
+  rejected: ["pending", "under_review"],
+  crb_failed: ["pending", "under_review", "approved", "rejected"],
+  pmic_pending: ["pending", "under_review", "approved", "rejected"],
+};
 
 interface Loan {
   id: string;
@@ -176,33 +203,6 @@ interface Props {
   loan: Loan | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** When provided, timeline/chain "view loan" navigates instead of a generic toast. */
-  onRequestOpenLoan?: (loanId: string) => void;
-}
-
-function netPenaltyOnRepayment(rep: {
-  penalty_amount?: number | null;
-  penalty_paid?: number | null;
-}): number {
-  return Math.max(0, Number(rep.penalty_amount || 0) - Number(rep.penalty_paid || 0));
-}
-
-function isRepaymentOpenForPayment(rep: Repayment): boolean {
-  return rep.status === "pending" || rep.status === "overdue";
-}
-
-function isRepaymentOverdueUi(rep: Repayment): boolean {
-  if (rep.is_reversed || rep.status === "paid") return false;
-  if (rep.status === "overdue") return true;
-  if (rep.status === "pending" && new Date(rep.due_date) < new Date()) return true;
-  return false;
-}
-
-function findNextPayableRepayment(repayments: Repayment[] | undefined): Repayment | undefined {
-  if (!repayments?.length) return undefined;
-  const candidates = repayments.filter((r) => !r.is_reversed && isRepaymentOpenForPayment(r));
-  if (!candidates.length) return undefined;
-  return [...candidates].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 }
 
 interface EarlySettlement {
@@ -213,35 +213,25 @@ interface EarlySettlement {
   total_payoff_amount: number;
 }
 
-export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOpenLoan }: Props) {
+export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const { user, isAdmin } = useAuth();
   const { can } = usePermissions();
+  const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
-  const canLedgerOps = can("loans", "edit") || canFinanceApprove;
-
-  const assertLedgerOps = () => {
-    if (!canLedgerOps) {
-      throw new Error("You don't have permission for this action.");
-    }
-  };
   const [activeTab, setActiveTab] = useState("overview");
+  const [isEditPendingOpen, setIsEditPendingOpen] = useState(false);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [transactionRef, setTransactionRef] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  // How much of the payment is allocated to penalty (vs principal)
-  const [penaltyAmount, setPenaltyAmount] = useState("");
-  const [paymentDestinationAccountId, setPaymentDestinationAccountId] = useState("");
-  // Waive penalty dialog
-  const [isWaivePenaltyOpen, setIsWaivePenaltyOpen] = useState(false);
-  const [waiveTargetRepayment, setWaiveTargetRepayment] = useState<Repayment | null>(null);
-  const [waivePenaltyReason, setWaivePenaltyReason] = useState("");
   const [isRestructureOpen, setIsRestructureOpen] = useState(false);
   const [newTermMonths, setNewTermMonths] = useState("");
   const [newInterestRate, setNewInterestRate] = useState("");
   const [restructureReason, setRestructureReason] = useState("");
   const [isUndoDisbursementOpen, setIsUndoDisbursementOpen] = useState(false);
+  const [isDeleteLoanOpen, setIsDeleteLoanOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
   const [isReloanOpen, setIsReloanOpen] = useState(false);
@@ -413,49 +403,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const recordPaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
-      assertLedgerOps();
 
       const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
-
-      const accountId = paymentDestinationAccountId || selectedRepayment.destination_account_id;
-      if (!accountId) {
-        throw new Error("Destination account is required. Choose an account to deposit the payment.");
+      if (!selectedRepayment.destination_account_id) {
+        throw new Error("Destination account is required. Please use Admin Repayments if account is not configured.");
       }
-
-      const installmentOutstanding = Math.max(
-        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) -
-          Number(selectedRepayment.principal_paid || 0),
-        0,
-      );
-      const penaltyOutstanding = Math.max(
-        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
-        0,
-      );
-
-      // Auto-allocate when no manual split provided: fill penalty first (since that's
-      // what was blocking reloans / completion), then principal.
-      let penaltyPortion = Number(penaltyAmount || 0);
-      if (!Number.isFinite(penaltyPortion) || penaltyPortion < 0) {
-        throw new Error("Penalty portion cannot be negative");
+      if (paidAmount > Number(selectedRepayment.amount)) {
+        throw new Error("Overpayment is disabled here. Open Admin → Repayments to allocate this payment across multiple installments.");
       }
-      if (penaltyPortion === 0 && penaltyOutstanding > 0) {
-        penaltyPortion = Math.min(penaltyOutstanding, paidAmount);
-      }
-      if (penaltyPortion > paidAmount + 0.01) {
-        throw new Error("Penalty portion cannot exceed total payment");
-      }
-      if (penaltyPortion > penaltyOutstanding + 0.01) {
-        throw new Error(`Penalty portion exceeds unpaid penalty (K${penaltyOutstanding.toLocaleString()})`);
-      }
-
-      const principalPortion = Math.max(paidAmount - penaltyPortion, 0);
-      if (principalPortion > installmentOutstanding + 0.01) {
-        throw new Error(
-          `Principal portion (K${principalPortion.toLocaleString()}) exceeds installment outstanding (K${installmentOutstanding.toLocaleString()}). Reduce the principal portion or use Admin Repayments to split across installments.`
-        );
+      if (Number(selectedRepayment.penalty_amount || 0) > Number(selectedRepayment.penalty_paid || 0)) {
+        throw new Error("This installment has pending penalties. Open Admin → Repayments to record the payment with proper penalty/principal split.");
       }
 
       const paidDate = new Date().toISOString().split("T")[0];
@@ -463,10 +423,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         p_repayment_id: selectedRepayment.id,
         p_amount: paidAmount,
         p_payment_method: paymentMethod,
-        p_account_id: accountId,
+        p_account_id: selectedRepayment.destination_account_id,
         p_transaction_reference: transactionRef || null,
         p_paid_date: paidDate,
-        p_penalty_amount: penaltyPortion,
       });
       if (rpcError) throw rpcError;
       const rpcResult = rpcData as { success?: boolean; error?: string } | null;
@@ -474,28 +433,20 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         throw new Error(rpcResult?.error || "Failed to record payment");
       }
 
-      return {
-        paidAmount,
-        principalPortion,
-        penaltyPortion,
-        isPartial: principalPortion < installmentOutstanding,
-        isOverpayment: false,
-      };
+      return { paidAmount, isPartial: paidAmount < Number(selectedRepayment.amount), isOverpayment: false };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
 
-      const penaltyMsg = result.penaltyPortion > 0
-        ? ` (incl. K${result.penaltyPortion.toLocaleString()} penalty)`
-        : "";
       if (result.isPartial) {
-        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded${penaltyMsg}. Remaining balance updated.`);
+        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
+      } else if (result.isOverpayment) {
+        toast.success(`Payment recorded. Excess amount applied to next installment.`);
       } else {
-        toast.success(`Payment of K${result.paidAmount.toLocaleString()} recorded${penaltyMsg}.`);
+        toast.success("Payment recorded successfully");
       }
 
       setIsRecordPaymentOpen(false);
@@ -503,53 +454,63 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       setPaymentMethod("cash");
       setTransactionRef("");
       setPaymentAmount("");
-      setPenaltyAmount("");
-      setPaymentDestinationAccountId("");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
     },
   });
 
-  // Waive an outstanding penalty on a single installment
-  const waivePenaltyMutation = useMutation({
-    mutationFn: async () => {
-      if (!waiveTargetRepayment) throw new Error("No installment selected");
-      assertLedgerOps();
-      if (!waivePenaltyReason.trim() || waivePenaltyReason.trim().length < 3) {
-        throw new Error("Please provide a reason (at least 3 characters)");
-      }
-      const { data, error } = await supabase.rpc("waive_loan_penalty", {
-        p_repayment_id: waiveTargetRepayment.id,
-        p_reason: waivePenaltyReason.trim(),
-      });
-      if (error) throw error;
-      const result = data as { success?: boolean; error?: string; penalty_waived?: number } | null;
-      if (!result?.success) {
-        throw new Error(result?.error || "Failed to waive penalty");
-      }
-      return result;
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
-      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
-      toast.success(`Penalty of K${Number(result.penalty_waived || 0).toLocaleString()} waived.`);
-      setIsWaivePenaltyOpen(false);
-      setWaiveTargetRepayment(null);
-      setWaivePenaltyReason("");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to waive penalty");
-    },
-  });
-
-  // Payment reversal mutation
+  // Payment reversal mutation — also debits the destination account so balances stay consistent.
   const reversePaymentMutation = useMutation({
     mutationFn: async () => {
       if (!selectedPaidRepayment || !loan) throw new Error("No repayment selected");
-      assertLedgerOps();
+      if (!reversalReason.trim()) throw new Error("Reversal reason is required");
+
+      const refundAmount = Number(selectedPaidRepayment.principal_paid || selectedPaidRepayment.amount || 0);
+
+      // 1. Locate the account_transactions row that booked this repayment
+      const { data: tx } = await supabase
+        .from("account_transactions")
+        .select("id, account_id, amount, balance_after")
+        .eq("reference_type", "repayment")
+        .eq("reference_id", selectedPaidRepayment.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // 2. Refund / debit the account
+      if (tx && tx.account_id && refundAmount > 0) {
+        const { data: account, error: accErr } = await supabase
+          .from("accounts")
+          .select("id, balance")
+          .eq("id", tx.account_id)
+          .maybeSingle();
+        if (accErr) throw accErr;
+        if (account) {
+          const balanceBefore = Number(account.balance);
+          const balanceAfter = balanceBefore - refundAmount;
+          if (balanceAfter < 0) {
+            throw new Error(`Cannot reverse: account balance (K${balanceBefore.toLocaleString()}) is less than the refund (K${refundAmount.toLocaleString()}).`);
+          }
+          const { error: balErr } = await supabase
+            .from("accounts")
+            .update({ balance: balanceAfter, updated_at: new Date().toISOString() })
+            .eq("id", account.id);
+          if (balErr) throw balErr;
+          await supabase.from("account_transactions").insert({
+            account_id: account.id,
+            transaction_type: "adjustment_debit",
+            amount: refundAmount,
+            balance_before: balanceBefore,
+            balance_after: balanceAfter,
+            destination: "Payment reversal",
+            reference_type: "repayment_reversal",
+            reference_id: selectedPaidRepayment.id,
+            notes: `Reversal of installment #${selectedPaidRepayment.installment_number ?? "?"} for ${loan.full_name}: ${reversalReason}`,
+            created_by: user?.id,
+          });
+        }
+      }
 
       const { error } = await supabase
         .from("loan_repayments")
@@ -579,14 +540,20 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         if (revLoanStatusErr) throw revLoanStatusErr;
       }
 
-      // Log the reversal
       const { error: revCollErr } = await supabase.from("collection_activities").insert({
         loan_id: loan.id,
         activity_type: "payment_reversal",
-        notes: `Payment of K${selectedPaidRepayment.amount.toLocaleString()} reversed. Reason: ${reversalReason}`,
-        outcome: "Payment reverted to pending",
+        notes: `Payment of K${refundAmount.toLocaleString()} reversed. Reason: ${reversalReason}`,
+        outcome: tx ? "Payment reverted; account debited" : "Payment reverted (no source account on record)",
       });
       if (revCollErr) throw revCollErr;
+
+      await logAudit({
+        action: "PAYMENT_REVERSED",
+        entity_type: "repayment",
+        entity_id: selectedPaidRepayment.id,
+        details: { amount: refundAmount, reason: reversalReason, loan_id: loan.id, account_id: tx?.account_id || null },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -606,7 +573,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const applyPenaltiesMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
 
       // Use the database function to apply penalties
       const { data, error } = await supabase.rpc("apply_loan_penalties", {
@@ -652,7 +618,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const processEarlySettlementMutation = useMutation({
     mutationFn: async () => {
       if (!loan || !earlySettlement) throw new Error("No loan or settlement data");
-      assertLedgerOps();
 
       // Fetch pending AND overdue repayments to set principal_paid correctly
       const { data: pendingRepsForSettle } = await supabase
@@ -664,7 +629,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       // Mark each pending repayment as paid with correct principal_paid
       for (const pr of (pendingRepsForSettle || [])) {
         const origAmt = pr.original_amount || pr.amount;
-        const { error: rowErr } = await supabase
+        await supabase
           .from("loan_repayments")
           .update({
             status: "paid",
@@ -675,8 +640,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
             amount: Number(origAmt),
           })
           .eq("id", pr.id);
-        if (rowErr) throw rowErr;
       }
+      const repaymentError = null; // handled per-row above
+
+      if (repaymentError) throw repaymentError;
 
       // Update loan with settlement info
       const { error: loanError } = await supabase
@@ -718,7 +685,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const generateScheduleMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
       await createRepaymentScheduleForLoan(
         {
           id: loan.id,
@@ -747,7 +713,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const disburseLoanFromDetailMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
       if (!disburseSourceAccountId) throw new Error("Select a source account");
 
       // Fetch product fees
@@ -883,7 +848,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const reloanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
 
       // Fetch all repayments to calculate what's been paid
       const { data: allReps } = await supabase
@@ -891,29 +855,31 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         .select("*")
         .eq("loan_id", loan.id);
 
-      const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
-      const pendingReps = (allReps || []).filter(r => r.status === "pending" || r.status === "overdue");
-      
-      // Calculate total paid (principal_paid from paid installments + partial payments on pending)
-      const totalPaidFromPaid = paidReps.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-      const totalPartialOnPending = pendingReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
-      const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
-      
-      // Outstanding carry-forward = remaining installment balances (after any partial payments)
-      const outstandingBalance = pendingReps.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-      
+      const liveReps = (allReps || []).filter(r => !r.is_reversed);
+      const pendingReps = liveReps.filter(r => ["pending", "overdue", "partial"].includes(r.status));
+      const totalAllPaid = liveReps.reduce((sum, r) => {
+        const fallbackPaid = r.status === "paid" ? Number(r.original_amount || r.amount || 0) : 0;
+        return sum + Number((r.principal_paid ?? fallbackPaid) || 0);
+      }, 0);
+      // Reloan carry-forward = total amount due (principal + interest) minus what's been paid.
+      // Penalties are tracked separately and must be settled first via repayments — they are NOT
+      // rolled into the new principal. This matches the long-standing business rule:
+      //   "She paid 2,850 from the 7,836.75 amount due → new reloan figure = 4,986.75"
+      const totalAmountDue = Number(loan.total_repayment || 0);
+      const carryForwardPrincipal = Math.max(0, totalAmountDue - totalAllPaid);
+
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
         (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
         0
       );
 
-      // Block if penalties are still outstanding
+      // Block if penalties are still outstanding (must be cleared via repayment first)
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
 
-      const isFreshReloan = outstandingBalance <= 0;
+      const isFreshReloan = carryForwardPrincipal <= 0.01;
       const freshPrincipalNum = Number(reloanFreshPrincipal || 0);
       const freshTermNum = Number(reloanFreshTermMonths || 0);
       if (isFreshReloan) {
@@ -990,11 +956,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
 
       // New principal: when there's outstanding, carry it forward + optional top-up.
       // When fully paid (fresh reloan), use the admin-entered principal.
-      const outstandingPrincipal = outstandingBalance;
+      const outstandingPrincipal = carryForwardPrincipal;
       const newPrincipal = isFreshReloan
         ? freshPrincipalNum
         : outstandingPrincipal + optionalTopUpAmount;
-      const newTermMonths = isFreshReloan ? freshTermNum : loan.loan_term_months;
+      // Carry-forward reloans default to the parent's term, but admins may override
+      // by entering a value in the "New Term" input (reloanFreshTermMonths).
+      const newTermMonths = isFreshReloan
+        ? freshTermNum
+        : (Number.isFinite(freshTermNum) && freshTermNum > 0 ? freshTermNum : loan.loan_term_months);
       // Backdate-friendly timestamps from the chosen reloan date (noon UTC for date-only safety)
       const reloanIso = new Date(`${reloanDate}T12:00:00Z`).toISOString();
 
@@ -1082,6 +1052,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       );
 
       if (optionalTopUpAmount > 0 && sourceAccount) {
+        // Create a disbursements row so this top-up shows up in reports and PMIC exports.
+        const { error: disbInsertErr } = await supabase.from("disbursements").insert({
+          loan_id: newLoan.id,
+          amount: topUpNetDisbursement,
+          disbursement_method: "cash",
+          status: "completed",
+          source_account_id: sourceAccount.id,
+          disbursed_at: reloanIso,
+          transaction_reference: `RELOAN-TOPUP-${newLoan.id.slice(0, 8).toUpperCase()}`,
+          is_top_up: true,
+        });
+        if (disbInsertErr) throw disbInsertErr;
+
         const sourceBalanceAfter = Number(sourceAccount.balance) - topUpNetDisbursement;
         const { error: sourceUpdateError } = await supabase
           .from("accounts")
@@ -1178,7 +1161,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const topUpMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
       const additionalAmount = Number(topUpAmount);
       if (!additionalAmount || additionalAmount <= 0) throw new Error("Enter a valid top-up amount");
       if (!topUpSourceAccountId) throw new Error("Select a source account");
@@ -1191,6 +1173,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         .single();
       if (accErr || !freshAccount) throw new Error("Source account not found");
       if (freshAccount.balance < additionalAmount) throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}`);
+
+      // Penalty gate: block top-up while there are unpaid penalties (mirrors reloan behavior)
+      const { data: openRows, error: openErr } = await supabase
+        .from("loan_repayments")
+        .select("penalty_amount, penalty_paid")
+        .eq("loan_id", loan.id)
+        .in("status", ["pending", "overdue", "partial"]);
+      if (openErr) throw openErr;
+      const totalUnpaidPenalties = (openRows || []).reduce(
+        (sum, r: any) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+        0,
+      );
+      if (totalUnpaidPenalties > 0.01) {
+        throw new Error(`Cannot top-up: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first (Admin → Repayments).`);
+      }
 
       // Fetch product for fee & interest calculations
       let processingFeePercent = 0;
@@ -1259,43 +1256,28 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         .eq("id", loan.id);
       if (loanErr) throw loanErr;
 
-      // Delete pending repayments and regenerate
+      // Cancel all open rows so the shared scheduler can rebuild a clean tail.
       const { error: delPendingErr } = await supabase
         .from("loan_repayments")
-        .delete()
+        .update({ status: "cancelled" })
         .eq("loan_id", loan.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "overdue"]);
       if (delPendingErr) throw delPendingErr;
 
-      const { data: paidReps } = await supabase
-        .from("loan_repayments")
-        .select("installment_number, amount, principal_paid, original_amount")
-        .eq("loan_id", loan.id)
-        .eq("status", "paid")
-        .order("installment_number", { ascending: false });
-
-      const lastPaidInstallment = paidReps?.[0]?.installment_number || 0;
-      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-      const remainingTotal = newTotal - paidTotal;
-      const remainingInstallments = loan.loan_term_months - lastPaidInstallment;
-      const newInstallmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
-
-      const repaymentRecords = [];
-      const startDate = new Date();
-      for (let i = 1; i <= remainingInstallments; i++) {
-        repaymentRecords.push({
-          loan_id: loan.id,
+      // Use the shared scheduler so business-calendar / holidays / product cadence are respected.
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
           user_id: loan.user_id,
-          amount: newInstallmentAmount,
-          due_date: format(addMonths(startDate, i), "yyyy-MM-dd"),
-          installment_number: lastPaidInstallment + i,
-          status: "pending",
-        });
-      }
-      if (repaymentRecords.length > 0) {
-        const { error } = await supabase.from("loan_repayments").insert(repaymentRecords);
-        if (error) throw error;
-      }
+          loan_term_months: loan.loan_term_months,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+          loan_product_id: loan.loan_product_id || null,
+          term_unit: termUnit,
+        },
+        supabase,
+        { regenerateRemaining: true },
+      );
 
       // Deduct from source account
       const newBalance = freshAccount.balance - netDisbursement;
@@ -1382,7 +1364,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const restructureLoanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
@@ -1430,71 +1411,42 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
 
       if (loanError) throw loanError;
 
-      // Delete pending repayments and regenerate
-      await supabase
+      // Cancel all open rows (pending/overdue) so the shared scheduler can rebuild a clean tail.
+      // Partial rows keep their installment_number — the scheduler skips locked numbers.
+      const { error: cancelErr } = await supabase
         .from("loan_repayments")
-        .delete()
+        .update({ status: "cancelled" })
         .eq("loan_id", loan.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "overdue"]);
+      if (cancelErr) throw cancelErr;
 
-      // Get paid count to continue numbering
-      const { data: paidRepayments } = await supabase
-        .from("loan_repayments")
-        .select("installment_number")
-        .eq("loan_id", loan.id)
-        .eq("status", "paid")
-        .order("installment_number", { ascending: false });
-
-      const lastPaidInstallment = paidRepayments?.[0]?.installment_number || 0;
-      const remainingInstallments = newTerm - lastPaidInstallment;
-      
-      // Calculate remaining amount (total - already paid)
-      const { data: paidReps } = await supabase
-        .from("loan_repayments")
-        .select("amount, principal_paid, original_amount")
-        .eq("loan_id", loan.id)
-        .eq("status", "paid");
-      const paidTotal = (paidReps ?? []).reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
-      const remainingTotal = newTotal - paidTotal;
-      const installmentAmount = remainingInstallments > 0 ? remainingTotal / remainingInstallments : newMonthly;
-
-      // Determine schedule interval
-      const isWeekly = termUnit === 'weeks' || interestPeriod === 'weekly';
-      const isDaily = termUnit === 'days' || interestPeriod === 'daily';
-
-      // Generate new schedule
-      const repaymentRecords = [];
-      const startDate = new Date();
-
-      for (let i = 1; i <= remainingInstallments; i++) {
-        let dueDate = new Date(startDate);
-        if (isDaily) {
-          dueDate.setDate(dueDate.getDate() + i);
-          // Skip Sundays — no collections on Sundays
-          while (dueDate.getDay() === 0) {
-            dueDate.setDate(dueDate.getDate() + 1);
-          }
-        } else if (isWeekly) {
-          dueDate.setDate(dueDate.getDate() + i * 7);
-        } else {
-          dueDate.setMonth(dueDate.getMonth() + i);
-        }
-        repaymentRecords.push({
-          loan_id: loan.id,
+      // Use the shared scheduler so business-calendar / holidays / product cadence are respected.
+      await createRepaymentScheduleForLoan(
+        {
+          id: loan.id,
           user_id: loan.user_id,
-          amount: installmentAmount,
-          due_date: format(dueDate, "yyyy-MM-dd"),
-          installment_number: lastPaidInstallment + i,
-          status: "pending",
-        });
-      }
+          loan_term_months: newTerm,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+          loan_product_id: loan.loan_product_id || null,
+          term_unit: termUnit,
+        },
+        supabase,
+        { regenerateRemaining: true },
+      );
 
-      if (repaymentRecords.length > 0) {
-        const { error } = await supabase
-          .from("loan_repayments")
-          .insert(repaymentRecords);
-        if (error) throw error;
-      }
+      await logAudit({
+        action: "LOAN_RESTRUCTURED",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: {
+          new_term: newTerm,
+          new_interest_rate: newRate,
+          new_total_repayment: newTotal,
+          new_monthly_payment: newMonthly,
+          reason: restructureReason,
+        },
+      });
 
       // Record loan event for history timeline
       await supabase.from("loan_events" as any).insert({
@@ -1539,7 +1491,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const undoDisbursementMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      assertLedgerOps();
 
       // Find the disbursement to refund the source account
       const { data: disbursementRecord } = await supabase
@@ -1627,6 +1578,84 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
     },
   });
 
+  // Delete loan application (only safe for pre-disbursement statuses)
+  const DELETABLE_STATUSES = new Set([
+    "pending",
+    "under_review",
+    "approved",
+    "contract_signing",
+    "awaiting_disbursement",
+    "rejected",
+    "crb_failed",
+    "pmic_pending",
+  ]);
+  const deleteLoanMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+      if (!DELETABLE_STATUSES.has(loan.status)) {
+        throw new Error(
+          `Cannot delete a loan in status "${loan.status}". Undo disbursement first.`,
+        );
+      }
+
+      // Best-effort cleanup of dependent rows that may not cascade.
+      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
+      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
+
+      const { error } = await supabase
+        .from("loan_applications")
+        .delete()
+        .eq("id", loan.id);
+      if (error) throw error;
+
+      await logAudit({
+        action: "DELETE_LOAN_APPLICATION",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { previous_status: loan.status, reason: deleteReason || null },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans"] });
+      toast.success("Loan application deleted");
+      setIsDeleteLoanOpen(false);
+      setDeleteReason("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete loan");
+    },
+  });
+
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      if (!loan) throw new Error("No loan selected");
+      // Permission check: only users with approve permission can move to approved
+      if (status === "approved" && !canApprove) {
+        throw new Error("You don't have permission to approve loans");
+      }
+      const { error } = await supabase
+        .from("loan_applications")
+        .update({ status: status as any })
+        .eq("id", loan.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, newStatus) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      toast.success(`Moved to ${getCanonicalStatusLabel(newStatus)}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to update status");
+    },
+  });
+
   // Save notes mutation
   const saveNotesMutation = useMutation({
     mutationFn: async () => {
@@ -1657,7 +1686,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   // Calculate progress and stats
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
-  const unpaidRepayments = repayments?.filter(r => (r.status === "pending" || r.status === "overdue") && !r.is_reversed) || [];
+  const unpaidRepayments = repayments?.filter(r => ["pending", "overdue", "partial"].includes(r.status) && !r.is_reversed) || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
   // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
   const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
@@ -1669,29 +1698,39 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
     (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
     0
   );
-  const totalOutstanding = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-  const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
-  const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
-  const progressPercentage = Math.min(
-    100,
-    loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0
+  const totalOutstanding = unpaidRepayments.reduce(
+    (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
+    0
   );
-  const overdueCount = repayments?.filter((r) => isRepaymentOverdueUi(r)).length || 0;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const nextDue = repayments?.find((r) => {
-    if (r.is_reversed || !isRepaymentOpenForPayment(r)) return false;
-    const d = new Date(r.due_date);
-    d.setHours(0, 0, 0, 0);
-    return d >= startOfToday;
-  });
-  const displayTermUnit = (loan as any).term_unit || loanProduct?.term_unit || "months";
-  const termLabel =
-    displayTermUnit === "weeks"
-      ? `${loan.loan_term_months} weeks`
-      : displayTermUnit === "days"
-        ? `${loan.loan_term_months} days`
-        : `${loan.loan_term_months} months`;
+  const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
+  // Reloan eligibility: borrower must have paid ALL interest (and all penalties).
+  // Interest is paid first from any payment; whatever is left counts toward principal.
+  // Carry-forward principal = remaining principal balance only — interest is NEVER rolled forward.
+  const interestPaidSoFar = Math.min(totalInterestDue, totalPaidIncludingPartial);
+  const reloanInterestOutstanding = Math.max(0, totalInterestDue - interestPaidSoFar);
+  const principalPaidSoFar = Math.max(0, totalPaidIncludingPartial - interestPaidSoFar);
+  const reloanCarryForwardPrincipal = Math.max(
+    0,
+    Number(loan.loan_amount || 0) - principalPaidSoFar,
+  );
+  const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
+  const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
+  const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
+  // Overdue / next-due include "partial" rows so quick-actions and KPIs reflect partially-paid installments correctly.
+  const _isUnpaidStatus = (s?: string) => s === "pending" || s === "partial" || s === "overdue";
+  const overdueCount = repayments?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed && new Date(r.due_date) < new Date()).length || 0;
+  // Next due = oldest still-owing installment (partial/overdue first, then upcoming pending).
+  const nextDue = repayments
+    ?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+
+  // Dynamic installment cadence label (Daily / Weekly / Monthly) based on loan term unit.
+  const installmentLabel = borrowerInstallmentLabel(loan as any);
+  const installmentColumnTitle = borrowerSchedulePaymentColumnTitle(loan as any);
+  const installmentCadenceWord = installmentLabel.replace(" installment", ""); // "Daily" | "Weekly" | "Monthly"
+
+  // Has any actual money been collected on this loan? Used to gate destructive actions like Undo Disbursement.
+  const hasAnyPaymentRecorded = (paidRepayments.length > 0) || (partialPaymentsOnPending > 0);
 
   // Helper functions for schedule and contract
   const handleDownloadSchedule = () => {
@@ -1735,7 +1774,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       `Loan Details:\n` +
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
       `- Amount: K${loan.loan_amount.toLocaleString()}\n` +
-      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n\n` +
       `Please contact us if you have any questions.\n\n` +
       `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
@@ -1757,7 +1796,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
       `- Principal: K${loan.loan_amount.toLocaleString()}\n` +
       `- Interest Rate: ${loan.interest_rate}%\n` +
-      `- Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
+      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
       `- Term: ${loan.loan_term_months} months\n` +
       `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
       `Please contact us if you have any questions.\n\n` +
@@ -1795,7 +1834,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       return;
     }
 
-    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, Monthly Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
+    const message = `Dear ${loan.full_name}, your loan schedule (Ref: LOAN-${loan.id.substring(0, 8).toUpperCase()}) is ready. Amount: K${loan.loan_amount.toLocaleString()}, ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}, Term: ${loan.loan_term_months} months. Check your email for full schedule. - ${settings?.companyInfo?.name || 'PHINDU Finance'}`;
 
     try {
       const { data, error } = await supabase.functions.invoke("excite-sms", {
@@ -1873,15 +1912,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold text-primary">K{Number(loan.loan_amount).toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">{termLabel} @ {loan.interest_rate}%</p>
+                <p className="text-sm text-muted-foreground">{loan.loan_term_months} months @ {loan.interest_rate}%</p>
               </div>
             </div>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-4 w-full">
+            <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="text-xs">
+                <FolderOpen size={14} className="mr-1 hidden sm:inline" /> Documents
               </TabsTrigger>
               <TabsTrigger value="repayments" className="text-xs">
                 <Receipt size={14} className="mr-1 hidden sm:inline" /> Repayments
@@ -1913,7 +1955,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                   </Card>
                   <Card className="bg-muted/30">
                     <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">Monthly Payment</p>
+                      <p className="text-xs text-muted-foreground">{installmentCadenceWord} Payment</p>
                       <p className="text-lg font-bold">K{Number(loan.monthly_payment || 0).toLocaleString()}</p>
                     </CardContent>
                   </Card>
@@ -1939,7 +1981,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                             This loan has been approved and is waiting for funds to be disbursed. 
                             No repayment schedule or interest will be generated until disbursement is completed.
                           </p>
-                          <Button size="sm" className="mt-3" disabled={!canLedgerOps} onClick={() => setIsDisburseOpen(true)}>
+                          <Button size="sm" className="mt-3" onClick={() => setIsDisburseOpen(true)}>
                             <Banknote size={14} className="mr-1" /> Disburse Funds
                           </Button>
                         </div>
@@ -2024,9 +2066,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     <CardTitle className="text-base">Quick Actions</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
+                    {/* Edit button for editable pre-disbursement statuses */}
+                    {DELETABLE_STATUSES.has(loan.status) && (
+                      <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
+                        <Edit size={14} className="mr-1" /> Edit Loan
+                      </Button>
+                    )}
+                    {/* Delete loan (admin-only, pre-disbursement) */}
+                    {isAdmin && DELETABLE_STATUSES.has(loan.status) && (
+                      <Button size="sm" variant="destructive" onClick={() => setIsDeleteLoanOpen(true)}>
+                        <Trash2 size={14} className="mr-1" /> Delete Loan
+                      </Button>
+                    )}
                     {/* Disburse button for awaiting_disbursement / approved */}
                     {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
-                      <Button size="sm" disabled={!canLedgerOps} onClick={() => setIsDisburseOpen(true)}>
+                      <Button size="sm" onClick={() => setIsDisburseOpen(true)}>
                         <Banknote size={14} className="mr-1" /> Disburse Funds
                       </Button>
                     )}
@@ -2034,26 +2088,31 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     {!isPreDisbursement && (
                       <>
                         {(!repayments || repayments.length === 0) && (
-                          <Button size="sm" disabled={!canLedgerOps} onClick={() => setIsGenerateScheduleOpen(true)}>
+                          <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
                             <Plus size={14} className="mr-1" /> Generate Schedule
                           </Button>
                         )}
                         {repayments && repayments.length > 0 && (
-                          <Button size="sm" disabled={!canLedgerOps} onClick={() => {
-                            const nextPayable = findNextPayableRepayment(repayments);
-                            if (nextPayable) {
-                              setSelectedRepayment(nextPayable);
-                              setPaymentAmount(
-                                (Number(nextPayable.amount) + netPenaltyOnRepayment(nextPayable)).toString()
-                              );
+                          <Button size="sm" onClick={() => {
+                            // Allocate to the oldest still-owing row (partial > overdue > pending) — never skip a partially-paid installment.
+                            const next = [...repayments]
+                              .filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+                              .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+                            if (next) {
+                              setSelectedRepayment(next);
+                              const remainingPrincipal = Math.max(Number(next.amount || 0) - Number(next.principal_paid || 0), 0);
+                              const remainingPenalty = Math.max(0, Number(next.penalty_amount || 0) - Number(next.penalty_paid || 0));
+                              setPaymentAmount((remainingPrincipal + remainingPenalty).toString());
                               setIsRecordPaymentOpen(true);
+                            } else {
+                              toast.info("No outstanding installments");
                             }
                           }}>
                             <CreditCard size={14} className="mr-1" /> Record Payment
                           </Button>
                         )}
                         {overdueCount > 0 && (
-                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsApplyPenaltiesOpen(true)}>
+                          <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
                             <AlertCircle size={14} className="mr-1" /> Apply Penalties
                           </Button>
                         )}
@@ -2063,22 +2122,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed") && (
-                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsRestructureOpen(true)}>
+                          <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
                             <RefreshCw size={14} className="mr-1" /> Restructure
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed") && (
-                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsReloanOpen(true)}>
+                          <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
                             <ArrowRight size={14} className="mr-1" /> Reloan
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed") && (
-                          <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsTopUpOpen(true)}>
+                          <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
                             <Plus size={14} className="mr-1" /> Top Up
                           </Button>
                         )}
                         {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
-                          <Button size="sm" variant="destructive" disabled={!canLedgerOps} onClick={() => setIsUndoDisbursementOpen(true)}>
+                          <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
                             <Undo2 size={14} className="mr-1" /> Undo Disbursement
                           </Button>
                         )}
@@ -2154,43 +2213,33 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
                         onClick={async () => {
-                          try {
-                            const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
-                            await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
-                            toast.success("SMS sent");
-                          } catch (e: unknown) {
-                            toast.error(e instanceof Error ? e.message : "Failed to send SMS");
-                          }
+                          const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
+                          await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
                         }}>
                         <Smartphone size={14} className="mr-1" /> SMS
                       </Button>
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.email}
                         onClick={async () => {
-                          try {
-                            const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
-                            await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
-                            toast.success("Email sent");
-                          } catch (e: unknown) {
-                            toast.error(e instanceof Error ? e.message : "Failed to send email");
-                          }
+                          const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
+                          await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
                         }}>
                         <Mail size={14} className="mr-1" /> Email
                       </Button>
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
                         onClick={async () => {
-                          try {
-                            const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
-                            await sendWhatsAppDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
-                            toast.success("WhatsApp message sent");
-                          } catch (e: unknown) {
-                            toast.error(e instanceof Error ? e.message : "Failed to send WhatsApp");
-                          }
+                          const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
+                          await sendWhatsAppDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
                         }}>
                         <Send size={14} className="mr-1" /> WhatsApp
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="m-0 space-y-4">
+                <LoanDocumentsCard loan={loan} />
               </TabsContent>
 
               {/* Repayments Tab */}
@@ -2215,25 +2264,27 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                   <h3 className="font-semibold">Repayment Schedule</h3>
                   <div className="flex gap-2">
                     {overdueCount > 0 && (
-                      <Button size="sm" variant="outline" disabled={!canLedgerOps} onClick={() => setIsApplyPenaltiesOpen(true)}>
+                      <Button size="sm" variant="outline" onClick={() => setIsApplyPenaltiesOpen(true)}>
                         <AlertCircle size={14} className="mr-1" /> Apply Penalties
                       </Button>
                     )}
                     {(!repayments || repayments.length === 0) ? (
-                      <Button size="sm" disabled={!canLedgerOps} onClick={() => setIsGenerateScheduleOpen(true)}>
+                      <Button size="sm" onClick={() => setIsGenerateScheduleOpen(true)}>
                         <Plus size={14} className="mr-1" /> Generate Schedule
                       </Button>
                     ) : (
-                      <Button size="sm" disabled={!canLedgerOps} onClick={() => {
-                        const nextPayable = findNextPayableRepayment(repayments);
-                        if (nextPayable) {
-                          setSelectedRepayment(nextPayable);
-                          setPaymentAmount(
-                            (Number(nextPayable.amount) + netPenaltyOnRepayment(nextPayable)).toString()
-                          );
+                      <Button size="sm" onClick={() => {
+                        const next = [...repayments]
+                          .filter(r => _isUnpaidStatus(r.status) && !r.is_reversed)
+                          .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
+                        if (next) {
+                          setSelectedRepayment(next);
+                          const remainingPrincipal = Math.max(Number(next.amount || 0) - Number(next.principal_paid || 0), 0);
+                          const remainingPenalty = Math.max(0, Number(next.penalty_amount || 0) - Number(next.penalty_paid || 0));
+                          setPaymentAmount((remainingPrincipal + remainingPenalty).toString());
                           setIsRecordPaymentOpen(true);
                         } else {
-                          toast.info("No pending repayments");
+                          toast.info("No outstanding installments");
                         }
                       }}>
                         <CreditCard size={14} className="mr-1" /> Record Payment
@@ -2286,13 +2337,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                         {repayments.map((rep) => {
                           const today = new Date();
                           const dueDate = new Date(rep.due_date);
-                          const isOverdue = isRepaymentOverdueUi(rep);
-                          const isDue =
-                            isRepaymentOpenForPayment(rep) &&
-                            !isOverdue &&
-                            dueDate.toDateString() === today.toDateString();
-                          const isUpcoming =
-                            isRepaymentOpenForPayment(rep) && !isOverdue && dueDate > today;
+                          const isOverdue = rep.status === "pending" && dueDate < today;
+                          const isDue = rep.status === "pending" && dueDate.toDateString() === today.toDateString();
+                          const isUpcoming = rep.status === "pending" && dueDate > today;
                           const daysOverdue = isOverdue ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
                           
                           const displayStatus = rep.is_reversed 
@@ -2304,7 +2351,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                                 : rep.status === "paid"
                                   ? "paid"
                                   : "pending";
-                          const totalDue = Number(rep.amount) + netPenaltyOnRepayment(rep);
+                          const totalDue = rep.amount + Math.max(0, (rep.penalty_amount || 0) - (rep.penalty_paid || 0));
 
                           // Format date based on frequency
                           const dateFormat = isDaily ? "MMM dd, yyyy" : isWeekly ? "MMM dd, yyyy" : "MMM dd, yyyy";
@@ -2363,29 +2410,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                                 })()}
                               </TableCell>
                               <TableCell className={rep.penalty_amount ? "text-destructive font-medium" : "text-muted-foreground"}>
-                                {(() => {
-                                  const pen = Number(rep.penalty_amount || 0);
-                                  if (!pen) return "-";
-                                  const paid = Number(rep.penalty_paid || 0);
-                                  const remaining = Math.max(0, pen - paid);
-                                  if (remaining <= 0) {
-                                    return (
-                                      <span className="text-success">
-                                        K{pen.toLocaleString()} <span className="text-[10px]">(cleared)</span>
-                                      </span>
-                                    );
-                                  }
-                                  return (
-                                    <div className="flex flex-col">
-                                      <span>K{pen.toLocaleString()}</span>
-                                      {paid > 0 && (
-                                        <span className="text-[10px] text-muted-foreground">
-                                          paid K{paid.toLocaleString()} · due K{remaining.toLocaleString()}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
+                                {rep.penalty_amount ? `K${Number(rep.penalty_amount).toLocaleString()}` : "-"}
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
@@ -2422,36 +2447,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">
-                                  {isRepaymentOpenForPayment(rep) && !rep.is_reversed && (
+                                  {rep.status === "pending" && !rep.is_reversed && (
                                     <Button
                                       size="sm"
-                                      disabled={!canLedgerOps}
                                       variant={isOverdue ? "destructive" : isDue ? "default" : "outline"}
                                       onClick={() => {
                                         setSelectedRepayment(rep);
                                         setPaymentAmount(totalDue.toString());
-                                        setPenaltyAmount("");
-                                        setPaymentDestinationAccountId("");
                                         setIsRecordPaymentOpen(true);
                                       }}
                                     >
                                       <CheckCircle size={14} className="mr-1" /> 
                                       {isOverdue ? "Pay Overdue" : isDue ? "Pay Now" : "Pay"}
-                                    </Button>
-                                  )}
-                                  {netPenaltyOnRepayment(rep) > 0 && !rep.is_reversed && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      disabled={!canLedgerOps}
-                                      title="Waive outstanding penalty"
-                                      onClick={() => {
-                                        setWaiveTargetRepayment(rep);
-                                        setWaivePenaltyReason("");
-                                        setIsWaivePenaltyOpen(true);
-                                      }}
-                                    >
-                                      <Shield size={14} className="mr-1" /> Waive
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (
@@ -2566,7 +2573,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     <Receipt className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No Repayment Schedule</h3>
                     <p className="text-muted-foreground mb-4">Generate a repayment schedule for this loan</p>
-                    <Button disabled={!canLedgerOps} onClick={() => setIsGenerateScheduleOpen(true)}>
+                    <Button onClick={() => setIsGenerateScheduleOpen(true)}>
                       <Plus size={16} className="mr-2" /> Generate Schedule
                     </Button>
                   </div>
@@ -2691,11 +2698,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                   loanId={loan.id}
                   parentLoanId={(loan as any).parent_loan_id}
                   onViewLoan={(id) => {
-                    if (onRequestOpenLoan) {
-                      onRequestOpenLoan(id);
-                    } else {
-                      toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
-                    }
+                    // Close current and signal parent to open the other loan
+                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
                   }}
                 />
 
@@ -2703,11 +2707,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                 <LoanHistoryTimeline
                   loanId={loan.id}
                   onViewLoan={(id) => {
-                    if (onRequestOpenLoan) {
-                      onRequestOpenLoan(id);
-                    } else {
-                      toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
-                    }
+                    toast.info(`Navigate to loan ${id.slice(0, 8).toUpperCase()} from the Loans list.`);
                   }}
                 />
               </TabsContent>
@@ -2741,18 +2741,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                   <span className="font-medium">K{Number(selectedRepayment.principal_paid).toLocaleString()}</span>
                 </div>
               )}
-              {selectedRepayment && netPenaltyOnRepayment(selectedRepayment) > 0 && (
+              {selectedRepayment?.penalty_amount && selectedRepayment.penalty_amount > 0 && (
                 <div className="flex justify-between text-destructive">
-                  <span className="text-sm">Penalty (unpaid)</span>
-                  <span className="font-medium">K{netPenaltyOnRepayment(selectedRepayment).toLocaleString()}</span>
+                  <span className="text-sm">Penalty</span>
+                  <span className="font-medium">K{Number(selectedRepayment.penalty_amount).toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between border-t border-border pt-2">
                 <span className="font-medium">Total Due</span>
                 <span className="text-lg font-bold">
-                  K{selectedRepayment
-                    ? (Number(selectedRepayment.amount) + netPenaltyOnRepayment(selectedRepayment)).toLocaleString()
-                    : "0"}
+                  K{((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)).toLocaleString()}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -2761,72 +2759,45 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
             </div>
 
             <div className="space-y-2">
-              <Label>Amount to Pay (total received)</Label>
+              <Label>Amount to Pay</Label>
               <Input
                 type="number"
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
-                placeholder="Enter total payment amount"
+                placeholder="Enter payment amount"
               />
               <p className="text-xs text-muted-foreground">
-                Includes any penalty portion. We'll allocate to penalty first by default.
+                Pay less for partial payment • Pay more for advance payment
               </p>
             </div>
 
-            {selectedRepayment && netPenaltyOnRepayment(selectedRepayment) > 0 && (
-              <div className="space-y-2">
-                <Label>Of which goes to penalty</Label>
+            {paymentAmount && Number(paymentAmount) !== (selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0) && (
+              <div className={`p-3 rounded-lg border ${Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={penaltyAmount}
-                    onChange={(e) => setPenaltyAmount(e.target.value)}
-                    placeholder={`Auto: K${Math.min(
-                      netPenaltyOnRepayment(selectedRepayment),
-                      Number(paymentAmount || 0) || netPenaltyOnRepayment(selectedRepayment),
-                    ).toLocaleString()}`}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setPenaltyAmount(String(netPenaltyOnRepayment(selectedRepayment)))
-                    }
-                  >
-                    Penalty in full
-                  </Button>
+                  {Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? (
+                    <>
+                      <AlertTriangle size={16} className="text-warning" />
+                      <div>
+                        <p className="text-sm font-medium">Partial Payment</p>
+                        <p className="text-xs text-muted-foreground">
+                          Remaining K{(((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) - Number(paymentAmount)).toLocaleString()} will stay pending
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight size={16} className="text-info" />
+                      <div>
+                        <p className="text-sm font-medium">Overpayment</p>
+                        <p className="text-xs text-muted-foreground">
+                          Excess K{(Number(paymentAmount) - ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0))).toLocaleString()} will be applied to next installment
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to auto-fill penalty first up to K
-                  {netPenaltyOnRepayment(selectedRepayment).toLocaleString()}, then apply the rest to principal.
-                </p>
               </div>
             )}
-
-            {selectedRepayment &&
-              paymentAmount &&
-              Number(paymentAmount) > 0 &&
-              Number(paymentAmount) <
-                Number(selectedRepayment.amount) + netPenaltyOnRepayment(selectedRepayment) && (
-                <div className="p-3 rounded-lg border bg-warning/10 border-warning/20">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={16} className="text-warning" />
-                    <div>
-                      <p className="text-sm font-medium">Partial Payment</p>
-                      <p className="text-xs text-muted-foreground">
-                        Remaining K
-                        {(
-                          Number(selectedRepayment.amount) +
-                          netPenaltyOnRepayment(selectedRepayment) -
-                          Number(paymentAmount)
-                        ).toLocaleString()}{" "}
-                        will stay pending on this installment.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
 
             <div className="space-y-2">
               <Label>Payment Method</Label>
@@ -2844,24 +2815,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Deposit to Account *</Label>
-              <Select
-                value={paymentDestinationAccountId || (selectedRepayment as any)?.destination_account_id || ""}
-                onValueChange={setPaymentDestinationAccountId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select destination account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(fundingAccounts || []).map((a: any) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.account_name} ({a.account_type}) — K{Number(a.balance).toLocaleString()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label>Transaction Reference (Optional)</Label>
               <Input
                 value={transactionRef}
@@ -2873,7 +2826,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               <Button variant="outline" onClick={() => setIsRecordPaymentOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => recordPaymentMutation.mutate()}
-                disabled={!canLedgerOps || recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
+                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
               >
                 {recordPaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
                 Record Payment
@@ -2930,7 +2883,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               <Button
                 variant="destructive"
                 onClick={() => reversePaymentMutation.mutate()}
-                disabled={!canLedgerOps || reversePaymentMutation.isPending || !reversalReason}
+                disabled={reversePaymentMutation.isPending || !reversalReason}
               >
                 {reversePaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <RotateCcw size={14} className="mr-1" />}
                 Reverse Payment
@@ -2998,7 +2951,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                 <Button variant="outline" onClick={() => setIsEarlySettlementOpen(false)}>Cancel</Button>
                 <Button
                   onClick={() => processEarlySettlementMutation.mutate()}
-                  disabled={!canLedgerOps || processEarlySettlementMutation.isPending}
+                  disabled={processEarlySettlementMutation.isPending}
                 >
                   {processEarlySettlementMutation.isPending ? (
                     <Loader2 className="animate-spin mr-1" size={14} />
@@ -3006,70 +2959,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     <CheckCircle size={14} className="mr-1" />
                   )}
                   Process Settlement
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Waive Penalty Dialog */}
-      <Dialog open={isWaivePenaltyOpen} onOpenChange={(o) => {
-        setIsWaivePenaltyOpen(o);
-        if (!o) { setWaiveTargetRepayment(null); setWaivePenaltyReason(""); }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Shield size={20} className="text-warning" /> Waive Penalty
-            </DialogTitle>
-            <DialogDescription>
-              Write off the outstanding penalty on installment #{waiveTargetRepayment?.installment_number}.
-              Use this when management has agreed to forgive the penalty (e.g., the borrower has paid their dues
-              and a goodwill discount has been authorised).
-            </DialogDescription>
-          </DialogHeader>
-          {waiveTargetRepayment && (
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-muted/50 grid grid-cols-2 gap-2 text-sm">
-                <span className="text-muted-foreground">Penalty applied</span>
-                <span className="font-medium text-right">
-                  K{Number(waiveTargetRepayment.penalty_amount || 0).toLocaleString()}
-                </span>
-                <span className="text-muted-foreground">Already paid</span>
-                <span className="font-medium text-right">
-                  K{Number(waiveTargetRepayment.penalty_paid || 0).toLocaleString()}
-                </span>
-                <span className="font-medium border-t pt-2">Will be waived</span>
-                <span className="font-bold text-right text-warning border-t pt-2">
-                  K{netPenaltyOnRepayment(waiveTargetRepayment).toLocaleString()}
-                </span>
-              </div>
-              <div className="space-y-2">
-                <Label>Reason *</Label>
-                <Textarea
-                  value={waivePenaltyReason}
-                  onChange={(e) => setWaivePenaltyReason(e.target.value)}
-                  placeholder="e.g., Borrower paid principal in full; penalty waived as agreed with manager."
-                  rows={3}
-                />
-                <p className="text-xs text-muted-foreground">
-                  This is recorded in the audit log and cannot be undone from this screen.
-                </p>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsWaivePenaltyOpen(false)}>Cancel</Button>
-                <Button
-                  variant="default"
-                  onClick={() => waivePenaltyMutation.mutate()}
-                  disabled={
-                    !canLedgerOps ||
-                    waivePenaltyMutation.isPending ||
-                    waivePenaltyReason.trim().length < 3
-                  }
-                >
-                  {waivePenaltyMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
-                  <Shield size={14} className="mr-1" /> Waive Penalty
                 </Button>
               </div>
             </div>
@@ -3091,7 +2980,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => applyPenaltiesMutation.mutate()}
-              disabled={!canLedgerOps || applyPenaltiesMutation.isPending}
+              disabled={applyPenaltiesMutation.isPending}
             >
               {applyPenaltiesMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Apply Penalties
@@ -3145,7 +3034,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               <Button variant="outline" onClick={() => setIsRestructureOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => restructureLoanMutation.mutate()}
-                disabled={!canLedgerOps || restructureLoanMutation.isPending || !restructureReason}
+                disabled={restructureLoanMutation.isPending || !restructureReason}
               >
                 {restructureLoanMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <RefreshCw size={14} className="mr-1" />}
                 Restructure Loan
@@ -3166,10 +3055,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={!canLedgerOps || generateScheduleMutation.isPending}
-              onClick={() => generateScheduleMutation.mutate()}
-            >
+            <AlertDialogAction onClick={() => generateScheduleMutation.mutate()}>
               {generateScheduleMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Generate
             </AlertDialogAction>
@@ -3182,16 +3068,31 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-destructive">Undo Disbursement</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.</p>
+                {hasAnyPaymentRecorded && (
+                  <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive text-sm font-medium">
+                    Blocked: payments totalling K{totalPaidIncludingPartial.toLocaleString()} have already been recorded on this loan.
+                    Reverse those payments from <strong>Admin → Repayments</strong> before undoing the disbursement, otherwise funds will be orphaned.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={!canLedgerOps || undoDisbursementMutation.isPending}
-              onClick={() => undoDisbursementMutation.mutate()}
+              disabled={hasAnyPaymentRecorded || undoDisbursementMutation.isPending}
+              onClick={(e) => {
+                if (hasAnyPaymentRecorded) {
+                  e.preventDefault();
+                  toast.error("Reverse recorded payments first before undoing disbursement.");
+                  return;
+                }
+                undoDisbursementMutation.mutate();
+              }}
             >
               {undoDisbursementMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : null}
               Undo Disbursement
@@ -3200,7 +3101,46 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Contract Notes Dialog */}
+      {/* Delete Loan Confirmation */}
+      <AlertDialog open={isDeleteLoanOpen} onOpenChange={setIsDeleteLoanOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete loan application?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This permanently deletes the loan application and any draft schedule, transitions and events.
+                  Use this only for pre-disbursement loans (pending, under review, approved, rejected, etc.).
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  For disbursed loans, use <strong>Undo Disbursement</strong> first.
+                </p>
+                <Textarea
+                  placeholder="Reason (optional, kept in audit log)"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLoanMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteLoanMutation.mutate();
+              }}
+            >
+              {deleteLoanMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Trash2 size={14} className="mr-1" />}
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isContractEditOpen} onOpenChange={setIsContractEditOpen}>
         <DialogContent>
           <DialogHeader>
@@ -3311,13 +3251,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
 
       {/* Reloan Confirmation Dialog */}
       <AlertDialog open={isReloanOpen} onOpenChange={setIsReloanOpen}>
-        <AlertDialogContent className="sm:max-w-lg">
-          <AlertDialogHeader>
+        <AlertDialogContent className="sm:max-w-lg max-h-[88vh] overflow-hidden p-0 flex flex-col">
+          <AlertDialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <AlertDialogTitle className="flex items-center gap-2">
               <ArrowRight size={20} /> Reloan — {loan.full_name}
             </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-4">
+            <AlertDialogDescription className="sr-only">
+              Review reloan eligibility, date, and new terms before confirming.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
+            <div className="space-y-4">
                 {/* Financial Breakdown */}
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
                   <h4 className="font-semibold text-foreground">Loan Financial Summary</h4>
@@ -3326,10 +3270,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     <span className="text-right font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
                     <span className="text-muted-foreground">Total Due (incl. interest)</span>
                     <span className="text-right font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Interest</span>
+                    <span className="text-right font-medium">K{totalInterestDue.toLocaleString()}</span>
                     <span className="text-muted-foreground">Total Paid</span>
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
-                    <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
-                    <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
+                    <span className="text-muted-foreground">— Interest Paid</span>
+                    <span className="text-right font-medium text-success">K{interestPaidSoFar.toLocaleString()}</span>
+                    <span className="text-muted-foreground">— Interest Still Due</span>
+                    <span className={`text-right font-medium ${reloanInterestOutstanding > 0.01 ? "text-destructive" : "text-success"}`}>
+                      K{reloanInterestOutstanding.toLocaleString()}
+                    </span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal (auto)</span>
+                    <span className="text-right font-bold text-destructive">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
                   </div>
@@ -3348,20 +3300,29 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {totalOutstanding <= 0 ? (
-                      <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> No outstanding balance — eligible for fresh reloan
+                    {reloanInterestOutstanding > 0.01 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Interest of K{reloanInterestOutstanding.toLocaleString()} still due — must be paid in full before reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> Outstanding balance K{totalOutstanding.toLocaleString()} — will carry forward as new principal
+                        <CheckCircle size={16} /> All interest paid — eligible
+                      </div>
+                    )}
+                    {reloanCarryForwardPrincipal <= 0.01 ? (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> No outstanding principal — eligible for fresh reloan
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> K{reloanCarryForwardPrincipal.toLocaleString()} principal will carry forward as the new principal
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Reloan date — applies to both fresh and carry-forward */}
-                {totalPenalties === 0 && (
+                {/* Reloan date — applies to both fresh and carry-forward, but only when eligible */}
+                {totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border p-4 space-y-2 text-sm">
                     <Label className="text-xs">Reloan date *</Label>
                     <Input
@@ -3374,7 +3335,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                 )}
 
                 {/* Fresh reloan inputs (when previous loan fully paid) */}
-                {totalOutstanding <= 0 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal <= 0.01 && totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">Fresh Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">Previous loan is fully paid. Enter a new principal and term to start a new loan for this borrower.</p>
@@ -3412,7 +3373,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                 )}
 
                 {/* Carry-forward Reloan Terms */}
-                {totalOutstanding > 0 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal > 0.01 && totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">
@@ -3455,35 +3416,47 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                         </div>
                       </>
                     )}
-                    <div className="grid grid-cols-2 gap-y-1">
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Adjust New Term ({(loan as any).term_unit || "months"}) — leave blank to keep current</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder={`Default ${loan.loan_term_months}`}
+                        value={reloanFreshTermMonths}
+                        onChange={(e) => setReloanFreshTermMonths(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-1 pt-2">
                       <span className="text-muted-foreground">Carry-forward Outstanding</span>
-                      <span className="text-right font-medium">K{totalOutstanding.toLocaleString()}</span>
+                      <span className="text-right font-medium">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                       <span className="text-muted-foreground">Optional Top-Up</span>
                       <span className="text-right font-medium">K{reloanTopUpNumeric.toLocaleString()}</span>
                       <span className="text-muted-foreground font-semibold">Projected New Principal</span>
                       <span className="text-right font-bold">K{reloanProjectedPrincipal.toLocaleString()}</span>
                       <span className="text-muted-foreground">Term</span>
-                      <span className="text-right font-medium">{loan.loan_term_months} months @ {loan.interest_rate}%</span>
+                      <span className="text-right font-medium">{Number(reloanFreshTermMonths) > 0 ? Number(reloanFreshTermMonths) : loan.loan_term_months} {(loan as any).term_unit || "months"} @ {loan.interest_rate}%</span>
                       <span className="text-muted-foreground">Disbursement</span>
                       <span className="text-right font-medium">{reloanTopUpNumeric > 0 ? "Optional top-up net disbursement after fees" : "None — funds already with borrower"}</span>
                     </div>
                   </div>
                 )}
 
-                <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <p className="text-sm font-medium text-warning">This action cannot be undone.</p>
+            </div>
+          </div>
+          <AlertDialogFooter className="shrink-0 border-t bg-background px-6 py-4">
+            <AlertDialogCancel disabled={reloanMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => reloanMutation.mutate()}
+              onClick={(event) => {
+                event.preventDefault();
+                reloanMutation.mutate();
+              }}
               disabled={
-                !canLedgerOps ||
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
+                reloanInterestOutstanding > 0.01 ||
                 !reloanDate ||
-                (totalOutstanding <= 0 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
+                (reloanCarryForwardPrincipal <= 0.01 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
                 (reloanTopUpNumeric > 0 && !reloanSourceAccountId)
               }
             >
@@ -3545,7 +3518,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               <Button variant="outline" onClick={() => setIsTopUpOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => topUpMutation.mutate()}
-                disabled={!canLedgerOps || topUpMutation.isPending || !topUpAmount || !topUpSourceAccountId}
+                disabled={topUpMutation.isPending || !topUpAmount || !topUpSourceAccountId}
               >
                 {topUpMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
                 Confirm Top-Up
@@ -3632,7 +3605,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
               <Button variant="outline" onClick={() => setIsDisburseOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => disburseLoanFromDetailMutation.mutate()}
-                disabled={!canLedgerOps || disburseLoanFromDetailMutation.isPending || !disburseSourceAccountId}
+                disabled={disburseLoanFromDetailMutation.isPending || !disburseSourceAccountId}
               >
                 {disburseLoanFromDetailMutation.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
                 <Banknote size={14} className="mr-1" /> Confirm Disbursement
@@ -3641,6 +3614,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
           </div>
         </DialogContent>
       </Dialog>
+
+      <EditPendingLoanDialog
+        loan={loan}
+        open={isEditPendingOpen}
+        onOpenChange={setIsEditPendingOpen}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+        }}
+      />
     </>
   );
 }

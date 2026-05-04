@@ -1613,6 +1613,36 @@ export type Database = {
           },
         ]
       }
+      loan_application_drafts: {
+        Row: {
+          borrower_id: string | null
+          created_at: string
+          form_data: Json
+          id: string
+          product_code: string
+          staff_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          borrower_id?: string | null
+          created_at?: string
+          form_data?: Json
+          id?: string
+          product_code: string
+          staff_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          borrower_id?: string | null
+          created_at?: string
+          form_data?: Json
+          id?: string
+          product_code?: string
+          staff_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       loan_applications: {
         Row: {
           address: string | null
@@ -3646,9 +3676,11 @@ export type Database = {
           employer_name: string | null
           employment_type: string | null
           full_name: string | null
+          gender: string | null
           id: string
           is_blacklisted: boolean | null
           job_title: string | null
+          marital_status: string | null
           marketing: boolean | null
           net_income: number | null
           nrc_number: string | null
@@ -3674,9 +3706,11 @@ export type Database = {
           employer_name?: string | null
           employment_type?: string | null
           full_name?: string | null
+          gender?: string | null
           id: string
           is_blacklisted?: boolean | null
           job_title?: string | null
+          marital_status?: string | null
           marketing?: boolean | null
           net_income?: number | null
           nrc_number?: string | null
@@ -3702,9 +3736,11 @@ export type Database = {
           employer_name?: string | null
           employment_type?: string | null
           full_name?: string | null
+          gender?: string | null
           id?: string
           is_blacklisted?: boolean | null
           job_title?: string | null
+          marital_status?: string | null
           marketing?: boolean | null
           net_income?: number | null
           nrc_number?: string | null
@@ -4291,13 +4327,6 @@ export type Database = {
         }
         Returns: Json
       }
-      waive_loan_penalty: {
-        Args: {
-          p_repayment_id: string
-          p_reason?: string
-        }
-        Returns: Json
-      }
       send_notification_via_edge_function: {
         Args: {
           p_event_type?: string
@@ -4321,6 +4350,10 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       transition_loan_status: {
         Args: { p_action: string; p_loan_id: string; p_reason?: string }
+        Returns: Json
+      }
+      waive_loan_penalty: {
+        Args: { p_amount?: number; p_reason?: string; p_repayment_id: string }
         Returns: Json
       }
     }
