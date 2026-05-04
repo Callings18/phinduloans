@@ -3491,6 +3491,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <EditPendingLoanDialog
+        loan={loan}
+        open={isEditPendingOpen}
+        onOpenChange={setIsEditPendingOpen}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+        }}
+      />
     </>
   );
 }
