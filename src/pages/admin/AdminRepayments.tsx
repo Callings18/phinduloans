@@ -77,6 +77,8 @@ interface Repayment {
   installment_number: number | null;
   principal_paid?: number | null;
   original_amount?: number | null;
+  penalty_amount?: number | null;
+  penalty_paid?: number | null;
   loan_applications?: {
     full_name: string;
     email: string;
@@ -112,6 +114,7 @@ const AdminRepayments = () => {
     payment_method: "mobile_money",
     transaction_reference: "",
     amount: "",
+    penalty_amount: "",
     destination_account_id: "", // NEW: Which account to deposit to
   });
   const [isSplitPayment, setIsSplitPayment] = useState(false);
@@ -170,6 +173,15 @@ const AdminRepayments = () => {
 
   const repayments = repaymentsResult?.data ?? [];
   const totalCount = repaymentsResult?.count ?? 0;
+  const principalRemaining = (repayment: Repayment | null) => {
+    if (!repayment || repayment.status === "paid") return 0;
+    return Math.max(0, Number(repayment.original_amount || repayment.amount || 0) - Number(repayment.principal_paid || 0));
+  };
+  const penaltyRemaining = (repayment: Repayment | null) => {
+    if (!repayment || repayment.status === "paid" || repayment.status === "cancelled") return 0;
+    return Math.max(0, Number(repayment.penalty_amount || 0) - Number(repayment.penalty_paid || 0));
+  };
+  const totalRemaining = (repayment: Repayment | null) => principalRemaining(repayment) + penaltyRemaining(repayment);
 
   // Pending borrower payment claims (for "Verify & record")
   const { data: paymentClaims = [] } = useQuery({
