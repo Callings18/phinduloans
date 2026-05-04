@@ -106,20 +106,21 @@ import LoanDocumentsCard from "./LoanDocumentsCard";
 import EditPendingLoanDialog from "./EditPendingLoanDialog";
 import { FolderOpen } from "lucide-react";
 
-/** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
+/** Allowed next stages per current status (Move to). Admins get full control,
+ *  including reversals (e.g., approved → pending) for pre-disbursement loans. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
-  pending: ["under_review", "rejected"],
-  under_review: ["approved", "rejected", "crb_failed", "pmic_pending"],
-  approved: ["contract_signing", "awaiting_disbursement"],
-  contract_signing: ["awaiting_disbursement", "approved"],
-  awaiting_disbursement: ["disbursed", "approved"],
-  disbursed: ["active"],
+  pending: ["under_review", "approved", "rejected"],
+  under_review: ["pending", "approved", "rejected", "crb_failed", "pmic_pending"],
+  approved: ["pending", "under_review", "contract_signing", "awaiting_disbursement", "rejected"],
+  contract_signing: ["pending", "approved", "awaiting_disbursement", "rejected"],
+  awaiting_disbursement: ["pending", "approved", "contract_signing", "rejected"],
+  disbursed: ["active", "approved"], // "approved" used by Undo Disbursement
   active: ["defaulted"], // "completed" is auto-set when fully paid
   completed: [],
-  defaulted: [],
-  rejected: [],
-  crb_failed: [],
-  pmic_pending: [],
+  defaulted: ["active"],
+  rejected: ["pending", "under_review"],
+  crb_failed: ["pending", "under_review", "approved", "rejected"],
+  pmic_pending: ["pending", "under_review", "approved", "rejected"],
 };
 
 interface Loan {
