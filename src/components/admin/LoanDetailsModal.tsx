@@ -1174,6 +1174,21 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (accErr || !freshAccount) throw new Error("Source account not found");
       if (freshAccount.balance < additionalAmount) throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}`);
 
+      // Penalty gate: block top-up while there are unpaid penalties (mirrors reloan behavior)
+      const { data: openRows, error: openErr } = await supabase
+        .from("loan_repayments")
+        .select("penalty_amount, penalty_paid")
+        .eq("loan_id", loan.id)
+        .in("status", ["pending", "overdue", "partial"]);
+      if (openErr) throw openErr;
+      const totalUnpaidPenalties = (openRows || []).reduce(
+        (sum, r: any) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+        0,
+      );
+      if (totalUnpaidPenalties > 0.01) {
+        throw new Error(`Cannot top-up: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first (Admin → Repayments).`);
+      }
+
       // Fetch product for fee & interest calculations
       let processingFeePercent = 0;
       let interestRate = loan.interest_rate || 15;
