@@ -619,13 +619,30 @@ export default function ProductLoanFormShell({
           setDocUploading(false);
         }
       }
+
+      // Persist enriched borrower data back to profile (gender, marital, employment, etc.)
+      await supabase.from("profiles").update({
+        gender: gender || null,
+        marital_status: maritalStatus || null,
+        phone: contactNumber || selectedBorrower.phone,
+        nrc_number: idNumber || selectedBorrower.nrc_number,
+        address: residentialAddress || selectedBorrower.address,
+        city: city || selectedBorrower.city,
+        employer_name: employerName || selectedBorrower.employer_name,
+        job_title: jobTitle || selectedBorrower.job_title,
+        employment_type: employmentType,
+        net_income: Number(monthlyIncome) || selectedBorrower.net_income,
+      }).eq("id", selectedBorrower.id);
+
       return inserted?.id ?? null;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setLastError(null);
       setPendingLoanId(null);
+      await deleteDraft();
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+      queryClient.invalidateQueries({ queryKey: ["product-loan-borrowers", productCode] });
       toast({ title: `${title} application created`, description: "Loan moved to pending review." });
       navigate(successRedirectPath);
     },
