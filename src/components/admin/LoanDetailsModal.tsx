@@ -3351,6 +3351,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               disabled={
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
+                reloanInterestOutstanding > 0.01 ||
                 !reloanDate ||
                 (reloanCarryForwardPrincipal <= 0.01 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
                 (reloanTopUpNumeric > 0 && !reloanSourceAccountId)
