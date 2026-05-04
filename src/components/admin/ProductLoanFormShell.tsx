@@ -22,7 +22,7 @@ import { fetchHouseProductByCode } from "@/services/repositories/houseRepository
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addDays, format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2, Save, Loader2 } from "lucide-react";
 import CollateralBorrowersSection, {
   type CollateralBorrowerEntry,
   makeBlankBorrower,
