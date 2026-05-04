@@ -960,22 +960,16 @@ export default function ProductLoanFormShell({
                   <div className="space-y-1.5">
                     <Label className="text-xs">
                       Tenure ({termUnit})
-                      {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed)</span>}
-                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(1–6 months)</span>}
+                      {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed: 26 days)</span>}
+                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(Fixed: 6 months)</span>}
                     </Label>
-                    {productCode === "COLLATERAL" ? (
-                      <select
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        value={termValue}
-                        onChange={(e) => setTermValue(e.target.value)}
-                      >
-                        {[1, 2, 3, 4, 5, 6].map((m) => (
-                          <option key={m} value={m}>{m} {m === 1 ? "month" : "months"}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Input className="h-9" type="number" value={termValue} onChange={(e) => setTermValue(e.target.value)} disabled={isMarketeer} />
-                    )}
+                    <Input
+                      className="h-9"
+                      type="number"
+                      value={termValue}
+                      onChange={(e) => setTermValue(e.target.value)}
+                      disabled={isMarketeer || productCode === "COLLATERAL"}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Purpose *</Label>
@@ -1019,11 +1013,10 @@ export default function ProductLoanFormShell({
                     {preview.dailyRate && (
                       <p className="text-[10px] text-muted-foreground text-center mt-1">Daily rate: {preview.dailyRate}/day</p>
                     )}
-                    {productCode === "COLLATERAL" && Number(termValue) > 0 && (
+                    {productCode === "COLLATERAL" && (
                       <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2">
-                        <span className="font-medium text-foreground">30% flat interest, charged once on the principal</span> — regardless of term.
-                        Split across {termValue} {Number(termValue) === 1 ? "month" : "months"} =
-                        <span className="font-medium"> {(30 / Number(termValue)).toFixed(2)}% / month</span> effective.
+                        <span className="font-medium text-foreground">30% flat interest charged once on the principal,</span> repaid over a fixed
+                        <span className="font-medium"> 6-month</span> term ({(30 / 6).toFixed(2)}% / month effective).
                       </p>
                     )}
                   </div>
