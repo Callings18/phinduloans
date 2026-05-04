@@ -102,6 +102,9 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
+import LoanDocumentsCard from "./LoanDocumentsCard";
+import EditPendingLoanDialog from "./EditPendingLoanDialog";
+import { FolderOpen } from "lucide-react";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
@@ -214,6 +217,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
   const [activeTab, setActiveTab] = useState("overview");
+  const [isEditPendingOpen, setIsEditPendingOpen] = useState(false);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -1854,9 +1858,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid grid-cols-4 w-full">
+            <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="overview" className="text-xs">
                 <TrendingUp size={14} className="mr-1 hidden sm:inline" /> Overview
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="text-xs">
+                <FolderOpen size={14} className="mr-1 hidden sm:inline" /> Documents
               </TabsTrigger>
               <TabsTrigger value="repayments" className="text-xs">
                 <Receipt size={14} className="mr-1 hidden sm:inline" /> Repayments
@@ -1999,6 +2006,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardTitle className="text-base">Quick Actions</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
+                    {/* Edit button for editable pre-disbursement statuses */}
+                    {(loan.status === "pending" || loan.status === "under_review" || loan.status === "approved") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
+                        <Edit size={14} className="mr-1" /> Edit Loan
+                      </Button>
+                    )}
                     {/* Disburse button for awaiting_disbursement / approved */}
                     {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
                       <Button size="sm" onClick={() => setIsDisburseOpen(true)}>
@@ -2156,6 +2169,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="m-0 space-y-4">
+                <LoanDocumentsCard loan={loan} />
               </TabsContent>
 
               {/* Repayments Tab */}
@@ -3473,6 +3491,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <EditPendingLoanDialog
+        loan={loan}
+        open={isEditPendingOpen}
+        onOpenChange={setIsEditPendingOpen}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+        }}
+      />
     </>
   );
 }

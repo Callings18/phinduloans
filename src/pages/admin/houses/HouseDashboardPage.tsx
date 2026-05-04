@@ -73,87 +73,88 @@ export default function HouseDashboardPage() {
   });
 
   const topCards = [
-    { label: "Total loans", value: data?.totalLoans ?? 0, icon: Users },
-    { label: "Active loans", value: data?.activeLoans ?? 0, icon: TrendingUp },
-    { label: "Overdue items", value: data?.overdue ?? 0, icon: AlertTriangle },
-    { label: "Total disbursed", value: `K${Number(data?.totalDisbursed ?? 0).toLocaleString()}`, icon: Banknote },
+    { label: "Total loans", value: data?.totalLoans ?? 0, icon: Users, accent: "from-primary/20 to-primary/5", iconClass: "text-primary" },
+    { label: "Active loans", value: data?.activeLoans ?? 0, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/5", iconClass: "text-emerald-500" },
+    { label: "Overdue items", value: data?.overdue ?? 0, icon: AlertTriangle, accent: "from-destructive/20 to-destructive/5", iconClass: "text-destructive" },
+    { label: "Total disbursed", value: `K${Number(data?.totalDisbursed ?? 0).toLocaleString()}`, icon: Banknote, accent: "from-amber-500/20 to-amber-500/5", iconClass: "text-amber-500" },
   ];
-  const extraCards =
+  const extraBadges =
     productCode === "PAYDAY_SOFT"
       ? [{ label: "Policy", value: "Lusaka / 30 days" }]
       : productCode === "COLLATERAL"
         ? [{ label: "Collateral", value: "Required" }]
         : productCode === "BUSINESS"
-          ? [{ label: "Business Owner Focus", value: "Enabled" }]
+          ? [{ label: "Focus", value: "Business owners" }]
           : productCode === "SALARY_ADVANCE_STAFF"
             ? [{ label: "Program", value: "Staff salary" }]
             : [];
 
+  const collectionTiles = repaymentStats
+    ? [
+        { label: "Due today", value: repaymentStats.dueToday, icon: Banknote, valueClass: "text-foreground", iconClass: "text-primary" },
+        { label: "Total overdue", value: repaymentStats.overdue, icon: AlertTriangle, valueClass: "text-destructive", iconClass: "text-destructive" },
+        { label: "Collected this month", value: repaymentStats.collectedThisMonth, icon: CheckCircle2, valueClass: "text-emerald-500", iconClass: "text-emerald-500" },
+        { label: "Outstanding", value: repaymentStats.totalOutstanding, icon: Clock, valueClass: "text-foreground", iconClass: "text-muted-foreground" },
+      ]
+    : [];
+
   return (
     <div className="space-y-6">
+      {/* Top KPI hero */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {topCards.map((c) => (
-          <Card key={c.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <c.icon className="h-4 w-4 text-muted-foreground" />
-                {c.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent><p className="text-2xl font-bold">{c.value}</p></CardContent>
+          <Card
+            key={c.label}
+            className={`relative overflow-hidden border-border/50 bg-gradient-to-br ${c.accent}`}
+          >
+            <div className="absolute -right-6 -bottom-6 opacity-10">
+              <c.icon className="h-28 w-28" />
+            </div>
+            <CardContent className="p-5 relative">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <c.icon className={`h-4 w-4 ${c.iconClass}`} />
+                <span>{c.label}</span>
+              </div>
+              <p className="mt-2 text-3xl font-bold tracking-tight">{c.value}</p>
+            </CardContent>
           </Card>
         ))}
       </div>
-      {extraCards.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {extraCards.map((c) => (
-            <Card key={c.label}>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">{c.label}</CardTitle></CardHeader>
-              <CardContent><p className="text-xl font-semibold">{c.value}</p></CardContent>
-            </Card>
+
+      {/* Extra product badges as chips, no longer giant cards */}
+      {extraBadges.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {extraBadges.map((b) => (
+            <Badge
+              key={b.label}
+              variant="outline"
+              className="px-3 py-1.5 text-xs bg-muted/40"
+            >
+              <span className="text-muted-foreground">{b.label}:</span>
+              <span className="ml-1.5 font-semibold">{b.value}</span>
+            </Badge>
           ))}
         </div>
-      ) : null}
+      )}
 
       {/* Collection summary for non-Marketeer products */}
       {productCode !== "MARKETEER" && repaymentStats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="pt-4 flex items-center gap-3">
-              <Banknote className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-xs text-muted-foreground">Due today</p>
-                <p className="text-lg font-bold">K{repaymentStats.dueToday.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 flex items-center gap-3">
-              <AlertTriangle className="h-8 w-8 text-destructive" />
-              <div>
-                <p className="text-xs text-muted-foreground">Total overdue</p>
-                <p className="text-lg font-bold text-destructive">K{repaymentStats.overdue.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 flex items-center gap-3">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
-              <div>
-                <p className="text-xs text-muted-foreground">Collected this month</p>
-                <p className="text-lg font-bold text-green-600">K{repaymentStats.collectedThisMonth.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 flex items-center gap-3">
-              <Clock className="h-8 w-8 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Outstanding</p>
-                <p className="text-lg font-bold">K{repaymentStats.totalOutstanding.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
+          {collectionTiles.map((t) => (
+            <Card key={t.label} className="border-border/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-muted/50 grid place-items-center">
+                  <t.icon className={`h-5 w-5 ${t.iconClass}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">{t.label}</p>
+                  <p className={`text-lg font-bold ${t.valueClass}`}>
+                    K{Number(t.value).toLocaleString()}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 

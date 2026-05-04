@@ -18,6 +18,7 @@ import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { differenceInCalendarDays, format } from "date-fns";
 import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
+import LoanDocumentsCard from "@/components/admin/LoanDocumentsCard";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
@@ -226,71 +227,79 @@ export default function HouseLoanDetailPage() {
         }}
       />
 
-      {/* Loan summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote size={18} /> Loan Detail
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Borrower</p>
-            <p className="font-medium">{loan.full_name || loan.email}</p>
+      {/* Loan summary — modern hero */}
+      <Card className="overflow-hidden border-border/50 bg-gradient-to-br from-primary/15 via-primary/5 to-background">
+        <CardContent className="p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Loan</p>
+              <h2 className="text-xl md:text-2xl font-bold leading-tight">
+                {loan.full_name || borrowerProfile?.full_name || loan.email || "—"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {loan.phone || borrowerProfile?.phone || "—"} · {loan.city || borrowerProfile?.city || "—"} · NRC {loan.nrc_number || borrowerProfile?.nrc_number || "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Principal</p>
+              <p className="text-3xl font-bold text-primary">K{Number(loan.loan_amount || 0).toLocaleString()}</p>
+              <Badge
+                variant={loan.status === "active" ? "default" : loan.status === "completed" ? "secondary" : "outline"}
+                className="mt-1 capitalize"
+              >
+                {loan.status?.replace(/_/g, " ")}
+              </Badge>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Phone</p>
-            <p className="font-medium">{loan.phone || borrowerProfile?.phone || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Principal</p>
-            <p className="font-medium">K{Number(loan.loan_amount || 0).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Repayment</p>
-            <p className="font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Status</p>
-            <Badge variant={loan.status === "active" ? "default" : loan.status === "completed" ? "secondary" : "outline"}>
-              {loan.status?.replace(/_/g, " ")}
-            </Badge>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Progress</p>
-            <p className="font-medium">
-              <span className="text-success">{paidCount}</span>/{repayments.length} installments
-              {partialCount > 0 && (
-                <span className="ml-1 text-xs text-warning">({partialCount} partial)</span>
-              )}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Paid</p>
-            <p className="font-medium text-success">K{totalPaid.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Outstanding</p>
-            <p className="font-medium text-destructive">K{outstanding.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Term</p>
-            <p className="font-medium">{loan.loan_term_months} {loan.term_unit || "months"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">NRC</p>
-            <p className="font-medium">{loan.nrc_number || borrowerProfile?.nrc_number || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Created</p>
-            <p className="font-medium text-sm">{loan.created_at ? format(new Date(loan.created_at), "dd MMM yyyy") : "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">City</p>
-            <p className="font-medium">{loan.city || borrowerProfile?.city || "—"}</p>
+
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Total Repayment</p>
+              <p className="font-bold mt-0.5">K{Number(loan.total_repayment || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Total Paid</p>
+              <p className="font-bold text-success mt-0.5">K{totalPaid.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Outstanding</p>
+              <p className="font-bold text-destructive mt-0.5">K{outstanding.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Progress</p>
+              <p className="font-bold mt-0.5">
+                <span className="text-success">{paidCount}</span>
+                <span className="text-muted-foreground">/{repayments.length}</span>
+                {partialCount > 0 && <span className="ml-1 text-xs text-warning">({partialCount} partial)</span>}
+              </p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Term</p>
+              <p className="font-bold mt-0.5">{loan.loan_term_months} {loan.term_unit || "months"}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Created</p>
+              <p className="font-bold mt-0.5 text-sm">{loan.created_at ? format(new Date(loan.created_at), "dd MMM yyyy") : "—"}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="font-medium mt-0.5 text-sm truncate">{loan.email || borrowerProfile?.email || "—"}</p>
+            </div>
+            <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground">Employer</p>
+              <p className="font-medium mt-0.5 text-sm truncate">
+                {borrowerProfile?.employer_name || "—"}
+                {borrowerProfile?.employment_type && (
+                  <span className="block text-xs text-muted-foreground">{borrowerProfile.employment_type}</span>
+                )}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Documents */}
+      <LoanDocumentsCard loan={loan} />
 
       {/* Servicing actions live in the full loan details modal — keeps a single source of truth */}
 
