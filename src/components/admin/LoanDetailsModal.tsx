@@ -2165,6 +2165,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </Card>
               </TabsContent>
 
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="m-0 space-y-4">
+                <LoanDocumentsCard loan={loan} />
+              </TabsContent>
+
               {/* Repayments Tab */}
               <TabsContent value="repayments" className="m-0 space-y-4">
                 {isPreDisbursement ? (
