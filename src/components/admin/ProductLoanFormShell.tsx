@@ -121,6 +121,96 @@ export default function ProductLoanFormShell({
   const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
   const [rollbackPending, setRollbackPending] = useState(false);
 
+  // Draft save & resume
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const draftLoadedRef = useRef(false);
+
+  // Load draft when borrower selected (auto-resume)
+  useEffect(() => {
+    if (!borrowerId || !user?.id) return;
+    draftLoadedRef.current = false;
+    (async () => {
+      const { data } = await supabase
+        .from("loan_application_drafts")
+        .select("id, form_data, updated_at")
+        .eq("staff_user_id", user.id)
+        .eq("borrower_id", borrowerId)
+        .eq("product_code", productCode)
+        .maybeSingle();
+      if (data?.form_data) {
+        const f: any = data.form_data;
+        setDraftId(data.id);
+        setDraftSavedAt(new Date(data.updated_at));
+        if (f.loanAmount) setLoanAmount(f.loanAmount);
+        if (f.termValue) setTermValue(f.termValue);
+        if (f.loanPurpose) setLoanPurpose(f.loanPurpose);
+        if (f.employmentType) setEmploymentType(f.employmentType);
+        if (f.monthlyIncome) setMonthlyIncome(f.monthlyIncome);
+        if (f.employerName) setEmployerName(f.employerName);
+        if (f.jobTitle) setJobTitle(f.jobTitle);
+        if (f.city) setCity(f.city);
+        if (f.adminNotes) setAdminNotes(f.adminNotes);
+        if (f.repaymentStartDate) setRepaymentStartDate(f.repaymentStartDate);
+        if (f.businessMonths) setBusinessMonths(f.businessMonths);
+        if (f.businessAddress) setBusinessAddress(f.businessAddress);
+        if (f.residentialAddress) setResidentialAddress(f.residentialAddress);
+        if (f.idType) setIdType(f.idType);
+        if (f.idNumber) setIdNumber(f.idNumber);
+        if (f.gender) setGender(f.gender);
+        if (f.maritalStatus) setMaritalStatus(f.maritalStatus);
+        if (f.contactNumber) setContactNumber(f.contactNumber);
+        toast({ title: "Draft restored", description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}` });
+      } else {
+        setDraftId(null);
+        setDraftSavedAt(null);
+      }
+      draftLoadedRef.current = true;
+    })();
+  }, [borrowerId, user?.id, productCode]);
+
+  const saveDraft = async () => {
+    if (!user?.id) return;
+    if (!borrowerId) {
+      toast({ title: "Select borrower first", description: "A borrower must be selected before saving a draft.", variant: "destructive" });
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      const form_data = {
+        loanAmount, termValue, loanPurpose, employmentType, monthlyIncome,
+        employerName, jobTitle, city, adminNotes, repaymentStartDate,
+        businessMonths, businessAddress, residentialAddress,
+        idType, idNumber, gender, maritalStatus, contactNumber,
+      };
+      const { data, error } = await supabase
+        .from("loan_application_drafts")
+        .upsert(
+          { staff_user_id: user.id, borrower_id: borrowerId, product_code: productCode, form_data, updated_at: new Date().toISOString() },
+          { onConflict: "staff_user_id,borrower_id,product_code" }
+        )
+        .select("id")
+        .single();
+      if (error) throw error;
+      setDraftId(data.id);
+      setDraftSavedAt(new Date());
+      toast({ title: "Draft saved", description: "You can come back and resume this loan anytime." });
+    } catch (err) {
+      toast({ title: "Save failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const deleteDraft = async () => {
+    if (!draftId) return;
+    await supabase.from("loan_application_drafts").delete().eq("id", draftId);
+    setDraftId(null);
+    setDraftSavedAt(null);
+  };
+
+
   // Pre-populate docs from borrower's permanent vault
   useEffect(() => {
     if (!borrowerId) { setVaultDocs({}); return; }
