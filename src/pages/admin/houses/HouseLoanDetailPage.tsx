@@ -18,6 +18,7 @@ import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { differenceInCalendarDays, format } from "date-fns";
 import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
+import LoanDocumentsCard from "@/components/admin/LoanDocumentsCard";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
