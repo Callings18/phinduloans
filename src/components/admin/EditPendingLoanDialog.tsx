@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { calculateLoan } from "@/utils/loanCalculations";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Props {
@@ -27,6 +27,41 @@ interface Props {
 
 const EDITABLE_STATUSES = new Set(["pending", "under_review", "approved"]);
 
+// Product-specific server-side rules enforced by enforce_house_product_rules().
+// Mirroring them client-side prevents the user from typing values the DB will reject.
+type ProductLock = {
+  fixedAmount?: { min: number; max: number };
+  fixedTerm?: { value: number; unit: string };
+  note: string;
+};
+
+function getProductLock(productCode: string | null | undefined): ProductLock | null {
+  switch ((productCode || "").toUpperCase()) {
+    case "COLLATERAL":
+      return {
+        fixedTerm: { value: 6, unit: "months" },
+        note: "Collateral loans are fixed at 6 months / 30% total interest. Term cannot be changed.",
+      };
+    case "PAYDAY_SOFT":
+      return {
+        fixedTerm: { value: 30, unit: "days" },
+        note: "Payday Soft loans are fixed at 30 days. Term cannot be changed.",
+      };
+    case "MARKETEER":
+      return {
+        fixedAmount: { min: 1000, max: 10000 },
+        fixedTerm: { value: 26, unit: "days" },
+        note: "Marketeer loans are fixed at 26 collection days, K1,000 – K10,000.",
+      };
+    case "MOTOR_VEHICLE":
+      return {
+        note: "Motor Vehicle term must be between 3 and 24 months.",
+      };
+    default:
+      return null;
+  }
+}
+
 export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSaved }: Props) {
   const qc = useQueryClient();
   const editable = loan && EDITABLE_STATUSES.has(loan.status);
@@ -37,6 +72,24 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
   const [collateralDescription, setCollateralDescription] = useState("");
   const [collateralValue, setCollateralValue] = useState("");
 
+  // Load the linked product so we can drive product-aware UI locks.
+  const { data: product, isLoading: productLoading } = useQuery({
+    queryKey: ["edit-pending-loan-product", loan?.loan_product_id],
+    enabled: !!open && !!loan?.loan_product_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("*")
+        .eq("id", loan.loan_product_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  const lock = useMemo(() => getProductLock(product?.product_code), [product?.product_code]);
+  const termLocked = !!lock?.fixedTerm;
+
   useEffect(() => {
     if (!open || !loan) return;
     setAmount(String(loan.loan_amount ?? ""));
@@ -45,6 +98,13 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
     setCollateralDescription(loan.collateral_description ?? "");
     setCollateralValue(loan.collateral_value ? String(loan.collateral_value) : "");
   }, [open, loan]);
+
+  // When the product loads and has a hard-fixed term, force the displayed term to match.
+  useEffect(() => {
+    if (lock?.fixedTerm) {
+      setTermMonths(String(lock.fixedTerm.value));
+    }
+  }, [lock?.fixedTerm?.value, lock?.fixedTerm?.unit]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -55,15 +115,22 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
       if (!Number.isFinite(amt) || amt <= 0) throw new Error("Enter a valid amount");
       if (!Number.isFinite(term) || term <= 0) throw new Error("Enter a valid term");
 
+      // Pre-flight product-rule guards so the user gets a friendly message
+      // instead of a raw Postgres exception from enforce_house_product_rules().
+      if (lock?.fixedAmount) {
+        const { min, max } = lock.fixedAmount;
+        if (amt < min || amt > max) {
+          throw new Error(`Amount must be between K${min.toLocaleString()} and K${max.toLocaleString()}`);
+        }
+      }
+      if (lock?.fixedTerm && term !== lock.fixedTerm.value) {
+        throw new Error(`Term is fixed at ${lock.fixedTerm.value} ${lock.fixedTerm.unit} for this product`);
+      }
+
       // Recompute totals from the linked product so totals stay consistent.
       let totals: { totalRepayment: number; monthlyPayment: number } | null = null;
-      try {
-        const { data: product } = await supabase
-          .from("loan_products")
-          .select("*")
-          .eq("id", loan.loan_product_id)
-          .maybeSingle();
-        if (product) {
+      if (product) {
+        try {
           const calc = calculateLoan(
             amt,
             term,
@@ -74,9 +141,9 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
             totalRepayment: calc.totalRepayment,
             monthlyPayment: calc.monthlyPayment,
           };
+        } catch {
+          /* fall through — totals stay as-is if calc fails */
         }
-      } catch {
-        /* fall through — totals stay as-is if calc fails */
       }
 
       const update: Record<string, any> = {
@@ -129,28 +196,46 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
           </Alert>
         )}
 
+        {lock && editable && (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>{lock.note}</AlertDescription>
+          </Alert>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="edit-amount">Loan amount (K)</Label>
+            <Label htmlFor="edit-amount">
+              Loan amount (K)
+              {lock?.fixedAmount && (
+                <span className="ml-1 text-xs text-muted-foreground">
+                  (K{lock.fixedAmount.min.toLocaleString()} – K{lock.fixedAmount.max.toLocaleString()})
+                </span>
+              )}
+            </Label>
             <Input
               id="edit-amount"
               type="number"
-              min={0}
+              min={lock?.fixedAmount?.min ?? 0}
+              max={lock?.fixedAmount?.max ?? undefined}
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              disabled={!editable}
+              disabled={!editable || productLoading}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="edit-term">Term ({loan?.term_unit || "months"})</Label>
+            <Label htmlFor="edit-term">
+              Term ({lock?.fixedTerm?.unit || product?.term_unit || loan?.term_unit || "months"})
+              {termLocked && <span className="ml-1 text-xs text-muted-foreground">(fixed)</span>}
+            </Label>
             <Input
               id="edit-term"
               type="number"
               min={1}
               value={termMonths}
               onChange={(e) => setTermMonths(e.target.value)}
-              disabled={!editable}
+              disabled={!editable || termLocked || productLoading}
             />
           </div>
         </div>

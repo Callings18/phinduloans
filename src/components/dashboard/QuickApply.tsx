@@ -32,6 +32,7 @@ interface Profile {
 interface LoanProduct {
   id: string;
   name: string;
+  product_code?: string | null;
   description: string | null;
   min_amount: number;
   max_amount: number;
@@ -40,6 +41,7 @@ interface LoanProduct {
   interest_rate: number;
   interest_period: string | null;
   interest_type: string | null;
+  term_unit?: string | null;
   processing_fee_percent: number | null;
   insurance_percent: number | null;
   vat_percent: number | null;
@@ -88,9 +90,11 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
   const loanCalc = selectedProduct
     ? calculateLoan(loanAmount, loanTerm, {
         product_name: selectedProduct.name,
+        product_code: selectedProduct.product_code ?? undefined,
         interest_rate: selectedProduct.interest_rate,
         interest_period: selectedProduct.interest_period as any,
         interest_type: selectedProduct.interest_type as any,
+        term_unit: (selectedProduct.term_unit ?? "months") as any,
         processing_fee_percent: selectedProduct.processing_fee_percent,
         enforcement_fee_percent: (selectedProduct as any).enforcement_fee_percent ?? 0,
         insurance_percent: selectedProduct.insurance_percent,
@@ -191,7 +195,9 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <Label>Loan Term</Label>
-                <span className="text-xl font-bold text-foreground">{loanTerm} month{loanTerm > 1 ? "s" : ""}</span>
+                <span className="text-xl font-bold text-foreground">
+                  {loanTerm} {(selectedProduct.term_unit || "months").replace(/s?$/, loanTerm > 1 ? "s" : "")}
+                </span>
               </div>
               <Slider value={[loanTerm]} onValueChange={([val]) => setLoanTerm(val)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
             </div>
@@ -205,8 +211,22 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
                 <CreditCard size={16} className="text-primary" /> Estimated Repayment
               </h4>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <span className="text-muted-foreground">Monthly Payment:</span>
-                <span className="font-medium text-right">{formatCurrency(loanCalc.monthlyPayment)}</span>
+                <span className="text-muted-foreground">
+                  {loanCalc.paymentFrequency === "daily"
+                    ? "Daily Installment:"
+                    : loanCalc.paymentFrequency === "weekly"
+                    ? "Weekly Payment:"
+                    : "Monthly Payment:"}
+                </span>
+                <span className="font-medium text-right">
+                  {formatCurrency(
+                    loanCalc.paymentFrequency === "daily"
+                      ? loanCalc.dailyPayment ?? loanCalc.monthlyPayment
+                      : loanCalc.paymentFrequency === "weekly"
+                      ? loanCalc.weeklyPayment ?? loanCalc.monthlyPayment
+                      : loanCalc.monthlyPayment,
+                  )}
+                </span>
                 <span className="text-muted-foreground">Total Interest:</span>
                 <span className="font-medium text-right">{formatCurrency(loanCalc.totalInterest)}</span>
                 {loanCalc.feesDeductedUpfront > 0 && (
