@@ -421,6 +421,7 @@ const AdminRepayments = () => {
         paymentMethod: "split", // Special indicator for split payment
         transactionRef: `SPLIT-${Date.now()}`,
         paidAmount: totalSplitAmount,
+        penaltyAmount: Math.min(totalSplitAmount, penaltyRemaining(selectedRepayment)),
         destinationAccountId: firstDestination,
         claimId: selectedClaimId ?? undefined,
       });
@@ -450,6 +451,7 @@ const AdminRepayments = () => {
         paymentMethod: paymentData.payment_method,
         transactionRef: paymentData.transaction_reference,
         paidAmount,
+        penaltyAmount: Number(paymentData.penalty_amount || 0),
         destinationAccountId: paymentData.destination_account_id,
         claimId: selectedClaimId ?? undefined,
       });
