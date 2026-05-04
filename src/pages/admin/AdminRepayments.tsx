@@ -1087,20 +1087,8 @@ const AdminRepayments = () => {
                     </div>
 
                     {penaltyRemaining(selectedRepayment) > 0 && (
-                      <div className="space-y-2">
-                        <Label>Penalty Portion</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max={penaltyRemaining(selectedRepayment)}
-                          value={paymentData.penalty_amount}
-                          onChange={(e) => setPaymentData({ ...paymentData, penalty_amount: e.target.value })}
-                          placeholder={`Penalty paid: K${penaltyRemaining(selectedRepayment).toLocaleString()}`}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          This portion clears penalties first; the balance is applied to principal.
-                        </p>
+                      <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-muted-foreground">
+                        K{Math.min(Number(paymentData.amount || totalRemaining(selectedRepayment)), penaltyRemaining(selectedRepayment)).toLocaleString()} will clear penalties first; the remaining payment applies to the loan balance.
                       </div>
                     )}
 
