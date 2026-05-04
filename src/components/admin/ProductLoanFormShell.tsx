@@ -744,10 +744,25 @@ export default function ProductLoanFormShell({
                   </div>
 
                   {selectedBorrower && (
-                    <div className="md:col-span-2 bg-muted/30 rounded-md px-3 py-2 text-xs flex gap-4 flex-wrap">
-                      <span><span className="text-muted-foreground">Name:</span> <strong>{selectedBorrower.full_name}</strong></span>
-                      <span><span className="text-muted-foreground">Phone:</span> {selectedBorrower.phone || "—"}</span>
-                      <span><span className="text-muted-foreground">NRC:</span> {selectedBorrower.nrc_number || "—"}</span>
+                    <div className="md:col-span-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                      <div className="flex gap-x-4 gap-y-1 flex-wrap">
+                        <span><span className="text-muted-foreground">Name:</span> <strong>{selectedBorrower.full_name}</strong></span>
+                        <span><span className="text-muted-foreground">Phone:</span> {selectedBorrower.phone || "—"}</span>
+                        <span><span className="text-muted-foreground">NRC:</span> {selectedBorrower.nrc_number || "—"}</span>
+                        <span><span className="text-muted-foreground">Gender:</span> {selectedBorrower.gender || "—"}</span>
+                        <span><span className="text-muted-foreground">Marital:</span> {selectedBorrower.marital_status || "—"}</span>
+                        <span><span className="text-muted-foreground">Employer:</span> {selectedBorrower.employer_name || "—"}</span>
+                        <span className="ml-auto inline-flex items-center gap-1">
+                          <FileText className="h-3 w-3 text-primary" />
+                          <span className="text-primary font-medium">{Object.keys(vaultDocs).length}</span>
+                          <span className="text-muted-foreground">vault docs linked</span>
+                        </span>
+                      </div>
+                      {Object.keys(vaultDocs).length > 0 && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          Existing KYC docs from this borrower will be auto-attached. See the Documents tab to review or replace.
+                        </p>
+                      )}
                     </div>
                   )}
 
