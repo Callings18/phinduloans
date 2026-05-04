@@ -60,22 +60,16 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
       try {
         const { data: product } = await supabase
           .from("loan_products")
-          .select("interest_rate, interest_period, interest_type, processing_fee_percent, insurance_percent, vat_percent, platform_fee_percent, term_unit")
+          .select("*")
           .eq("id", loan.loan_product_id)
           .maybeSingle();
         if (product) {
-          const calc = calculateLoan({
-            principal: amt,
-            interestRate: Number(product.interest_rate || loan.interest_rate || 0),
-            interestPeriod: (product.interest_period as any) || "monthly",
-            interestType: (product.interest_type as any) || "flat",
-            termMonths: term,
-            termUnit: (product.term_unit as any) || (loan.term_unit as any) || "months",
-            processingFeePercent: Number(product.processing_fee_percent || 0),
-            insurancePercent: Number(product.insurance_percent || 0),
-            vatPercent: Number(product.vat_percent || 0),
-            platformFeePercent: Number(product.platform_fee_percent || 0),
-          });
+          const calc = calculateLoan(
+            amt,
+            term,
+            product as any,
+            ((product as any).term_unit ?? loan.term_unit ?? "months") as any,
+          );
           totals = {
             totalRepayment: calc.totalRepayment,
             monthlyPayment: calc.monthlyPayment,
