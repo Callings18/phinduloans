@@ -3145,7 +3145,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</span>
                     <span className="text-muted-foreground">Total Paid</span>
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
-                    <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
+                    <span className="text-muted-foreground">Interest Still Due</span>
+                    <span className={`text-right font-medium ${reloanInterestOutstanding > 0.01 ? "text-destructive" : ""}`}>K{reloanInterestOutstanding.toLocaleString()}</span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal</span>
                     <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
@@ -3165,13 +3167,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {totalOutstanding <= 0 ? (
+                    {reloanInterestOutstanding > 0.01 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Interest still due K{reloanInterestOutstanding.toLocaleString()} — must be cleared before reloan
+                      </div>
+                    ) : reloanCarryForwardPrincipal <= 0.01 ? (
                       <div className="flex items-center gap-2 text-success">
                         <CheckCircle size={16} /> No outstanding balance — eligible for fresh reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> Outstanding balance K{totalOutstanding.toLocaleString()} — will carry forward as new principal
+                        <CheckCircle size={16} /> Interest is cleared — K{reloanCarryForwardPrincipal.toLocaleString()} principal will carry forward
                       </div>
                     )}
                   </div>
