@@ -1577,7 +1577,61 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Update loan status mutation (Move to)
+  // Delete loan application (only safe for pre-disbursement statuses)
+  const DELETABLE_STATUSES = new Set([
+    "pending",
+    "under_review",
+    "approved",
+    "contract_signing",
+    "awaiting_disbursement",
+    "rejected",
+    "crb_failed",
+    "pmic_pending",
+  ]);
+  const deleteLoanMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+      if (!DELETABLE_STATUSES.has(loan.status)) {
+        throw new Error(
+          `Cannot delete a loan in status "${loan.status}". Undo disbursement first.`,
+        );
+      }
+
+      // Best-effort cleanup of dependent rows that may not cascade.
+      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
+      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
+
+      const { error } = await supabase
+        .from("loan_applications")
+        .delete()
+        .eq("id", loan.id);
+      if (error) throw error;
+
+      await logAudit({
+        action: "DELETE_LOAN_APPLICATION",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { previous_status: loan.status, reason: deleteReason || null },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans"] });
+      toast.success("Loan application deleted");
+      setIsDeleteLoanOpen(false);
+      setDeleteReason("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete loan");
+    },
+  });
+
+
   const updateStatusMutation = useMutation({
     mutationFn: async (status: string) => {
       if (!loan) throw new Error("No loan selected");
