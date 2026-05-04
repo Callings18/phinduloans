@@ -3167,9 +3167,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium">K{Number(loan.loan_amount).toLocaleString()}</span>
                     <span className="text-muted-foreground">Total Due (incl. interest)</span>
                     <span className="text-right font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Total Interest</span>
+                    <span className="text-right font-medium">K{totalInterestDue.toLocaleString()}</span>
                     <span className="text-muted-foreground">Total Paid</span>
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
-                    <span className="text-muted-foreground font-semibold">Reloan Principal (Amount Due − Paid)</span>
+                    <span className="text-muted-foreground">— Interest Paid</span>
+                    <span className="text-right font-medium text-success">K{interestPaidSoFar.toLocaleString()}</span>
+                    <span className="text-muted-foreground">— Interest Still Due</span>
+                    <span className={`text-right font-medium ${reloanInterestOutstanding > 0.01 ? "text-destructive" : "text-success"}`}>
+                      K{reloanInterestOutstanding.toLocaleString()}
+                    </span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal (auto)</span>
                     <span className="text-right font-bold text-destructive">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
@@ -3189,13 +3197,22 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {reloanCarryForwardPrincipal <= 0.01 ? (
-                      <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> No outstanding balance — eligible for fresh reloan
+                    {reloanInterestOutstanding > 0.01 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Interest of K{reloanInterestOutstanding.toLocaleString()} still due — must be paid in full before reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> K{reloanCarryForwardPrincipal.toLocaleString()} will carry forward as the new principal
+                        <CheckCircle size={16} /> All interest paid — eligible
+                      </div>
+                    )}
+                    {reloanCarryForwardPrincipal <= 0.01 ? (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> No outstanding principal — eligible for fresh reloan
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> K{reloanCarryForwardPrincipal.toLocaleString()} principal will carry forward as the new principal
                       </div>
                     )}
                   </div>
