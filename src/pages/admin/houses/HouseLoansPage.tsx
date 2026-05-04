@@ -235,9 +235,21 @@ export default function HouseLoansPage() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.created_at ? format(new Date(l.created_at), "dd MMM yyyy") : "—"}</TableCell>
                       <TableCell>
-                        <Button asChild size="sm" variant="ghost">
-                          <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button asChild size="sm" variant="ghost" title="View">
+                            <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
+                          </Button>
+                          {EDITABLE_STATUSES.has(l.status) && (
+                            <Button size="sm" variant="ghost" title="Edit" onClick={() => setEditLoan(l)}>
+                              <Pencil size={14} />
+                            </Button>
+                          )}
+                          {DELETABLE_STATUSES.has(l.status) && (
+                            <Button size="sm" variant="ghost" title="Delete" onClick={() => setDeleteLoan(l)} className="text-destructive hover:text-destructive">
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
