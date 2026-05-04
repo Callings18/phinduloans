@@ -1,14 +1,41 @@
 import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
-import { Search, Plus, Eye, AlertTriangle } from "lucide-react";
+import { Search, Plus, Eye, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import EditPendingLoanDialog from "@/components/admin/EditPendingLoanDialog";
+
+const DELETABLE_STATUSES = new Set([
+  "pending",
+  "under_review",
+  "approved",
+  "contract_signing",
+  "awaiting_disbursement",
+  "rejected",
+  "crb_failed",
+  "pmic_pending",
+]);
+const EDITABLE_STATUSES = new Set(["pending", "under_review", "approved"]);
+
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -29,6 +56,32 @@ export default function HouseLoansPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [editLoan, setEditLoan] = useState<any>(null);
+  const [deleteLoan, setDeleteLoan] = useState<any>(null);
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: async (loan: any) => {
+      if (!loan) throw new Error("No loan selected");
+      if (!DELETABLE_STATUSES.has(loan.status)) {
+        throw new Error(`Cannot delete a loan in status "${loan.status}".`);
+      }
+      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
+      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
+      const { error } = await supabase.from("loan_applications").delete().eq("id", loan.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Loan deleted");
+      queryClient.invalidateQueries({ queryKey: ["house-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["house-report-summary"] });
+      setDeleteLoan(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   // Build overdue stats per loan from repayments — a loan is "overdue" if it has any
   // pending/overdue installment with due_date < today.
@@ -182,9 +235,21 @@ export default function HouseLoansPage() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.created_at ? format(new Date(l.created_at), "dd MMM yyyy") : "—"}</TableCell>
                       <TableCell>
-                        <Button asChild size="sm" variant="ghost">
-                          <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button asChild size="sm" variant="ghost" title="View">
+                            <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
+                          </Button>
+                          {EDITABLE_STATUSES.has(l.status) && (
+                            <Button size="sm" variant="ghost" title="Edit" onClick={() => setEditLoan(l)}>
+                              <Pencil size={14} />
+                            </Button>
+                          )}
+                          {DELETABLE_STATUSES.has(l.status) && (
+                            <Button size="sm" variant="ghost" title="Delete" onClick={() => setDeleteLoan(l)} className="text-destructive hover:text-destructive">
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -200,6 +265,35 @@ export default function HouseLoansPage() {
       {filtered.length > pageSize && (
         <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
       )}
+
+      <EditPendingLoanDialog
+        loan={editLoan}
+        open={Boolean(editLoan)}
+        onOpenChange={(o) => { if (!o) setEditLoan(null); }}
+      />
+
+      <AlertDialog open={Boolean(deleteLoan)} onOpenChange={(o) => { if (!o) setDeleteLoan(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete loan application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes <strong>{deleteLoan?.full_name || deleteLoan?.email}</strong>'s
+              loan ({deleteLoan?.status}) for K{Number(deleteLoan?.loan_amount || 0).toLocaleString()}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => { e.preventDefault(); deleteMutation.mutate(deleteLoan); }}
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

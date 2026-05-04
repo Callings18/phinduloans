@@ -80,6 +80,7 @@ import {
   Send,
   FileDown,
   Edit,
+  Trash2,
   Smartphone,
   Upload,
   Eye,
@@ -106,20 +107,21 @@ import LoanDocumentsCard from "./LoanDocumentsCard";
 import EditPendingLoanDialog from "./EditPendingLoanDialog";
 import { FolderOpen } from "lucide-react";
 
-/** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
+/** Allowed next stages per current status (Move to). Admins get full control,
+ *  including reversals (e.g., approved → pending) for pre-disbursement loans. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
-  pending: ["under_review", "rejected"],
-  under_review: ["approved", "rejected", "crb_failed", "pmic_pending"],
-  approved: ["contract_signing", "awaiting_disbursement"],
-  contract_signing: ["awaiting_disbursement", "approved"],
-  awaiting_disbursement: ["disbursed", "approved"],
-  disbursed: ["active"],
+  pending: ["under_review", "approved", "rejected"],
+  under_review: ["pending", "approved", "rejected", "crb_failed", "pmic_pending"],
+  approved: ["pending", "under_review", "contract_signing", "awaiting_disbursement", "rejected"],
+  contract_signing: ["pending", "approved", "awaiting_disbursement", "rejected"],
+  awaiting_disbursement: ["pending", "approved", "contract_signing", "rejected"],
+  disbursed: ["active", "approved"], // "approved" used by Undo Disbursement
   active: ["defaulted"], // "completed" is auto-set when fully paid
   completed: [],
-  defaulted: [],
-  rejected: [],
-  crb_failed: [],
-  pmic_pending: [],
+  defaulted: ["active"],
+  rejected: ["pending", "under_review"],
+  crb_failed: ["pending", "under_review", "approved", "rejected"],
+  pmic_pending: ["pending", "under_review", "approved", "rejected"],
 };
 
 interface Loan {
@@ -228,6 +230,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [newInterestRate, setNewInterestRate] = useState("");
   const [restructureReason, setRestructureReason] = useState("");
   const [isUndoDisbursementOpen, setIsUndoDisbursementOpen] = useState(false);
+  const [isDeleteLoanOpen, setIsDeleteLoanOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
   const [isReloanOpen, setIsReloanOpen] = useState(false);
@@ -1574,7 +1578,61 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-  // Update loan status mutation (Move to)
+  // Delete loan application (only safe for pre-disbursement statuses)
+  const DELETABLE_STATUSES = new Set([
+    "pending",
+    "under_review",
+    "approved",
+    "contract_signing",
+    "awaiting_disbursement",
+    "rejected",
+    "crb_failed",
+    "pmic_pending",
+  ]);
+  const deleteLoanMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan) throw new Error("No loan selected");
+      if (!DELETABLE_STATUSES.has(loan.status)) {
+        throw new Error(
+          `Cannot delete a loan in status "${loan.status}". Undo disbursement first.`,
+        );
+      }
+
+      // Best-effort cleanup of dependent rows that may not cascade.
+      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
+      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
+
+      const { error } = await supabase
+        .from("loan_applications")
+        .delete()
+        .eq("id", loan.id);
+      if (error) throw error;
+
+      await logAudit({
+        action: "DELETE_LOAN_APPLICATION",
+        entity_type: "loan_application",
+        entity_id: loan.id,
+        details: { previous_status: loan.status, reason: deleteReason || null },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans"] });
+      toast.success("Loan application deleted");
+      setIsDeleteLoanOpen(false);
+      setDeleteReason("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete loan");
+    },
+  });
+
+
   const updateStatusMutation = useMutation({
     mutationFn: async (status: string) => {
       if (!loan) throw new Error("No loan selected");
@@ -2009,9 +2067,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
                     {/* Edit button for editable pre-disbursement statuses */}
-                    {(loan.status === "pending" || loan.status === "under_review" || loan.status === "approved") && (
+                    {DELETABLE_STATUSES.has(loan.status) && (
                       <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
                         <Edit size={14} className="mr-1" /> Edit Loan
+                      </Button>
+                    )}
+                    {/* Delete loan (admin-only, pre-disbursement) */}
+                    {isAdmin && DELETABLE_STATUSES.has(loan.status) && (
+                      <Button size="sm" variant="destructive" onClick={() => setIsDeleteLoanOpen(true)}>
+                        <Trash2 size={14} className="mr-1" /> Delete Loan
                       </Button>
                     )}
                     {/* Disburse button for awaiting_disbursement / approved */}
@@ -3037,7 +3101,46 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Contract Notes Dialog */}
+      {/* Delete Loan Confirmation */}
+      <AlertDialog open={isDeleteLoanOpen} onOpenChange={setIsDeleteLoanOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete loan application?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This permanently deletes the loan application and any draft schedule, transitions and events.
+                  Use this only for pre-disbursement loans (pending, under review, approved, rejected, etc.).
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  For disbursed loans, use <strong>Undo Disbursement</strong> first.
+                </p>
+                <Textarea
+                  placeholder="Reason (optional, kept in audit log)"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLoanMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteLoanMutation.mutate();
+              }}
+            >
+              {deleteLoanMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Trash2 size={14} className="mr-1" />}
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isContractEditOpen} onOpenChange={setIsContractEditOpen}>
         <DialogContent>
           <DialogHeader>
