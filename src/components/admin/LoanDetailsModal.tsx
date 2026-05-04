@@ -3218,8 +3218,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </div>
                 </div>
 
-                {/* Reloan date — applies to both fresh and carry-forward */}
-                {totalPenalties === 0 && (
+                {/* Reloan date — applies to both fresh and carry-forward, but only when eligible */}
+                {totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border p-4 space-y-2 text-sm">
                     <Label className="text-xs">Reloan date *</Label>
                     <Input
