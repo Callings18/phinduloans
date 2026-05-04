@@ -4285,8 +4285,16 @@ export type Database = {
           p_amount: number
           p_paid_date?: string
           p_payment_method?: string
+          p_penalty_amount?: number
           p_repayment_id: string
           p_transaction_reference?: string
+        }
+        Returns: Json
+      }
+      waive_loan_penalty: {
+        Args: {
+          p_repayment_id: string
+          p_reason?: string
         }
         Returns: Json
       }

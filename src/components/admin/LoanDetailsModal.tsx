@@ -230,6 +230,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [transactionRef, setTransactionRef] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
+  // How much of the payment is allocated to penalty (vs principal)
+  const [penaltyAmount, setPenaltyAmount] = useState("");
+  const [paymentDestinationAccountId, setPaymentDestinationAccountId] = useState("");
+  // Waive penalty dialog
+  const [isWaivePenaltyOpen, setIsWaivePenaltyOpen] = useState(false);
+  const [waiveTargetRepayment, setWaiveTargetRepayment] = useState<Repayment | null>(null);
+  const [waivePenaltyReason, setWaivePenaltyReason] = useState("");
   const [isRestructureOpen, setIsRestructureOpen] = useState(false);
   const [newTermMonths, setNewTermMonths] = useState("");
   const [newInterestRate, setNewInterestRate] = useState("");
@@ -412,14 +419,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
-      if (!selectedRepayment.destination_account_id) {
-        throw new Error("Destination account is required. Please use Admin Repayments if account is not configured.");
+
+      const accountId = paymentDestinationAccountId || selectedRepayment.destination_account_id;
+      if (!accountId) {
+        throw new Error("Destination account is required. Choose an account to deposit the payment.");
       }
-      if (paidAmount > Number(selectedRepayment.amount)) {
-        throw new Error("Overpayment from Loan Details is disabled for safety. Use Admin Repayments to allocate across installments.");
+
+      const installmentOutstanding = Math.max(
+        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) -
+          Number(selectedRepayment.principal_paid || 0),
+        0,
+      );
+      const penaltyOutstanding = Math.max(
+        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
+        0,
+      );
+
+      // Auto-allocate when no manual split provided: fill penalty first (since that's
+      // what was blocking reloans / completion), then principal.
+      let penaltyPortion = Number(penaltyAmount || 0);
+      if (!Number.isFinite(penaltyPortion) || penaltyPortion < 0) {
+        throw new Error("Penalty portion cannot be negative");
       }
-      if (Number(selectedRepayment.penalty_amount || 0) > Number(selectedRepayment.penalty_paid || 0)) {
-        throw new Error("This installment has pending penalties. Record payment via Admin Repayments for canonical allocation.");
+      if (penaltyPortion === 0 && penaltyOutstanding > 0) {
+        penaltyPortion = Math.min(penaltyOutstanding, paidAmount);
+      }
+      if (penaltyPortion > paidAmount + 0.01) {
+        throw new Error("Penalty portion cannot exceed total payment");
+      }
+      if (penaltyPortion > penaltyOutstanding + 0.01) {
+        throw new Error(`Penalty portion exceeds unpaid penalty (K${penaltyOutstanding.toLocaleString()})`);
+      }
+
+      const principalPortion = Math.max(paidAmount - penaltyPortion, 0);
+      if (principalPortion > installmentOutstanding + 0.01) {
+        throw new Error(
+          `Principal portion (K${principalPortion.toLocaleString()}) exceeds installment outstanding (K${installmentOutstanding.toLocaleString()}). Reduce the principal portion or use Admin Repayments to split across installments.`
+        );
       }
 
       const paidDate = new Date().toISOString().split("T")[0];
@@ -427,9 +463,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         p_repayment_id: selectedRepayment.id,
         p_amount: paidAmount,
         p_payment_method: paymentMethod,
-        p_account_id: selectedRepayment.destination_account_id,
+        p_account_id: accountId,
         p_transaction_reference: transactionRef || null,
         p_paid_date: paidDate,
+        p_penalty_amount: penaltyPortion,
       });
       if (rpcError) throw rpcError;
       const rpcResult = rpcData as { success?: boolean; error?: string } | null;
@@ -437,20 +474,28 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
         throw new Error(rpcResult?.error || "Failed to record payment");
       }
 
-      return { paidAmount, isPartial: paidAmount < Number(selectedRepayment.amount), isOverpayment: false };
+      return {
+        paidAmount,
+        principalPortion,
+        penaltyPortion,
+        isPartial: principalPortion < installmentOutstanding,
+        isOverpayment: false,
+      };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
 
+      const penaltyMsg = result.penaltyPortion > 0
+        ? ` (incl. K${result.penaltyPortion.toLocaleString()} penalty)`
+        : "";
       if (result.isPartial) {
-        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded. Remaining balance updated.`);
-      } else if (result.isOverpayment) {
-        toast.success(`Payment recorded. Excess amount applied to next installment.`);
+        toast.success(`Partial payment of K${result.paidAmount.toLocaleString()} recorded${penaltyMsg}. Remaining balance updated.`);
       } else {
-        toast.success("Payment recorded successfully");
+        toast.success(`Payment of K${result.paidAmount.toLocaleString()} recorded${penaltyMsg}.`);
       }
 
       setIsRecordPaymentOpen(false);
@@ -458,9 +503,45 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
       setPaymentMethod("cash");
       setTransactionRef("");
       setPaymentAmount("");
+      setPenaltyAmount("");
+      setPaymentDestinationAccountId("");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
+    },
+  });
+
+  // Waive an outstanding penalty on a single installment
+  const waivePenaltyMutation = useMutation({
+    mutationFn: async () => {
+      if (!waiveTargetRepayment) throw new Error("No installment selected");
+      assertLedgerOps();
+      if (!waivePenaltyReason.trim() || waivePenaltyReason.trim().length < 3) {
+        throw new Error("Please provide a reason (at least 3 characters)");
+      }
+      const { data, error } = await supabase.rpc("waive_loan_penalty", {
+        p_repayment_id: waiveTargetRepayment.id,
+        p_reason: waivePenaltyReason.trim(),
+      });
+      if (error) throw error;
+      const result = data as { success?: boolean; error?: string; penalty_waived?: number } | null;
+      if (!result?.success) {
+        throw new Error(result?.error || "Failed to waive penalty");
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+      toast.success(`Penalty of K${Number(result.penalty_waived || 0).toLocaleString()} waived.`);
+      setIsWaivePenaltyOpen(false);
+      setWaiveTargetRepayment(null);
+      setWaivePenaltyReason("");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to waive penalty");
     },
   });
 
@@ -2282,7 +2363,29 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                                 })()}
                               </TableCell>
                               <TableCell className={rep.penalty_amount ? "text-destructive font-medium" : "text-muted-foreground"}>
-                                {rep.penalty_amount ? `K${Number(rep.penalty_amount).toLocaleString()}` : "-"}
+                                {(() => {
+                                  const pen = Number(rep.penalty_amount || 0);
+                                  if (!pen) return "-";
+                                  const paid = Number(rep.penalty_paid || 0);
+                                  const remaining = Math.max(0, pen - paid);
+                                  if (remaining <= 0) {
+                                    return (
+                                      <span className="text-success">
+                                        K{pen.toLocaleString()} <span className="text-[10px]">(cleared)</span>
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <div className="flex flex-col">
+                                      <span>K{pen.toLocaleString()}</span>
+                                      {paid > 0 && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          paid K{paid.toLocaleString()} · due K{remaining.toLocaleString()}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
@@ -2327,11 +2430,28 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                                       onClick={() => {
                                         setSelectedRepayment(rep);
                                         setPaymentAmount(totalDue.toString());
+                                        setPenaltyAmount("");
+                                        setPaymentDestinationAccountId("");
                                         setIsRecordPaymentOpen(true);
                                       }}
                                     >
                                       <CheckCircle size={14} className="mr-1" /> 
                                       {isOverdue ? "Pay Overdue" : isDue ? "Pay Now" : "Pay"}
+                                    </Button>
+                                  )}
+                                  {netPenaltyOnRepayment(rep) > 0 && !rep.is_reversed && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={!canLedgerOps}
+                                      title="Waive outstanding penalty"
+                                      onClick={() => {
+                                        setWaiveTargetRepayment(rep);
+                                        setWaivePenaltyReason("");
+                                        setIsWaivePenaltyOpen(true);
+                                      }}
+                                    >
+                                      <Shield size={14} className="mr-1" /> Waive
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (
@@ -2641,17 +2761,48 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
             </div>
 
             <div className="space-y-2">
-              <Label>Amount to Pay</Label>
+              <Label>Amount to Pay (total received)</Label>
               <Input
                 type="number"
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
-                placeholder="Enter payment amount"
+                placeholder="Enter total payment amount"
               />
               <p className="text-xs text-muted-foreground">
-                Pay less than total due for a partial payment. Amounts above the installment total must be recorded on Admin Repayments.
+                Includes any penalty portion. We'll allocate to penalty first by default.
               </p>
             </div>
+
+            {selectedRepayment && netPenaltyOnRepayment(selectedRepayment) > 0 && (
+              <div className="space-y-2">
+                <Label>Of which goes to penalty</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={penaltyAmount}
+                    onChange={(e) => setPenaltyAmount(e.target.value)}
+                    placeholder={`Auto: K${Math.min(
+                      netPenaltyOnRepayment(selectedRepayment),
+                      Number(paymentAmount || 0) || netPenaltyOnRepayment(selectedRepayment),
+                    ).toLocaleString()}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPenaltyAmount(String(netPenaltyOnRepayment(selectedRepayment)))
+                    }
+                  >
+                    Penalty in full
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to auto-fill penalty first up to K
+                  {netPenaltyOnRepayment(selectedRepayment).toLocaleString()}, then apply the rest to principal.
+                </p>
+              </div>
+            )}
 
             {selectedRepayment &&
               paymentAmount &&
@@ -2689,6 +2840,24 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                   <SelectItem value="mobile_money">Mobile Money</SelectItem>
                   <SelectItem value="cheque">Cheque</SelectItem>
                   <SelectItem value="deduction">Salary Deduction</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Deposit to Account *</Label>
+              <Select
+                value={paymentDestinationAccountId || (selectedRepayment as any)?.destination_account_id || ""}
+                onValueChange={setPaymentDestinationAccountId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select destination account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts || []).map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.account_name} ({a.account_type}) — K{Number(a.balance).toLocaleString()}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2837,6 +3006,70 @@ export default function LoanDetailsModal({ loan, open, onOpenChange, onRequestOp
                     <CheckCircle size={14} className="mr-1" />
                   )}
                   Process Settlement
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Waive Penalty Dialog */}
+      <Dialog open={isWaivePenaltyOpen} onOpenChange={(o) => {
+        setIsWaivePenaltyOpen(o);
+        if (!o) { setWaiveTargetRepayment(null); setWaivePenaltyReason(""); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield size={20} className="text-warning" /> Waive Penalty
+            </DialogTitle>
+            <DialogDescription>
+              Write off the outstanding penalty on installment #{waiveTargetRepayment?.installment_number}.
+              Use this when management has agreed to forgive the penalty (e.g., the borrower has paid their dues
+              and a goodwill discount has been authorised).
+            </DialogDescription>
+          </DialogHeader>
+          {waiveTargetRepayment && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 grid grid-cols-2 gap-2 text-sm">
+                <span className="text-muted-foreground">Penalty applied</span>
+                <span className="font-medium text-right">
+                  K{Number(waiveTargetRepayment.penalty_amount || 0).toLocaleString()}
+                </span>
+                <span className="text-muted-foreground">Already paid</span>
+                <span className="font-medium text-right">
+                  K{Number(waiveTargetRepayment.penalty_paid || 0).toLocaleString()}
+                </span>
+                <span className="font-medium border-t pt-2">Will be waived</span>
+                <span className="font-bold text-right text-warning border-t pt-2">
+                  K{netPenaltyOnRepayment(waiveTargetRepayment).toLocaleString()}
+                </span>
+              </div>
+              <div className="space-y-2">
+                <Label>Reason *</Label>
+                <Textarea
+                  value={waivePenaltyReason}
+                  onChange={(e) => setWaivePenaltyReason(e.target.value)}
+                  placeholder="e.g., Borrower paid principal in full; penalty waived as agreed with manager."
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This is recorded in the audit log and cannot be undone from this screen.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsWaivePenaltyOpen(false)}>Cancel</Button>
+                <Button
+                  variant="default"
+                  onClick={() => waivePenaltyMutation.mutate()}
+                  disabled={
+                    !canLedgerOps ||
+                    waivePenaltyMutation.isPending ||
+                    waivePenaltyReason.trim().length < 3
+                  }
+                >
+                  {waivePenaltyMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+                  <Shield size={14} className="mr-1" /> Waive Penalty
                 </Button>
               </div>
             </div>
