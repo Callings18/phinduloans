@@ -1645,14 +1645,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     0
   );
   const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
-  // Reloan carry-forward = (principal + interest) − total paid. Penalties are settled separately
-  // through repayments and never rolled into the new principal.
+  // Reloan eligibility: borrower must have paid ALL interest (and all penalties).
+  // Interest is paid first from any payment; whatever is left counts toward principal.
+  // Carry-forward principal = remaining principal balance only — interest is NEVER rolled forward.
+  const interestPaidSoFar = Math.min(totalInterestDue, totalPaidIncludingPartial);
+  const reloanInterestOutstanding = Math.max(0, totalInterestDue - interestPaidSoFar);
+  const principalPaidSoFar = Math.max(0, totalPaidIncludingPartial - interestPaidSoFar);
   const reloanCarryForwardPrincipal = Math.max(
     0,
-    Number(loan.total_repayment || 0) - totalPaidIncludingPartial,
+    Number(loan.loan_amount || 0) - principalPaidSoFar,
   );
-  // Kept for legacy display only — no longer gates the reloan.
-  const reloanInterestOutstanding = 0;
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
