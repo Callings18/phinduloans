@@ -3147,8 +3147,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
                     <span className="text-muted-foreground">Interest Still Due</span>
                     <span className={`text-right font-medium ${reloanInterestOutstanding > 0.01 ? "text-destructive" : ""}`}>K{reloanInterestOutstanding.toLocaleString()}</span>
-                    <span className="text-muted-foreground font-semibold">Reloan Principal</span>
-                    <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal (carry-forward)</span>
+                    <span className="text-right font-bold text-destructive">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
                   </div>
@@ -3197,7 +3197,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Fresh reloan inputs (when previous loan fully paid) */}
-                {totalOutstanding <= 0 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal <= 0.01 && reloanInterestOutstanding <= 0.01 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">Fresh Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">Previous loan is fully paid. Enter a new principal and term to start a new loan for this borrower.</p>
@@ -3235,7 +3235,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Carry-forward Reloan Terms */}
-                {totalOutstanding > 0 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal > 0.01 && reloanInterestOutstanding <= 0.01 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">
@@ -3290,7 +3290,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </div>
                     <div className="grid grid-cols-2 gap-y-1 pt-2">
                       <span className="text-muted-foreground">Carry-forward Outstanding</span>
-                      <span className="text-right font-medium">K{totalOutstanding.toLocaleString()}</span>
+                      <span className="text-right font-medium">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                       <span className="text-muted-foreground">Optional Top-Up</span>
                       <span className="text-right font-medium">K{reloanTopUpNumeric.toLocaleString()}</span>
                       <span className="text-muted-foreground font-semibold">Projected New Principal</span>
@@ -3316,8 +3316,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               disabled={
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
+                reloanInterestOutstanding > 0.01 ||
                 !reloanDate ||
-                (totalOutstanding <= 0 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
+                (reloanCarryForwardPrincipal <= 0.01 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
                 (reloanTopUpNumeric > 0 && !reloanSourceAccountId)
               }
             >
