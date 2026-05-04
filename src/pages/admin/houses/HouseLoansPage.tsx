@@ -265,6 +265,35 @@ export default function HouseLoansPage() {
       {filtered.length > pageSize && (
         <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
       )}
+
+      <EditPendingLoanDialog
+        loan={editLoan}
+        open={Boolean(editLoan)}
+        onOpenChange={(o) => { if (!o) setEditLoan(null); }}
+      />
+
+      <AlertDialog open={Boolean(deleteLoan)} onOpenChange={(o) => { if (!o) setDeleteLoan(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete loan application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes <strong>{deleteLoan?.full_name || deleteLoan?.email}</strong>'s
+              loan ({deleteLoan?.status}) for K{Number(deleteLoan?.loan_amount || 0).toLocaleString()}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => { e.preventDefault(); deleteMutation.mutate(deleteLoan); }}
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
