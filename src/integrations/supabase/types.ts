@@ -1613,6 +1613,36 @@ export type Database = {
           },
         ]
       }
+      loan_application_drafts: {
+        Row: {
+          borrower_id: string | null
+          created_at: string
+          form_data: Json
+          id: string
+          product_code: string
+          staff_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          borrower_id?: string | null
+          created_at?: string
+          form_data?: Json
+          id?: string
+          product_code: string
+          staff_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          borrower_id?: string | null
+          created_at?: string
+          form_data?: Json
+          id?: string
+          product_code?: string
+          staff_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       loan_applications: {
         Row: {
           address: string | null
@@ -3646,9 +3676,11 @@ export type Database = {
           employer_name: string | null
           employment_type: string | null
           full_name: string | null
+          gender: string | null
           id: string
           is_blacklisted: boolean | null
           job_title: string | null
+          marital_status: string | null
           marketing: boolean | null
           net_income: number | null
           nrc_number: string | null
@@ -3674,9 +3706,11 @@ export type Database = {
           employer_name?: string | null
           employment_type?: string | null
           full_name?: string | null
+          gender?: string | null
           id: string
           is_blacklisted?: boolean | null
           job_title?: string | null
+          marital_status?: string | null
           marketing?: boolean | null
           net_income?: number | null
           nrc_number?: string | null
@@ -3702,9 +3736,11 @@ export type Database = {
           employer_name?: string | null
           employment_type?: string | null
           full_name?: string | null
+          gender?: string | null
           id?: string
           is_blacklisted?: boolean | null
           job_title?: string | null
+          marital_status?: string | null
           marketing?: boolean | null
           net_income?: number | null
           nrc_number?: string | null
