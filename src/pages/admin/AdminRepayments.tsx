@@ -1287,12 +1287,12 @@ const AdminRepayments = () => {
                         </div>
                         <div className="flex justify-between items-center mt-1 text-xs">
                           <span className="text-muted-foreground">Amount Due:</span>
-                          <span>K{Number(selectedRepayment.amount).toLocaleString()}</span>
+                          <span>K{totalRemaining(selectedRepayment).toLocaleString()}</span>
                         </div>
-                        {getTotalSplitAmount() < Number(selectedRepayment.amount) && (
+                        {getTotalSplitAmount() < totalRemaining(selectedRepayment) && (
                           <div className="flex justify-between items-center mt-1 text-xs text-warning">
                             <span>Remaining:</span>
-                            <span>K{(Number(selectedRepayment.amount) - getTotalSplitAmount()).toLocaleString()}</span>
+                            <span>K{(totalRemaining(selectedRepayment) - getTotalSplitAmount()).toLocaleString()}</span>
                           </div>
                         )}
                       </div>
