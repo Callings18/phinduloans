@@ -849,7 +849,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const liveReps = (allReps || []).filter(r => !r.is_reversed);
       const pendingReps = liveReps.filter(r => ["pending", "overdue", "partial"].includes(r.status));
-      const totalAllPaid = liveReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      const totalAllPaid = liveReps.reduce(
+        (sum, r) => sum + Number(r.principal_paid ?? (r.status === "paid" ? (r.original_amount || r.amount) : 0) || 0),
+        0
+      );
       const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
       const interestStillDue = Math.max(0, totalInterestDue - totalAllPaid);
       const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDue);
@@ -1622,7 +1625,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   // Calculate progress and stats
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
-  const unpaidRepayments = repayments?.filter(r => (r.status === "pending" || r.status === "overdue") && !r.is_reversed) || [];
+  const unpaidRepayments = repayments?.filter(r => ["pending", "overdue", "partial"].includes(r.status) && !r.is_reversed) || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
   // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
   const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
@@ -1634,9 +1637,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
     0
   );
-  const totalOutstanding = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  const totalOutstanding = unpaidRepayments.reduce(
+    (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
+    0
+  );
+  const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
+  const reloanInterestOutstanding = Math.max(0, totalInterestDue - totalPaidIncludingPartial);
+  const principalPaidAfterInterest = Math.max(0, totalPaidIncludingPartial - totalInterestDue);
+  const reloanCarryForwardPrincipal = Math.max(0, Number(loan.loan_amount || 0) - principalPaidAfterInterest);
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
-  const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
+  const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
   // Overdue / next-due include "partial" rows so quick-actions and KPIs reflect partially-paid installments correctly.
   const _isUnpaidStatus = (s?: string) => s === "pending" || s === "partial" || s === "overdue";
