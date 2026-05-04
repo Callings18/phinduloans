@@ -847,26 +847,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .select("*")
         .eq("loan_id", loan.id);
 
-      const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
-      // CRITICAL: include `partial` rows so partial payments are not lost in reloan math
-      const pendingReps = (allReps || []).filter(r => ["pending", "overdue", "partial"].includes(r.status));
-
-      // Total ever paid = full-paid principal + partial principal_paid still sitting on open rows
-      const totalPaidFromPaid = paidReps.reduce(
-        (sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount),
-        0
-      );
-      const totalPartialOnPending = pendingReps.reduce(
-        (sum, r) => sum + Number(r.principal_paid || 0),
-        0
-      );
-      const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
-
-      // Carry-forward = remaining installment balances NET of partial payments already applied
-      const outstandingBalance = pendingReps.reduce(
-        (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
-        0
-      );
+      const liveReps = (allReps || []).filter(r => !r.is_reversed);
+      const pendingReps = liveReps.filter(r => ["pending", "overdue", "partial"].includes(r.status));
+      const totalAllPaid = liveReps.reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
+      const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
+      const interestStillDue = Math.max(0, totalInterestDue - totalAllPaid);
+      const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDue);
+      const carryForwardPrincipal = Math.max(0, Number(loan.loan_amount || 0) - principalPaidAfterInterest);
       
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
@@ -878,8 +865,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
+      if (interestStillDue > 0.01) {
+        throw new Error(`Cannot reloan: K${interestStillDue.toLocaleString()} interest must be paid first. Once penalties and interest are cleared, the reloan principal will be K${carryForwardPrincipal.toLocaleString()}.`);
+      }
 
-      const isFreshReloan = outstandingBalance <= 0;
+      const isFreshReloan = carryForwardPrincipal <= 0.01;
       const freshPrincipalNum = Number(reloanFreshPrincipal || 0);
       const freshTermNum = Number(reloanFreshTermMonths || 0);
       if (isFreshReloan) {
@@ -956,7 +946,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       // New principal: when there's outstanding, carry it forward + optional top-up.
       // When fully paid (fresh reloan), use the admin-entered principal.
-      const outstandingPrincipal = outstandingBalance;
+      const outstandingPrincipal = carryForwardPrincipal;
       const newPrincipal = isFreshReloan
         ? freshPrincipalNum
         : outstandingPrincipal + optionalTopUpAmount;
