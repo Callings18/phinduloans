@@ -202,11 +202,21 @@ const AdminRepayments = () => {
 
   // Record payment mutation - supports partial payments; optional claimId to mark borrower claim as verified
   const recordPaymentMutation = useMutation({
-    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, destinationAccountId, claimId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; destinationAccountId: string; claimId?: string | null }) => {
+    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, penaltyAmount, destinationAccountId, claimId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; penaltyAmount: number; destinationAccountId: string; claimId?: string | null }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
       if (!repayment) throw new Error("Repayment not found");
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
+      }
+      const unpaidPenalty = penaltyRemaining(repayment);
+      if (!Number.isFinite(penaltyAmount) || penaltyAmount < 0) {
+        throw new Error("Penalty allocation must be zero or greater");
+      }
+      if (penaltyAmount > paidAmount) {
+        throw new Error("Penalty allocation cannot exceed the received amount");
+      }
+      if (penaltyAmount > unpaidPenalty + 0.01) {
+        throw new Error(`Penalty allocation cannot exceed unpaid penalty (K${unpaidPenalty.toLocaleString()})`);
       }
 
       if (!destinationAccountId) {
@@ -224,6 +234,7 @@ const AdminRepayments = () => {
         p_account_id: destinationAccountId,
         p_transaction_reference: transactionRef || `PAY-${Date.now()}`,
         p_paid_date: paidDate,
+        p_penalty_amount: penaltyAmount,
       });
       if (rpcError) throw rpcError;
       const rpcResult = rpcData as { success?: boolean; error?: string } | null;
@@ -293,7 +304,7 @@ const AdminRepayments = () => {
 
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
-      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
+        setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
       setSelectedClaimId(null);
     },
     onError: (error: any) => {
