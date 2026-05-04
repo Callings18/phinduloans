@@ -432,7 +432,10 @@ const AdminRepayments = () => {
     } else {
       // Single payment method
       const paidAmount = paymentData.amount ? Number(paymentData.amount) : totalRemaining(selectedRepayment);
-      const penaltyAmount = Number(paymentData.penalty_amount || 0);
+      const rawPenalty = Number(paymentData.penalty_amount || 0);
+      // Clamp prefilled penalty so it never exceeds the entered payment amount
+      const penaltyCap = Math.min(paidAmount, penaltyRemaining(selectedRepayment));
+      const penaltyAmount = Number.isFinite(rawPenalty) ? Math.max(0, Math.min(rawPenalty, penaltyCap)) : 0;
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         toast.error("Please enter a valid payment amount");
         return;
@@ -441,8 +444,8 @@ const AdminRepayments = () => {
         toast.error(`Amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
         return;
       }
-      if (!Number.isFinite(penaltyAmount) || penaltyAmount < 0 || penaltyAmount > Math.min(paidAmount, penaltyRemaining(selectedRepayment)) + 0.01) {
-        toast.error(`Penalty allocation must be between K0 and K${Math.min(paidAmount, penaltyRemaining(selectedRepayment)).toLocaleString()}`);
+      if (rawPenalty < 0) {
+        toast.error("Penalty allocation cannot be negative");
         return;
       }
 
