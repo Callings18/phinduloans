@@ -431,13 +431,18 @@ const AdminRepayments = () => {
       if (import.meta.env.DEV) console.log("Split payments recorded:", validSplits);
     } else {
       // Single payment method
-      const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
+      const paidAmount = paymentData.amount ? Number(paymentData.amount) : totalRemaining(selectedRepayment);
+      const penaltyAmount = Number(paymentData.penalty_amount || 0);
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         toast.error("Please enter a valid payment amount");
         return;
       }
-      if (paidAmount > Number(selectedRepayment.amount)) {
-        toast.error(`Amount cannot exceed remaining due (K${Number(selectedRepayment.amount).toLocaleString()})`);
+      if (paidAmount > totalRemaining(selectedRepayment) + 0.01) {
+        toast.error(`Amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
+        return;
+      }
+      if (!Number.isFinite(penaltyAmount) || penaltyAmount < 0 || penaltyAmount > Math.min(paidAmount, penaltyRemaining(selectedRepayment)) + 0.01) {
+        toast.error(`Penalty allocation must be between K0 and K${Math.min(paidAmount, penaltyRemaining(selectedRepayment)).toLocaleString()}`);
         return;
       }
 
@@ -451,7 +456,7 @@ const AdminRepayments = () => {
         paymentMethod: paymentData.payment_method,
         transactionRef: paymentData.transaction_reference,
         paidAmount,
-        penaltyAmount: Number(paymentData.penalty_amount || 0),
+        penaltyAmount,
         destinationAccountId: paymentData.destination_account_id,
         claimId: selectedClaimId ?? undefined,
       });
