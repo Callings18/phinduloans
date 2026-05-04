@@ -394,8 +394,8 @@ const AdminRepayments = () => {
       }
 
       const totalSplitAmount = validSplits.reduce((sum, sp) => sum + parseFloat(sp.amount), 0);
-      if (totalSplitAmount > Number(selectedRepayment.amount)) {
-        toast.error(`Total split amount cannot exceed remaining due (K${Number(selectedRepayment.amount).toLocaleString()})`);
+      if (totalSplitAmount > totalRemaining(selectedRepayment) + 0.01) {
+        toast.error(`Total split amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
         return;
       }
       
@@ -628,7 +628,7 @@ const AdminRepayments = () => {
 
   const RepaymentRowActions = ({ rep }: { rep: Repayment }) => (
     <div className="flex flex-col items-end gap-1 sm:items-end">
-      {rep.status === "pending" && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
+      {["pending", "partial", "overdue"].includes(rep.status) && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
         <div className="mb-1 flex max-w-full flex-col items-end gap-2 text-xs text-muted-foreground">
           <Badge variant="secondary" className="text-xs">
             Borrower reported – pending verification
@@ -644,7 +644,7 @@ const AdminRepayments = () => {
           </Button>
         </div>
       )}
-      {rep.status === "pending" && canRecordPayment && (
+      {["pending", "partial", "overdue"].includes(rep.status) && canRecordPayment && (
         <Button size="sm" onClick={() => handleRecordPayment(rep)} className="gradient-primary min-h-11 w-full sm:w-auto">
           <Plus size={14} className="mr-1" />
           Record Payment
