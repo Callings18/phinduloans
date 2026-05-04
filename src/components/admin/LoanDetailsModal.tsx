@@ -2006,6 +2006,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <CardTitle className="text-base">Quick Actions</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
+                    {/* Edit button for editable pre-disbursement statuses */}
+                    {(loan.status === "pending" || loan.status === "under_review" || loan.status === "approved") && (
+                      <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
+                        <Edit size={14} className="mr-1" /> Edit Loan
+                      </Button>
+                    )}
                     {/* Disburse button for awaiting_disbursement / approved */}
                     {(loan.status === "awaiting_disbursement" || loan.status === "approved") && (
                       <Button size="sm" onClick={() => setIsDisburseOpen(true)}>
