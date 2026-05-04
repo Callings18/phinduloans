@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, full_name, phone, nrc_number, address, city, product_code } = await req.json();
+    const { email, full_name, phone, nrc_number, address, city, product_code, gender, marital_status } = await req.json();
 
     if (!email || !full_name) {
       return new Response(JSON.stringify({ error: "Email and full name are required" }), {
@@ -64,9 +64,10 @@ Deno.serve(async (req) => {
     }
 
     let userId: string;
+    let createdNew = false;
 
     // Try to create user first
-    const tempPassword = crypto.randomUUID().slice(0, 12) + "Aa1!";
+    const tempPassword = crypto.randomUUID().slice(0, 10) + "Aa1!";
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: tempPassword,
