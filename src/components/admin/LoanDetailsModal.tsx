@@ -849,10 +849,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const liveReps = (allReps || []).filter(r => !r.is_reversed);
       const pendingReps = liveReps.filter(r => ["pending", "overdue", "partial"].includes(r.status));
-      const totalAllPaid = liveReps.reduce(
-        (sum, r) => sum + Number(r.principal_paid ?? (r.status === "paid" ? (r.original_amount || r.amount) : 0) || 0),
-        0
-      );
+      const totalAllPaid = liveReps.reduce((sum, r) => {
+        const fallbackPaid = r.status === "paid" ? Number(r.original_amount || r.amount || 0) : 0;
+        return sum + Number((r.principal_paid ?? fallbackPaid) || 0);
+      }, 0);
       const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
       const interestStillDue = Math.max(0, totalInterestDue - totalAllPaid);
       const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDue);
