@@ -8,6 +8,8 @@ export interface ProductLoanFormValues {
   businessMonths: number;
   isCivilServantConfirmed: boolean;
   hasLocalAuthorityCompliance: boolean;
+  productMinAmount?: number | null;
+  productMaxAmount?: number | null;
 }
 
 export interface ProductLoanRuleSet {
@@ -126,12 +128,14 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
     ],
     validate(values) {
       const errors: string[] = [];
+      const minAmount = Number(values.productMinAmount || 1000);
+      const maxAmount = Number(values.productMaxAmount || 10000);
       if (!values.hasLocalAuthorityCompliance) {
         errors.push("Local authority compliance must be confirmed for Marketeer loans.");
       }
       if (values.businessMonths < 6) errors.push("Business must exist for at least 6 months.");
-      if (values.loanAmount < 1000 || values.loanAmount > 10000) {
-        errors.push("Marketeer loan amount must be between K1,000 and K10,000.");
+      if (values.loanAmount < minAmount || values.loanAmount > maxAmount) {
+        errors.push(`Marketeer loan amount must be between K${minAmount.toLocaleString()} and K${maxAmount.toLocaleString()}.`);
       }
       if (values.termValue !== 26) {
         errors.push("Marketeer term is fixed at 26 collection days (Sundays excluded).");
