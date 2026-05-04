@@ -168,6 +168,7 @@ Deno.serve(async (req) => {
       }
     } else {
       userId = newUser.user.id;
+      createdNew = true;
     }
 
     // Update the profile with additional info for new user
