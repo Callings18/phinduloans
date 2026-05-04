@@ -1,14 +1,41 @@
 import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
-import { Search, Plus, Eye, AlertTriangle } from "lucide-react";
+import { Search, Plus, Eye, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import EditPendingLoanDialog from "@/components/admin/EditPendingLoanDialog";
+
+const DELETABLE_STATUSES = new Set([
+  "pending",
+  "under_review",
+  "approved",
+  "contract_signing",
+  "awaiting_disbursement",
+  "rejected",
+  "crb_failed",
+  "pmic_pending",
+]);
+const EDITABLE_STATUSES = new Set(["pending", "under_review", "approved"]);
+
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
