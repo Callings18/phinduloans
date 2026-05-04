@@ -56,6 +56,32 @@ export default function HouseLoansPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [editLoan, setEditLoan] = useState<any>(null);
+  const [deleteLoan, setDeleteLoan] = useState<any>(null);
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: async (loan: any) => {
+      if (!loan) throw new Error("No loan selected");
+      if (!DELETABLE_STATUSES.has(loan.status)) {
+        throw new Error(`Cannot delete a loan in status "${loan.status}".`);
+      }
+      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
+      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
+      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
+      const { error } = await supabase.from("loan_applications").delete().eq("id", loan.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Loan deleted");
+      queryClient.invalidateQueries({ queryKey: ["house-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["house-report-summary"] });
+      setDeleteLoan(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   // Build overdue stats per loan from repayments — a loan is "overdue" if it has any
   // pending/overdue installment with due_date < today.
