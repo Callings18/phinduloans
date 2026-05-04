@@ -3235,7 +3235,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Carry-forward Reloan Terms */}
-                {totalOutstanding > 0 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal > 0.01 && reloanInterestOutstanding <= 0.01 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">
