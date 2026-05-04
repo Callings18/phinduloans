@@ -80,6 +80,7 @@ import {
   Send,
   FileDown,
   Edit,
+  Trash2,
   Smartphone,
   Upload,
   Eye,
