@@ -41,6 +41,8 @@ type Borrower = {
   employment_type: string | null;
   job_title: string | null;
   net_income: number | null;
+  gender: string | null;
+  marital_status: string | null;
 };
 
 interface ProductLoanFormShellProps {
