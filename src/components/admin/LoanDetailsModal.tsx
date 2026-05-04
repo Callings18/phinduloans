@@ -102,6 +102,9 @@ import { calculateLoan } from "@/utils/loanCalculations";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
+import LoanDocumentsCard from "./LoanDocumentsCard";
+import EditPendingLoanDialog from "./EditPendingLoanDialog";
+import { FolderOpen } from "lucide-react";
 
 /** Allowed next stages per current status (Move to). Same sections for all loans; only these buttons vary. */
 const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
