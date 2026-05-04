@@ -2066,9 +2066,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
                     {/* Edit button for editable pre-disbursement statuses */}
-                    {(loan.status === "pending" || loan.status === "under_review" || loan.status === "approved") && (
+                    {DELETABLE_STATUSES.has(loan.status) && (
                       <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
                         <Edit size={14} className="mr-1" /> Edit Loan
+                      </Button>
+                    )}
+                    {/* Delete loan (admin-only, pre-disbursement) */}
+                    {isAdmin && DELETABLE_STATUSES.has(loan.status) && (
+                      <Button size="sm" variant="destructive" onClick={() => setIsDeleteLoanOpen(true)}>
+                        <Trash2 size={14} className="mr-1" /> Delete Loan
                       </Button>
                     )}
                     {/* Disburse button for awaiting_disbursement / approved */}
