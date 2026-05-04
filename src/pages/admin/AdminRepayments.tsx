@@ -315,7 +315,7 @@ const AdminRepayments = () => {
   const handleRecordPayment = (repayment: Repayment) => {
     setSelectedClaimId(null);
     setSelectedRepayment(repayment);
-    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: String(penaltyRemaining(repayment) || ""), destination_account_id: "" });
+    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
     setIsRecordPaymentOpen(true);
   };
 
@@ -325,7 +325,7 @@ const AdminRepayments = () => {
       payment_method: "mobile_money",
       transaction_reference: claim.reference,
       amount: String(claim.amount),
-      penalty_amount: String(Math.min(Number(claim.amount || 0), penaltyRemaining(repayment)) || ""),
+      penalty_amount: "",
       destination_account_id: "",
     });
     setSelectedClaimId(claim.id);
@@ -432,10 +432,7 @@ const AdminRepayments = () => {
     } else {
       // Single payment method
       const paidAmount = paymentData.amount ? Number(paymentData.amount) : totalRemaining(selectedRepayment);
-      const rawPenalty = Number(paymentData.penalty_amount || 0);
-      // Clamp prefilled penalty so it never exceeds the entered payment amount
-      const penaltyCap = Math.min(paidAmount, penaltyRemaining(selectedRepayment));
-      const penaltyAmount = Number.isFinite(rawPenalty) ? Math.max(0, Math.min(rawPenalty, penaltyCap)) : 0;
+      const penaltyAmount = Math.min(paidAmount, penaltyRemaining(selectedRepayment));
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         toast.error("Please enter a valid payment amount");
         return;
@@ -444,11 +441,6 @@ const AdminRepayments = () => {
         toast.error(`Amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
         return;
       }
-      if (rawPenalty < 0) {
-        toast.error("Penalty allocation cannot be negative");
-        return;
-      }
-
       if (!paymentData.destination_account_id) {
         toast.error("Please select a destination account");
         return;
