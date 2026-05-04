@@ -66,7 +66,6 @@ export default function ProductLoanFormShell({
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const rules = useProductLoanRules(productCode);
 
   const resolveProduct = async (code: LoanProductCode) => {
     return fetchHouseProductByCode(code);
@@ -143,6 +142,19 @@ export default function ProductLoanFormShell({
     queryKey: ["product-by-code", productCode],
     queryFn: () => resolveProduct(productCode),
   });
+
+  // Build validation rules using the product's configured min/max amount so
+  // that admin edits to the loan product (e.g., Marketeer min K500) take
+  // effect immediately without a code change.
+  const rules = useProductLoanRules(productCode, {
+    min_amount: (product as any)?.min_amount,
+    max_amount: (product as any)?.max_amount,
+  });
+
+  // Convenience numbers for the loan amount input bounds; falls back to the
+  // historical Marketeer band when the product has no override.
+  const productMinAmount = Number((product as any)?.min_amount) || (productCode === "MARKETEER" ? 1000 : 0);
+  const productMaxAmount = Number((product as any)?.max_amount) || (productCode === "MARKETEER" ? 10000 : 0);
 
   const { data: borrowers } = useQuery({
     queryKey: ["product-loan-borrowers", productCode],
@@ -792,7 +804,8 @@ export default function ProductLoanFormShell({
               <CardContent className="pt-4 pb-4">
                 {isMarketeer && (
                   <p className="text-xs text-muted-foreground mb-3">
-                    Interest: 30% flat · Duration: 26 business days (Mon–Fri) · Daily collection · Range: K1,000 – K10,000
+                    Interest: 30% flat · Duration: 26 business days (Mon–Fri) · Daily collection · Range:
+                    K{productMinAmount.toLocaleString()} – K{productMaxAmount.toLocaleString()}
                   </p>
                 )}
                 <div className="grid gap-3 md:grid-cols-4">
@@ -803,13 +816,17 @@ export default function ProductLoanFormShell({
                       type="number"
                       value={loanAmount}
                       onChange={(e) => setLoanAmount(e.target.value)}
-                      min={isMarketeer ? 1000 : 0}
-                      max={isMarketeer ? 10000 : undefined}
-                      placeholder={isMarketeer ? "K1,000 – K10,000" : "Enter amount"}
+                      min={isMarketeer ? productMinAmount : 0}
+                      max={isMarketeer ? productMaxAmount : undefined}
+                      placeholder={
+                        isMarketeer
+                          ? `K${productMinAmount.toLocaleString()} – K${productMaxAmount.toLocaleString()}`
+                          : "Enter amount"
+                      }
                     />
-                    {isMarketeer && loanAmount && (Number(loanAmount) < 1000 || Number(loanAmount) > 10000) && (
+                    {isMarketeer && loanAmount && (Number(loanAmount) < productMinAmount || Number(loanAmount) > productMaxAmount) && (
                       <p className="text-[10px] text-destructive flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Must be K1,000 – K10,000
+                        <AlertTriangle className="h-3 w-3" /> Must be K{productMinAmount.toLocaleString()} – K{productMaxAmount.toLocaleString()}
                       </p>
                     )}
                   </div>

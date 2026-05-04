@@ -15,7 +15,29 @@ export interface ProductLoanRuleSet {
   validate: (values: ProductLoanFormValues) => string[];
 }
 
-const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
+// Optional product-level overrides loaded from the database. Fields that are
+// not provided fall back to the hard-coded product policy below. This lets
+// admins tune product limits (e.g., Marketeer min K500 instead of K1000) via
+// the Loan Products screen without needing a code change.
+export interface ProductLimitsOverride {
+  min_amount?: number | null;
+  max_amount?: number | null;
+}
+
+function formatK(n: number): string {
+  return `K${Math.round(n).toLocaleString()}`;
+}
+
+function makeProductRules(overrides?: ProductLimitsOverride): Record<LoanProductCode, ProductLoanRuleSet> {
+  // Default Marketeer band when the product hasn't been customised in the DB.
+  const marketeerMin = Number.isFinite(Number(overrides?.min_amount)) && Number(overrides?.min_amount) > 0
+    ? Number(overrides!.min_amount)
+    : 1000;
+  const marketeerMax = Number.isFinite(Number(overrides?.max_amount)) && Number(overrides?.max_amount) > 0
+    ? Number(overrides!.max_amount)
+    : 10000;
+
+  return {
   SALARY_ADVANCE: {
     checklist: [
       "NRC",
@@ -130,8 +152,8 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
         errors.push("Local authority compliance must be confirmed for Marketeer loans.");
       }
       if (values.businessMonths < 6) errors.push("Business must exist for at least 6 months.");
-      if (values.loanAmount < 1000 || values.loanAmount > 10000) {
-        errors.push("Marketeer loan amount must be between K1,000 and K10,000.");
+      if (values.loanAmount < marketeerMin || values.loanAmount > marketeerMax) {
+        errors.push(`Marketeer loan amount must be between ${formatK(marketeerMin)} and ${formatK(marketeerMax)}.`);
       }
       if (values.termValue !== 26) {
         errors.push("Marketeer term is fixed at 26 collection days (Sundays excluded).");
@@ -139,8 +161,12 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
       return errors;
     },
   },
-};
+  };
+}
 
-export function useProductLoanRules(productCode: LoanProductCode): ProductLoanRuleSet {
-  return productRules[productCode];
+export function useProductLoanRules(
+  productCode: LoanProductCode,
+  overrides?: ProductLimitsOverride,
+): ProductLoanRuleSet {
+  return makeProductRules(overrides)[productCode];
 }

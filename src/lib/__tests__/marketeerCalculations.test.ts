@@ -27,8 +27,19 @@ describe("calculateMarketeerLoan", () => {
     expect(r!.dailyInstallment).toBe(300);
   });
 
-  it("returns null outside configured principal floor", () => {
-    expect(calculateMarketeerLoan(500, sampleTiers)).toBeNull();
+  it("accepts smaller principals (e.g., K500) when no custom tier floor is set", () => {
+    // Default tier accepts any positive principal so admins can configure
+    // smaller minimums (K500 etc.) on the loan product without code changes.
+    const r = calculateMarketeerLoan(500, sampleTiers);
+    expect(r).not.toBeNull();
+    expect(r!.totalRepayment).toBe(650); // 500 + 30%
+  });
+
+  it("rejects principals below an explicit tier floor", () => {
+    const explicitFloor = getMarketeerTiersOrDefault([
+      { minPrincipal: 1000, maxPrincipal: 1000000, interestPercent: 30, durationDays: 26 },
+    ]);
+    expect(calculateMarketeerLoan(500, explicitFloor)).toBeNull();
   });
 });
 

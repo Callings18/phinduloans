@@ -8,9 +8,13 @@ export interface MarketeerTier {
 export const MARKETEER_FIXED_INTEREST_PERCENT = 30;
 export const MARKETEER_COLLECTION_DAYS = 26;
 
+// Default tier intentionally accepts any positive principal so that admin
+// edits to the loan product's min_amount (e.g., K500) are honoured even when
+// no explicit pricing tier override is configured. Per-product overrides via
+// `pricing_tiers` still take precedence.
 export const MARKETEER_DEFAULT_TIERS: MarketeerTier[] = [
   {
-    minPrincipal: 1000,
+    minPrincipal: 1,
     maxPrincipal: 1000000000,
     interestPercent: MARKETEER_FIXED_INTEREST_PERCENT,
     durationDays: MARKETEER_COLLECTION_DAYS,
