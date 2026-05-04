@@ -677,17 +677,30 @@ export default function ProductLoanFormShell({
 
   return (
     <AdminLayout>
-      <div className="max-w-5xl">
-        {/* Compact Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-              <BetaBadge />
+      <div className="max-w-6xl mx-auto">
+        {/* Sticky compact header with Save Draft */}
+        <div className="sticky top-0 z-10 -mx-2 px-2 py-2 mb-2 bg-gradient-to-r from-background via-background to-background/80 backdrop-blur border-b border-border/40">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold text-foreground truncate">{title}</h1>
+                <BetaBadge />
+                <Badge variant="outline" className="text-[10px]">{productCode}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{description}</p>
             </div>
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <div className="flex items-center gap-2">
+              {draftSavedAt && (
+                <span className="text-[11px] text-muted-foreground hidden md:inline">
+                  Draft · {draftSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+              <Button size="sm" variant="outline" onClick={saveDraft} disabled={savingDraft || !borrowerId}>
+                {savingDraft ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                Save Draft
+              </Button>
+            </div>
           </div>
-          <Badge variant="outline" className="text-sm">{productCode}</Badge>
         </div>
 
         {/* Tabbed Form - compact, no excessive spacing */}
