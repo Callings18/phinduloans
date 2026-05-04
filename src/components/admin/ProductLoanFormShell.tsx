@@ -22,7 +22,7 @@ import { fetchHouseProductByCode } from "@/services/repositories/houseRepository
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addDays, format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2, Save, Loader2 } from "lucide-react";
 import CollateralBorrowersSection, {
   type CollateralBorrowerEntry,
   makeBlankBorrower,
@@ -41,6 +41,8 @@ type Borrower = {
   employment_type: string | null;
   job_title: string | null;
   net_income: number | null;
+  gender: string | null;
+  marital_status: string | null;
 };
 
 interface ProductLoanFormShellProps {
@@ -119,6 +121,96 @@ export default function ProductLoanFormShell({
   const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
   const [rollbackPending, setRollbackPending] = useState(false);
 
+  // Draft save & resume
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const draftLoadedRef = useRef(false);
+
+  // Load draft when borrower selected (auto-resume)
+  useEffect(() => {
+    if (!borrowerId || !user?.id) return;
+    draftLoadedRef.current = false;
+    (async () => {
+      const { data } = await supabase
+        .from("loan_application_drafts")
+        .select("id, form_data, updated_at")
+        .eq("staff_user_id", user.id)
+        .eq("borrower_id", borrowerId)
+        .eq("product_code", productCode)
+        .maybeSingle();
+      if (data?.form_data) {
+        const f: any = data.form_data;
+        setDraftId(data.id);
+        setDraftSavedAt(new Date(data.updated_at));
+        if (f.loanAmount) setLoanAmount(f.loanAmount);
+        if (f.termValue) setTermValue(f.termValue);
+        if (f.loanPurpose) setLoanPurpose(f.loanPurpose);
+        if (f.employmentType) setEmploymentType(f.employmentType);
+        if (f.monthlyIncome) setMonthlyIncome(f.monthlyIncome);
+        if (f.employerName) setEmployerName(f.employerName);
+        if (f.jobTitle) setJobTitle(f.jobTitle);
+        if (f.city) setCity(f.city);
+        if (f.adminNotes) setAdminNotes(f.adminNotes);
+        if (f.repaymentStartDate) setRepaymentStartDate(f.repaymentStartDate);
+        if (f.businessMonths) setBusinessMonths(f.businessMonths);
+        if (f.businessAddress) setBusinessAddress(f.businessAddress);
+        if (f.residentialAddress) setResidentialAddress(f.residentialAddress);
+        if (f.idType) setIdType(f.idType);
+        if (f.idNumber) setIdNumber(f.idNumber);
+        if (f.gender) setGender(f.gender);
+        if (f.maritalStatus) setMaritalStatus(f.maritalStatus);
+        if (f.contactNumber) setContactNumber(f.contactNumber);
+        toast({ title: "Draft restored", description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}` });
+      } else {
+        setDraftId(null);
+        setDraftSavedAt(null);
+      }
+      draftLoadedRef.current = true;
+    })();
+  }, [borrowerId, user?.id, productCode]);
+
+  const saveDraft = async () => {
+    if (!user?.id) return;
+    if (!borrowerId) {
+      toast({ title: "Select borrower first", description: "A borrower must be selected before saving a draft.", variant: "destructive" });
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      const form_data = {
+        loanAmount, termValue, loanPurpose, employmentType, monthlyIncome,
+        employerName, jobTitle, city, adminNotes, repaymentStartDate,
+        businessMonths, businessAddress, residentialAddress,
+        idType, idNumber, gender, maritalStatus, contactNumber,
+      };
+      const { data, error } = await supabase
+        .from("loan_application_drafts")
+        .upsert(
+          { staff_user_id: user.id, borrower_id: borrowerId, product_code: productCode, form_data, updated_at: new Date().toISOString() },
+          { onConflict: "staff_user_id,borrower_id,product_code" }
+        )
+        .select("id")
+        .single();
+      if (error) throw error;
+      setDraftId(data.id);
+      setDraftSavedAt(new Date());
+      toast({ title: "Draft saved", description: "You can come back and resume this loan anytime." });
+    } catch (err) {
+      toast({ title: "Save failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const deleteDraft = async () => {
+    if (!draftId) return;
+    await supabase.from("loan_application_drafts").delete().eq("id", draftId);
+    setDraftId(null);
+    setDraftSavedAt(null);
+  };
+
+
   // Pre-populate docs from borrower's permanent vault
   useEffect(() => {
     if (!borrowerId) { setVaultDocs({}); return; }
@@ -149,7 +241,7 @@ export default function ProductLoanFormShell({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, phone, nrc_number, address, city, employer_name, employment_type, job_title, net_income")
+        .select("id, full_name, email, phone, nrc_number, address, city, employer_name, employment_type, job_title, net_income, gender, marital_status")
         .order("created_at", { ascending: false })
         .limit(300);
       if (error) throw error;
@@ -172,6 +264,8 @@ export default function ProductLoanFormShell({
       if (selectedBorrower.job_title) setJobTitle(selectedBorrower.job_title);
       if (selectedBorrower.net_income) setMonthlyIncome(String(selectedBorrower.net_income));
       if (selectedBorrower.employment_type) setEmploymentType(selectedBorrower.employment_type as any);
+      if (selectedBorrower.gender) setGender(selectedBorrower.gender);
+      if (selectedBorrower.marital_status) setMaritalStatus(selectedBorrower.marital_status);
 
       // Sync primary borrower entry for collateral multi-borrower section
       setPrimaryBorrowerEntry((prev) => ({
@@ -525,13 +619,30 @@ export default function ProductLoanFormShell({
           setDocUploading(false);
         }
       }
+
+      // Persist enriched borrower data back to profile (gender, marital, employment, etc.)
+      await supabase.from("profiles").update({
+        gender: gender || null,
+        marital_status: maritalStatus || null,
+        phone: contactNumber || selectedBorrower.phone,
+        nrc_number: idNumber || selectedBorrower.nrc_number,
+        address: residentialAddress || selectedBorrower.address,
+        city: city || selectedBorrower.city,
+        employer_name: employerName || selectedBorrower.employer_name,
+        job_title: jobTitle || selectedBorrower.job_title,
+        employment_type: employmentType,
+        net_income: Number(monthlyIncome) || selectedBorrower.net_income,
+      }).eq("id", selectedBorrower.id);
+
       return inserted?.id ?? null;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setLastError(null);
       setPendingLoanId(null);
+      await deleteDraft();
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
       queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+      queryClient.invalidateQueries({ queryKey: ["product-loan-borrowers", productCode] });
       toast({ title: `${title} application created`, description: "Loan moved to pending review." });
       navigate(successRedirectPath);
     },
@@ -566,17 +677,30 @@ export default function ProductLoanFormShell({
 
   return (
     <AdminLayout>
-      <div className="max-w-5xl">
-        {/* Compact Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-              <BetaBadge />
+      <div className="max-w-6xl mx-auto">
+        {/* Sticky compact header with Save Draft */}
+        <div className="sticky top-0 z-10 -mx-2 px-2 py-2 mb-2 bg-gradient-to-r from-background via-background to-background/80 backdrop-blur border-b border-border/40">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold text-foreground truncate">{title}</h1>
+                <BetaBadge />
+                <Badge variant="outline" className="text-[10px]">{productCode}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{description}</p>
             </div>
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <div className="flex items-center gap-2">
+              {draftSavedAt && (
+                <span className="text-[11px] text-muted-foreground hidden md:inline">
+                  Draft · {draftSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+              <Button size="sm" variant="outline" onClick={saveDraft} disabled={savingDraft || !borrowerId}>
+                {savingDraft ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                Save Draft
+              </Button>
+            </div>
           </div>
-          <Badge variant="outline" className="text-sm">{productCode}</Badge>
         </div>
 
         {/* Tabbed Form - compact, no excessive spacing */}
@@ -620,10 +744,25 @@ export default function ProductLoanFormShell({
                   </div>
 
                   {selectedBorrower && (
-                    <div className="md:col-span-2 bg-muted/30 rounded-md px-3 py-2 text-xs flex gap-4 flex-wrap">
-                      <span><span className="text-muted-foreground">Name:</span> <strong>{selectedBorrower.full_name}</strong></span>
-                      <span><span className="text-muted-foreground">Phone:</span> {selectedBorrower.phone || "—"}</span>
-                      <span><span className="text-muted-foreground">NRC:</span> {selectedBorrower.nrc_number || "—"}</span>
+                    <div className="md:col-span-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                      <div className="flex gap-x-4 gap-y-1 flex-wrap">
+                        <span><span className="text-muted-foreground">Name:</span> <strong>{selectedBorrower.full_name}</strong></span>
+                        <span><span className="text-muted-foreground">Phone:</span> {selectedBorrower.phone || "—"}</span>
+                        <span><span className="text-muted-foreground">NRC:</span> {selectedBorrower.nrc_number || "—"}</span>
+                        <span><span className="text-muted-foreground">Gender:</span> {selectedBorrower.gender || "—"}</span>
+                        <span><span className="text-muted-foreground">Marital:</span> {selectedBorrower.marital_status || "—"}</span>
+                        <span><span className="text-muted-foreground">Employer:</span> {selectedBorrower.employer_name || "—"}</span>
+                        <span className="ml-auto inline-flex items-center gap-1">
+                          <FileText className="h-3 w-3 text-primary" />
+                          <span className="text-primary font-medium">{Object.keys(vaultDocs).length}</span>
+                          <span className="text-muted-foreground">vault docs linked</span>
+                        </span>
+                      </div>
+                      {Object.keys(vaultDocs).length > 0 && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          Existing KYC docs from this borrower will be auto-attached. See the Documents tab to review or replace.
+                        </p>
+                      )}
                     </div>
                   )}
 
