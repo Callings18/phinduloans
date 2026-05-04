@@ -3101,7 +3101,46 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Contract Notes Dialog */}
+      {/* Delete Loan Confirmation */}
+      <AlertDialog open={isDeleteLoanOpen} onOpenChange={setIsDeleteLoanOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete loan application?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This permanently deletes the loan application and any draft schedule, transitions and events.
+                  Use this only for pre-disbursement loans (pending, under review, approved, rejected, etc.).
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  For disbursed loans, use <strong>Undo Disbursement</strong> first.
+                </p>
+                <Textarea
+                  placeholder="Reason (optional, kept in audit log)"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLoanMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteLoanMutation.mutate();
+              }}
+            >
+              {deleteLoanMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Trash2 size={14} className="mr-1" />}
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isContractEditOpen} onOpenChange={setIsContractEditOpen}>
         <DialogContent>
           <DialogHeader>
