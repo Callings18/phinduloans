@@ -217,6 +217,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
   const [activeTab, setActiveTab] = useState("overview");
+  const [isEditPendingOpen, setIsEditPendingOpen] = useState(false);
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
