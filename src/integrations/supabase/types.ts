@@ -4285,6 +4285,7 @@ export type Database = {
           p_amount: number
           p_paid_date?: string
           p_payment_method?: string
+          p_penalty_amount?: number
           p_repayment_id: string
           p_transaction_reference?: string
         }
@@ -4313,6 +4314,10 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       transition_loan_status: {
         Args: { p_action: string; p_loan_id: string; p_reason?: string }
+        Returns: Json
+      }
+      waive_loan_penalty: {
+        Args: { p_amount?: number; p_reason?: string; p_repayment_id: string }
         Returns: Json
       }
     }

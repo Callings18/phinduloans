@@ -77,6 +77,8 @@ interface Repayment {
   installment_number: number | null;
   principal_paid?: number | null;
   original_amount?: number | null;
+  penalty_amount?: number | null;
+  penalty_paid?: number | null;
   loan_applications?: {
     full_name: string;
     email: string;
@@ -112,6 +114,7 @@ const AdminRepayments = () => {
     payment_method: "mobile_money",
     transaction_reference: "",
     amount: "",
+    penalty_amount: "",
     destination_account_id: "", // NEW: Which account to deposit to
   });
   const [isSplitPayment, setIsSplitPayment] = useState(false);
@@ -170,6 +173,15 @@ const AdminRepayments = () => {
 
   const repayments = repaymentsResult?.data ?? [];
   const totalCount = repaymentsResult?.count ?? 0;
+  const principalRemaining = (repayment: Repayment | null) => {
+    if (!repayment || repayment.status === "paid") return 0;
+    return Math.max(0, Number(repayment.original_amount || repayment.amount || 0) - Number(repayment.principal_paid || 0));
+  };
+  const penaltyRemaining = (repayment: Repayment | null) => {
+    if (!repayment || repayment.status === "paid" || repayment.status === "cancelled") return 0;
+    return Math.max(0, Number(repayment.penalty_amount || 0) - Number(repayment.penalty_paid || 0));
+  };
+  const totalRemaining = (repayment: Repayment | null) => principalRemaining(repayment) + penaltyRemaining(repayment);
 
   // Pending borrower payment claims (for "Verify & record")
   const { data: paymentClaims = [] } = useQuery({
@@ -190,11 +202,21 @@ const AdminRepayments = () => {
 
   // Record payment mutation - supports partial payments; optional claimId to mark borrower claim as verified
   const recordPaymentMutation = useMutation({
-    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, destinationAccountId, claimId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; destinationAccountId: string; claimId?: string | null }) => {
+    mutationFn: async ({ repaymentId, paymentMethod, transactionRef, paidAmount, penaltyAmount, destinationAccountId, claimId }: { repaymentId: string; paymentMethod: string; transactionRef: string; paidAmount: number; penaltyAmount: number; destinationAccountId: string; claimId?: string | null }) => {
       const repayment = repayments?.find(r => r.id === repaymentId);
       if (!repayment) throw new Error("Repayment not found");
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
+      }
+      const unpaidPenalty = penaltyRemaining(repayment);
+      if (!Number.isFinite(penaltyAmount) || penaltyAmount < 0) {
+        throw new Error("Penalty allocation must be zero or greater");
+      }
+      if (penaltyAmount > paidAmount) {
+        throw new Error("Penalty allocation cannot exceed the received amount");
+      }
+      if (penaltyAmount > unpaidPenalty + 0.01) {
+        throw new Error(`Penalty allocation cannot exceed unpaid penalty (K${unpaidPenalty.toLocaleString()})`);
       }
 
       if (!destinationAccountId) {
@@ -212,6 +234,7 @@ const AdminRepayments = () => {
         p_account_id: destinationAccountId,
         p_transaction_reference: transactionRef || `PAY-${Date.now()}`,
         p_paid_date: paidDate,
+        p_penalty_amount: penaltyAmount,
       });
       if (rpcError) throw rpcError;
       const rpcResult = rpcData as { success?: boolean; error?: string } | null;
@@ -281,7 +304,7 @@ const AdminRepayments = () => {
 
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
-      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
+        setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
       setSelectedClaimId(null);
     },
     onError: (error: any) => {
@@ -292,7 +315,7 @@ const AdminRepayments = () => {
   const handleRecordPayment = (repayment: Repayment) => {
     setSelectedClaimId(null);
     setSelectedRepayment(repayment);
-    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
+    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: String(penaltyRemaining(repayment) || ""), destination_account_id: "" });
     setIsRecordPaymentOpen(true);
   };
 
@@ -302,6 +325,7 @@ const AdminRepayments = () => {
       payment_method: "mobile_money",
       transaction_reference: claim.reference,
       amount: String(claim.amount),
+      penalty_amount: String(Math.min(Number(claim.amount || 0), penaltyRemaining(repayment)) || ""),
       destination_account_id: "",
     });
     setSelectedClaimId(claim.id);
@@ -370,8 +394,8 @@ const AdminRepayments = () => {
       }
 
       const totalSplitAmount = validSplits.reduce((sum, sp) => sum + parseFloat(sp.amount), 0);
-      if (totalSplitAmount > Number(selectedRepayment.amount)) {
-        toast.error(`Total split amount cannot exceed remaining due (K${Number(selectedRepayment.amount).toLocaleString()})`);
+      if (totalSplitAmount > totalRemaining(selectedRepayment) + 0.01) {
+        toast.error(`Total split amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
         return;
       }
       
@@ -397,6 +421,7 @@ const AdminRepayments = () => {
         paymentMethod: "split", // Special indicator for split payment
         transactionRef: `SPLIT-${Date.now()}`,
         paidAmount: totalSplitAmount,
+        penaltyAmount: Math.min(totalSplitAmount, penaltyRemaining(selectedRepayment)),
         destinationAccountId: firstDestination,
         claimId: selectedClaimId ?? undefined,
       });
@@ -406,13 +431,18 @@ const AdminRepayments = () => {
       if (import.meta.env.DEV) console.log("Split payments recorded:", validSplits);
     } else {
       // Single payment method
-      const paidAmount = paymentData.amount ? Number(paymentData.amount) : Number(selectedRepayment.amount);
+      const paidAmount = paymentData.amount ? Number(paymentData.amount) : totalRemaining(selectedRepayment);
+      const penaltyAmount = Number(paymentData.penalty_amount || 0);
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         toast.error("Please enter a valid payment amount");
         return;
       }
-      if (paidAmount > Number(selectedRepayment.amount)) {
-        toast.error(`Amount cannot exceed remaining due (K${Number(selectedRepayment.amount).toLocaleString()})`);
+      if (paidAmount > totalRemaining(selectedRepayment) + 0.01) {
+        toast.error(`Amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
+        return;
+      }
+      if (!Number.isFinite(penaltyAmount) || penaltyAmount < 0 || penaltyAmount > Math.min(paidAmount, penaltyRemaining(selectedRepayment)) + 0.01) {
+        toast.error(`Penalty allocation must be between K0 and K${Math.min(paidAmount, penaltyRemaining(selectedRepayment)).toLocaleString()}`);
         return;
       }
 
@@ -426,6 +456,7 @@ const AdminRepayments = () => {
         paymentMethod: paymentData.payment_method,
         transactionRef: paymentData.transaction_reference,
         paidAmount,
+        penaltyAmount,
         destinationAccountId: paymentData.destination_account_id,
         claimId: selectedClaimId ?? undefined,
       });
@@ -597,7 +628,7 @@ const AdminRepayments = () => {
 
   const RepaymentRowActions = ({ rep }: { rep: Repayment }) => (
     <div className="flex flex-col items-end gap-1 sm:items-end">
-      {rep.status === "pending" && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
+      {["pending", "partial", "overdue"].includes(rep.status) && canRecordPayment && canApprovePaymentClaim && claimsByRepaymentId[rep.id] && (
         <div className="mb-1 flex max-w-full flex-col items-end gap-2 text-xs text-muted-foreground">
           <Badge variant="secondary" className="text-xs">
             Borrower reported – pending verification
@@ -613,7 +644,7 @@ const AdminRepayments = () => {
           </Button>
         </div>
       )}
-      {rep.status === "pending" && canRecordPayment && (
+      {["pending", "partial", "overdue"].includes(rep.status) && canRecordPayment && (
         <Button size="sm" onClick={() => handleRecordPayment(rep)} className="gradient-primary min-h-11 w-full sm:w-auto">
           <Plus size={14} className="mr-1" />
           Record Payment
@@ -998,8 +1029,18 @@ const AdminRepayments = () => {
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Remaining Due</span>
-                    <span className="font-bold text-foreground">K{Number(selectedRepayment.amount).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Principal Due</span>
+                    <span className="font-bold text-foreground">K{principalRemaining(selectedRepayment).toLocaleString()}</span>
+                  </div>
+                  {penaltyRemaining(selectedRepayment) > 0 && (
+                    <div className="flex justify-between text-destructive">
+                      <span className="text-muted-foreground">Unpaid Penalty</span>
+                      <span className="font-bold">K{penaltyRemaining(selectedRepayment).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-border/50 pt-2">
+                    <span className="text-muted-foreground">Total Remaining</span>
+                    <span className="font-bold text-foreground">K{totalRemaining(selectedRepayment).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Due Date</span>
@@ -1040,15 +1081,33 @@ const AdminRepayments = () => {
                         type="number"
                         step="0.01"
                         min="1"
-                        max={selectedRepayment.amount}
+                        max={totalRemaining(selectedRepayment)}
                         value={paymentData.amount}
                         onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                        placeholder={`Full amount: K${Number(selectedRepayment.amount).toLocaleString()}`}
+                        placeholder={`Full amount: K${totalRemaining(selectedRepayment).toLocaleString()}`}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Enter amount received. Leave empty to record full payment of K{Number(selectedRepayment.amount).toLocaleString()}
+                        Enter amount received. Leave empty to record full payment of K{totalRemaining(selectedRepayment).toLocaleString()}
                       </p>
                     </div>
+
+                    {penaltyRemaining(selectedRepayment) > 0 && (
+                      <div className="space-y-2">
+                        <Label>Penalty Portion</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max={penaltyRemaining(selectedRepayment)}
+                          value={paymentData.penalty_amount}
+                          onChange={(e) => setPaymentData({ ...paymentData, penalty_amount: e.target.value })}
+                          placeholder={`Penalty paid: K${penaltyRemaining(selectedRepayment).toLocaleString()}`}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          This portion clears penalties first; the balance is applied to principal.
+                        </p>
+                      </div>
+                    )}
 
                     {/* NEW: Destination Account Selection */}
                     <div className="space-y-2">
@@ -1228,12 +1287,12 @@ const AdminRepayments = () => {
                         </div>
                         <div className="flex justify-between items-center mt-1 text-xs">
                           <span className="text-muted-foreground">Amount Due:</span>
-                          <span>K{Number(selectedRepayment.amount).toLocaleString()}</span>
+                          <span>K{totalRemaining(selectedRepayment).toLocaleString()}</span>
                         </div>
-                        {getTotalSplitAmount() < Number(selectedRepayment.amount) && (
+                        {getTotalSplitAmount() < totalRemaining(selectedRepayment) && (
                           <div className="flex justify-between items-center mt-1 text-xs text-warning">
                             <span>Remaining:</span>
-                            <span>K{(Number(selectedRepayment.amount) - getTotalSplitAmount()).toLocaleString()}</span>
+                            <span>K{(totalRemaining(selectedRepayment) - getTotalSplitAmount()).toLocaleString()}</span>
                           </div>
                         )}
                       </div>
