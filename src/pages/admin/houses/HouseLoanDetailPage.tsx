@@ -16,8 +16,12 @@ import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { recordLoanPayment } from "@/services/repositories/houseWorkflowRepository";
 import { downloadReceiptFromRpc } from "@/utils/handlePaymentReceipt";
 import { differenceInCalendarDays, format } from "date-fns";
-import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
+import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText, Pencil } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
+import EditPendingLoanDialog from "@/components/loans/EditPendingLoanDialog";
+import { usePermissions } from "@/hooks/usePermissions";
+
+const EDITABLE_LOAN_STATUSES = new Set(["pending", "under_review", "pmic_pending", "crb_failed"]);
 
 export default function HouseLoanDetailPage() {
   const navigate = useNavigate();
@@ -32,6 +36,9 @@ export default function HouseLoanDetailPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
+  const [editPendingOpen, setEditPendingOpen] = useState(false);
+  const { can } = usePermissions();
+  const canEditLoans = can("loans", "edit") || can("loans", "update");
   const creditToRef = useRef<HTMLButtonElement | null>(null);
 
   const focusCreditTo = () => {
@@ -241,9 +248,16 @@ export default function HouseLoanDetailPage() {
             <ArrowLeft size={14} className="mr-1" /> Back to loans
           </Link>
         </Button>
-        <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
-          <FileText size={14} className="mr-1" /> Open full loan details
-        </Button>
+        <div className="flex items-center gap-2">
+          {canEditLoans && EDITABLE_LOAN_STATUSES.has(loan.status) && (
+            <Button size="sm" variant="outline" onClick={() => setEditPendingOpen(true)}>
+              <Pencil size={14} className="mr-1" /> Edit Pending Loan
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
+            <FileText size={14} className="mr-1" /> Open full loan details
+          </Button>
+        </div>
       </div>
 
       <LoanDetailsModal
@@ -257,6 +271,13 @@ export default function HouseLoanDetailPage() {
           if (id === loanId) return;
           navigate(`/admin/houses/${encodeURIComponent(productCode)}/loans/${encodeURIComponent(id)}`);
         }}
+      />
+
+      <EditPendingLoanDialog
+        loan={loan as any}
+        open={editPendingOpen}
+        onOpenChange={setEditPendingOpen}
+        onSaved={invalidateAll}
       />
 
       {/* Loan summary */}

@@ -6,9 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
-import { Search, Plus, Eye, AlertTriangle } from "lucide-react";
+import { Search, Plus, Eye, AlertTriangle, Pencil } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
 import { format } from "date-fns";
+import EditPendingLoanDialog from "@/components/loans/EditPendingLoanDialog";
+import { usePermissions } from "@/hooks/usePermissions";
+
+// Statuses that can still be edited (before disbursement)
+const EDITABLE_STATUSES = new Set(["pending", "under_review", "pmic_pending", "crb_failed"]);
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
@@ -25,10 +30,13 @@ export default function HouseLoansPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const { data: loans, isLoading } = useHouseLoans(productCode);
   const { data: repayments } = useHouseRepayments(productCode);
+  const { can } = usePermissions();
+  const canEditLoans = can("loans", "edit") || can("loans", "update");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
 
   // Build overdue stats per loan from repayments — a loan is "overdue" if it has any
   // pending/overdue installment with due_date < today.
@@ -182,9 +190,21 @@ export default function HouseLoansPage() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{l.created_at ? format(new Date(l.created_at), "dd MMM yyyy") : "—"}</TableCell>
                       <TableCell>
-                        <Button asChild size="sm" variant="ghost">
-                          <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
-                        </Button>
+                        <div className="flex items-center gap-1 justify-end">
+                          {canEditLoans && EDITABLE_STATUSES.has(l.status) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Edit pending loan"
+                              onClick={() => setEditTarget(l)}
+                            >
+                              <Pencil size={14} />
+                            </Button>
+                          )}
+                          <Button asChild size="sm" variant="ghost">
+                            <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -200,6 +220,12 @@ export default function HouseLoansPage() {
       {filtered.length > pageSize && (
         <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
       )}
+
+      <EditPendingLoanDialog
+        loan={editTarget}
+        open={!!editTarget}
+        onOpenChange={(o) => { if (!o) setEditTarget(null); }}
+      />
     </div>
   );
 }
