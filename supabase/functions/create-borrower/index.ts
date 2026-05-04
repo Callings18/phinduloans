@@ -180,11 +180,25 @@ Deno.serve(async (req) => {
         nrc_number: nrc_number || null,
         address: address || null,
         city: city || null,
+        gender: gender || null,
+        marital_status: marital_status || null,
       })
       .eq("id", userId);
 
     if (updateError) {
       console.error("Error updating profile:", updateError);
+    }
+
+    // Send SMS with login credentials (phone-only OTP/password) for newly created borrowers
+    if (createdNew && phone) {
+      try {
+        const smsBody = `Welcome to Phindu Loans! Your account has been created. Login email: ${email} | Temp password: ${tempPassword} | Or login with phone OTP. https://phindu.com`;
+        await supabaseAdmin.functions.invoke("excite-sms", {
+          body: { to: phone, message: smsBody, userId, title: "Account credentials" },
+        });
+      } catch (smsErr) {
+        console.error("Failed to send credentials SMS:", smsErr);
+      }
     }
 
     if (product_code) {
