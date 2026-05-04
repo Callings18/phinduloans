@@ -72,7 +72,9 @@ interface Props {
   onSaved?: () => void;
 }
 
-const EDITABLE_STATUSES = new Set([
+type EditableLoanStatus = "pending" | "under_review" | "pmic_pending" | "crb_failed";
+
+const EDITABLE_STATUSES = new Set<EditableLoanStatus>([
   "pending",
   "under_review",
   "pmic_pending",
@@ -243,7 +245,7 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
     return validateCollateralBorrowers(primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries);
   }, [isCollateral, primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries]);
 
-  const editable = !!loan && EDITABLE_STATUSES.has(loan.status);
+  const editable = !!loan && EDITABLE_STATUSES.has(loan.status as EditableLoanStatus);
 
   const updateMutation = useMutation({
     mutationFn: async () => {

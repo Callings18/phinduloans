@@ -30,6 +30,12 @@ export interface LoanProduct {
   term_unit?: TermUnit | null; // NEW: Unit for loan term
 }
 
+function isCollateralProduct(product: LoanProduct): boolean {
+  const productCode = (product.product_code || "").trim().toUpperCase();
+  const productName = (product.product_name || "").trim().toLowerCase();
+  return productCode === "COLLATERAL" || productName.includes("collateral");
+}
+
 export interface LoanCalculationResult {
   principal: number;
   monthlyInterestRate: number;
@@ -155,22 +161,75 @@ export function calculateReducingBalanceInterest(
 /**
  * Main loan calculation function
  * Handles all interest periods and types with fees
- * Supports weekly and monthly payment frequencies
+ * Supports daily, weekly, and monthly payment frequencies.
+ *
+ * If `termUnit` is omitted, the function falls back to `product.term_unit`
+ * so callers that only know the product (e.g. the borrower application form
+ * or the public Calculator page) still get correct math for daily/weekly
+ * products like PAYDAY_SOFT (30 days) or MARKETEER (26 days). Without this
+ * fallback a 30-day Payday Soft loan would be priced as a 30-MONTH loan,
+ * inflating the quoted interest dramatically.
  */
 export function calculateLoan(
   principal: number,
-  termValue: number, // Can be weeks or months depending on term_unit
+  termValue: number, // Can be days, weeks, months or years (per termUnit / product.term_unit)
   product: LoanProduct,
-  termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
+  termUnit?: TermUnit
 ): LoanCalculationResult {
+  const resolvedTermUnit: TermUnit =
+    termUnit ?? (product.term_unit as TermUnit | null | undefined) ?? 'months';
+  const isCollateral = isCollateralProduct(product);
+
+  if (isCollateral) {
+    const fixedTermMonths = 6;
+    const collateralInterestRateTotal = 30;
+    const totalInterest = principal * (collateralInterestRateTotal / 100);
+    const totalRepayment = principal + totalInterest;
+    const monthlyPayment = totalRepayment / fixedTermMonths;
+
+    const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
+    const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
+    const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
+    const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
+    const vatableAmount = processingFee + enforcementFee + platformFee;
+    const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+    const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+    const feesDeductedUpfront = totalFees;
+    const disbursementAmount = principal - feesDeductedUpfront;
+
+    return {
+      principal,
+      monthlyInterestRate: 5,
+      totalInterest: Math.round(totalInterest * 100) / 100,
+      processingFee: Math.round(processingFee * 100) / 100,
+      enforcementFee: Math.round(enforcementFee * 100) / 100,
+      insuranceFee: Math.round(insuranceFee * 100) / 100,
+      vatAmount: Math.round(vatAmount * 100) / 100,
+      platformFee: Math.round(platformFee * 100) / 100,
+      totalFees: Math.round(totalFees * 100) / 100,
+      feesDeductedUpfront: Math.round(feesDeductedUpfront * 100) / 100,
+      disbursementAmount: Math.round(disbursementAmount * 100) / 100,
+      totalRepayment: Math.round(totalRepayment * 100) / 100,
+      monthlyPayment: Math.round(monthlyPayment * 100) / 100,
+      effectiveAnnualRate: Math.round(monthlyToAnnualRate(5) * 100) / 100,
+      paymentFrequency: "monthly",
+    };
+  }
+
   if (product.product_code === "MARKETEER") {
     const tiers = getMarketeerTiersOrDefault(product.pricing_tiers);
     const m = calculateMarketeerLoan(principal, tiers);
     if (m) {
-      const monthlyRate = normalizeToMonthlyRate(product.interest_rate || 0, "daily");
+      // Marketeer is a fixed-term per-loan product (30% / 26 days).
+      // Express an equivalent "monthly" rate purely for display: total interest %
+      // scaled by (30 / durationDays) so a 26-day, 30% loan reads ~34.6%/month.
+      const interestPercentTotal = m.tier.interestPercent;
+      const equivMonthlyRate = m.tier.durationDays > 0
+        ? (interestPercentTotal * 30) / m.tier.durationDays
+        : interestPercentTotal;
       return {
         principal,
-        monthlyInterestRate: monthlyRate,
+        monthlyInterestRate: Math.round(equivMonthlyRate * 100) / 100,
         totalInterest: m.totalInterest,
         processingFee: 0,
         enforcementFee: 0,
@@ -183,7 +242,7 @@ export function calculateLoan(
         totalRepayment: m.totalRepayment,
         monthlyPayment: m.dailyInstallment,
         dailyPayment: m.dailyInstallment,
-        effectiveAnnualRate: Math.round(monthlyToAnnualRate(monthlyRate) * 100) / 100,
+        effectiveAnnualRate: Math.round(monthlyToAnnualRate(equivMonthlyRate) * 100) / 100,
         paymentFrequency: "daily",
       };
     }
@@ -198,9 +257,24 @@ export function calculateLoan(
   const interestType = (rawInterestType === 'reducing_balance'
     ? 'reducing'
     : rawInterestType) as InterestType;
-  
-  // Determine payment frequency based on term_unit
-  const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && interestPeriod === 'weekly');
+
+  // Normalize "days" / "years" to a months-based view so the rest of the
+  // calculation reuses the existing weekly/monthly branches without
+  // introducing extra payment-frequency cases. Marketeer (days) is already
+  // handled by the early-return above; the remaining "days" product today
+  // is PAYDAY_SOFT (30 days = 1 month equivalent).
+  let workingTermValue = termValue;
+  let workingTermUnit: TermUnit = resolvedTermUnit;
+  if (workingTermUnit === 'days') {
+    workingTermValue = termValue / 30;
+    workingTermUnit = 'months';
+  } else if (workingTermUnit === 'years') {
+    workingTermValue = termValue * 12;
+    workingTermUnit = 'months';
+  }
+
+  // Determine payment frequency based on the working term unit
+  const isWeekly = !isCollateral && (workingTermUnit === 'weeks' || (workingTermUnit === 'months' && interestPeriod === 'weekly'));
   
   let totalInterest: number;
   let monthlyPayment: number = 0;
@@ -211,7 +285,7 @@ export function calculateLoan(
   if (isWeekly && interestPeriod === 'weekly') {
     // For weekly loans with weekly interest: calculate per week, don't normalize
     weeklyRate = product.interest_rate;
-    const termWeeks = termUnit === 'weeks' ? termValue : termValue * 4.33; // Convert months to weeks if needed
+    const termWeeks = workingTermUnit === 'weeks' ? workingTermValue : workingTermValue * 4.33; // Convert months to weeks if needed
     
     if (interestType === 'reducing') {
       weeklyPayment = calculateReducingBalancePayment(principal, weeklyRate, termWeeks);
@@ -228,7 +302,7 @@ export function calculateLoan(
   } else {
     // For monthly loans or weekly loans with monthly interest: normalize to monthly
     monthlyRate = normalizeToMonthlyRate(product.interest_rate, interestPeriod);
-    const termMonths = termUnit === 'weeks' ? termValue / 4.33 : termValue; // Convert weeks to months if needed
+    const termMonths = workingTermUnit === 'weeks' ? workingTermValue / 4.33 : workingTermValue; // Convert weeks to months if needed
     
     if (interestType === 'reducing') {
       monthlyPayment = calculateReducingBalancePayment(principal, monthlyRate, termMonths);
@@ -247,7 +321,7 @@ export function calculateLoan(
     }
     
     // For weekly payment frequency with monthly interest, calculate weekly payment
-    if (termUnit === 'weeks') {
+    if (workingTermUnit === 'weeks') {
       weeklyPayment = monthlyPayment / 4.33;
     }
   }
@@ -274,19 +348,21 @@ export function calculateLoan(
   // Adjust payment amounts for flat interest only (reducing balance already has correct amortized payments)
   if (interestType !== 'reducing') {
     if (isWeekly && weeklyPayment > 0) {
-      const termWeeks = termUnit === 'weeks' ? termValue : termValue * 4.33;
+      const termWeeks = workingTermUnit === 'weeks' ? workingTermValue : workingTermValue * 4.33;
       weeklyPayment = totalRepayment / termWeeks;
       monthlyPayment = weeklyPayment * 4.33;
     } else if (monthlyPayment > 0) {
-      const termMonths = termUnit === 'weeks' ? termValue / 4.33 : termValue;
-      monthlyPayment = totalRepayment / termMonths;
+      const termMonths = workingTermUnit === 'weeks' ? workingTermValue / 4.33 : workingTermValue;
+      if (termMonths > 0) {
+        monthlyPayment = totalRepayment / termMonths;
+      }
     }
   }
   
   // For per_loan products, derive a display monthly rate from the total interest %
   // (e.g. 30% over 3 months => 10% / month effective).
   if ((interestPeriod as string) === 'per_loan') {
-    const termMonthsDisplay = termUnit === 'weeks' ? termValue / 4.33 : termValue;
+    const termMonthsDisplay = workingTermUnit === 'weeks' ? workingTermValue / 4.33 : workingTermValue;
     if (termMonthsDisplay > 0) {
       monthlyRate = product.interest_rate / termMonthsDisplay;
     }
@@ -315,47 +391,62 @@ export function calculateLoan(
 
 /**
  * Generate amortization schedule
- * Supports both weekly and monthly payment frequencies
+ * Supports daily, weekly and monthly payment frequencies. The authoritative
+ * server-side schedule is built by `createRepaymentScheduleForLoan` in
+ * `src/utils/createRepaymentSchedule.ts` (which honours business calendar
+ * & holidays). This helper is for UI previews only.
  */
 export function generateRepaymentSchedule(
   principal: number,
-  termValue: number, // Can be weeks or months
+  termValue: number, // Can be days, weeks, months or years (per termUnit / product.term_unit)
   product: LoanProduct,
   startDate: Date,
-  termUnit: TermUnit = 'months' // NEW: Specify if term is in weeks, months, etc.
+  termUnit?: TermUnit
 ): RepaymentScheduleItem[] {
+  const resolvedTermUnit: TermUnit =
+    termUnit ?? (product.term_unit as TermUnit | null | undefined) ?? 'months';
+  const isCollateral = isCollateralProduct(product);
   const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const interestType = (product.interest_type as InterestType) || 'flat';
-  
-  // Determine if this is a weekly loan
-  const isWeekly = termUnit === 'weeks' || (termUnit === 'months' && interestPeriod === 'weekly');
-  
+
+  // Determine if this is a weekly or daily loan
+  const isWeekly = resolvedTermUnit === 'weeks' || (resolvedTermUnit === 'months' && interestPeriod === 'weekly');
+  const isDaily = !isCollateral && resolvedTermUnit === 'days';
+
   // Calculate loan details
-  const loanCalc = calculateLoan(principal, termValue, product, termUnit);
-  
+  const loanCalc = calculateLoan(principal, termValue, product, resolvedTermUnit);
+
   const schedule: RepaymentScheduleItem[] = [];
   let remainingBalance = principal;
-  
+
   // Determine number of installments and payment amount
-  const numInstallments = termUnit === 'weeks' ? termValue : (termUnit === 'months' ? termValue : termValue);
-  const paymentAmount = isWeekly && loanCalc.weeklyPayment 
-    ? loanCalc.weeklyPayment 
-    : loanCalc.monthlyPayment;
-  
-  // Get the appropriate interest rate
-  const rate = isWeekly && loanCalc.weeklyInterestRate 
-    ? loanCalc.weeklyInterestRate 
+  const numInstallments = isCollateral
+    ? 6
+    : isDaily
+      ? termValue
+      : resolvedTermUnit === 'weeks'
+        ? termValue
+        : termValue;
+  const paymentAmount = isDaily && loanCalc.dailyPayment
+    ? loanCalc.dailyPayment
+    : isWeekly && loanCalc.weeklyPayment
+      ? loanCalc.weeklyPayment
+      : loanCalc.monthlyPayment;
+
+  // Get the appropriate interest rate (display only — used by reducing balance)
+  const rate = isWeekly && loanCalc.weeklyInterestRate
+    ? loanCalc.weeklyInterestRate
     : loanCalc.monthlyInterestRate;
-  
+
   for (let i = 1; i <= numInstallments; i++) {
     const dueDate = new Date(startDate);
-    
+
     // Calculate due date based on payment frequency
-    if (isWeekly) {
-      // Add weeks (7 days per week)
+    if (isDaily) {
+      dueDate.setDate(dueDate.getDate() + i);
+    } else if (isWeekly) {
       dueDate.setDate(dueDate.getDate() + (i * 7));
     } else {
-      // Add months
       dueDate.setMonth(dueDate.getMonth() + i);
     }
     
@@ -409,12 +500,14 @@ export function calculatePenalty(
   switch (frequency) {
     case 'daily':
       return overdueAmount * (penaltyRate / 100) * effectiveDaysOverdue;
-    case 'weekly':
+    case 'weekly': {
       const weeksOverdue = Math.ceil(effectiveDaysOverdue / 7);
       return overdueAmount * (penaltyRate / 100) * weeksOverdue;
-    case 'monthly':
+    }
+    case 'monthly': {
       const monthsOverdue = Math.ceil(effectiveDaysOverdue / 30);
       return overdueAmount * (penaltyRate / 100) * monthsOverdue;
+    }
     case 'one_time':
     default:
       return overdueAmount * (penaltyRate / 100);

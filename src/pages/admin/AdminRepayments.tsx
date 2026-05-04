@@ -286,7 +286,7 @@ const AdminRepayments = () => {
 
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
-      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
+      setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "", penalty_amount: "" });
       setSelectedClaimId(null);
     },
     onError: (error: any) => {
@@ -297,7 +297,7 @@ const AdminRepayments = () => {
   const handleRecordPayment = (repayment: Repayment) => {
     setSelectedClaimId(null);
     setSelectedRepayment(repayment);
-    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "" });
+    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", destination_account_id: "", penalty_amount: "" });
     setIsRecordPaymentOpen(true);
   };
 
@@ -308,6 +308,7 @@ const AdminRepayments = () => {
       transaction_reference: claim.reference,
       amount: String(claim.amount),
       destination_account_id: "",
+      penalty_amount: "",
     });
     setSelectedClaimId(claim.id);
     setIsRecordPaymentOpen(true);

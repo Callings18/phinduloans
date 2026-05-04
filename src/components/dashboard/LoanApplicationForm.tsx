@@ -629,7 +629,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                         <p className="text-sm text-muted-foreground mb-3">{product.description}</p>
                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span>K{product.min_amount.toLocaleString()} – K{product.max_amount.toLocaleString()}</span>
-                          <span>{product.interest_rate}% {getInterestPeriodLabel(product.interest_period as any)}</span>
+                          <span>
+                            {(product.product_code || "") === "COLLATERAL"
+                              ? "30% total over 6 months (5%/month equivalent)"
+                              : `${product.interest_rate}% ${getInterestPeriodLabel(product.interest_period as any)}`}
+                          </span>
                           <span>{product.min_term_months}–{product.max_term_months} {(product.term_unit || 'months')}</span>
                           <span className="capitalize">{(product.interest_type || 'flat').replace(/_/g, ' ')}</span>
                           {(product as any).enforcement_fee_percent > 0 && <span>Enforcement: {(product as any).enforcement_fee_percent}%</span>}
@@ -844,9 +848,28 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 <h4 className="font-semibold flex items-center gap-2 mb-3">
                   <CreditCard size={16} className="text-primary" /> Loan Summary
                 </h4>
+                {selectedProduct.product_code === "COLLATERAL" && (
+                  <p className="text-xs text-muted-foreground mb-2">
+                    30% total interest over 6 months. Equivalent display rate: 5% per month.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span className="text-muted-foreground">Monthly Payment:</span>
-                  <span className="font-medium text-right">{formatCurrency(loanCalc.monthlyPayment)}</span>
+                  <span className="text-muted-foreground">
+                    {loanCalc.paymentFrequency === "daily"
+                      ? "Daily Installment:"
+                      : loanCalc.paymentFrequency === "weekly"
+                      ? "Weekly Payment:"
+                      : "Monthly Payment:"}
+                  </span>
+                  <span className="font-medium text-right">
+                    {formatCurrency(
+                      loanCalc.paymentFrequency === "daily"
+                        ? (loanCalc.dailyPayment ?? loanCalc.monthlyPayment)
+                        : loanCalc.paymentFrequency === "weekly"
+                        ? (loanCalc.weeklyPayment ?? loanCalc.monthlyPayment)
+                        : loanCalc.monthlyPayment
+                    )}
+                  </span>
                   <span className="text-muted-foreground">Total Interest:</span>
                   <span className="font-medium text-right">{formatCurrency(loanCalc.totalInterest)}</span>
                   {loanCalc.feesDeductedUpfront > 0 && (
@@ -968,8 +991,31 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium ml-1">{formatCurrency(loanAmount)}</span></div>
               <div><span className="text-muted-foreground">Term:</span> <span className="font-medium ml-1">{loanTerm} {termUnitLabel}</span></div>
               <div><span className="text-muted-foreground">Purpose:</span> <span className="font-medium ml-1 capitalize">{loanPurpose.replace(/_/g, " ")}</span></div>
-              <div><span className="text-muted-foreground">Monthly Payment:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.monthlyPayment)}</span></div>
+              <div>
+                <span className="text-muted-foreground">
+                  {loanCalc.paymentFrequency === "daily"
+                    ? "Daily Installment:"
+                    : loanCalc.paymentFrequency === "weekly"
+                    ? "Weekly Payment:"
+                    : "Monthly Payment:"}
+                </span>
+                <span className="font-bold ml-1 text-primary">
+                  {formatCurrency(
+                    loanCalc.paymentFrequency === "daily"
+                      ? (loanCalc.dailyPayment ?? loanCalc.monthlyPayment)
+                      : loanCalc.paymentFrequency === "weekly"
+                      ? (loanCalc.weeklyPayment ?? loanCalc.monthlyPayment)
+                      : loanCalc.monthlyPayment
+                  )}
+                </span>
+              </div>
               <div><span className="text-muted-foreground">Total Repayment:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.totalRepayment)}</span></div>
+              {selectedProduct.product_code === "COLLATERAL" && (
+                <>
+                  <div><span className="text-muted-foreground">Interest model:</span> <span className="font-medium ml-1">30% total over 6 months</span></div>
+                  <div><span className="text-muted-foreground">Equivalent rate:</span> <span className="font-medium ml-1">5% per month (display only)</span></div>
+                </>
+              )}
               {loanCalc.feesDeductedUpfront > 0 && (
                 <div><span className="text-muted-foreground">You Receive:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.disbursementAmount)}</span></div>
               )}
