@@ -151,7 +151,7 @@ export default function ProductLoanFormShell({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, phone, nrc_number, address, city, employer_name, employment_type, job_title, net_income")
+        .select("id, full_name, email, phone, nrc_number, address, city, employer_name, employment_type, job_title, net_income, gender, marital_status")
         .order("created_at", { ascending: false })
         .limit(300);
       if (error) throw error;
@@ -174,6 +174,8 @@ export default function ProductLoanFormShell({
       if (selectedBorrower.job_title) setJobTitle(selectedBorrower.job_title);
       if (selectedBorrower.net_income) setMonthlyIncome(String(selectedBorrower.net_income));
       if (selectedBorrower.employment_type) setEmploymentType(selectedBorrower.employment_type as any);
+      if (selectedBorrower.gender) setGender(selectedBorrower.gender);
+      if (selectedBorrower.marital_status) setMaritalStatus(selectedBorrower.marital_status);
 
       // Sync primary borrower entry for collateral multi-borrower section
       setPrimaryBorrowerEntry((prev) => ({
