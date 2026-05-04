@@ -229,6 +229,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [newInterestRate, setNewInterestRate] = useState("");
   const [restructureReason, setRestructureReason] = useState("");
   const [isUndoDisbursementOpen, setIsUndoDisbursementOpen] = useState(false);
+  const [isDeleteLoanOpen, setIsDeleteLoanOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [isGenerateScheduleOpen, setIsGenerateScheduleOpen] = useState(false);
   const [adminNotes, setAdminNotes] = useState(loan?.admin_notes || "");
   const [isReloanOpen, setIsReloanOpen] = useState(false);
