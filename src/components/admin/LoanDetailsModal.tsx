@@ -847,26 +847,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .select("*")
         .eq("loan_id", loan.id);
 
-      const paidReps = (allReps || []).filter(r => r.status === "paid" && !r.is_reversed);
-      // CRITICAL: include `partial` rows so partial payments are not lost in reloan math
-      const pendingReps = (allReps || []).filter(r => ["pending", "overdue", "partial"].includes(r.status));
-
-      // Total ever paid = full-paid principal + partial principal_paid still sitting on open rows
-      const totalPaidFromPaid = paidReps.reduce(
-        (sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount),
-        0
-      );
-      const totalPartialOnPending = pendingReps.reduce(
-        (sum, r) => sum + Number(r.principal_paid || 0),
-        0
-      );
-      const totalAllPaid = totalPaidFromPaid + totalPartialOnPending;
-
-      // Carry-forward = remaining installment balances NET of partial payments already applied
-      const outstandingBalance = pendingReps.reduce(
-        (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
-        0
-      );
+      const liveReps = (allReps || []).filter(r => !r.is_reversed);
+      const pendingReps = liveReps.filter(r => ["pending", "overdue", "partial"].includes(r.status));
+      const totalAllPaid = liveReps.reduce((sum, r) => {
+        const fallbackPaid = r.status === "paid" ? Number(r.original_amount || r.amount || 0) : 0;
+        return sum + Number((r.principal_paid ?? fallbackPaid) || 0);
+      }, 0);
+      const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
+      const interestStillDue = Math.max(0, totalInterestDue - totalAllPaid);
+      const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDue);
+      const carryForwardPrincipal = Math.max(0, Number(loan.loan_amount || 0) - principalPaidAfterInterest);
       
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
@@ -878,8 +868,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (totalUnpaidPenalties > 0) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
+      if (interestStillDue > 0.01) {
+        throw new Error(`Cannot reloan: K${interestStillDue.toLocaleString()} interest must be paid first. Once penalties and interest are cleared, the reloan principal will be K${carryForwardPrincipal.toLocaleString()}.`);
+      }
 
-      const isFreshReloan = outstandingBalance <= 0;
+      const isFreshReloan = carryForwardPrincipal <= 0.01;
       const freshPrincipalNum = Number(reloanFreshPrincipal || 0);
       const freshTermNum = Number(reloanFreshTermMonths || 0);
       if (isFreshReloan) {
@@ -956,7 +949,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       // New principal: when there's outstanding, carry it forward + optional top-up.
       // When fully paid (fresh reloan), use the admin-entered principal.
-      const outstandingPrincipal = outstandingBalance;
+      const outstandingPrincipal = carryForwardPrincipal;
       const newPrincipal = isFreshReloan
         ? freshPrincipalNum
         : outstandingPrincipal + optionalTopUpAmount;
@@ -1632,7 +1625,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   // Calculate progress and stats
   const paidRepayments = repayments?.filter(r => r.status === "paid" && !r.is_reversed) || [];
   const pendingRepayments = repayments?.filter(r => r.status === "pending") || [];
-  const unpaidRepayments = repayments?.filter(r => (r.status === "pending" || r.status === "overdue") && !r.is_reversed) || [];
+  const unpaidRepayments = repayments?.filter(r => ["pending", "overdue", "partial"].includes(r.status) && !r.is_reversed) || [];
   const reversedRepayments = repayments?.filter(r => r.is_reversed) || [];
   // Use principal_paid where available; fall back to original_amount for settlement/reloan rows
   const totalPaid = paidRepayments.reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
@@ -1644,9 +1637,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
     0
   );
-  const totalOutstanding = unpaidRepayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  const totalOutstanding = unpaidRepayments.reduce(
+    (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
+    0
+  );
+  const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
+  const reloanInterestOutstanding = Math.max(0, totalInterestDue - totalPaidIncludingPartial);
+  const principalPaidAfterInterest = Math.max(0, totalPaidIncludingPartial - totalInterestDue);
+  const reloanCarryForwardPrincipal = Math.max(0, Number(loan.loan_amount || 0) - principalPaidAfterInterest);
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
-  const reloanProjectedPrincipal = totalOutstanding + reloanTopUpNumeric;
+  const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
   // Overdue / next-due include "partial" rows so quick-actions and KPIs reflect partially-paid installments correctly.
   const _isUnpaidStatus = (s?: string) => s === "pending" || s === "partial" || s === "overdue";
@@ -3145,7 +3145,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium">K{Number(loan.total_repayment || 0).toLocaleString()}</span>
                     <span className="text-muted-foreground">Total Paid</span>
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
-                    <span className="text-muted-foreground font-semibold">Outstanding Balance</span>
+                    <span className="text-muted-foreground">Interest Still Due</span>
+                    <span className={`text-right font-medium ${reloanInterestOutstanding > 0.01 ? "text-destructive" : ""}`}>K{reloanInterestOutstanding.toLocaleString()}</span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal</span>
                     <span className="text-right font-bold text-destructive">K{totalOutstanding.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
@@ -3165,13 +3167,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {totalOutstanding <= 0 ? (
+                    {reloanInterestOutstanding > 0.01 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Interest still due K{reloanInterestOutstanding.toLocaleString()} — must be cleared before reloan
+                      </div>
+                    ) : reloanCarryForwardPrincipal <= 0.01 ? (
                       <div className="flex items-center gap-2 text-success">
                         <CheckCircle size={16} /> No outstanding balance — eligible for fresh reloan
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> Outstanding balance K{totalOutstanding.toLocaleString()} — will carry forward as new principal
+                        <CheckCircle size={16} /> Interest is cleared — K{reloanCarryForwardPrincipal.toLocaleString()} principal will carry forward
                       </div>
                     )}
                   </div>

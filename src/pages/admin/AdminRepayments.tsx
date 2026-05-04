@@ -315,7 +315,7 @@ const AdminRepayments = () => {
   const handleRecordPayment = (repayment: Repayment) => {
     setSelectedClaimId(null);
     setSelectedRepayment(repayment);
-    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: String(penaltyRemaining(repayment) || ""), destination_account_id: "" });
+    setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
     setIsRecordPaymentOpen(true);
   };
 
@@ -325,7 +325,7 @@ const AdminRepayments = () => {
       payment_method: "mobile_money",
       transaction_reference: claim.reference,
       amount: String(claim.amount),
-      penalty_amount: String(Math.min(Number(claim.amount || 0), penaltyRemaining(repayment)) || ""),
+      penalty_amount: "",
       destination_account_id: "",
     });
     setSelectedClaimId(claim.id);
@@ -432,10 +432,7 @@ const AdminRepayments = () => {
     } else {
       // Single payment method
       const paidAmount = paymentData.amount ? Number(paymentData.amount) : totalRemaining(selectedRepayment);
-      const rawPenalty = Number(paymentData.penalty_amount || 0);
-      // Clamp prefilled penalty so it never exceeds the entered payment amount
-      const penaltyCap = Math.min(paidAmount, penaltyRemaining(selectedRepayment));
-      const penaltyAmount = Number.isFinite(rawPenalty) ? Math.max(0, Math.min(rawPenalty, penaltyCap)) : 0;
+      const penaltyAmount = Math.min(paidAmount, penaltyRemaining(selectedRepayment));
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         toast.error("Please enter a valid payment amount");
         return;
@@ -444,11 +441,6 @@ const AdminRepayments = () => {
         toast.error(`Amount cannot exceed remaining due (K${totalRemaining(selectedRepayment).toLocaleString()})`);
         return;
       }
-      if (rawPenalty < 0) {
-        toast.error("Penalty allocation cannot be negative");
-        return;
-      }
-
       if (!paymentData.destination_account_id) {
         toast.error("Please select a destination account");
         return;
@@ -1095,20 +1087,8 @@ const AdminRepayments = () => {
                     </div>
 
                     {penaltyRemaining(selectedRepayment) > 0 && (
-                      <div className="space-y-2">
-                        <Label>Penalty Portion</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max={penaltyRemaining(selectedRepayment)}
-                          value={paymentData.penalty_amount}
-                          onChange={(e) => setPaymentData({ ...paymentData, penalty_amount: e.target.value })}
-                          placeholder={`Penalty paid: K${penaltyRemaining(selectedRepayment).toLocaleString()}`}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          This portion clears penalties first; the balance is applied to principal.
-                        </p>
+                      <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-muted-foreground">
+                        K{Math.min(Number(paymentData.amount || totalRemaining(selectedRepayment)), penaltyRemaining(selectedRepayment)).toLocaleString()} will clear penalties first; the remaining payment applies to the loan balance.
                       </div>
                     )}
 

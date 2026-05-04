@@ -214,6 +214,9 @@ export default function ProductLoanFormShell({
   const isSalaryAdvanceFamily = productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF";
   const usesDailySchedule = termUnit === "days";
   const minRepaymentStartDate = format(addDays(new Date(), 1), "yyyy-MM-dd");
+  const marketeerMinAmount = isMarketeer ? Number(product?.min_amount || 500) : 0;
+  const marketeerMaxAmount = isMarketeer ? Number(product?.max_amount || 10000) : 0;
+  const marketeerRangeLabel = `K${marketeerMinAmount.toLocaleString()} – K${marketeerMaxAmount.toLocaleString()}`;
 
   const marketeerResult = useMemo(() => {
     if (!isMarketeer || !product || !loanAmount) return null;
@@ -794,7 +797,7 @@ export default function ProductLoanFormShell({
               <CardContent className="pt-4 pb-4">
                 {isMarketeer && (
                   <p className="text-xs text-muted-foreground mb-3">
-                    Interest: 30% flat · Duration: 26 business days (Mon–Fri) · Daily collection · Range: K1,000 – K10,000
+                    Interest: 30% flat · Duration: 26 business days (Mon–Sat, Sundays excluded) · Daily collection · Range: {marketeerRangeLabel}
                   </p>
                 )}
                 <div className="grid gap-3 md:grid-cols-4">
@@ -805,13 +808,13 @@ export default function ProductLoanFormShell({
                       type="number"
                       value={loanAmount}
                       onChange={(e) => setLoanAmount(e.target.value)}
-                      min={isMarketeer ? 1000 : 0}
-                      max={isMarketeer ? 10000 : undefined}
-                      placeholder={isMarketeer ? "K1,000 – K10,000" : "Enter amount"}
+                      min={isMarketeer ? marketeerMinAmount : 0}
+                      max={isMarketeer ? marketeerMaxAmount : undefined}
+                      placeholder={isMarketeer ? marketeerRangeLabel : "Enter amount"}
                     />
-                    {isMarketeer && loanAmount && (Number(loanAmount) < 1000 || Number(loanAmount) > 10000) && (
+                    {isMarketeer && loanAmount && (Number(loanAmount) < marketeerMinAmount || Number(loanAmount) > marketeerMaxAmount) && (
                       <p className="text-[10px] text-destructive flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Must be K1,000 – K10,000
+                        <AlertTriangle className="h-3 w-3" /> Must be {marketeerRangeLabel}
                       </p>
                     )}
                   </div>
