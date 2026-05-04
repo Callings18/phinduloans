@@ -3290,7 +3290,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     </div>
                     <div className="grid grid-cols-2 gap-y-1 pt-2">
                       <span className="text-muted-foreground">Carry-forward Outstanding</span>
-                      <span className="text-right font-medium">K{totalOutstanding.toLocaleString()}</span>
+                      <span className="text-right font-medium">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                       <span className="text-muted-foreground">Optional Top-Up</span>
                       <span className="text-right font-medium">K{reloanTopUpNumeric.toLocaleString()}</span>
                       <span className="text-muted-foreground font-semibold">Projected New Principal</span>
