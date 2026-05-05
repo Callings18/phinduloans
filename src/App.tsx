@@ -296,6 +296,10 @@ function App() {
                         element={<PermissionRoute permission={{ module: "house", action: "loans_create" }}><HouseLoanCreatePage /></PermissionRoute>}
                       />
                       <Route
+                        path="loans/:loanId/edit"
+                        element={<PermissionRoute permission={{ module: "house", action: "loans_update" }}><HouseLoanEditPage /></PermissionRoute>}
+                      />
+                      <Route
                         path="loans/:loanId"
                         element={
                           <PermissionRoute
