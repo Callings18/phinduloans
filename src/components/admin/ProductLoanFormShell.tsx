@@ -436,8 +436,19 @@ export default function ProductLoanFormShell({
     mutationFn: async () => {
       if (!selectedBorrower) throw new Error("Select a borrower first.");
       if (!user?.id) throw new Error("User session not found.");
-      if (!loanAmount || !termValue || !loanPurpose || !monthlyIncome) {
-        throw new Error("Fill in all required loan fields.");
+      // Build a specific list of missing fields so the user knows exactly what to fix
+      // (the previous generic "Fill in all required loan fields" was a UX dead-end).
+      const missing: string[] = [];
+      if (!loanAmount) missing.push("Loan Amount");
+      if (!termValue) missing.push(`Tenure (${termUnit})`);
+      if (!loanPurpose) missing.push("Loan Purpose");
+      if (!monthlyIncome) missing.push(isMarketeer ? "Monthly Business Income" : "Monthly Income");
+      if (missing.length > 0) {
+        throw new Error(
+          missing.length === 1
+            ? `Missing required field: ${missing[0]}.`
+            : `Missing required fields: ${missing.join(", ")}.`,
+        );
       }
       if (usesDailySchedule && !repaymentStartDate) {
         throw new Error("Repayment start date is required.");
@@ -1034,6 +1045,7 @@ export default function ProductLoanFormShell({
                 onCoBorrowersChange={setCoBorrowerEntries}
                 onAbsoluteOwnersChange={setAbsoluteOwnerEntries}
                 primaryLocked={!!selectedBorrower}
+                borrowerDirectory={borrowers || []}
               />
             )}
 
