@@ -803,6 +803,153 @@ export default function ProductLoanFormShell({
     },
   });
 
+  // ===== EDIT MODE: update mutation that mirrors the create payload. =====
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!isEditMode || !editLoanId) throw new Error("Not in edit mode");
+      if (!user?.id) throw new Error("User session not found.");
+      if (!selectedBorrower) throw new Error("Select a borrower first.");
+      const missing: string[] = [];
+      if (!loanAmount) missing.push("Loan Amount");
+      if (!termValue) missing.push(`Tenure (${termUnit})`);
+      if (!loanPurpose) missing.push("Loan Purpose");
+      if (!monthlyIncome) missing.push(isMarketeer ? "Monthly Business Income" : "Monthly Income");
+      if (missing.length > 0) throw new Error(`Missing required fields: ${missing.join(", ")}`);
+      if (validationErrors.length > 0) throw new Error(validationErrors[0]);
+      if (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid) {
+        throw new Error(collateralBorrowersValidation.errors[0] || "Borrowers section incomplete.");
+      }
+
+      const activeProduct = product?.id ? product : await resolveProduct(productCode);
+      let totalRepayment = 0;
+      let installmentAmount = 0;
+      if (isMarketeer && marketeerResult) {
+        totalRepayment = marketeerResult.totalRepayment;
+        installmentAmount = marketeerResult.dailyInstallment;
+      } else if (activeProduct) {
+        const calc = calculateLoan(
+          Number(loanAmount),
+          Number(termValue),
+          {
+            product_code: productCode,
+            interest_rate: Number(activeProduct.interest_rate || 0),
+            interest_period: (activeProduct.interest_period || "monthly") as any,
+            interest_type: ((activeProduct.interest_type as string) || "flat") as any,
+            processing_fee_percent: Number(activeProduct.processing_fee_percent || 0),
+            enforcement_fee_percent: Number(activeProduct.enforcement_fee_percent || 0),
+            insurance_percent: Number(activeProduct.insurance_percent || 0),
+            vat_percent: Number(activeProduct.vat_percent || 0),
+            platform_fee_percent: Number(activeProduct.platform_fee_percent || 0),
+          },
+          termUnit,
+        );
+        totalRepayment = calc.totalRepayment;
+        installmentAmount = calc.monthlyPayment;
+      }
+
+      const existingPsd = ((editLoanData?.loan as any)?.product_specific_data as any) || {};
+      const update: Record<string, unknown> = {
+        loan_amount: Number(loanAmount),
+        loan_term_months: Number(termValue),
+        loan_purpose: loanPurpose,
+        full_name: selectedBorrower.full_name || selectedBorrower.email,
+        email: selectedBorrower.email,
+        phone: contactNumber || selectedBorrower.phone || "",
+        nrc_number: idNumber || selectedBorrower.nrc_number || "",
+        address: residentialAddress || selectedBorrower.address || null,
+        city: city || selectedBorrower.city || null,
+        employer_name: employerName || null,
+        job_title: jobTitle || null,
+        employment_type: employmentType,
+        monthly_income: Number(monthlyIncome),
+        admin_notes: adminNotes || null,
+        repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
+        monthly_payment: installmentAmount,
+        total_repayment: totalRepayment,
+        product_specific_data: {
+          ...existingPsd,
+          product_code: productCode,
+          business_months: Number(businessMonths || 0),
+          civil_servant_confirmed: isCivilServantConfirmed,
+          local_authority_compliance: hasLocalAuthorityCompliance,
+          business_address: businessAddress,
+          residential_address: residentialAddress,
+          id_type: idType,
+          id_number: idNumber,
+          gender,
+          marital_status: maritalStatus,
+          contact_number: contactNumber,
+        },
+      };
+      const { error: upErr } = await supabase.from("loan_applications").update(update).eq("id", editLoanId);
+      if (upErr) throw upErr;
+
+      if (productCode === "COLLATERAL") {
+        await supabase.from("loan_borrowers").delete().eq("loan_application_id", editLoanId);
+        const rows = [
+          {
+            loan_application_id: editLoanId,
+            customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
+            full_name: primaryBorrowerEntry.full_name,
+            nrc_number: primaryBorrowerEntry.nrc_number,
+            phone: primaryBorrowerEntry.phone || null,
+            address: primaryBorrowerEntry.address || null,
+            role: "PRIMARY_BORROWER" as const,
+            is_signatory: primaryBorrowerEntry.is_signatory,
+            created_by: user.id,
+          },
+          ...coBorrowerEntries.map((b) => ({
+            loan_application_id: editLoanId,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "CO_BORROWER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user.id,
+          })),
+          ...absoluteOwnerEntries.map((b) => ({
+            loan_application_id: editLoanId,
+            customer_id: b.customer_id || null,
+            full_name: b.full_name,
+            nrc_number: b.nrc_number,
+            phone: b.phone || null,
+            address: b.address || null,
+            role: "ABSOLUTE_OWNER" as const,
+            is_signatory: b.is_signatory,
+            created_by: user.id,
+          })),
+        ];
+        const { error: insErr } = await supabase.from("loan_borrowers").insert(rows);
+        if (insErr) throw insErr;
+      }
+
+      // Upload any newly attached docs (additive — never delete existing).
+      if (Object.values(docFiles).some(Boolean)) {
+        setDocUploading(true);
+        try {
+          await uploadDocuments(editLoanId, selectedBorrower.id);
+        } finally {
+          setDocUploading(false);
+        }
+      }
+      return editLoanId;
+    },
+    onSuccess: () => {
+      toast({ title: "Loan updated", description: "Changes saved successfully." });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+      queryClient.invalidateQueries({ queryKey: ["edit-loan-shell", editLoanId] });
+      queryClient.invalidateQueries({ queryKey: ["application-documents", editLoanId] });
+      navigate(successRedirectPath);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+
   const rollbackPendingLoan = async () => {
     if (!pendingLoanId) return;
     setRollbackPending(true);
