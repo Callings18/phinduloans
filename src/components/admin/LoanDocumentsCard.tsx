@@ -74,6 +74,8 @@ function normalizeDocKey(path: string): string {
 
 function inferGroupFromDocMeta(docType: string, label: string): DocItem["group"] {
   const t = `${docType} ${label}`.toLowerCase();
+  if (t.includes("co_borrower") || t.includes("co-borrower") || t.includes("coborrower")) return "co_borrower";
+  if (t.includes("absolute_owner") || t.includes("absolute owner") || t.includes("owner")) return "absolute_owner";
   if (t.includes("collateral") || t.includes("title") || t.includes("deed")) return "collateral";
   if (t.includes("nrc") || t.includes("selfie") || t.includes("identity")) return "identity";
   if (t.includes("payslip") || t.includes("bank") || t.includes("income")) return "income";
