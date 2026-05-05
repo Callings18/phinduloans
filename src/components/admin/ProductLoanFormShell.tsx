@@ -53,6 +53,8 @@ interface ProductLoanFormShellProps {
   defaultTermValue: number;
   showChecklist?: boolean;
   successRedirectPath?: string;
+  /** When set, the form runs in EDIT mode against an existing loan_applications.id. */
+  editLoanId?: string;
 }
 
 export default function ProductLoanFormShell({
@@ -63,7 +65,9 @@ export default function ProductLoanFormShell({
   defaultTermValue,
   showChecklist = true,
   successRedirectPath = "/admin/applications",
+  editLoanId,
 }: ProductLoanFormShellProps) {
+  const isEditMode = !!editLoanId;
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
