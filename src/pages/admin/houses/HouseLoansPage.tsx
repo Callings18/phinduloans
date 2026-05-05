@@ -56,7 +56,7 @@ export default function HouseLoansPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [editLoan, setEditLoan] = useState<any>(null);
+  
   const [deleteLoan, setDeleteLoan] = useState<any>(null);
   const queryClient = useQueryClient();
 
