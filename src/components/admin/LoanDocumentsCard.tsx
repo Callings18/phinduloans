@@ -19,7 +19,10 @@ type DocItem = {
   label: string;
   path: string;
   kind: "image" | "pdf" | "file";
-  group: "collateral" | "identity" | "income" | "contract" | "other";
+  group: "collateral" | "identity" | "income" | "contract" | "co_borrower" | "absolute_owner" | "other";
+  /** Source row ids so we know how to delete. */
+  appDocId?: string;
+  vaultDocId?: string;
 };
 
 interface Props {
@@ -33,8 +36,20 @@ const groupMeta: Record<DocItem["group"], { label: string; icon: any; tint: stri
   identity: { label: "Identity (NRC)", icon: IdCard, tint: "text-blue-500" },
   income: { label: "Income / Payslips", icon: Receipt, tint: "text-emerald-500" },
   contract: { label: "Contract", icon: FileCheck2, tint: "text-primary" },
+  co_borrower: { label: "Co-borrower", icon: Users, tint: "text-fuchsia-500" },
+  absolute_owner: { label: "Absolute owner", icon: UserCheck, tint: "text-cyan-500" },
   other: { label: "Other", icon: Paperclip, tint: "text-muted-foreground" },
 };
+
+const UPLOAD_CATEGORIES: { value: DocItem["group"]; label: string }[] = [
+  { value: "collateral", label: "Collateral" },
+  { value: "identity", label: "Identity (NRC)" },
+  { value: "income", label: "Income / Payslip" },
+  { value: "contract", label: "Contract" },
+  { value: "co_borrower", label: "Co-borrower" },
+  { value: "absolute_owner", label: "Absolute owner" },
+  { value: "other", label: "Other" },
+];
 
 function inferKind(path: string): DocItem["kind"] {
   const p = path.toLowerCase();
