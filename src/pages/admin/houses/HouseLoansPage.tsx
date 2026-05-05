@@ -22,7 +22,7 @@ import PaginationControls from "@/components/common/PaginationControls";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import EditPendingLoanDialog from "@/components/admin/EditPendingLoanDialog";
+
 
 const DELETABLE_STATUSES = new Set([
   "pending",
@@ -56,7 +56,7 @@ export default function HouseLoansPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [editLoan, setEditLoan] = useState<any>(null);
+  
   const [deleteLoan, setDeleteLoan] = useState<any>(null);
   const queryClient = useQueryClient();
 
@@ -240,8 +240,8 @@ export default function HouseLoansPage() {
                             <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
                           </Button>
                           {EDITABLE_STATUSES.has(l.status) && (
-                            <Button size="sm" variant="ghost" title="Edit" onClick={() => setEditLoan(l)}>
-                              <Pencil size={14} />
+                            <Button asChild size="sm" variant="ghost" title="Edit">
+                              <Link to={`/admin/houses/${productCode}/loans/${l.id}/edit`}><Pencil size={14} /></Link>
                             </Button>
                           )}
                           {DELETABLE_STATUSES.has(l.status) && (
@@ -266,11 +266,6 @@ export default function HouseLoansPage() {
         <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
       )}
 
-      <EditPendingLoanDialog
-        loan={editLoan}
-        open={Boolean(editLoan)}
-        onOpenChange={(o) => { if (!o) setEditLoan(null); }}
-      />
 
       <AlertDialog open={Boolean(deleteLoan)} onOpenChange={(o) => { if (!o) setDeleteLoan(null); }}>
         <AlertDialogContent>

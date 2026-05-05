@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
@@ -268,6 +269,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [messageTemplate, setMessageTemplate] = useState("");
 
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: settings } = useSystemSettings();
 
   // Fetch loan product to determine payment frequency
@@ -277,7 +279,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!loan?.loan_product_id) return null;
       const { data, error } = await supabase
         .from("loan_products")
-        .select("name, term_unit, interest_period, repayment_frequency, interest_type")
+        .select("name, product_code, term_unit, interest_period, repayment_frequency, interest_type")
         .eq("id", loan.loan_product_id)
         .single();
 
@@ -2068,7 +2070,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <CardContent className="flex flex-wrap gap-2">
                     {/* Edit button for editable pre-disbursement statuses */}
                     {DELETABLE_STATUSES.has(loan.status) && (
-                      <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const code = (loanProduct as any)?.product_code;
+                          if (code) {
+                            onOpenChange(false);
+                            navigate(`/admin/houses/${code}/loans/${loan.id}/edit`);
+                          } else {
+                            setIsEditPendingOpen(true);
+                          }
+                        }}
+                      >
                         <Edit size={14} className="mr-1" /> Edit Loan
                       </Button>
                     )}

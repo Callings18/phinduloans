@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Image as ImageIcon, Eye, Download, FolderOpen, ShieldCheck, IdCard, Receipt, Paperclip, FileCheck2 } from "lucide-react";
+import { FileText, Image as ImageIcon, Eye, Download, FolderOpen, ShieldCheck, IdCard, Receipt, Paperclip, FileCheck2, Upload, Trash2, Users, UserCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/hooks/useAuth";
 import { getSignedUrl } from "@/utils/storageHelpers";
 
 type DocItem = {
@@ -14,7 +19,10 @@ type DocItem = {
   label: string;
   path: string;
   kind: "image" | "pdf" | "file";
-  group: "collateral" | "identity" | "income" | "contract" | "other";
+  group: "collateral" | "identity" | "income" | "contract" | "co_borrower" | "absolute_owner" | "other";
+  /** Source row ids so we know how to delete. */
+  appDocId?: string;
+  vaultDocId?: string;
 };
 
 interface Props {
@@ -28,8 +36,20 @@ const groupMeta: Record<DocItem["group"], { label: string; icon: any; tint: stri
   identity: { label: "Identity (NRC)", icon: IdCard, tint: "text-blue-500" },
   income: { label: "Income / Payslips", icon: Receipt, tint: "text-emerald-500" },
   contract: { label: "Contract", icon: FileCheck2, tint: "text-primary" },
+  co_borrower: { label: "Co-borrower", icon: Users, tint: "text-fuchsia-500" },
+  absolute_owner: { label: "Absolute owner", icon: UserCheck, tint: "text-cyan-500" },
   other: { label: "Other", icon: Paperclip, tint: "text-muted-foreground" },
 };
+
+const UPLOAD_CATEGORIES: { value: DocItem["group"]; label: string }[] = [
+  { value: "collateral", label: "Collateral" },
+  { value: "identity", label: "Identity (NRC)" },
+  { value: "income", label: "Income / Payslip" },
+  { value: "contract", label: "Contract" },
+  { value: "co_borrower", label: "Co-borrower" },
+  { value: "absolute_owner", label: "Absolute owner" },
+  { value: "other", label: "Other" },
+];
 
 function inferKind(path: string): DocItem["kind"] {
   const p = path.toLowerCase();
@@ -54,6 +74,8 @@ function normalizeDocKey(path: string): string {
 
 function inferGroupFromDocMeta(docType: string, label: string): DocItem["group"] {
   const t = `${docType} ${label}`.toLowerCase();
+  if (t.includes("co_borrower") || t.includes("co-borrower") || t.includes("coborrower")) return "co_borrower";
+  if (t.includes("absolute_owner") || t.includes("absolute owner") || t.includes("owner")) return "absolute_owner";
   if (t.includes("collateral") || t.includes("title") || t.includes("deed")) return "collateral";
   if (t.includes("nrc") || t.includes("selfie") || t.includes("identity")) return "identity";
   if (t.includes("payslip") || t.includes("bank") || t.includes("income")) return "income";
@@ -140,6 +162,7 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
           path: url,
           kind: inferKind(doc.file_name || url),
           group: inferGroupFromDocMeta(doc.doc_type, doc.doc_label || ""),
+          appDocId: doc.id,
         });
       }
     }
@@ -158,6 +181,7 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
           path: url,
           kind: inferKind(v.file_name || url),
           group: inferGroupFromDocMeta(v.doc_type, v.doc_label || ""),
+          vaultDocId: v.id,
         });
       }
     }
@@ -233,6 +257,93 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
     }
   };
 
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<DocItem["group"]>("collateral");
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DocItem | null>(null);
+
+  const refreshDocs = () => {
+    qc.invalidateQueries({ queryKey: ["application-documents", loan?.id] });
+    qc.invalidateQueries({ queryKey: ["borrower-kyc-vault", loan?.user_id] });
+  };
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    if (!loan?.id || !loan?.user_id) {
+      toast.error("Loan or borrower missing — cannot upload.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const baseLabel = (uploadLabel || UPLOAD_CATEGORIES.find((c) => c.value === uploadCategory)?.label || "Document").trim();
+      for (let i = 0; i < files.length; i++) {
+        const file = files.item(i);
+        if (!file) continue;
+        const ext = file.name.split(".").pop() || "bin";
+        const slug = `${uploadCategory}_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`;
+        const path = `loan-docs/${loan.user_id}/${loan.id}/${slug}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+        if (upErr) throw upErr;
+        const docLabel = files.length === 1 ? baseLabel : `${baseLabel} ${i + 1}`;
+        await supabase.from("application_documents").insert({
+          application_id: loan.id,
+          borrower_id: loan.user_id,
+          doc_type: slug,
+          doc_label: docLabel,
+          file_url: path,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+          loan_product_id: loan.loan_product_id ?? null,
+          uploaded_by: user?.id ?? null,
+        });
+        await supabase.from("borrower_document_vault").insert({
+          borrower_id: loan.user_id,
+          doc_type: slug,
+          doc_label: docLabel,
+          file_url: path,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+        });
+      }
+      toast.success(`${files.length} file${files.length === 1 ? "" : "s"} uploaded`);
+      setUploadLabel("");
+      refreshDocs();
+    } catch (e: any) {
+      toast.error(`Upload failed: ${e?.message ?? "unknown error"}`);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const deleteDoc = async (doc: DocItem) => {
+    try {
+      // Best-effort storage delete (skip absolute URLs/legacy columns)
+      if (!/^https?:\/\//i.test(doc.path)) {
+        await supabase.storage.from(bucket).remove([doc.path]);
+      }
+      if (doc.appDocId) {
+        await supabase.from("application_documents").delete().eq("id", doc.appDocId);
+      } else {
+        await supabase.from("application_documents").delete().eq("application_id", loan.id).eq("file_url", doc.path);
+      }
+      if (doc.vaultDocId) {
+        await supabase.from("borrower_document_vault").delete().eq("id", doc.vaultDocId);
+      }
+      toast.success(`Deleted ${doc.label}`);
+      refreshDocs();
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e?.message ?? "unknown error"}`);
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
   const grouped = docs.reduce<Record<string, DocItem[]>>((acc, d) => {
     (acc[d.group] ||= []).push(d);
     return acc;
@@ -252,7 +363,49 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
             <Badge variant="outline">{docs.length} file{docs.length === 1 ? "" : "s"}</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Upload bar */}
+          <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Upload size={14} />
+              <p className="text-xs font-semibold uppercase tracking-wide">Add documents</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase text-muted-foreground">Category</Label>
+                <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocItem["group"])}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {UPLOAD_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase text-muted-foreground">Label (optional)</Label>
+                <Input
+                  className="h-9"
+                  placeholder="e.g. NRC of co-borrower 2"
+                  value={uploadLabel}
+                  onChange={(e) => setUploadLabel(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1 flex flex-col justify-end">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => uploadFiles(e.target.files)}
+                />
+                <Button size="sm" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                  <Upload size={14} className="mr-1" /> {uploading ? "Uploading..." : "Choose files"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {docs.length === 0 ? (
             <div className="text-center py-8 text-sm text-muted-foreground">
               <FolderOpen className="mx-auto mb-2 opacity-50" />
@@ -325,6 +478,15 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
                               >
                                 <Download size={12} />
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(doc)}
+                                title="Delete"
+                              >
+                                <Trash2 size={12} />
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -355,6 +517,23 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <strong>{deleteTarget?.label}</strong>? This removes it from the loan and the borrower vault.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteTarget && deleteDoc(deleteTarget)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
