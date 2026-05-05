@@ -981,7 +981,7 @@ export default function ProductLoanFormShell({
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-foreground truncate">{title}</h1>
+                <h1 className="text-xl font-bold text-foreground truncate">{isEditMode ? `Edit ${title.replace(/^Create\s+/i, "")}` : title}</h1>
                 <BetaBadge />
                 <Badge variant="outline" className="text-[10px]">{productCode}</Badge>
               </div>
