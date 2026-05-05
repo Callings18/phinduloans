@@ -269,6 +269,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [messageTemplate, setMessageTemplate] = useState("");
 
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: settings } = useSystemSettings();
 
   // Fetch loan product to determine payment frequency
