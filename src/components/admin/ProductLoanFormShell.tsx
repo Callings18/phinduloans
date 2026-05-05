@@ -988,24 +988,28 @@ export default function ProductLoanFormShell({
               <p className="text-xs text-muted-foreground">{description}</p>
             </div>
             <div className="flex items-center gap-2">
-              {draftSavedAt && (
+              {!isEditMode && draftSavedAt && (
                 <span className="text-[11px] text-muted-foreground hidden md:inline">
                   Draft · {draftSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-xs"
-                onClick={() => navigate("/admin/loan-drafts")}
-                title="See all of your saved drafts"
-              >
-                <FolderOpen className="h-3.5 w-3.5 mr-1" /> All drafts
-              </Button>
-              <Button size="sm" variant="outline" onClick={saveDraft} disabled={savingDraft || !borrowerId}>
-                {savingDraft ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                Save Draft
-              </Button>
+              {!isEditMode && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs"
+                    onClick={() => navigate("/admin/loan-drafts")}
+                    title="See all of your saved drafts"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 mr-1" /> All drafts
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={saveDraft} disabled={savingDraft || !borrowerId}>
+                    {savingDraft ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                    Save Draft
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
