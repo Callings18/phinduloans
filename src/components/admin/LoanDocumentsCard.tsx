@@ -363,7 +363,49 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
             <Badge variant="outline">{docs.length} file{docs.length === 1 ? "" : "s"}</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Upload bar */}
+          <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Upload size={14} />
+              <p className="text-xs font-semibold uppercase tracking-wide">Add documents</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase text-muted-foreground">Category</Label>
+                <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocItem["group"])}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {UPLOAD_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase text-muted-foreground">Label (optional)</Label>
+                <Input
+                  className="h-9"
+                  placeholder="e.g. NRC of co-borrower 2"
+                  value={uploadLabel}
+                  onChange={(e) => setUploadLabel(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1 flex flex-col justify-end">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => uploadFiles(e.target.files)}
+                />
+                <Button size="sm" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                  <Upload size={14} className="mr-1" /> {uploading ? "Uploading..." : "Choose files"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {docs.length === 0 ? (
             <div className="text-center py-8 text-sm text-muted-foreground">
               <FolderOpen className="mx-auto mb-2 opacity-50" />
