@@ -310,7 +310,13 @@ export default function ProductLoanFormShell({
     [borrowers, borrowerId]
   );
 
+  // In edit mode we hydrate fields directly from the existing loan and must NOT
+  // let the borrower-autofill effect clobber edited values. We track whether
+  // hydration has already happened.
+  const editHydratedRef = useRef(false);
+
   useEffect(() => {
+    if (isEditMode) return; // edit mode hydrates from the loan, not from borrower defaults
     if (selectedBorrower) {
       if (selectedBorrower.phone) setContactNumber(selectedBorrower.phone);
       if (selectedBorrower.nrc_number) setIdNumber(selectedBorrower.nrc_number);
@@ -334,7 +340,85 @@ export default function ProductLoanFormShell({
         is_signatory: true,
       }));
     }
-  }, [selectedBorrower]);
+  }, [selectedBorrower, isEditMode]);
+
+  // ===== EDIT MODE: load loan + borrowers and hydrate every field once. =====
+  const { data: editLoanData } = useQuery({
+    queryKey: ["edit-loan-shell", editLoanId],
+    enabled: isEditMode,
+    queryFn: async () => {
+      const { data: loan, error } = await supabase
+        .from("loan_applications")
+        .select("*")
+        .eq("id", editLoanId!)
+        .maybeSingle();
+      if (error) throw error;
+      const { data: lbs } = await supabase
+        .from("loan_borrowers")
+        .select("*")
+        .eq("loan_application_id", editLoanId!);
+      return { loan, borrowers: lbs ?? [] };
+    },
+  });
+
+  useEffect(() => {
+    if (!isEditMode || editHydratedRef.current) return;
+    const loan = editLoanData?.loan as any;
+    if (!loan) return;
+    editHydratedRef.current = true;
+    setBorrowerId(loan.user_id ?? "");
+    setLoanAmount(String(loan.loan_amount ?? ""));
+    setTermValue(String(loan.loan_term_months ?? defaultTermValue));
+    setLoanPurpose(loan.loan_purpose ?? "");
+    setEmploymentType((loan.employment_type as any) || "employed");
+    setMonthlyIncome(loan.monthly_income != null ? String(loan.monthly_income) : "");
+    setEmployerName(loan.employer_name ?? "");
+    setJobTitle(loan.job_title ?? "");
+    setCity(loan.city ?? "");
+    setAdminNotes(loan.admin_notes ?? "");
+    if (loan.repayment_start_date) setRepaymentStartDate(loan.repayment_start_date);
+    setContactNumber(loan.phone ?? "");
+    setIdNumber(loan.nrc_number ?? "");
+    setResidentialAddress(loan.address ?? "");
+    const psd = (loan.product_specific_data as any) || {};
+    if (psd.business_months != null) setBusinessMonths(String(psd.business_months));
+    if (psd.civil_servant_confirmed) setIsCivilServantConfirmed(true);
+    if (psd.local_authority_compliance) setHasLocalAuthorityCompliance(true);
+    if (psd.business_address) setBusinessAddress(psd.business_address);
+    if (psd.id_type) setIdType(psd.id_type);
+    if (psd.gender) setGender(psd.gender);
+    if (psd.marital_status) setMaritalStatus(psd.marital_status);
+
+    if (productCode === "COLLATERAL") {
+      const rows = editLoanData!.borrowers as any[];
+      const primary = rows.find((r) => r.role === "PRIMARY_BORROWER");
+      const co = rows.filter((r) => r.role === "CO_BORROWER");
+      const owners = rows.filter((r) => r.role === "ABSOLUTE_OWNER");
+      const toEntry = (r: any): CollateralBorrowerEntry => ({
+        uid: r.id,
+        customer_id: r.customer_id,
+        full_name: r.full_name ?? "",
+        nrc_number: r.nrc_number ?? "",
+        phone: r.phone ?? "",
+        address: r.address ?? "",
+        role: r.role,
+        is_signatory: r.is_signatory ?? true,
+      });
+      if (primary) setPrimaryBorrowerEntry(toEntry(primary));
+      else
+        setPrimaryBorrowerEntry({
+          ...makeBlankBorrower("PRIMARY_BORROWER"),
+          customer_id: loan.user_id,
+          full_name: loan.full_name ?? "",
+          nrc_number: loan.nrc_number ?? "",
+          phone: loan.phone ?? "",
+          address: loan.address ?? "",
+        });
+      setCoBorrowerEntries(co.map(toEntry));
+      setAbsoluteOwnerEntries(owners.map(toEntry));
+    }
+  }, [isEditMode, editLoanData, productCode, defaultTermValue]);
+
 
   const validationErrors = useMemo(
     () =>
