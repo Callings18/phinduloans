@@ -478,6 +478,15 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
                               >
                                 <Download size={12} />
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(doc)}
+                                title="Delete"
+                              >
+                                <Trash2 size={12} />
+                              </Button>
                             </div>
                           </div>
                         </div>
