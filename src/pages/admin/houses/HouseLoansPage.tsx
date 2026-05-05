@@ -240,8 +240,8 @@ export default function HouseLoansPage() {
                             <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
                           </Button>
                           {EDITABLE_STATUSES.has(l.status) && (
-                            <Button size="sm" variant="ghost" title="Edit" onClick={() => setEditLoan(l)}>
-                              <Pencil size={14} />
+                            <Button asChild size="sm" variant="ghost" title="Edit">
+                              <Link to={`/admin/houses/${productCode}/loans/${l.id}/edit`}><Pencil size={14} /></Link>
                             </Button>
                           )}
                           {DELETABLE_STATUSES.has(l.status) && (
