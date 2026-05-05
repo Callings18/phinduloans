@@ -26,6 +26,7 @@ import {
   ClipboardList,
   Percent,
   ToggleLeft,
+  FileEdit,
 } from "lucide-react";
 
 /** Optional permission gate: item visible if can(module, action) or admin fallback handled in sidebar. */
@@ -56,6 +57,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
     label: "Lending",
     items: [
       { icon: FileText, label: "Applications", path: "/admin/applications", perm: { module: "loans", action: "view" } },
+      { icon: FileEdit, label: "Loan drafts", path: "/admin/loan-drafts", perm: { module: "loans", action: "view" } },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", perm: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employers", path: "/admin/employers", perm: { module: "borrowers", action: "view" } },
       {

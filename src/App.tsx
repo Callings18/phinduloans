@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import Install from "./pages/Install";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
+import AdminLoanDrafts from "./pages/admin/AdminLoanDrafts";
 import AdminLoans from "./pages/admin/AdminLoans";
 import AdminBorrowers from "./pages/admin/AdminBorrowers";
 import AdminRepayments from "./pages/admin/AdminRepayments";
@@ -164,6 +165,16 @@ function App() {
                         <ErrorBoundary>
                           <PermissionRoute permission={{ module: "loans", action: "view" }}>
                             <AdminApplications />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="loan-drafts"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                            <AdminLoanDrafts />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

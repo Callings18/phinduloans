@@ -657,7 +657,7 @@ const AdminApplications = () => {
         },
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
       queryClient.invalidateQueries({ queryKey: ['disbursements'] });
       queryClient.invalidateQueries({ queryKey: ['admin-active-loans'] });
@@ -668,13 +668,15 @@ const AdminApplications = () => {
         queryClient.invalidateQueries({ queryKey: ['loan-repayments', selectedApp.id] });
       }
 
-      // Trigger Disbursement SMS notification
+      // SMS confirmation — pull the txn ref from the form payload (variables),
+      // not from a `disbursement` symbol which doesn't exist in this scope.
+      // The previous code threw a ReferenceError here and silently broke the toast.
       if (selectedApp) {
         notificationService.sendDisbursementConfirmation(
           selectedApp.user_id,
           selectedApp.full_name,
           selectedApp.loan_amount,
-          disbursement.transaction_reference || `TXN-${Date.now()}`,
+          variables?.transaction_reference || `TXN-${Date.now()}`,
           selectedApp.phone
         );
       }

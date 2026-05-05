@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import { fetchHouseProductByCode } from "@/services/repositories/houseRepository
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addDays, format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2, Save, Loader2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2, Save, Loader2, FolderOpen } from "lucide-react";
 import CollateralBorrowersSection, {
   type CollateralBorrowerEntry,
   makeBlankBorrower,
@@ -69,13 +69,20 @@ export default function ProductLoanFormShell({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const rules = useProductLoanRules(productCode);
+  const [searchParams] = useSearchParams();
+  // Optional URL params used by the Drafts page when resuming.
+  // ?borrower=<uuid>  → preselects the borrower so the auto-resume effect kicks in.
+  // ?draft=<uuid>     → falls back to a direct fetch by draft id (ignores borrower
+  //                     mismatch so even an orphaned draft can be opened once).
+  const initialBorrowerParam = searchParams.get("borrower") || "";
+  const draftIdParam = searchParams.get("draft") || "";
 
   const resolveProduct = async (code: LoanProductCode) => {
     return fetchHouseProductByCode(code);
   };
 
   // --- Core fields ---
-  const [borrowerId, setBorrowerId] = useState("");
+  const [borrowerId, setBorrowerId] = useState(initialBorrowerParam);
   const [loanAmount, setLoanAmount] = useState("");
   const [termValue, setTermValue] = useState(String(defaultTermValue));
   const [loanPurpose, setLoanPurpose] = useState("");
@@ -127,7 +134,38 @@ export default function ProductLoanFormShell({
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const draftLoadedRef = useRef(false);
 
-  // Load draft when borrower selected (auto-resume)
+  // Hydrate every form field from a saved draft payload. Used by both the
+  // auto-resume effect (matches by staff+borrower+product) and the explicit
+  // ?draft=<id> URL flow used by the Drafts page.
+  const hydrateFromDraft = (draft: { id: string; form_data: any; updated_at: string }) => {
+    const f: any = draft.form_data || {};
+    setDraftId(draft.id);
+    setDraftSavedAt(new Date(draft.updated_at));
+    if (f.loanAmount) setLoanAmount(f.loanAmount);
+    if (f.termValue) setTermValue(f.termValue);
+    if (f.loanPurpose) setLoanPurpose(f.loanPurpose);
+    if (f.employmentType) setEmploymentType(f.employmentType);
+    if (f.monthlyIncome) setMonthlyIncome(f.monthlyIncome);
+    if (f.employerName) setEmployerName(f.employerName);
+    if (f.jobTitle) setJobTitle(f.jobTitle);
+    if (f.city) setCity(f.city);
+    if (f.adminNotes) setAdminNotes(f.adminNotes);
+    if (f.repaymentStartDate) setRepaymentStartDate(f.repaymentStartDate);
+    if (f.businessMonths) setBusinessMonths(f.businessMonths);
+    if (f.businessAddress) setBusinessAddress(f.businessAddress);
+    if (f.residentialAddress) setResidentialAddress(f.residentialAddress);
+    if (f.idType) setIdType(f.idType);
+    if (f.idNumber) setIdNumber(f.idNumber);
+    if (f.gender) setGender(f.gender);
+    if (f.maritalStatus) setMaritalStatus(f.maritalStatus);
+    if (f.contactNumber) setContactNumber(f.contactNumber);
+    // Collateral multi-borrower section (only meaningful for productCode === "COLLATERAL")
+    if (f.primaryBorrowerEntry) setPrimaryBorrowerEntry(f.primaryBorrowerEntry);
+    if (Array.isArray(f.coBorrowerEntries)) setCoBorrowerEntries(f.coBorrowerEntries);
+    if (Array.isArray(f.absoluteOwnerEntries)) setAbsoluteOwnerEntries(f.absoluteOwnerEntries);
+  };
+
+  // Load draft when borrower selected (auto-resume by composite key).
   useEffect(() => {
     if (!borrowerId || !user?.id) return;
     draftLoadedRef.current = false;
@@ -140,27 +178,7 @@ export default function ProductLoanFormShell({
         .eq("product_code", productCode)
         .maybeSingle();
       if (data?.form_data) {
-        const f: any = data.form_data;
-        setDraftId(data.id);
-        setDraftSavedAt(new Date(data.updated_at));
-        if (f.loanAmount) setLoanAmount(f.loanAmount);
-        if (f.termValue) setTermValue(f.termValue);
-        if (f.loanPurpose) setLoanPurpose(f.loanPurpose);
-        if (f.employmentType) setEmploymentType(f.employmentType);
-        if (f.monthlyIncome) setMonthlyIncome(f.monthlyIncome);
-        if (f.employerName) setEmployerName(f.employerName);
-        if (f.jobTitle) setJobTitle(f.jobTitle);
-        if (f.city) setCity(f.city);
-        if (f.adminNotes) setAdminNotes(f.adminNotes);
-        if (f.repaymentStartDate) setRepaymentStartDate(f.repaymentStartDate);
-        if (f.businessMonths) setBusinessMonths(f.businessMonths);
-        if (f.businessAddress) setBusinessAddress(f.businessAddress);
-        if (f.residentialAddress) setResidentialAddress(f.residentialAddress);
-        if (f.idType) setIdType(f.idType);
-        if (f.idNumber) setIdNumber(f.idNumber);
-        if (f.gender) setGender(f.gender);
-        if (f.maritalStatus) setMaritalStatus(f.maritalStatus);
-        if (f.contactNumber) setContactNumber(f.contactNumber);
+        hydrateFromDraft(data);
         toast({ title: "Draft restored", description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}` });
       } else {
         setDraftId(null);
@@ -169,6 +187,30 @@ export default function ProductLoanFormShell({
       draftLoadedRef.current = true;
     })();
   }, [borrowerId, user?.id, productCode]);
+
+  // Direct ?draft=<id> resume — fetch by id even if no borrower is preselected.
+  // Useful if the borrower row was deleted or the draft pre-dates picker logic.
+  useEffect(() => {
+    if (!draftIdParam || !user?.id) return;
+    if (draftId === draftIdParam) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("loan_application_drafts")
+        .select("id, form_data, updated_at, borrower_id, product_code")
+        .eq("id", draftIdParam)
+        .maybeSingle();
+      if (error || !data) return;
+      if (data.borrower_id && !borrowerId) {
+        setBorrowerId(data.borrower_id);
+      }
+      hydrateFromDraft({ id: data.id, form_data: data.form_data, updated_at: data.updated_at });
+      toast({
+        title: "Draft restored",
+        description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}`,
+      });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftIdParam, user?.id]);
 
   const saveDraft = async () => {
     if (!user?.id) return;
@@ -183,11 +225,19 @@ export default function ProductLoanFormShell({
         employerName, jobTitle, city, adminNotes, repaymentStartDate,
         businessMonths, businessAddress, residentialAddress,
         idType, idNumber, gender, maritalStatus, contactNumber,
+        // Collateral multi-borrower section (no-op for non-collateral products).
+        // The Supabase generated types want a JSON object here; the entry shape is
+        // a plain TS interface with no index signature, so we serialize through
+        // JSON to satisfy the type-checker without losing any fields.
+        primaryBorrowerEntry,
+        coBorrowerEntries,
+        absoluteOwnerEntries,
       };
+      const form_data_json = JSON.parse(JSON.stringify(form_data));
       const { data, error } = await supabase
         .from("loan_application_drafts")
         .upsert(
-          { staff_user_id: user.id, borrower_id: borrowerId, product_code: productCode, form_data, updated_at: new Date().toISOString() },
+          { staff_user_id: user.id, borrower_id: borrowerId, product_code: productCode, form_data: form_data_json, updated_at: new Date().toISOString() },
           { onConflict: "staff_user_id,borrower_id,product_code" }
         )
         .select("id")
@@ -706,6 +756,15 @@ export default function ProductLoanFormShell({
                   Draft · {draftSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                onClick={() => navigate("/admin/loan-drafts")}
+                title="See all of your saved drafts"
+              >
+                <FolderOpen className="h-3.5 w-3.5 mr-1" /> All drafts
+              </Button>
               <Button size="sm" variant="outline" onClick={saveDraft} disabled={savingDraft || !borrowerId}>
                 {savingDraft ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
                 Save Draft
