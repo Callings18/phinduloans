@@ -57,6 +57,7 @@ import HouseBorrowersPage from "./pages/admin/houses/HouseBorrowersPage";
 import HouseBorrowerDetailPage from "./pages/admin/houses/HouseBorrowerDetailPage";
 import HouseLoansPage from "./pages/admin/houses/HouseLoansPage";
 import HouseLoanCreatePage from "./pages/admin/houses/HouseLoanCreatePage";
+import HouseLoanEditPage from "./pages/admin/houses/HouseLoanEditPage";
 import HouseLoanDetailPage from "./pages/admin/houses/HouseLoanDetailPage";
 import HouseReviewPage from "./pages/admin/houses/HouseReviewPage";
 import HouseDisbursementsPage from "./pages/admin/houses/HouseDisbursementsPage";
