@@ -245,6 +245,7 @@ export default function ProductLoanFormShell({
       if (error) throw error;
       setDraftId(data.id);
       setDraftSavedAt(new Date());
+      queryClient.invalidateQueries({ queryKey: ["admin-loan-drafts"] });
       toast({ title: "Draft saved", description: "You can come back and resume this loan anytime." });
     } catch (err) {
       toast({ title: "Save failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
@@ -258,6 +259,7 @@ export default function ProductLoanFormShell({
     await supabase.from("loan_application_drafts").delete().eq("id", draftId);
     setDraftId(null);
     setDraftSavedAt(null);
+    queryClient.invalidateQueries({ queryKey: ["admin-loan-drafts"] });
   };
 
 

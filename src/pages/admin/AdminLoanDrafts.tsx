@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -72,27 +72,49 @@ const draftCompletionScore = (draft: DraftRow): number => {
 };
 
 export default function AdminLoanDrafts() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState<string>("all");
   const [confirmDelete, setConfirmDelete] = useState<DraftRow | null>(null);
 
+  const draftsQueryKey = ["admin-loan-drafts"] as const;
+
   const { data: drafts, isLoading, isError, refetch } = useQuery({
-    queryKey: ["admin-loan-drafts", user?.id],
+    queryKey: draftsQueryKey,
     queryFn: async (): Promise<DraftRow[]> => {
       if (!user?.id) return [];
+      // No staff_user_id filter: RLS returns every draft visible to this role
+      // (whole lending team — see migration loan_drafts_team_visibility_rls).
       const { data, error } = await supabase
         .from("loan_application_drafts")
         .select("id, staff_user_id, borrower_id, product_code, form_data, created_at, updated_at")
-        .eq("staff_user_id", user.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return (data || []) as DraftRow[];
     },
     enabled: !!user?.id,
   });
+
+  // Live updates when anyone on the team saves / deletes a draft (requires
+  // supabase_realtime publication on loan_application_drafts — see migration).
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel("loan_application_drafts_list")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_application_drafts" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: draftsQueryKey });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   // Look up borrower display info for each draft. We grab the union of ids in one query.
   const borrowerIds = useMemo(
@@ -117,13 +139,36 @@ export default function AdminLoanDrafts() {
     enabled: borrowerIds.length > 0,
   });
 
+  const staffIds = useMemo(
+    () => Array.from(new Set((drafts || []).map((d) => d.staff_user_id))),
+    [drafts],
+  );
+
+  const { data: staffById } = useQuery({
+    queryKey: ["admin-loan-drafts-staff", staffIds.sort().join(",")],
+    queryFn: async (): Promise<Record<string, { id: string; full_name: string | null; email: string }>> => {
+      if (staffIds.length === 0) return {};
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", staffIds);
+      if (error) throw error;
+      const map: Record<string, { id: string; full_name: string | null; email: string }> = {};
+      (data || []).forEach((s) => {
+        map[s.id] = s as { id: string; full_name: string | null; email: string };
+      });
+      return map;
+    },
+    enabled: staffIds.length > 0,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (draftId: string) => {
       const { error } = await supabase.from("loan_application_drafts").delete().eq("id", draftId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-loan-drafts", user?.id] });
+      queryClient.invalidateQueries({ queryKey: draftsQueryKey });
       toast({ title: "Draft deleted" });
     },
     onError: (err: Error) => {
@@ -138,11 +183,14 @@ export default function AdminLoanDrafts() {
       if (productFilter !== "all" && d.product_code !== productFilter) return false;
       if (!q) return true;
       const b = d.borrower_id ? borrowers?.[d.borrower_id] : null;
+      const saver = staffById?.[d.staff_user_id];
       const haystack = [
         b?.full_name,
         b?.email,
         b?.phone,
         b?.nrc_number,
+        saver?.full_name,
+        saver?.email,
         d.product_code,
         PRODUCT_NAMES[d.product_code],
         (d.form_data as any)?.loanPurpose,
@@ -152,7 +200,7 @@ export default function AdminLoanDrafts() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [drafts, search, productFilter, borrowers]);
+  }, [drafts, search, productFilter, borrowers, staffById]);
 
   return (
     <AdminLayout>
@@ -168,7 +216,9 @@ export default function AdminLoanDrafts() {
                 Loan application drafts
               </h1>
               <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                Saved drafts you can resume. Each draft is keyed by borrower and product.
+                Shared across the lending team — new saves and deletes sync automatically. Each row shows who saved it;
+                only they (or an admin) can delete it. Resuming opens the form; pressing <strong>Save Draft</strong> there
+                stores a copy under <em>your</em> staff account for the same borrower and product.
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -190,7 +240,7 @@ export default function AdminLoanDrafts() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by borrower name, NRC, phone, purpose…"
+                placeholder="Borrower, staff name, email, NRC, purpose…"
                 className="h-9 pl-8"
               />
             </div>
@@ -224,12 +274,13 @@ export default function AdminLoanDrafts() {
             )}
 
             {!isLoading && !isError && filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-                <Inbox className="h-10 w-10 text-muted-foreground/60" />
-                <p className="text-sm font-medium">No drafts yet</p>
+              <div className="flex flex-col items-center justify-center gap-1.5 py-6 text-center">
+                <Inbox className="h-9 w-9 text-muted-foreground/60" />
+                <p className="text-sm font-medium">No drafts match</p>
                 <p className="max-w-md text-xs text-muted-foreground">
-                  Drafts appear here when you click <strong>Save Draft</strong> while creating a loan
-                  application. You can resume each draft directly into the same product&apos;s create form.
+                  When anyone on the team clicks <strong>Save Draft</strong> on loan creation, it appears here for
+                  everyone with lending access. Try clearing filters, or pull <strong>Refresh</strong> if you
+                  expected new rows.
                 </p>
               </div>
             )}
@@ -237,6 +288,9 @@ export default function AdminLoanDrafts() {
             <div className="space-y-2">
               {filtered.map((draft) => {
                 const borrower = draft.borrower_id ? borrowers?.[draft.borrower_id] : null;
+                const saver = staffById?.[draft.staff_user_id];
+                const isOwnDraft = user?.id === draft.staff_user_id;
+                const canDelete = isOwnDraft || isAdmin;
                 const score = draftCompletionScore(draft);
                 const productName = PRODUCT_NAMES[draft.product_code] || draft.product_code;
                 const purpose = (draft.form_data as any)?.loanPurpose as string | undefined;
@@ -262,6 +316,14 @@ export default function AdminLoanDrafts() {
                           }
                         >
                           {score}% complete
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0 h-5 ${isOwnDraft ? "border-primary/40 text-primary" : ""}`}
+                          title="Staff member who saved this draft"
+                        >
+                          Saved by{" "}
+                          {saver?.full_name || saver?.email || draft.staff_user_id.slice(0, 8) + "…"}
                         </Badge>
                         <span className="text-[11px] text-muted-foreground">
                           Updated {formatDistanceToNow(new Date(draft.updated_at), { addSuffix: true })}
@@ -293,7 +355,23 @@ export default function AdminLoanDrafts() {
                         size="sm"
                         variant="ghost"
                         className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setConfirmDelete(draft)}
+                        disabled={!canDelete}
+                        title={
+                          canDelete
+                            ? "Delete this draft"
+                            : "Only the person who saved this draft (or an admin) can delete it"
+                        }
+                        onClick={() => {
+                          if (!canDelete) {
+                            toast({
+                              title: "Cannot delete",
+                              description: "Only the staff member who saved this draft, or an admin, can remove it.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setConfirmDelete(draft);
+                        }}
                         aria-label="Delete draft"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
