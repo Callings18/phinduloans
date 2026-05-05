@@ -257,6 +257,93 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
     }
   };
 
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<DocItem["group"]>("collateral");
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DocItem | null>(null);
+
+  const refreshDocs = () => {
+    qc.invalidateQueries({ queryKey: ["application-documents", loan?.id] });
+    qc.invalidateQueries({ queryKey: ["borrower-kyc-vault", loan?.user_id] });
+  };
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    if (!loan?.id || !loan?.user_id) {
+      toast.error("Loan or borrower missing — cannot upload.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const baseLabel = (uploadLabel || UPLOAD_CATEGORIES.find((c) => c.value === uploadCategory)?.label || "Document").trim();
+      for (let i = 0; i < files.length; i++) {
+        const file = files.item(i);
+        if (!file) continue;
+        const ext = file.name.split(".").pop() || "bin";
+        const slug = `${uploadCategory}_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`;
+        const path = `loan-docs/${loan.user_id}/${loan.id}/${slug}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+        if (upErr) throw upErr;
+        const docLabel = files.length === 1 ? baseLabel : `${baseLabel} ${i + 1}`;
+        await supabase.from("application_documents").insert({
+          application_id: loan.id,
+          borrower_id: loan.user_id,
+          doc_type: slug,
+          doc_label: docLabel,
+          file_url: path,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+          loan_product_id: loan.loan_product_id ?? null,
+          uploaded_by: user?.id ?? null,
+        });
+        await supabase.from("borrower_document_vault").insert({
+          borrower_id: loan.user_id,
+          doc_type: slug,
+          doc_label: docLabel,
+          file_url: path,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+        });
+      }
+      toast.success(`${files.length} file${files.length === 1 ? "" : "s"} uploaded`);
+      setUploadLabel("");
+      refreshDocs();
+    } catch (e: any) {
+      toast.error(`Upload failed: ${e?.message ?? "unknown error"}`);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const deleteDoc = async (doc: DocItem) => {
+    try {
+      // Best-effort storage delete (skip absolute URLs/legacy columns)
+      if (!/^https?:\/\//i.test(doc.path)) {
+        await supabase.storage.from(bucket).remove([doc.path]);
+      }
+      if (doc.appDocId) {
+        await supabase.from("application_documents").delete().eq("id", doc.appDocId);
+      } else {
+        await supabase.from("application_documents").delete().eq("application_id", loan.id).eq("file_url", doc.path);
+      }
+      if (doc.vaultDocId) {
+        await supabase.from("borrower_document_vault").delete().eq("id", doc.vaultDocId);
+      }
+      toast.success(`Deleted ${doc.label}`);
+      refreshDocs();
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e?.message ?? "unknown error"}`);
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
   const grouped = docs.reduce<Record<string, DocItem[]>>((acc, d) => {
     (acc[d.group] ||= []).push(d);
     return acc;
