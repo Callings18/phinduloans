@@ -2076,7 +2076,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         onClick={() => {
                           const code = (loanProduct as any)?.product_code;
                           if (code) {
-                            onClose();
+                            onOpenChange(false);
                             navigate(`/admin/houses/${code}/loans/${loan.id}/edit`);
                           } else {
                             setIsEditPendingOpen(true);
