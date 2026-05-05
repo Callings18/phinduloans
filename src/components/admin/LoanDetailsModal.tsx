@@ -2070,7 +2070,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <CardContent className="flex flex-wrap gap-2">
                     {/* Edit button for editable pre-disbursement statuses */}
                     {DELETABLE_STATUSES.has(loan.status) && (
-                      <Button size="sm" variant="outline" onClick={() => setIsEditPendingOpen(true)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const code = (loanProduct as any)?.product_code;
+                          if (code) {
+                            onClose();
+                            navigate(`/admin/houses/${code}/loans/${loan.id}/edit`);
+                          } else {
+                            setIsEditPendingOpen(true);
+                          }
+                        }}
+                      >
                         <Edit size={14} className="mr-1" /> Edit Loan
                       </Button>
                     )}
