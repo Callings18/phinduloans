@@ -162,6 +162,7 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
           path: url,
           kind: inferKind(doc.file_name || url),
           group: inferGroupFromDocMeta(doc.doc_type, doc.doc_label || ""),
+          appDocId: doc.id,
         });
       }
     }
@@ -180,6 +181,7 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
           path: url,
           kind: inferKind(v.file_name || url),
           group: inferGroupFromDocMeta(v.doc_type, v.doc_label || ""),
+          vaultDocId: v.id,
         });
       }
     }
