@@ -48,6 +48,7 @@ const AdminStaff = () => {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedRole, setSelectedRole] = useState("loan_officer");
+    const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searchResult, setSearchResult] = useState<any>(null);
     const [isSearching, setIsSearching] = useState(false);
 
@@ -87,21 +88,45 @@ const AdminStaff = () => {
         }
     });
 
-    // Search existing user
+    // Search existing user — fuzzy partial match across full_name, email, NRC and phone.
+    // Returns up to 10 candidates so the admin can pick the right person; previously this
+    // used `.eq` + `.single()`, which errored on partial names AND on multiple matches,
+    // making it impossible to find someone whose full email/NRC you didn't already know.
     const searchUser = async () => {
-        if (!searchTerm) return;
+        const q = searchTerm.trim();
+        if (!q) return;
         setIsSearching(true);
         setSearchResult(null);
+        setSearchResults([]);
         try {
+            // Escape PostgREST-special characters to keep the OR filter safe.
+            const safe = q.replace(/[(),%]/g, " ").trim();
+            const pattern = `%${safe}%`;
             const { data, error } = await supabase
                 .from('profiles')
-                .select('*')
-                .or(`email.eq.${searchTerm},nrc_number.eq.${searchTerm}`)
-                .single();
-            if (error) toast.error("User not found");
-            else setSearchResult(data);
-        } catch { toast.error("Error searching user"); }
-        finally { setIsSearching(false); }
+                .select('id, full_name, email, phone, nrc_number, avatar_url')
+                .or(
+                    `full_name.ilike.${pattern},email.ilike.${pattern},nrc_number.ilike.${pattern},phone.ilike.${pattern}`,
+                )
+                .order('full_name', { ascending: true, nullsFirst: false })
+                .limit(10);
+            if (error) {
+                toast.error(`Search failed: ${error.message}`);
+                return;
+            }
+            const list = data ?? [];
+            if (list.length === 0) {
+                toast.error("No matching user found");
+                return;
+            }
+            setSearchResults(list);
+            // If exactly one match, auto-select it for fastest assignment.
+            if (list.length === 1) setSearchResult(list[0]);
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Error searching user");
+        } finally {
+            setIsSearching(false);
+        }
     };
 
     // Assign role to existing user
@@ -123,10 +148,11 @@ const AdminStaff = () => {
             queryClient.invalidateQueries({ queryKey: ['staff-list'] });
             setIsAddOpen(false);
             setSearchResult(null);
+            setSearchResults([]);
             setSearchTerm("");
             toast.success("Staff role assigned successfully");
         },
-        onError: () => toast.error("Failed to assign role"),
+        onError: (e: Error) => toast.error(e.message || "Failed to assign role"),
     });
 
     // Create new staff user via edge function
@@ -289,31 +315,93 @@ const AdminStaff = () => {
                         </Dialog>
 
                         {/* Assign Existing User */}
-                        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                        <Dialog
+                            open={isAddOpen}
+                            onOpenChange={(open) => {
+                                setIsAddOpen(open);
+                                if (!open) {
+                                    setSearchTerm("");
+                                    setSearchResult(null);
+                                    setSearchResults([]);
+                                }
+                            }}
+                        >
                             <DialogTrigger asChild>
                                 <Button variant="outline"><Plus size={18} className="mr-2" />Assign Existing User</Button>
                             </DialogTrigger>
                             <DialogContent>
-                                <DialogHeader><DialogTitle>Assign Role to Existing User</DialogTitle></DialogHeader>
+                                <DialogHeader>
+                                    <DialogTitle>Assign Role to Existing User</DialogTitle>
+                                </DialogHeader>
                                 <div className="space-y-4 py-4">
-                                    <div className="flex gap-2">
-                                        <Input placeholder="Search by Email or NRC" value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)} />
-                                        <Button variant="secondary" onClick={searchUser} disabled={isSearching}>
-                                            {isSearching ? <Loader2 className="animate-spin" /> : <Search size={18} />}
-                                        </Button>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Search by name, email, NRC, or phone</Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                placeholder="e.g. Ireen, ireen@…, 0976…, 123456/00/1"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === "Enter") searchUser(); }}
+                                            />
+                                            <Button variant="secondary" onClick={searchUser} disabled={isSearching || !searchTerm.trim()}>
+                                                {isSearching ? <Loader2 className="animate-spin" /> : <Search size={18} />}
+                                            </Button>
+                                        </div>
                                     </div>
+
+                                    {/* Multi-match list */}
+                                    {searchResults.length > 1 && !searchResult && (
+                                        <div className="border rounded-lg divide-y max-h-72 overflow-y-auto">
+                                            {searchResults.map((u) => (
+                                                <button
+                                                    key={u.id}
+                                                    type="button"
+                                                    onClick={() => setSearchResult(u)}
+                                                    className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-muted/40 transition-colors"
+                                                >
+                                                    <Avatar className="h-9 w-9">
+                                                        <AvatarImage src={u.avatar_url} />
+                                                        <AvatarFallback>{u.full_name?.charAt(0) || "?"}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="font-medium text-sm truncate">{u.full_name || "(no name)"}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">
+                                                            {u.email}{u.nrc_number ? ` · ${u.nrc_number}` : ""}{u.phone ? ` · ${u.phone}` : ""}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Selected user — confirm role */}
                                     {searchResult && (
                                         <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar>
-                                                    <AvatarImage src={searchResult.avatar_url} />
-                                                    <AvatarFallback>{searchResult.full_name?.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-medium">{searchResult.full_name}</p>
-                                                    <p className="text-sm text-muted-foreground">{searchResult.email}</p>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <Avatar>
+                                                        <AvatarImage src={searchResult.avatar_url} />
+                                                        <AvatarFallback>{searchResult.full_name?.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium truncate">{searchResult.full_name || "(no name)"}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">
+                                                            {searchResult.email}
+                                                            {searchResult.nrc_number ? ` · ${searchResult.nrc_number}` : ""}
+                                                        </p>
+                                                    </div>
                                                 </div>
+                                                {searchResults.length > 1 && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-xs"
+                                                        onClick={() => setSearchResult(null)}
+                                                    >
+                                                        Pick different
+                                                    </Button>
+                                                )}
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Assign Role</Label>
