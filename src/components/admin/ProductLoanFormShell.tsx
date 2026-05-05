@@ -1383,10 +1383,12 @@ export default function ProductLoanFormShell({
               <div className="flex items-center justify-between">
                 <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
                 <Button
-                  onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
+                  onClick={() => (isEditMode ? updateMutation.mutate() : createMutation.mutate())}
+                    disabled={(isEditMode ? updateMutation.isPending : createMutation.isPending) || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
                 >
-                  {createMutation.isPending || docUploading ? "Creating..." : "Create Loan Application"}
+                  {(isEditMode ? updateMutation.isPending : createMutation.isPending) || docUploading
+                    ? (isEditMode ? "Saving..." : "Creating...")
+                    : (isEditMode ? "Save Changes" : "Create Loan Application")}
                 </Button>
               </div>
             </div>
