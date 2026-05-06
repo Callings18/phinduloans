@@ -581,6 +581,7 @@ const AdminApplications = () => {
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
       if (!selectedApp) throw new Error("No application selected");
+      await assertBusinessDayForDisbursement();
       const sourceAccount = fundingAccounts.find((a) => a.id === data.source_account_id);
       if (!sourceAccount) throw new Error("Source account not found");
 

@@ -51,6 +51,7 @@ export default function HouseDisbursementsPage() {
 
   const disburseMutation = useMutation({
     mutationFn: async (disbursement: any) => {
+      await assertBusinessDayForDisbursement();
       const accountId = rowAccounts[disbursement.id] || disbursement?.source_account_id;
       if (!accountId) {
         throw new Error("Pick a funding account before disbursing");
