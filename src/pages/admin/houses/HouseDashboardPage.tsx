@@ -24,6 +24,20 @@ export default function HouseDashboardPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const { data } = useHouseReportSummary(productCode);
 
+  // Live updates for the house dashboard whenever loans, repayments,
+  // disbursements or payment claims change.
+  useRealtimeInvalidate(
+    ["loan_applications", "loan_repayments", "disbursements", "payment_claims"],
+    [
+      ["house-report-summary", productCode],
+      ["house-repayment-stats", productCode],
+      ["house-loans", productCode],
+      ["house-disbursements", productCode],
+      ["house-repayments", productCode],
+    ],
+    `house-${productCode}-realtime`,
+  );
+
   // For non-Marketeer products: fetch repayment summary
   const { data: repaymentStats } = useQuery({
     queryKey: ["house-repayment-stats", productCode],
