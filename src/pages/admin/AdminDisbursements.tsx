@@ -358,6 +358,7 @@ const AdminDisbursements = () => {
 
       // COMPLETED: use atomic server-side RPC (balance guard + ledger + loan
       // status advance + audit log all in one transaction).
+      await assertBusinessDayForDisbursement();
       const disbursement = disbursements?.find((d) => d.id === id);
       if (!disbursement) throw new Error("Disbursement not found locally");
       if (!disbursement.source_account_id) {
