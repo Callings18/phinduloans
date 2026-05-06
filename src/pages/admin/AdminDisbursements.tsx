@@ -27,6 +27,7 @@ import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { BORROWER_SELFIE_VAULT_ALIASES, latestVerifiedByVaultDocType } from "@/constants/borrowerKycDocs";
 import {
   Banknote,
@@ -223,6 +224,7 @@ const AdminDisbursements = () => {
 
   const createDisbursementMutation = useMutation({
     mutationFn: async () => {
+      await assertBusinessDayForDisbursement();
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
       const verifiedDocs = selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0;
@@ -356,6 +358,7 @@ const AdminDisbursements = () => {
 
       // COMPLETED: use atomic server-side RPC (balance guard + ledger + loan
       // status advance + audit log all in one transaction).
+      await assertBusinessDayForDisbursement();
       const disbursement = disbursements?.find((d) => d.id === id);
       if (!disbursement) throw new Error("Disbursement not found locally");
       if (!disbursement.source_account_id) {

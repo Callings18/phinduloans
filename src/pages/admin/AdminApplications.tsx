@@ -83,6 +83,7 @@ import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
 
 const statusConfig = {
@@ -580,6 +581,7 @@ const AdminApplications = () => {
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
       if (!selectedApp) throw new Error("No application selected");
+      await assertBusinessDayForDisbursement();
       const sourceAccount = fundingAccounts.find((a) => a.id === data.source_account_id);
       if (!sourceAccount) throw new Error("Source account not found");
 

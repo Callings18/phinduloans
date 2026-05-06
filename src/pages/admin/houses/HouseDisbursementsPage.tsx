@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useHouseDisbursements, useHouseLoans } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { houseMarkDisbursementCompleted } from "@/services/repositories/houseWorkflowRepository";
+import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { format } from "date-fns";
 import { Banknote, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
@@ -50,6 +51,7 @@ export default function HouseDisbursementsPage() {
 
   const disburseMutation = useMutation({
     mutationFn: async (disbursement: any) => {
+      await assertBusinessDayForDisbursement();
       const accountId = rowAccounts[disbursement.id] || disbursement?.source_account_id;
       if (!accountId) {
         throw new Error("Pick a funding account before disbursing");

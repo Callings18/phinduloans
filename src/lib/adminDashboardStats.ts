@@ -99,18 +99,23 @@ export async function fetchAdminDashboardStats(
 
 export async function fetchAdminUpcomingPayments(
   supabase: SupabaseClient,
-  options: { loanProductId?: string | null }
+  options: { loanProductId?: string | null; daysAhead?: number; limit?: number }
 ) {
   const loanProductId = options.loanProductId || null;
+  const daysAhead = options.daysAhead ?? 7;
+  const limit = options.limit ?? 100;
   const today = new Date();
+  const horizon = new Date(today);
+  horizon.setDate(horizon.getDate() + daysAhead);
 
   const { data, error } = await supabase
     .from("loan_repayments")
     .select(`*, loan:loan_applications(id, full_name, phone, loan_amount, loan_product_id)`)
     .eq("status", "pending")
     .gte("due_date", format(today, "yyyy-MM-dd"))
+    .lte("due_date", format(horizon, "yyyy-MM-dd"))
     .order("due_date", { ascending: true })
-    .limit(50);
+    .limit(limit);
 
   if (error) throw error;
   let rows = data || [];
@@ -120,5 +125,5 @@ export async function fetchAdminUpcomingPayments(
         r.loan?.loan_product_id === loanProductId
     );
   }
-  return rows.slice(0, 5);
+  return rows;
 }
