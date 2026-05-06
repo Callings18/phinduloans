@@ -83,6 +83,7 @@ import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { transitionLoanStatus } from "@/services/repositories/workflowRepository";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
 
 const statusConfig = {

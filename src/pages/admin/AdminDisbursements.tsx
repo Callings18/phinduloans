@@ -27,6 +27,7 @@ import { logAudit, handleUnauthorized } from "@/utils/auditLog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { BORROWER_SELFIE_VAULT_ALIASES, latestVerifiedByVaultDocType } from "@/constants/borrowerKycDocs";
 import {
   Banknote,

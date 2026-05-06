@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useHouseDisbursements, useHouseLoans } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { houseMarkDisbursementCompleted } from "@/services/repositories/houseWorkflowRepository";
+import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { format } from "date-fns";
 import { Banknote, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
