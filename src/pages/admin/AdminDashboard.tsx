@@ -501,6 +501,11 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                     </div>
                   );
                 })}
+                {upcomingPayments.length > 8 && (
+                  <p className="pt-1 text-center text-xs text-muted-foreground">
+                    +{upcomingPayments.length - 8} more due in the next 7 days — see Repayments
+                  </p>
+                )}
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
