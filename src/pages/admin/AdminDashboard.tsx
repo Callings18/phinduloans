@@ -438,7 +438,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                   <Calendar size={18} className="shrink-0 text-primary" />
                   Upcoming Payments
                 </CardTitle>
-                <CardDescription>Next payments due</CardDescription>
+                <CardDescription>Live — all payments due in the next 7 days, across every loan type</CardDescription>
               </div>
               <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
                 <Link to="/admin/repayments">
@@ -460,7 +460,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               </div>
             ) : upcomingPayments && upcomingPayments.length > 0 ? (
               <div className="space-y-3">
-                {upcomingPayments.map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
+                {upcomingPayments.slice(0, 8).map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
                   const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
                   const urgencyClass =
                     daysUntil === 0
@@ -494,7 +494,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                       </div>
                       <div className="flex shrink-0 flex-row items-center justify-between gap-2 sm:flex-col sm:items-end sm:text-right">
                         <Badge variant="outline" className={urgencyClass}>
-                          {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`}
+                          {daysUntil === 0 ? "Due today" : daysUntil === 1 ? "Due tomorrow" : `Due in ${daysUntil} days`}
                         </Badge>
                         <p className="text-xs text-muted-foreground sm:mt-1">{format(new Date(payment.due_date), "MMM d")}</p>
                       </div>
