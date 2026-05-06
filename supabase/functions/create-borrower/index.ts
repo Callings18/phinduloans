@@ -110,20 +110,28 @@ Deno.serve(async (req) => {
           userId = profile.id;
         }
 
-        // Update profile with new info for existing user
-        const { error: updateError } = await supabaseAdmin
+        // Upsert profile for existing auth users too. Some older auth users may not
+        // have a profiles row yet, and product_house_borrowers FK requires it.
+        const { error: upsertExistingProfileError } = await supabaseAdmin
           .from("profiles")
-          .update({
+          .upsert({
+            id: userId,
+            email,
             full_name,
             phone: phone || null,
             nrc_number: nrc_number || null,
             address: address || null,
             city: city || null,
-          })
-          .eq("id", userId);
+            gender: gender || null,
+            marital_status: marital_status || null,
+          }, { onConflict: "id" });
 
-        if (updateError) {
-          console.error("Error updating profile:", updateError);
+        if (upsertExistingProfileError) {
+          console.error("Error upserting existing borrower profile:", upsertExistingProfileError);
+          return new Response(JSON.stringify({ error: `Profile update failed: ${upsertExistingProfileError.message}` }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         if (product_code) {
