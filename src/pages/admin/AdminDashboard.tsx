@@ -29,6 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { format, differenceInDays, startOfDay } from "date-fns";
 import { useAdminDashboardStats, useAdminUpcomingPayments } from "@/hooks/useAdminDashboardStats";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
 import { anyBetaModuleActive, isBetaModule } from "@/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
