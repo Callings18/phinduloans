@@ -171,10 +171,12 @@ Deno.serve(async (req) => {
       createdNew = true;
     }
 
-    // Update the profile with additional info for new user
-    const { error: updateError } = await supabaseAdmin
+    // Upsert profile (handle_new_user trigger may not have created it yet)
+    const { error: upsertError } = await supabaseAdmin
       .from("profiles")
-      .update({
+      .upsert({
+        id: userId,
+        email,
         full_name,
         phone: phone || null,
         nrc_number: nrc_number || null,
@@ -182,11 +184,14 @@ Deno.serve(async (req) => {
         city: city || null,
         gender: gender || null,
         marital_status: marital_status || null,
-      })
-      .eq("id", userId);
+      }, { onConflict: "id" });
 
-    if (updateError) {
-      console.error("Error updating profile:", updateError);
+    if (upsertError) {
+      console.error("Error upserting profile:", upsertError);
+      return new Response(JSON.stringify({ error: `Profile creation failed: ${upsertError.message}` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Send SMS with login credentials (phone-only OTP/password) for newly created borrowers
