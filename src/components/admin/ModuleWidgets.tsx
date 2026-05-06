@@ -109,7 +109,12 @@ const ModuleWidgets = () => {
     },
   });
 
-  const widgets: ModuleWidgetProps[] = [
+  // Live updates for the widget tiles
+  useRealtimeInvalidate(
+    ["loan_applications", "loan_repayments", "disbursements"],
+    [["module-stats"]],
+    "module-widgets-realtime",
+  );
     {
       title: "Pending Applications",
       icon: FileText,
