@@ -10,6 +10,7 @@ import {
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 
 interface ModuleWidgetProps {
   title: string;
@@ -107,6 +108,13 @@ const ModuleWidgets = () => {
       };
     },
   });
+
+  // Live updates for the widget tiles
+  useRealtimeInvalidate(
+    ["loan_applications", "loan_repayments", "disbursements"],
+    [["module-stats"]],
+    "module-widgets-realtime",
+  );
 
   const widgets: ModuleWidgetProps[] = [
     {

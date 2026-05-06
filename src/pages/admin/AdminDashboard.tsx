@@ -29,6 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { format, differenceInDays, startOfDay } from "date-fns";
 import { useAdminDashboardStats, useAdminUpcomingPayments } from "@/hooks/useAdminDashboardStats";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
 import { anyBetaModuleActive, isBetaModule } from "@/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
@@ -53,6 +54,26 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     isLoading: upcomingPaymentsLoading,
     isError: upcomingPaymentsError,
   } = useAdminUpcomingPayments(loanProductId);
+
+  // Live updates: refresh dashboard stats, upcoming payments and operational
+  // risk strip whenever loans, repayments, disbursements or payment claims
+  // change anywhere in the system.
+  useRealtimeInvalidate(
+    [
+      "loan_applications",
+      "loan_repayments",
+      "disbursements",
+      "payment_claims",
+      "account_transactions",
+    ],
+    [
+      ["admin-stats", loanProductId || null],
+      ["upcoming-payments", loanProductId || null],
+      ["admin-operational-risk"],
+      ["module-stats"],
+    ],
+    "admin-dashboard-realtime",
+  );
 
   const { data: operationalRisk, isError: operationalRiskFailed } = useQuery({
     queryKey: ["admin-operational-risk"],
