@@ -475,7 +475,7 @@ export default function ProductLoanFormShell({
       return {
         repayment: marketeerResult.totalRepayment,
         interest: marketeerResult.totalInterest,
-        installmentLabel: `Daily installment (${marketeerResult.durationDays} days, Mon–Fri)`,
+        installmentLabel: `Daily installment (${marketeerResult.durationDays} days, Mon–Sat)`,
         installment: marketeerResult.dailyInstallment,
         dailyRate: `${(marketeerResult.tier.interestPercent / marketeerResult.durationDays).toFixed(3)}%`,
       };
