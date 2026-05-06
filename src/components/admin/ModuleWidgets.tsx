@@ -115,6 +115,8 @@ const ModuleWidgets = () => {
     [["module-stats"]],
     "module-widgets-realtime",
   );
+
+  const widgets: ModuleWidgetProps[] = [
     {
       title: "Pending Applications",
       icon: FileText,
