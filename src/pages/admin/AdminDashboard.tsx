@@ -55,6 +55,26 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     isError: upcomingPaymentsError,
   } = useAdminUpcomingPayments(loanProductId);
 
+  // Live updates: refresh dashboard stats, upcoming payments and operational
+  // risk strip whenever loans, repayments, disbursements or payment claims
+  // change anywhere in the system.
+  useRealtimeInvalidate(
+    [
+      "loan_applications",
+      "loan_repayments",
+      "disbursements",
+      "payment_claims",
+      "account_transactions",
+    ],
+    [
+      ["admin-stats", loanProductId || null],
+      ["upcoming-payments", loanProductId || null],
+      ["admin-operational-risk"],
+      ["module-stats"],
+    ],
+    "admin-dashboard-realtime",
+  );
+
   const { data: operationalRisk, isError: operationalRiskFailed } = useQuery({
     queryKey: ["admin-operational-risk"],
     queryFn: async () => {
