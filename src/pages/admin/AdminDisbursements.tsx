@@ -224,6 +224,7 @@ const AdminDisbursements = () => {
 
   const createDisbursementMutation = useMutation({
     mutationFn: async () => {
+      await assertBusinessDayForDisbursement();
       const loan = approvedLoans?.find((l) => l.id === selectedLoan);
       if (!loan) throw new Error("Loan not found");
       const verifiedDocs = selectedBorrowerKycSummary?.verifiedRequiredDocs ?? 0;
