@@ -18,8 +18,7 @@ export function useRealtimeInvalidate(
     const name = channelName || `rt-${tables.join("-")}-${Math.random().toString(36).slice(2, 8)}`;
     let channel = supabase.channel(name);
     tables.forEach((table) => {
-      channel = channel.on(
-        // @ts-expect-error - supabase-js typings for postgres_changes are loose
+      channel = (channel as any).on(
         "postgres_changes",
         { event: "*", schema: "public", table },
         () => {
