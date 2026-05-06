@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useHouseReportSummary } from "@/hooks/useHouseData";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { Badge } from "@/components/ui/badge";
 import { format, isPast } from "date-fns";
 import { Banknote, TrendingUp, AlertTriangle, CheckCircle2, Clock, Users } from "lucide-react";
