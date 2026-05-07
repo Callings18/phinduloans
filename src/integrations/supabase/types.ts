@@ -4237,6 +4237,10 @@ export type Database = {
         Returns: string
       }
       cron_apply_daily_penalties: { Args: never; Returns: undefined }
+      generate_loan_schedule_for: {
+        Args: { p_loan_id: string }
+        Returns: undefined
+      }
       get_my_permissions: {
         Args: never
         Returns: {
