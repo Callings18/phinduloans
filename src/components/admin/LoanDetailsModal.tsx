@@ -442,7 +442,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         p_repayment_id: selectedRepayment.id,
         p_amount: paidAmount,
         p_payment_method: paymentMethod,
-        p_account_id: selectedRepayment.destination_account_id,
+        p_account_id: destinationAccountId,
         p_transaction_reference: transactionRef || null,
         p_paid_date: paidDate,
       });
