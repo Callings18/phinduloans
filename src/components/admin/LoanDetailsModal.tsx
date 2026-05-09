@@ -2860,6 +2860,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             )}
 
             <div className="space-y-2">
+              <Label>Credit to account</Label>
+              <Select value={paymentAccountId} onValueChange={setPaymentAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account to credit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts ?? []).map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.account_name} <span className="text-xs text-muted-foreground">({a.account_type})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Payment will be posted to this account's ledger.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label>Payment Method</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                 <SelectTrigger>
