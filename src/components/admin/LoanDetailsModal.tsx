@@ -226,6 +226,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [transactionRef, setTransactionRef] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentAccountId, setPaymentAccountId] = useState<string>("");
   const [isRestructureOpen, setIsRestructureOpen] = useState(false);
   const [newTermMonths, setNewTermMonths] = useState("");
   const [newInterestRate, setNewInterestRate] = useState("");
