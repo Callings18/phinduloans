@@ -411,13 +411,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
-      // Resolve the destination account: prefer the value attached to the
-      // installment (if present), otherwise fall back to the source account
-      // used to fund the loan via its disbursement record. This keeps Pay
-      // buttons working for products (e.g. Salary Advance) that don't carry
-      // an account id directly on each installment row.
+      // Resolve the destination account: prefer admin's explicit pick from
+      // the dialog, else the value attached to the installment, else the
+      // source account used to fund the loan via its disbursement record.
       let destinationAccountId: string | null =
-        (selectedRepayment as any).destination_account_id ?? null;
+        paymentAccountId ||
+        ((selectedRepayment as any).destination_account_id ?? null);
       if (!destinationAccountId) {
         const { data: disb } = await supabase
           .from("disbursements")
@@ -429,7 +428,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         destinationAccountId = (disb as any)?.source_account_id ?? null;
       }
       if (!destinationAccountId) {
-        throw new Error("No funding account found for this loan. Please open Admin → Repayments.");
+        throw new Error("Choose a 'Credit to' account before recording the payment.");
       }
       if (paidAmount > Number(selectedRepayment.amount)) {
         throw new Error("Overpayment is disabled here. Open Admin → Repayments to allocate this payment across multiple installments.");
