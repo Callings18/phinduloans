@@ -2905,7 +2905,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => setIsRecordPaymentOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => recordPaymentMutation.mutate()}
-                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
+                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0 || !paymentAccountId}
               >
                 {recordPaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
                 Record Payment
