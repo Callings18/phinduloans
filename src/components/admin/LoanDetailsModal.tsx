@@ -226,6 +226,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [transactionRef, setTransactionRef] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentAccountId, setPaymentAccountId] = useState<string>("");
   const [isRestructureOpen, setIsRestructureOpen] = useState(false);
   const [newTermMonths, setNewTermMonths] = useState("");
   const [newInterestRate, setNewInterestRate] = useState("");
@@ -342,6 +343,35 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     };
   }, [loan?.id, open, queryClient]);
 
+  // Prefill the "Credit to" account when the Record Payment dialog opens —
+  // use the funding account from the loan's disbursement, falling back to
+  // the first active bank account so admins can pay even when the loan
+  // has no linked disbursement (e.g. legacy/imported Salary Advances).
+  useEffect(() => {
+    if (!isRecordPaymentOpen || !loan?.id) return;
+    if (paymentAccountId) return;
+    let cancelled = false;
+    (async () => {
+      const { data: disb } = await supabase
+        .from("disbursements")
+        .select("source_account_id")
+        .eq("loan_id", loan.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      const fromDisb = (disb as any)?.source_account_id ?? null;
+      if (fromDisb) {
+        setPaymentAccountId(fromDisb);
+        return;
+      }
+      const fallback = (fundingAccounts ?? []).find((a: any) => a.account_type === "bank")
+        ?? (fundingAccounts ?? [])[0];
+      if (fallback?.id) setPaymentAccountId(fallback.id);
+    })();
+    return () => { cancelled = true; };
+  }, [isRecordPaymentOpen, loan?.id, fundingAccounts, paymentAccountId]);
+
   // Determine payment frequency
   const termUnit = (loan as any)?.term_unit || loanProduct?.term_unit || 'months';
   const interestPeriod = loanProduct?.interest_period || 'monthly';
@@ -410,13 +440,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
-      // Resolve the destination account: prefer the value attached to the
-      // installment (if present), otherwise fall back to the source account
-      // used to fund the loan via its disbursement record. This keeps Pay
-      // buttons working for products (e.g. Salary Advance) that don't carry
-      // an account id directly on each installment row.
+      // Resolve the destination account: prefer admin's explicit pick from
+      // the dialog, else the value attached to the installment, else the
+      // source account used to fund the loan via its disbursement record.
       let destinationAccountId: string | null =
-        (selectedRepayment as any).destination_account_id ?? null;
+        paymentAccountId ||
+        ((selectedRepayment as any).destination_account_id ?? null);
       if (!destinationAccountId) {
         const { data: disb } = await supabase
           .from("disbursements")
@@ -428,7 +457,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         destinationAccountId = (disb as any)?.source_account_id ?? null;
       }
       if (!destinationAccountId) {
-        throw new Error("No funding account found for this loan. Please open Admin → Repayments.");
+        throw new Error("Choose a 'Credit to' account before recording the payment.");
       }
       if (paidAmount > Number(selectedRepayment.amount)) {
         throw new Error("Overpayment is disabled here. Open Admin → Repayments to allocate this payment across multiple installments.");
@@ -2831,6 +2860,25 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             )}
 
             <div className="space-y-2">
+              <Label>Credit to account</Label>
+              <Select value={paymentAccountId} onValueChange={setPaymentAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account to credit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(fundingAccounts ?? []).map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.account_name} <span className="text-xs text-muted-foreground">({a.account_type})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Payment will be posted to this account's ledger.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label>Payment Method</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                 <SelectTrigger>
@@ -2857,7 +2905,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => setIsRecordPaymentOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => recordPaymentMutation.mutate()}
-                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
+                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0 || !paymentAccountId}
               >
                 {recordPaymentMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
                 Record Payment
