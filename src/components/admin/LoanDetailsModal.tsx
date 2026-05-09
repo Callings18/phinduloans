@@ -343,6 +343,35 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     };
   }, [loan?.id, open, queryClient]);
 
+  // Prefill the "Credit to" account when the Record Payment dialog opens —
+  // use the funding account from the loan's disbursement, falling back to
+  // the first active bank account so admins can pay even when the loan
+  // has no linked disbursement (e.g. legacy/imported Salary Advances).
+  useEffect(() => {
+    if (!isRecordPaymentOpen || !loan?.id) return;
+    if (paymentAccountId) return;
+    let cancelled = false;
+    (async () => {
+      const { data: disb } = await supabase
+        .from("disbursements")
+        .select("source_account_id")
+        .eq("loan_id", loan.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      const fromDisb = (disb as any)?.source_account_id ?? null;
+      if (fromDisb) {
+        setPaymentAccountId(fromDisb);
+        return;
+      }
+      const fallback = (fundingAccounts ?? []).find((a: any) => a.account_type === "bank")
+        ?? (fundingAccounts ?? [])[0];
+      if (fallback?.id) setPaymentAccountId(fallback.id);
+    })();
+    return () => { cancelled = true; };
+  }, [isRecordPaymentOpen, loan?.id, fundingAccounts, paymentAccountId]);
+
   // Determine payment frequency
   const termUnit = (loan as any)?.term_unit || loanProduct?.term_unit || 'months';
   const interestPeriod = loanProduct?.interest_period || 'monthly';
