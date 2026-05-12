@@ -431,10 +431,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     return principalAmount * (penaltyRate / 100) * monthsOverdue;
   };
 
-  // Enhanced record payment mutation with partial/overpayment support
+  // Enhanced record payment mutation with partial/overpayment support.
+  // Surfaces clear, actionable error messages and logs full RPC context to
+  // the console so admins can paste it into a bug report.
   const recordPaymentMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedRepayment || !loan) throw new Error("No repayment selected");
+      if (!selectedRepayment) {
+        throw new Error("No installment selected. Close the dialog and click Pay on the installment again.");
+      }
+      if (!loan) {
+        throw new Error("Loan record not loaded. Refresh the page and try again.");
+      }
 
       const principalRemaining = Math.max(
         Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) - Number(selectedRepayment.principal_paid || 0),
@@ -445,36 +452,56 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         0,
       );
       const totalRemaining = principalRemaining + penaltyRemaining;
+
+      if (totalRemaining <= 0.01) {
+        throw new Error("This installment is already fully paid. Refresh the loan to see the latest status.");
+      }
+
       const paidAmount = Number(paymentAmount) || totalRemaining;
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
-        throw new Error("Payment amount must be greater than 0");
+        throw new Error("Enter a payment amount greater than 0.");
       }
+      if (paidAmount > totalRemaining + 0.01) {
+        throw new Error(
+          `Payment K${paidAmount.toLocaleString()} exceeds the remaining installment balance K${totalRemaining.toLocaleString()} ` +
+          `(principal K${principalRemaining.toLocaleString()} + penalty K${penaltyRemaining.toLocaleString()}). ` +
+          `Use Admin → Repayments to allocate across multiple installments.`,
+        );
+      }
+
       // Resolve the destination account: prefer admin's explicit pick from
       // the dialog, else the value attached to the installment, else the
       // source account used to fund the loan via its disbursement record.
       let destinationAccountId: string | null =
         paymentAccountId ||
         ((selectedRepayment as any).destination_account_id ?? null);
+      let accountResolution: "dialog" | "installment" | "disbursement" | "none" =
+        paymentAccountId ? "dialog" : ((selectedRepayment as any).destination_account_id ? "installment" : "none");
       if (!destinationAccountId) {
-        const { data: disb } = await supabase
+        const { data: disb, error: disbErr } = await supabase
           .from("disbursements")
           .select("source_account_id")
           .eq("loan_id", loan.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
+        if (disbErr) {
+          console.error("[recordPayment] Failed to look up disbursement source account", { loanId: loan.id, error: disbErr });
+        }
         destinationAccountId = (disb as any)?.source_account_id ?? null;
+        if (destinationAccountId) accountResolution = "disbursement";
       }
       if (!destinationAccountId) {
-        throw new Error("Choose a 'Credit to' account before recording the payment.");
+        throw new Error(
+          "No destination account is set. Pick a 'Credit to' account in the dialog, " +
+          "or open the loan's Disbursements tab and set a source account.",
+        );
       }
-      if (paidAmount > totalRemaining + 0.01) {
-        throw new Error("Payment exceeds the remaining installment balance. Open Admin → Repayments for multi-installment allocation.");
-      }
-      const penaltyAllocation = Math.min(paidAmount, penaltyRemaining);
 
+      const penaltyAllocation = Math.min(paidAmount, penaltyRemaining);
       const paidDate = new Date().toISOString().split("T")[0];
-      const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
+
+      const rpcArgs = {
         p_repayment_id: selectedRepayment.id,
         p_amount: paidAmount,
         p_payment_method: paymentMethod,
@@ -482,13 +509,55 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         p_transaction_reference: transactionRef || null,
         p_paid_date: paidDate,
         p_penalty_amount: penaltyAllocation,
+      };
+
+      // Structured context log before the call — pasteable into bug reports.
+      console.info("[recordPayment] Calling record_loan_payment", {
+        loan: { id: loan.id, name: loan.full_name, status: (loan as any).status, productCode: (loan as any).loan_products?.product_code },
+        installment: {
+          id: selectedRepayment.id,
+          number: selectedRepayment.installment_number,
+          amount: selectedRepayment.amount,
+          original_amount: (selectedRepayment as any).original_amount,
+          principal_paid: selectedRepayment.principal_paid,
+          penalty_amount: (selectedRepayment as any).penalty_amount,
+          penalty_paid: (selectedRepayment as any).penalty_paid,
+          principalRemaining,
+          penaltyRemaining,
+          totalRemaining,
+        },
+        payment: { paidAmount, penaltyAllocation, accountResolution, destinationAccountId, method: paymentMethod, ref: transactionRef || null },
       });
-      if (rpcError) throw rpcError;
-      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
-      if (!rpcResult?.success) {
-        throw new Error(rpcResult?.error || "Failed to record payment");
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", rpcArgs);
+
+      if (rpcError) {
+        console.error("[recordPayment] RPC failed", { rpcArgs, rpcError });
+        const code = (rpcError as any).code;
+        const raw = rpcError.message || "";
+        // Map common Postgres / RPC errors to plain-English guidance.
+        if (code === "PGRST301" || /jwt|permission denied|rls/i.test(raw)) {
+          throw new Error("You don't have permission to record this payment. Sign in again or ask an admin.");
+        }
+        if (/account.*balance|insufficient/i.test(raw)) {
+          throw new Error("The destination account update failed (insufficient balance or stale data). Refresh and retry.");
+        }
+        if (/exceeds|greater than/i.test(raw)) {
+          throw new Error(`Server rejected the amount: ${raw}`);
+        }
+        if (/network|fetch|timeout/i.test(raw)) {
+          throw new Error("Network error reaching the server. Check your connection and retry.");
+        }
+        throw new Error(`Payment failed: ${raw || "Unknown server error"}. Details logged to console.`);
       }
 
+      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+      if (!rpcResult?.success) {
+        console.error("[recordPayment] RPC returned success=false", { rpcArgs, rpcResult });
+        throw new Error(rpcResult?.error || "The server could not record this payment. Details logged to console.");
+      }
+
+      console.info("[recordPayment] Success", { rpcResult });
       return { paidAmount, isPartial: paidAmount < totalRemaining - 0.01, isOverpayment: false };
     },
     onSuccess: (result) => {
@@ -513,7 +582,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       setPaymentAccountId("");
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to record payment");
+      // Long messages are common now — give the toast room and keep it visible.
+      toast.error(error?.message || "Failed to record payment", { duration: 8000 });
     },
   });
 
