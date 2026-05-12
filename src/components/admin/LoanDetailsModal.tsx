@@ -436,7 +436,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
 
-      const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
+      const principalRemaining = Math.max(
+        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) - Number(selectedRepayment.principal_paid || 0),
+        0,
+      );
+      const penaltyRemaining = Math.max(
+        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
+        0,
+      );
+      const totalRemaining = principalRemaining + penaltyRemaining;
+      const paidAmount = Number(paymentAmount) || totalRemaining;
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
@@ -459,15 +468,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!destinationAccountId) {
         throw new Error("Choose a 'Credit to' account before recording the payment.");
       }
-      const principalRemaining = Math.max(
-        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) - Number(selectedRepayment.principal_paid || 0),
-        0,
-      );
-      const penaltyRemaining = Math.max(
-        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
-        0,
-      );
-      const totalRemaining = principalRemaining + penaltyRemaining;
       if (paidAmount > totalRemaining + 0.01) {
         throw new Error("Payment exceeds the remaining installment balance. Open Admin → Repayments for multi-installment allocation.");
       }
