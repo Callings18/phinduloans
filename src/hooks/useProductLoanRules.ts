@@ -33,6 +33,14 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
       if (!["employed", "contract"].includes(values.employmentType)) {
         errors.push("Salary Advance is restricted to employed/civil servant borrowers.");
       }
+      const minAmount = Number(values.productMinAmount ?? 500);
+      const maxAmount = Number(values.productMaxAmount ?? 10000);
+      if (values.loanAmount < minAmount || values.loanAmount > maxAmount) {
+        errors.push(`Salary Advance amount must be between K${minAmount.toLocaleString()} and K${maxAmount.toLocaleString()}.`);
+      }
+      if (values.termValue !== 1) {
+        errors.push("Salary Advance term is fixed at 1 month.");
+      }
       return errors;
     },
   },
