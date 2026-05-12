@@ -2800,6 +2800,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+              {(() => {
+                const principalRemaining = Math.max(
+                  Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0) - Number(selectedRepayment?.principal_paid || 0),
+                  0,
+                );
+                const penaltyRemaining = Math.max(
+                  Number(selectedRepayment?.penalty_amount || 0) - Number(selectedRepayment?.penalty_paid || 0),
+                  0,
+                );
+                const totalRemaining = principalRemaining + penaltyRemaining;
+                return (
+                  <>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Original Installment</span>
                 <span className="font-medium">K{Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0).toLocaleString()}</span>
@@ -2812,16 +2824,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               )}
               {selectedRepayment?.penalty_amount && selectedRepayment.penalty_amount > 0 && (
                 <div className="flex justify-between text-destructive">
-                  <span className="text-sm">Penalty</span>
-                  <span className="font-medium">K{Number(selectedRepayment.penalty_amount).toLocaleString()}</span>
+                  <span className="text-sm">Penalty Remaining</span>
+                  <span className="font-medium">K{penaltyRemaining.toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between border-t border-border pt-2">
-                <span className="font-medium">Total Due</span>
+                <span className="font-medium">Total Remaining</span>
                 <span className="text-lg font-bold">
-                  K{((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)).toLocaleString()}
+                  K{totalRemaining.toLocaleString()}
                 </span>
               </div>
+                  </>
+                );
+              })()}
               <p className="text-xs text-muted-foreground">
                 Due: {selectedRepayment?.due_date ? format(new Date(selectedRepayment.due_date), "MMM dd, yyyy") : ""}
               </p>
