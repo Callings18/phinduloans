@@ -2884,14 +2884,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <div>
                         <p className="text-sm font-medium">Overpayment</p>
                         <p className="text-xs text-muted-foreground">
-                          Excess K{(Number(paymentAmount) - ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0))).toLocaleString()} will be applied to next installment
+                          Excess K{(Number(paymentAmount) - totalRemaining).toLocaleString()} cannot be recorded here; use Admin → Repayments for multi-installment allocation
                         </p>
                       </div>
                     </>
                   )}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             <div className="space-y-2">
               <Label>Credit to account</Label>
