@@ -436,7 +436,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!selectedRepayment || !loan) throw new Error("No repayment selected");
 
-      const paidAmount = Number(paymentAmount) || selectedRepayment.amount;
+      const principalRemaining = Math.max(
+        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) - Number(selectedRepayment.principal_paid || 0),
+        0,
+      );
+      const penaltyRemaining = Math.max(
+        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
+        0,
+      );
+      const totalRemaining = principalRemaining + penaltyRemaining;
+      const paidAmount = Number(paymentAmount) || totalRemaining;
       if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
         throw new Error("Payment amount must be greater than 0");
       }
@@ -459,15 +468,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!destinationAccountId) {
         throw new Error("Choose a 'Credit to' account before recording the payment.");
       }
-      const principalRemaining = Math.max(
-        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) - Number(selectedRepayment.principal_paid || 0),
-        0,
-      );
-      const penaltyRemaining = Math.max(
-        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
-        0,
-      );
-      const totalRemaining = principalRemaining + penaltyRemaining;
       if (paidAmount > totalRemaining + 0.01) {
         throw new Error("Payment exceeds the remaining installment balance. Open Admin → Repayments for multi-installment allocation.");
       }
@@ -510,6 +510,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       setPaymentMethod("cash");
       setTransactionRef("");
       setPaymentAmount("");
+      setPaymentAccountId("");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
@@ -931,7 +932,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       );
 
       // Block if penalties are still outstanding (must be cleared via repayment first)
-      if (totalUnpaidPenalties > 0) {
+      if (totalUnpaidPenalties > 0.01) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
 
@@ -1759,15 +1760,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     0
   );
   const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
-  // Reloan eligibility: borrower must have paid ALL interest (and all penalties).
-  // Interest is paid first from any payment; whatever is left counts toward principal.
-  // Carry-forward principal = remaining principal balance only — interest is NEVER rolled forward.
+  // Reloan eligibility: borrower must clear penalties. The remaining scheduled
+  // balance (principal + unpaid interest) carries forward into the new loan.
   const interestPaidSoFar = Math.min(totalInterestDue, totalPaidIncludingPartial);
   const reloanInterestOutstanding = Math.max(0, totalInterestDue - interestPaidSoFar);
-  const principalPaidSoFar = Math.max(0, totalPaidIncludingPartial - interestPaidSoFar);
   const reloanCarryForwardPrincipal = Math.max(
     0,
-    Number(loan.loan_amount || 0) - principalPaidSoFar,
+    Number(loan.total_repayment || loan.loan_amount || 0) - totalPaidIncludingPartial,
   );
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
@@ -2799,6 +2798,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+              {(() => {
+                const principalRemaining = Math.max(
+                  Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0) - Number(selectedRepayment?.principal_paid || 0),
+                  0,
+                );
+                const penaltyRemaining = Math.max(
+                  Number(selectedRepayment?.penalty_amount || 0) - Number(selectedRepayment?.penalty_paid || 0),
+                  0,
+                );
+                const totalRemaining = principalRemaining + penaltyRemaining;
+                return (
+                  <>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Original Installment</span>
                 <span className="font-medium">K{Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0).toLocaleString()}</span>
@@ -2811,16 +2822,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               )}
               {selectedRepayment?.penalty_amount && selectedRepayment.penalty_amount > 0 && (
                 <div className="flex justify-between text-destructive">
-                  <span className="text-sm">Penalty</span>
-                  <span className="font-medium">K{Number(selectedRepayment.penalty_amount).toLocaleString()}</span>
+                  <span className="text-sm">Penalty Remaining</span>
+                  <span className="font-medium">K{penaltyRemaining.toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between border-t border-border pt-2">
-                <span className="font-medium">Total Due</span>
+                <span className="font-medium">Total Remaining</span>
                 <span className="text-lg font-bold">
-                  K{((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)).toLocaleString()}
+                  K{totalRemaining.toLocaleString()}
                 </span>
               </div>
+                  </>
+                );
+              })()}
               <p className="text-xs text-muted-foreground">
                 Due: {selectedRepayment?.due_date ? format(new Date(selectedRepayment.due_date), "MMM dd, yyyy") : ""}
               </p>
@@ -2839,16 +2853,26 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </p>
             </div>
 
-            {paymentAmount && Number(paymentAmount) !== (selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0) && (
-              <div className={`p-3 rounded-lg border ${Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
+            {paymentAmount && (() => {
+              const principalRemaining = Math.max(
+                Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0) - Number(selectedRepayment?.principal_paid || 0),
+                0,
+              );
+              const penaltyRemaining = Math.max(
+                Number(selectedRepayment?.penalty_amount || 0) - Number(selectedRepayment?.penalty_paid || 0),
+                0,
+              );
+              const totalRemaining = principalRemaining + penaltyRemaining;
+              return Number(paymentAmount) !== totalRemaining && (
+              <div className={`p-3 rounded-lg border ${Number(paymentAmount) < totalRemaining ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
                 <div className="flex items-center gap-2">
-                  {Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? (
+                  {Number(paymentAmount) < totalRemaining ? (
                     <>
                       <AlertTriangle size={16} className="text-warning" />
                       <div>
                         <p className="text-sm font-medium">Partial Payment</p>
                         <p className="text-xs text-muted-foreground">
-                          Remaining K{(((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) - Number(paymentAmount)).toLocaleString()} will stay pending
+                          Remaining K{(totalRemaining - Number(paymentAmount)).toLocaleString()} will stay pending
                         </p>
                       </div>
                     </>
@@ -2858,14 +2882,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <div>
                         <p className="text-sm font-medium">Overpayment</p>
                         <p className="text-xs text-muted-foreground">
-                          Excess K{(Number(paymentAmount) - ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0))).toLocaleString()} will be applied to next installment
+                          Excess K{(Number(paymentAmount) - totalRemaining).toLocaleString()} cannot be recorded here; use Admin → Repayments for multi-installment allocation
                         </p>
                       </div>
                     </>
                   )}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             <div className="space-y-2">
               <Label>Credit to account</Label>
@@ -3363,11 +3388,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium text-success">K{totalPaidIncludingPartial.toLocaleString()}</span>
                     <span className="text-muted-foreground">— Interest Paid</span>
                     <span className="text-right font-medium text-success">K{interestPaidSoFar.toLocaleString()}</span>
-                    <span className="text-muted-foreground">— Interest Still Due</span>
-                    <span className={`text-right font-medium ${reloanInterestOutstanding > 0.01 ? "text-destructive" : "text-success"}`}>
+                    <span className="text-muted-foreground">— Interest Remaining</span>
+                    <span className="text-right font-medium text-muted-foreground">
                       K{reloanInterestOutstanding.toLocaleString()}
                     </span>
-                    <span className="text-muted-foreground font-semibold">Reloan Principal (auto)</span>
+                    <span className="text-muted-foreground font-semibold">Reloan Balance (auto)</span>
                     <span className="text-right font-bold text-destructive">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
@@ -3387,15 +3412,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    {reloanInterestOutstanding > 0.01 ? (
-                      <div className="flex items-center gap-2 text-destructive">
-                        <XCircle size={16} /> Interest of K{reloanInterestOutstanding.toLocaleString()} still due — must be paid in full before reloan
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-success">
-                        <CheckCircle size={16} /> All interest paid — eligible
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 text-success">
+                      <CheckCircle size={16} /> Remaining balance will carry forward into the reloan
+                    </div>
                     {reloanCarryForwardPrincipal <= 0.01 ? (
                       <div className="flex items-center gap-2 text-success">
                         <CheckCircle size={16} /> No outstanding principal — eligible for fresh reloan
@@ -3409,7 +3428,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </div>
 
                 {/* Reloan date — applies to both fresh and carry-forward, but only when eligible */}
-                {totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
+                {totalPenalties === 0 && (
                   <div className="rounded-lg border p-4 space-y-2 text-sm">
                     <Label className="text-xs">Reloan date *</Label>
                     <Input
@@ -3422,7 +3441,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Fresh reloan inputs (when previous loan fully paid) */}
-                {reloanCarryForwardPrincipal <= 0.01 && totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
+                {reloanCarryForwardPrincipal <= 0.01 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">Fresh Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">Previous loan is fully paid. Enter a new principal and term to start a new loan for this borrower.</p>
@@ -3460,7 +3479,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Carry-forward Reloan Terms */}
-                {reloanCarryForwardPrincipal > 0.01 && totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
+                {reloanCarryForwardPrincipal > 0.01 && totalPenalties === 0 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">
@@ -3541,7 +3560,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               disabled={
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
-                reloanInterestOutstanding > 0.01 ||
                 !reloanDate ||
                 (reloanCarryForwardPrincipal <= 0.01 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
                 (reloanTopUpNumeric > 0 && !reloanSourceAccountId)

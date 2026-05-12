@@ -134,8 +134,8 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
     ],
     validate(values) {
       const errors: string[] = [];
-      const minAmount = Number(values.productMinAmount || 1000);
-      const maxAmount = Number(values.productMaxAmount || 10000);
+      const minAmount = Number(values.productMinAmount ?? 500);
+      const maxAmount = Number(values.productMaxAmount ?? 10000);
       if (!values.hasLocalAuthorityCompliance) {
         errors.push("Local authority compliance must be confirmed for Marketeer loans.");
       }
