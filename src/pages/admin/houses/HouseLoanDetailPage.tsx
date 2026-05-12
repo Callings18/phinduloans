@@ -382,6 +382,9 @@ export default function HouseLoanDetailPage() {
                 const isPending = r.status !== "paid" && r.status !== "cancelled";
                 const isOverdue = isPending && r.due_date && r.due_date < todayStr;
                 const daysLate = isOverdue ? differenceInCalendarDays(today, new Date(r.due_date)) : 0;
+                const principalRemaining = Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0);
+                const penaltyRemaining = Math.max(Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0), 0);
+                const totalRemaining = principalRemaining + penaltyRemaining;
                 return (
                   <TableRow key={r.id} className={isOverdue ? "bg-destructive/5" : undefined}>
                     <TableCell className="text-sm">{r.installment_number}</TableCell>
@@ -434,8 +437,9 @@ export default function HouseLoanDetailPage() {
                                     disabled={payMutation.isPending || !selectedAccount}
                                     onClick={() => payMutation.mutate({
                                       repaymentId: r.id,
-                                      amount: Number(payAmounts[r.id] || r.amount),
-                                      expected: Number(r.amount || 0),
+                                      amount: Number(payAmounts[r.id] || totalRemaining || r.amount),
+                                      maxPayable: totalRemaining || Number(r.amount || 0),
+                                      penaltyAmount: Math.min(Number(payAmounts[r.id] || totalRemaining || r.amount), penaltyRemaining),
                                     })}
                                   >
                                     Pay
