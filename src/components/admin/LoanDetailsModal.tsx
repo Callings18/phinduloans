@@ -2855,16 +2855,26 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               </p>
             </div>
 
-            {paymentAmount && Number(paymentAmount) !== (selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0) && (
-              <div className={`p-3 rounded-lg border ${Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
+            {paymentAmount && (() => {
+              const principalRemaining = Math.max(
+                Number(selectedRepayment?.original_amount || selectedRepayment?.amount || 0) - Number(selectedRepayment?.principal_paid || 0),
+                0,
+              );
+              const penaltyRemaining = Math.max(
+                Number(selectedRepayment?.penalty_amount || 0) - Number(selectedRepayment?.penalty_paid || 0),
+                0,
+              );
+              const totalRemaining = principalRemaining + penaltyRemaining;
+              return Number(paymentAmount) !== totalRemaining && (
+              <div className={`p-3 rounded-lg border ${Number(paymentAmount) < totalRemaining ? "bg-warning/10 border-warning/20" : "bg-info/10 border-info/20"}`}>
                 <div className="flex items-center gap-2">
-                  {Number(paymentAmount) < ((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) ? (
+                  {Number(paymentAmount) < totalRemaining ? (
                     <>
                       <AlertTriangle size={16} className="text-warning" />
                       <div>
                         <p className="text-sm font-medium">Partial Payment</p>
                         <p className="text-xs text-muted-foreground">
-                          Remaining K{(((selectedRepayment?.amount || 0) + (selectedRepayment?.penalty_amount || 0)) - Number(paymentAmount)).toLocaleString()} will stay pending
+                          Remaining K{(totalRemaining - Number(paymentAmount)).toLocaleString()} will stay pending
                         </p>
                       </div>
                     </>
