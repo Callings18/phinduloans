@@ -931,7 +931,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       );
 
       // Block if penalties are still outstanding (must be cleared via repayment first)
-      if (totalUnpaidPenalties > 0) {
+      if (totalUnpaidPenalties > 0.01) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
 
