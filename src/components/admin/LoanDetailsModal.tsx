@@ -510,6 +510,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       setPaymentMethod("cash");
       setTransactionRef("");
       setPaymentAmount("");
+      setPaymentAccountId("");
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to record payment");
