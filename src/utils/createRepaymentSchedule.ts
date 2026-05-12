@@ -127,6 +127,7 @@ export async function createRepaymentScheduleForLoan(
     loan_id: string;
     user_id: string;
     amount: number;
+    original_amount: number;
     due_date: string;
     installment_number: number;
     status: string;
@@ -182,6 +183,7 @@ export async function createRepaymentScheduleForLoan(
       loan_id: loan.id,
       user_id: loan.user_id,
       amount: paymentAmount,
+      original_amount: paymentAmount,
       due_date: format(dueDate, "yyyy-MM-dd"),
       installment_number: i,
       status: "pending",

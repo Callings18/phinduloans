@@ -459,12 +459,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (!destinationAccountId) {
         throw new Error("Choose a 'Credit to' account before recording the payment.");
       }
-      if (paidAmount > Number(selectedRepayment.amount)) {
-        throw new Error("Overpayment is disabled here. Open Admin → Repayments to allocate this payment across multiple installments.");
+      const principalRemaining = Math.max(
+        Number(selectedRepayment.original_amount || selectedRepayment.amount || 0) - Number(selectedRepayment.principal_paid || 0),
+        0,
+      );
+      const penaltyRemaining = Math.max(
+        Number(selectedRepayment.penalty_amount || 0) - Number(selectedRepayment.penalty_paid || 0),
+        0,
+      );
+      const totalRemaining = principalRemaining + penaltyRemaining;
+      if (paidAmount > totalRemaining + 0.01) {
+        throw new Error("Payment exceeds the remaining installment balance. Open Admin → Repayments for multi-installment allocation.");
       }
-      if (Number(selectedRepayment.penalty_amount || 0) > Number(selectedRepayment.penalty_paid || 0)) {
-        throw new Error("This installment has pending penalties. Open Admin → Repayments to record the payment with proper penalty/principal split.");
-      }
+      const penaltyAllocation = Math.min(paidAmount, penaltyRemaining);
 
       const paidDate = new Date().toISOString().split("T")[0];
       const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
@@ -474,6 +481,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         p_account_id: destinationAccountId,
         p_transaction_reference: transactionRef || null,
         p_paid_date: paidDate,
+        p_penalty_amount: penaltyAllocation,
       });
       if (rpcError) throw rpcError;
       const rpcResult = rpcData as { success?: boolean; error?: string } | null;
@@ -481,7 +489,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(rpcResult?.error || "Failed to record payment");
       }
 
-      return { paidAmount, isPartial: paidAmount < Number(selectedRepayment.amount), isOverpayment: false };
+      return { paidAmount, isPartial: paidAmount < totalRemaining - 0.01, isOverpayment: false };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });

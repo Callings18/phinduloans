@@ -58,7 +58,7 @@ export default function HouseLoanDetailPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_repayments")
-        .select("id, amount, due_date, status, installment_number, principal_paid, paid_date, payment_method, transaction_reference")
+        .select("id, amount, original_amount, due_date, status, installment_number, principal_paid, penalty_amount, penalty_paid, paid_date, payment_method, transaction_reference")
         .eq("loan_id", loanId)
         .order("due_date", { ascending: true });
       if (error) throw error;
@@ -113,17 +113,18 @@ export default function HouseLoanDetailPage() {
   }, [loanId]);
 
   const payMutation = useMutation({
-    mutationFn: async ({ repaymentId, amount, expected }: { repaymentId: string; amount: number; expected: number }) => {
+    mutationFn: async ({ repaymentId, amount, maxPayable, penaltyAmount }: { repaymentId: string; amount: number; maxPayable: number; penaltyAmount: number }) => {
       if (!selectedAccount) throw new Error("Select the account to credit first");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid payment amount");
-      if (amount > expected * 1.5) {
-        throw new Error(`Amount K${amount.toLocaleString()} exceeds installment K${expected.toLocaleString()} by more than 50%`);
+      if (amount > maxPayable + 0.01) {
+        throw new Error(`Amount K${amount.toLocaleString()} exceeds remaining balance K${maxPayable.toLocaleString()}`);
       }
       return recordLoanPayment({
         repaymentId,
         amount,
         paymentMethod,
         accountId: selectedAccount || null,
+        penaltyAmount,
       });
     },
     onSuccess: (receipt) => {
@@ -381,6 +382,9 @@ export default function HouseLoanDetailPage() {
                 const isPending = r.status !== "paid" && r.status !== "cancelled";
                 const isOverdue = isPending && r.due_date && r.due_date < todayStr;
                 const daysLate = isOverdue ? differenceInCalendarDays(today, new Date(r.due_date)) : 0;
+                const principalRemaining = Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0);
+                const penaltyRemaining = Math.max(Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0), 0);
+                const totalRemaining = principalRemaining + penaltyRemaining;
                 return (
                   <TableRow key={r.id} className={isOverdue ? "bg-destructive/5" : undefined}>
                     <TableCell className="text-sm">{r.installment_number}</TableCell>
@@ -433,8 +437,9 @@ export default function HouseLoanDetailPage() {
                                     disabled={payMutation.isPending || !selectedAccount}
                                     onClick={() => payMutation.mutate({
                                       repaymentId: r.id,
-                                      amount: Number(payAmounts[r.id] || r.amount),
-                                      expected: Number(r.amount || 0),
+                                      amount: Number(payAmounts[r.id] || totalRemaining || r.amount),
+                                      maxPayable: totalRemaining || Number(r.amount || 0),
+                                      penaltyAmount: Math.min(Number(payAmounts[r.id] || totalRemaining || r.amount), penaltyRemaining),
                                     })}
                                   >
                                     Pay
