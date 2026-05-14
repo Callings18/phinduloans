@@ -73,11 +73,13 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
   PAYDAY_SOFT: {
     checklist: [
       "NRC",
-      "Proof of employment / latest payslip",
-      "Proof of residence",
-      "Sketch map to residence",
+      "Latest payslip (1 month) + employment letter",
+      "Proof of residence / utility bill",
       "Selfie holding NRC",
+      "Sketch map to residence",
+      "Collateral declared on contract (not collected unless default)",
       "Home verification marked required",
+      "Lusaka residents only — 30 days, 30% flat, single bullet payment",
     ],
     validate(values) {
       const errors: string[] = [];
