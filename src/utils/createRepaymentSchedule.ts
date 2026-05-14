@@ -15,6 +15,7 @@ export interface LoanForSchedule {
   loan_product_id?: string | null;
   term_unit?: string | null;
   repayment_start_date?: string | null;
+  disbursed_at?: string | null;
 }
 
 /**
@@ -141,6 +142,8 @@ export async function createRepaymentScheduleForLoan(
   const startDate =
     loan.repayment_start_date && !Number.isNaN(new Date(loan.repayment_start_date).getTime())
       ? new Date(loan.repayment_start_date)
+      : loan.disbursed_at && !Number.isNaN(new Date(loan.disbursed_at).getTime())
+      ? new Date(loan.disbursed_at)
       : new Date();
   startDate.setHours(12, 0, 0, 0);
 

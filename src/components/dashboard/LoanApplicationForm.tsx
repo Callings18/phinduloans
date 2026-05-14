@@ -483,7 +483,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           mime_type: file.type,
           is_required: docMeta?.is_mandatory ?? true,
           loan_product_id: selectedProduct.id,
-          status: "pending",
+          status: "uploaded",
         });
 
         const columnMap: Record<string, string> = {
@@ -520,7 +520,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             mime_type: file.type,
             is_required: true,
             loan_product_id: selectedProduct.id,
-            status: "pending",
+            status: "uploaded",
           });
         }
       }
