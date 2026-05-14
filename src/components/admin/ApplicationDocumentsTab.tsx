@@ -407,9 +407,9 @@ const ApplicationDocumentsTab = ({ selectedApp }: ApplicationDocumentsTabProps) 
           file_url: filePath,
           file_size: file.size,
           mime_type: file.type,
-          uploaded_by: "admin",
+          uploaded_by: user.id,
           loan_product_id: selectedApp?.loan_product_id || null,
-          status: "pending",
+          status: "uploaded",
         });
       if (insertError) throw insertError;
 
