@@ -414,7 +414,7 @@ const AdminApplications = () => {
               uploaded_by: user?.id || 'admin',
               loan_product_id: data.loanData.product_id || null,
               is_required: doc.is_mandatory ?? true,
-              status: 'pending',
+              status: 'uploaded',
             });
           }
         }
