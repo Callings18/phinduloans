@@ -512,22 +512,49 @@ export default function ProductLoanFormShell({
 
   const uploadDocuments = async (loanId: string, borrowerId: string): Promise<Record<string, string>> => {
     const uploaded: Record<string, string> = {};
+    const failures: string[] = [];
+    const adminUid = (await supabase.auth.getUser()).data.user?.id ?? null;
+
     for (const [label, file] of Object.entries(docFiles)) {
       if (!file) continue;
       const ext = file.name.split(".").pop() || "jpg";
-      const sanitizedLabel = label.replace(/\s+/g, "_").toLowerCase();
-      const path = `loan-docs/${borrowerId}/${loanId}/${sanitizedLabel}.${ext}`;
+      const sanitizedLabel = label.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+      const path = `loan-docs/${borrowerId}/${loanId}/${sanitizedLabel}_${Date.now()}.${ext}`;
+
       const { error: uploadError } = await supabase.storage
         .from("loan-documents")
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: true, contentType: file.type });
       if (uploadError) {
-        console.error(`Upload failed for ${label}:`, uploadError);
+        console.error(`[uploadDocuments] Storage upload failed for "${label}":`, uploadError);
+        failures.push(`${label}: ${uploadError.message}`);
+        continue;
+      }
+
+      // Per-loan record — REQUIRED. If this fails, the doc is invisible to admins.
+      const { error: appErr } = await supabase.from("application_documents").insert({
+        application_id: loanId,
+        borrower_id: borrowerId,
+        doc_type: sanitizedLabel,
+        doc_label: label,
+        file_url: path,
+        file_name: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+        uploaded_by: adminUid ?? "admin",
+        status: "uploaded",
+      });
+      if (appErr) {
+        console.error(`[uploadDocuments] application_documents insert failed for "${label}":`, appErr, {
+          application_id: loanId, borrower_id: borrowerId, path,
+        });
+        failures.push(`${label}: could not save record (${appErr.message})`);
+        // Storage upload still succeeded, but record is missing — leave in storage so we can retry.
         continue;
       }
       uploaded[label] = path;
 
-      // Save to permanent borrower vault (persists across loans)
-      await supabase.from("borrower_document_vault").insert({
+      // Best-effort vault persistence (cross-loan reuse). Non-blocking.
+      const { error: vaultErr } = await supabase.from("borrower_document_vault").insert({
         borrower_id: borrowerId,
         doc_type: sanitizedLabel,
         doc_label: label,
@@ -535,36 +562,39 @@ export default function ProductLoanFormShell({
         file_name: file.name,
         mime_type: file.type,
         file_size: file.size,
-      }).then(({ error }) => { if (error) console.warn("Vault insert:", error); });
-
-      // Save to application_documents (per-loan, visible to admin)
-      await supabase.from("application_documents").insert({
-        application_id: loanId,
-        borrower_id: borrowerId,
-        doc_type: sanitizedLabel,
-        doc_label: label,
-        file_url: path,
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-      }).then(({ error }) => { if (error) console.warn("App doc insert:", error); });
+      });
+      if (vaultErr) console.warn(`[uploadDocuments] vault insert (non-blocking) for "${label}":`, vaultErr);
     }
 
-    // Also link any vault docs that weren't re-uploaded (reused from previous loans)
+    // Link any vault docs that weren't re-uploaded (reused from previous loans)
     for (const [label, vDoc] of Object.entries(vaultDocs)) {
-      if (uploaded[label]) continue; // already uploaded fresh
-      // Link vault doc to this application
-      await supabase.from("application_documents").insert({
+      if (uploaded[label]) continue;
+      const sanitizedLabel = label.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+      const { error: linkErr } = await supabase.from("application_documents").insert({
         application_id: loanId,
         borrower_id: borrowerId,
-        doc_type: label.replace(/\s+/g, "_").toLowerCase(),
+        doc_type: sanitizedLabel,
         doc_label: label,
         file_url: vDoc.file_url,
-        file_name: vDoc.file_name,
-        mime_type: "image/jpeg",
+        file_name: vDoc.file_name || `${sanitizedLabel}.bin`,
+        mime_type: "application/octet-stream",
         file_size: 0,
-      }).then(({ error }) => { if (error) console.warn("Vault link:", error); });
+        uploaded_by: adminUid ?? "admin",
+        status: "uploaded",
+      });
+      if (linkErr) {
+        console.error(`[uploadDocuments] Vault-link insert failed for "${label}":`, linkErr);
+        failures.push(`${label} (reused): ${linkErr.message}`);
+        continue;
+      }
       uploaded[label] = vDoc.file_url;
+    }
+
+    if (failures.length > 0) {
+      // Surface failures so the admin actually knows docs didn't persist.
+      throw new Error(
+        `Some documents could not be saved and are NOT attached to the loan:\n• ${failures.join("\n• ")}`
+      );
     }
 
     return uploaded;
