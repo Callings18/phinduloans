@@ -97,11 +97,19 @@ export default function MarketeerDailyCollectionTracker() {
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
+  const remainingOf = (r: Repayment) =>
+    Math.max(Number(r.amount) - Number(r.principal_paid || 0), 0);
+
   const loanSummaries = useMemo(() => {
     return loans.map((loan) => {
       const loanRepayments = repayments.filter((r) => r.loan_id === loan.id);
       const paid = loanRepayments.filter((r) => r.status === "paid");
-      const totalPaid = paid.reduce((s, r) => s + Number(r.principal_paid || r.amount), 0);
+      // Include partial payments — sum principal_paid across ALL rows so partials
+      // immediately reduce outstanding and show up in "Total collected".
+      const totalPaid = loanRepayments.reduce(
+        (s, r) => s + Number(r.principal_paid || (r.status === "paid" ? r.amount : 0)),
+        0,
+      );
       const outstanding = Number(loan.total_repayment) - totalPaid;
       const todayDue = loanRepayments.find(
         (r) => r.due_date === todayStr && r.status !== "paid" && r.status !== "cancelled"
@@ -117,9 +125,12 @@ export default function MarketeerDailyCollectionTracker() {
         totalPaid,
         outstanding: Math.max(outstanding, 0),
         todayDue,
+        todayRemaining: todayDue ? remainingOf(todayDue) : 0,
+        todayPaid: todayDue ? Number(todayDue.principal_paid || 0) : 0,
         overdueItems: overdue,
         overdueCount: overdue.length,
-        overdueAmount: overdue.reduce((s, r) => s + Number(r.amount), 0),
+        // Bulk-pay total = sum of remaining (not full installment), so partials aren't double-charged.
+        overdueAmount: overdue.reduce((s, r) => s + remainingOf(r), 0),
         dailyAmount,
         daysLeft,
         paidDays: paid.length,
