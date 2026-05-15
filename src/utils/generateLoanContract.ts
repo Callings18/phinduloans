@@ -952,13 +952,14 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
   // Upload PDF to storage and get URL
   const pdfUrl = await uploadContractToStorage(loan);
   
+  const cadenceCtx = await resolveCadence(loan);
   const message = `Hello ${loan.full_name},\n\n` +
     `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
-    `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
-    `- Term: ${loan.loan_term_months} months\n\n` +
+    `- ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}\n` +
+    `- Term: ${cadenceCtx.termLabel}\n\n` +
     `Please review, sign and return the contract.\n\n` +
     `Phindu Credit Solutions Limited`;
   
