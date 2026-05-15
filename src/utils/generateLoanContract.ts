@@ -578,9 +578,9 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
 
   addSection(`${sectionNum}. LOAN DETAILS`, [
     `Principal Amount: K${loan.loan_amount.toLocaleString()}`,
-    `Interest Rate: ${loan.interest_rate}% per month`,
-    `Loan Term: ${loan.loan_term_months} months`,
-    `Monthly Payment: K${loan.monthly_payment.toLocaleString()}`,
+    `Interest Rate: ${cadenceCtx.interestLabel}`,
+    `Loan Term: ${cadenceCtx.termLabel}`,
+    `${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}`,
     `Total Repayment: K${loan.total_repayment.toLocaleString()}`,
     `Purpose: ${loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal'}`,
   ]);
@@ -591,12 +591,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   ]);
   sectionNum++;
 
-  const firstPaymentDate = new Date();
-  firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
-  addSection(`${sectionNum}. REPAYMENT`, [
-    `The Borrower agrees to repay the loan in ${loan.loan_term_months} equal monthly installments`,
-    `on ${firstPaymentDate.toLocaleDateString('en-GB')}.`,
-  ]);
+  addSection(`${sectionNum}. REPAYMENT`, [cadenceCtx.repaymentSummary]);
   sectionNum++;
 
   if (loan.employer_name) {
