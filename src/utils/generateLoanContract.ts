@@ -252,8 +252,8 @@ const resolveCadence = async (loan: LoanData): Promise<CadenceContext> => {
 // Replace placeholders in template content with actual loan data
 const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
-  const firstPaymentDate = new Date();
-  firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+  const cadenceCtx = await resolveCadence(loan);
+  const firstPaymentDate = cadenceCtx.firstPaymentDate;
 
   // Fetch product fees
   let processingFeePercent = 0;
@@ -290,7 +290,12 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     '{{loan_amount}}': loan.loan_amount.toLocaleString(),
     '{{loan_term}}': loan.loan_term_months.toString(),
     '{{interest_rate}}': loan.interest_rate.toString(),
-    '{{monthly_payment}}': loan.monthly_payment.toLocaleString(),
+    '{{monthly_payment}}': cadenceCtx.installmentAmount.toLocaleString(),
+    '{{installment_amount}}': cadenceCtx.installmentAmount.toLocaleString(),
+    '{{installment_label}}': cadenceCtx.installmentLabel,
+    '{{term_label}}': cadenceCtx.termLabel,
+    '{{interest_label}}': cadenceCtx.interestLabel,
+    '{{repayment_schedule_summary}}': cadenceCtx.repaymentSummary,
     '{{total_repayment}}': loan.total_repayment.toLocaleString(),
     '{{disbursement_date}}': disbursementDate.toLocaleDateString('en-GB'),
     '{{first_payment_date}}': firstPaymentDate.toLocaleDateString('en-GB'),
