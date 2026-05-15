@@ -352,7 +352,10 @@ export default function MarketeerDailyCollectionTracker() {
                     <TableCell>
                       {loan.todayDue ? (
                         <Badge variant="secondary" className="text-xs">
-                          K{Number(loan.todayDue.amount).toLocaleString()} due
+                          K{loan.todayRemaining.toLocaleString()} due
+                          {loan.todayPaid > 0 && (
+                            <span className="ml-1 text-muted-foreground">(K{loan.todayPaid.toLocaleString()} paid)</span>
+                          )}
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
@@ -363,7 +366,7 @@ export default function MarketeerDailyCollectionTracker() {
                         <div className="flex items-center gap-1">
                           <Input
                             type="number"
-                            placeholder={String(loan.todayDue.amount)}
+                            placeholder={String(loan.todayRemaining)}
                             className="w-20 h-7 text-xs"
                             value={payAmounts[loan.todayDue.id] ?? ""}
                             onChange={(e) =>
@@ -378,7 +381,7 @@ export default function MarketeerDailyCollectionTracker() {
                             onClick={() =>
                               recordPaymentMutation.mutate({
                                 repaymentId: loan.todayDue!.id,
-                                amount: Number(payAmounts[loan.todayDue!.id] || loan.todayDue!.amount),
+                                amount: Number(payAmounts[loan.todayDue!.id] || loan.todayRemaining),
                               })
                             }
                           >
