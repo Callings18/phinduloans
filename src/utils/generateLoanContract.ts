@@ -166,11 +166,94 @@ const formatBorrowersBlock = (rows: LoanBorrowerRow[]): string => {
 const JOINT_LIABILITY_CLAUSE =
   'All Borrowers and Co-Borrowers named in this Agreement are jointly and severally liable for the full repayment of the loan, including principal, interest, fees, and any penalties. The Lender may pursue any one or more of them for the entire outstanding amount.';
 
+// ─── Repayment cadence (daily / bullet / monthly) ──────────────────────────
+type Cadence = 'daily' | 'bullet' | 'monthly';
+
+interface CadenceContext {
+  cadence: Cadence;
+  installmentLabel: string;       // e.g. "Daily Installment"
+  installmentAmount: number;      // K value of one installment (or full bullet)
+  termLabel: string;              // e.g. "26 days", "30 days", "12 months"
+  interestLabel: string;          // e.g. "30% flat for the cycle"
+  repaymentSummary: string;       // sentence used in REPAYMENT section
+  firstPaymentDate: Date;         // sensible default first due date
+}
+
+const resolveCadence = async (loan: LoanData): Promise<CadenceContext> => {
+  let productCode: string | null = null;
+  let repaymentFrequency: string | null = null;
+  let termUnit: string | null = null;
+  if (loan.loan_product_id) {
+    const { data } = await supabase
+      .from('loan_products')
+      .select('product_code, repayment_frequency, term_unit')
+      .eq('id', loan.loan_product_id)
+      .maybeSingle();
+    productCode = (data as any)?.product_code ?? null;
+    repaymentFrequency = (data as any)?.repayment_frequency ?? null;
+    termUnit = (data as any)?.term_unit ?? null;
+  }
+
+  const dailyish = repaymentFrequency === 'daily' || productCode === 'MARKETEER';
+  const bulletish =
+    repaymentFrequency === 'bullet' ||
+    productCode === 'PAYDAY_SOFT' ||
+    (loan.loan_term_months === 30 && termUnit === 'days');
+
+  const cadence: Cadence = dailyish ? 'daily' : bulletish ? 'bullet' : 'monthly';
+
+  const installmentAmount =
+    Number(loan.monthly_payment) ||
+    (cadence === 'bullet' ? Number(loan.total_repayment) : 0);
+
+  if (cadence === 'daily') {
+    const days = loan.loan_term_months || 26;
+    const first = new Date();
+    first.setDate(first.getDate() + 1); // next collection day
+    return {
+      cadence,
+      installmentLabel: 'Daily Installment',
+      installmentAmount,
+      termLabel: `${days} days`,
+      interestLabel: `${loan.interest_rate}% flat for the cycle`,
+      repaymentSummary: `The Borrower agrees to repay the loan in ${days} equal daily installments (Monday–Saturday) of K${installmentAmount.toLocaleString()} starting ${first.toLocaleDateString('en-GB')}.`,
+      firstPaymentDate: first,
+    };
+  }
+
+  if (cadence === 'bullet') {
+    const days = termUnit === 'days' ? loan.loan_term_months || 30 : 30;
+    const due = new Date();
+    due.setDate(due.getDate() + days);
+    return {
+      cadence,
+      installmentLabel: 'Single Bullet Payment',
+      installmentAmount: Number(loan.total_repayment),
+      termLabel: `${days} days`,
+      interestLabel: `${loan.interest_rate}% for the period`,
+      repaymentSummary: `The Borrower agrees to repay the full amount of K${Number(loan.total_repayment).toLocaleString()} as a single bullet payment on ${due.toLocaleDateString('en-GB')}.`,
+      firstPaymentDate: due,
+    };
+  }
+
+  const first = new Date();
+  first.setMonth(first.getMonth() + 1);
+  return {
+    cadence,
+    installmentLabel: 'Monthly Payment',
+    installmentAmount,
+    termLabel: `${loan.loan_term_months} months`,
+    interestLabel: `${loan.interest_rate}% per month`,
+    repaymentSummary: `The Borrower agrees to repay the loan in ${loan.loan_term_months} equal monthly installments of K${installmentAmount.toLocaleString()} starting ${first.toLocaleDateString('en-GB')}.`,
+    firstPaymentDate: first,
+  };
+};
+
 // Replace placeholders in template content with actual loan data
 const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
-  const firstPaymentDate = new Date();
-  firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+  const cadenceCtx = await resolveCadence(loan);
+  const firstPaymentDate = cadenceCtx.firstPaymentDate;
 
   // Fetch product fees
   let processingFeePercent = 0;
@@ -207,7 +290,12 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     '{{loan_amount}}': loan.loan_amount.toLocaleString(),
     '{{loan_term}}': loan.loan_term_months.toString(),
     '{{interest_rate}}': loan.interest_rate.toString(),
-    '{{monthly_payment}}': loan.monthly_payment.toLocaleString(),
+    '{{monthly_payment}}': cadenceCtx.installmentAmount.toLocaleString(),
+    '{{installment_amount}}': cadenceCtx.installmentAmount.toLocaleString(),
+    '{{installment_label}}': cadenceCtx.installmentLabel,
+    '{{term_label}}': cadenceCtx.termLabel,
+    '{{interest_label}}': cadenceCtx.interestLabel,
+    '{{repayment_schedule_summary}}': cadenceCtx.repaymentSummary,
     '{{total_repayment}}': loan.total_repayment.toLocaleString(),
     '{{disbursement_date}}': disbursementDate.toLocaleDateString('en-GB'),
     '{{first_payment_date}}': firstPaymentDate.toLocaleDateString('en-GB'),
@@ -351,8 +439,9 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   const contentWidth = pageWidth - margin * 2;
   let yPos = 20;
 
-  // Fetch multi-borrower context (collateral only)
+  // Fetch multi-borrower context (collateral only) and repayment cadence
   const parties = await fetchCollateralParties(loan);
+  const cadenceCtx = await resolveCadence(loan);
   const centerText = (text: string, y: number, fontSize: number = 12) => {
     doc.setFontSize(fontSize);
     const textWidth = doc.getStringUnitWidth(text) * fontSize / doc.internal.scaleFactor;
@@ -489,9 +578,9 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
 
   addSection(`${sectionNum}. LOAN DETAILS`, [
     `Principal Amount: K${loan.loan_amount.toLocaleString()}`,
-    `Interest Rate: ${loan.interest_rate}% per month`,
-    `Loan Term: ${loan.loan_term_months} months`,
-    `Monthly Payment: K${loan.monthly_payment.toLocaleString()}`,
+    `Interest Rate: ${cadenceCtx.interestLabel}`,
+    `Loan Term: ${cadenceCtx.termLabel}`,
+    `${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}`,
     `Total Repayment: K${loan.total_repayment.toLocaleString()}`,
     `Purpose: ${loan.loan_purpose?.replace('_', ' ').toUpperCase() || 'Personal'}`,
   ]);
@@ -502,12 +591,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   ]);
   sectionNum++;
 
-  const firstPaymentDate = new Date();
-  firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
-  addSection(`${sectionNum}. REPAYMENT`, [
-    `The Borrower agrees to repay the loan in ${loan.loan_term_months} equal monthly installments`,
-    `on ${firstPaymentDate.toLocaleDateString('en-GB')}.`,
-  ]);
+  addSection(`${sectionNum}. REPAYMENT`, [cadenceCtx.repaymentSummary]);
   sectionNum++;
 
   if (loan.employer_name) {
@@ -868,13 +952,14 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
   // Upload PDF to storage and get URL
   const pdfUrl = await uploadContractToStorage(loan);
   
+  const cadenceCtx = await resolveCadence(loan);
   const message = `Hello ${loan.full_name},\n\n` +
     `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
-    `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
-    `- Term: ${loan.loan_term_months} months\n\n` +
+    `- ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}\n` +
+    `- Term: ${cadenceCtx.termLabel}\n\n` +
     `Please review, sign and return the contract.\n\n` +
     `Phindu Credit Solutions Limited`;
   
@@ -898,15 +983,16 @@ export const emailContract = async (loan: LoanData) => {
   const { toast } = await import('sonner');
   
   const subject = `Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`;
+  const cadenceCtx = await resolveCadence(loan);
   const message = 
     `Dear ${loan.full_name},\n\n` +
     `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
-    `- Interest Rate: ${loan.interest_rate}%\n` +
-    `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
-    `- Term: ${loan.loan_term_months} months\n` +
+    `- Interest: ${cadenceCtx.interestLabel}\n` +
+    `- ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}\n` +
+    `- Term: ${cadenceCtx.termLabel}\n` +
     `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
     `Please review, sign, and return the contract at your earliest convenience.\n\n` +
     `If you have any questions, please don't hesitate to contact us.\n\n` +
@@ -931,7 +1017,8 @@ export const emailContract = async (loan: LoanData) => {
 export const smsContract = async (loan: LoanData, companyName?: string) => {
   const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
   
-  const message = `Dear ${loan.full_name}, your loan contract (Ref: PCS-${loan.id.slice(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. Monthly payment: K${loan.monthly_payment.toLocaleString()}. Term: ${loan.loan_term_months} months. Please check your email/WhatsApp for the full contract. - ${companyName || 'Phindu Finance'}`;
+  const cadenceCtx = await resolveCadence(loan);
+  const message = `Dear ${loan.full_name}, your loan contract (Ref: PCS-${loan.id.slice(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}. Term: ${cadenceCtx.termLabel}. Please check your email/WhatsApp for the full contract. - ${companyName || 'Phindu Finance'}`;
   
   const result = await sendSMSDirect(
     loan.phone,

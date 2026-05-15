@@ -97,11 +97,19 @@ export default function MarketeerDailyCollectionTracker() {
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
+  const remainingOf = (r: Repayment) =>
+    Math.max(Number(r.amount) - Number(r.principal_paid || 0), 0);
+
   const loanSummaries = useMemo(() => {
     return loans.map((loan) => {
       const loanRepayments = repayments.filter((r) => r.loan_id === loan.id);
       const paid = loanRepayments.filter((r) => r.status === "paid");
-      const totalPaid = paid.reduce((s, r) => s + Number(r.principal_paid || r.amount), 0);
+      // Include partial payments — sum principal_paid across ALL rows so partials
+      // immediately reduce outstanding and show up in "Total collected".
+      const totalPaid = loanRepayments.reduce(
+        (s, r) => s + Number(r.principal_paid || (r.status === "paid" ? r.amount : 0)),
+        0,
+      );
       const outstanding = Number(loan.total_repayment) - totalPaid;
       const todayDue = loanRepayments.find(
         (r) => r.due_date === todayStr && r.status !== "paid" && r.status !== "cancelled"
@@ -117,9 +125,12 @@ export default function MarketeerDailyCollectionTracker() {
         totalPaid,
         outstanding: Math.max(outstanding, 0),
         todayDue,
+        todayRemaining: todayDue ? remainingOf(todayDue) : 0,
+        todayPaid: todayDue ? Number(todayDue.principal_paid || 0) : 0,
         overdueItems: overdue,
         overdueCount: overdue.length,
-        overdueAmount: overdue.reduce((s, r) => s + Number(r.amount), 0),
+        // Bulk-pay total = sum of remaining (not full installment), so partials aren't double-charged.
+        overdueAmount: overdue.reduce((s, r) => s + remainingOf(r), 0),
         dailyAmount,
         daysLeft,
         paidDays: paid.length,
@@ -205,9 +216,7 @@ export default function MarketeerDailyCollectionTracker() {
     });
   };
 
-  const totalDueToday = loanSummaries.reduce(
-    (s, l) => s + (l.todayDue ? Number(l.todayDue.amount) : 0), 0
-  );
+  const totalDueToday = loanSummaries.reduce((s, l) => s + l.todayRemaining, 0);
   const totalOverdue = loanSummaries.reduce((s, l) => s + l.overdueAmount, 0);
   const totalOutstanding = loanSummaries.reduce((s, l) => s + l.outstanding, 0);
   const totalCollected = loanSummaries.reduce((s, l) => s + l.totalPaid, 0);
@@ -343,7 +352,10 @@ export default function MarketeerDailyCollectionTracker() {
                     <TableCell>
                       {loan.todayDue ? (
                         <Badge variant="secondary" className="text-xs">
-                          K{Number(loan.todayDue.amount).toLocaleString()} due
+                          K{loan.todayRemaining.toLocaleString()} due
+                          {loan.todayPaid > 0 && (
+                            <span className="ml-1 text-muted-foreground">(K{loan.todayPaid.toLocaleString()} paid)</span>
+                          )}
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
@@ -354,7 +366,7 @@ export default function MarketeerDailyCollectionTracker() {
                         <div className="flex items-center gap-1">
                           <Input
                             type="number"
-                            placeholder={String(loan.todayDue.amount)}
+                            placeholder={String(loan.todayRemaining)}
                             className="w-20 h-7 text-xs"
                             value={payAmounts[loan.todayDue.id] ?? ""}
                             onChange={(e) =>
@@ -369,7 +381,7 @@ export default function MarketeerDailyCollectionTracker() {
                             onClick={() =>
                               recordPaymentMutation.mutate({
                                 repaymentId: loan.todayDue!.id,
-                                amount: Number(payAmounts[loan.todayDue!.id] || loan.todayDue!.amount),
+                                amount: Number(payAmounts[loan.todayDue!.id] || loan.todayRemaining),
                               })
                             }
                           >
@@ -396,32 +408,39 @@ export default function MarketeerDailyCollectionTracker() {
                               disabled={recordBulkOverdue.isPending || !selectedAccount}
                               onClick={() =>
                                 recordBulkOverdue.mutate({
-                                  items: loan.overdueItems.map((r) => ({ id: r.id, amount: Number(r.amount) })),
+                                  items: loan.overdueItems.map((r) => ({ id: r.id, amount: remainingOf(r) })),
                                 })
                               }
                             >
                               Pay all {loan.overdueCount} overdue (K{loan.overdueAmount.toLocaleString()})
                             </Button>
                           </div>
-                          {loan.overdueItems.map((r) => (
-                            <div key={r.id} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
-                              <span className="text-muted-foreground">
-                                Day {r.installment_number} — {format(new Date(r.due_date), "dd MMM yyyy")}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">K{Number(r.amount).toLocaleString()}</span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 text-xs px-2"
-                                  disabled={recordPaymentMutation.isPending || !selectedAccount}
-                                  onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: Number(r.amount) })}
-                                >
-                                  Pay
-                                </Button>
+                          {loan.overdueItems.map((r) => {
+                            const remaining = remainingOf(r);
+                            const partialPaid = Number(r.principal_paid || 0);
+                            return (
+                              <div key={r.id} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
+                                <span className="text-muted-foreground">
+                                  Day {r.installment_number} — {format(new Date(r.due_date), "dd MMM yyyy")}
+                                  {partialPaid > 0 && (
+                                    <span className="ml-1 text-amber-600">(K{partialPaid.toLocaleString()} paid, K{remaining.toLocaleString()} left)</span>
+                                  )}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">K{remaining.toLocaleString()}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2"
+                                    disabled={recordPaymentMutation.isPending || !selectedAccount}
+                                    onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: remaining })}
+                                  >
+                                    Pay
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </TableCell>
                     </TableRow>
