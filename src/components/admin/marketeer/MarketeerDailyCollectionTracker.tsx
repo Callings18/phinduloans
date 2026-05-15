@@ -408,32 +408,39 @@ export default function MarketeerDailyCollectionTracker() {
                               disabled={recordBulkOverdue.isPending || !selectedAccount}
                               onClick={() =>
                                 recordBulkOverdue.mutate({
-                                  items: loan.overdueItems.map((r) => ({ id: r.id, amount: Number(r.amount) })),
+                                  items: loan.overdueItems.map((r) => ({ id: r.id, amount: remainingOf(r) })),
                                 })
                               }
                             >
                               Pay all {loan.overdueCount} overdue (K{loan.overdueAmount.toLocaleString()})
                             </Button>
                           </div>
-                          {loan.overdueItems.map((r) => (
-                            <div key={r.id} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
-                              <span className="text-muted-foreground">
-                                Day {r.installment_number} — {format(new Date(r.due_date), "dd MMM yyyy")}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">K{Number(r.amount).toLocaleString()}</span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 text-xs px-2"
-                                  disabled={recordPaymentMutation.isPending || !selectedAccount}
-                                  onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: Number(r.amount) })}
-                                >
-                                  Pay
-                                </Button>
+                          {loan.overdueItems.map((r) => {
+                            const remaining = remainingOf(r);
+                            const partialPaid = Number(r.principal_paid || 0);
+                            return (
+                              <div key={r.id} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
+                                <span className="text-muted-foreground">
+                                  Day {r.installment_number} — {format(new Date(r.due_date), "dd MMM yyyy")}
+                                  {partialPaid > 0 && (
+                                    <span className="ml-1 text-amber-600">(K{partialPaid.toLocaleString()} paid, K{remaining.toLocaleString()} left)</span>
+                                  )}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">K{remaining.toLocaleString()}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2"
+                                    disabled={recordPaymentMutation.isPending || !selectedAccount}
+                                    onClick={() => recordPaymentMutation.mutate({ repaymentId: r.id, amount: remaining })}
+                                  >
+                                    Pay
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </TableCell>
                     </TableRow>
