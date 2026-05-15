@@ -216,9 +216,7 @@ export default function MarketeerDailyCollectionTracker() {
     });
   };
 
-  const totalDueToday = loanSummaries.reduce(
-    (s, l) => s + (l.todayDue ? Number(l.todayDue.amount) : 0), 0
-  );
+  const totalDueToday = loanSummaries.reduce((s, l) => s + l.todayRemaining, 0);
   const totalOverdue = loanSummaries.reduce((s, l) => s + l.overdueAmount, 0);
   const totalOutstanding = loanSummaries.reduce((s, l) => s + l.outstanding, 0);
   const totalCollected = loanSummaries.reduce((s, l) => s + l.totalPaid, 0);
