@@ -166,6 +166,89 @@ const formatBorrowersBlock = (rows: LoanBorrowerRow[]): string => {
 const JOINT_LIABILITY_CLAUSE =
   'All Borrowers and Co-Borrowers named in this Agreement are jointly and severally liable for the full repayment of the loan, including principal, interest, fees, and any penalties. The Lender may pursue any one or more of them for the entire outstanding amount.';
 
+// ─── Repayment cadence (daily / bullet / monthly) ──────────────────────────
+type Cadence = 'daily' | 'bullet' | 'monthly';
+
+interface CadenceContext {
+  cadence: Cadence;
+  installmentLabel: string;       // e.g. "Daily Installment"
+  installmentAmount: number;      // K value of one installment (or full bullet)
+  termLabel: string;              // e.g. "26 days", "30 days", "12 months"
+  interestLabel: string;          // e.g. "30% flat for the cycle"
+  repaymentSummary: string;       // sentence used in REPAYMENT section
+  firstPaymentDate: Date;         // sensible default first due date
+}
+
+const resolveCadence = async (loan: LoanData): Promise<CadenceContext> => {
+  let productCode: string | null = null;
+  let repaymentFrequency: string | null = null;
+  let termUnit: string | null = null;
+  if (loan.loan_product_id) {
+    const { data } = await supabase
+      .from('loan_products')
+      .select('product_code, repayment_frequency, term_unit')
+      .eq('id', loan.loan_product_id)
+      .maybeSingle();
+    productCode = (data as any)?.product_code ?? null;
+    repaymentFrequency = (data as any)?.repayment_frequency ?? null;
+    termUnit = (data as any)?.term_unit ?? null;
+  }
+
+  const dailyish = repaymentFrequency === 'daily' || productCode === 'MARKETEER';
+  const bulletish =
+    repaymentFrequency === 'bullet' ||
+    productCode === 'PAYDAY_SOFT' ||
+    (loan.loan_term_months === 30 && termUnit === 'days');
+
+  const cadence: Cadence = dailyish ? 'daily' : bulletish ? 'bullet' : 'monthly';
+
+  const installmentAmount =
+    Number(loan.monthly_payment) ||
+    (cadence === 'bullet' ? Number(loan.total_repayment) : 0);
+
+  if (cadence === 'daily') {
+    const days = loan.loan_term_months || 26;
+    const first = new Date();
+    first.setDate(first.getDate() + 1); // next collection day
+    return {
+      cadence,
+      installmentLabel: 'Daily Installment',
+      installmentAmount,
+      termLabel: `${days} days`,
+      interestLabel: `${loan.interest_rate}% flat for the cycle`,
+      repaymentSummary: `The Borrower agrees to repay the loan in ${days} equal daily installments (Monday–Saturday) of K${installmentAmount.toLocaleString()} starting ${first.toLocaleDateString('en-GB')}.`,
+      firstPaymentDate: first,
+    };
+  }
+
+  if (cadence === 'bullet') {
+    const days = termUnit === 'days' ? loan.loan_term_months || 30 : 30;
+    const due = new Date();
+    due.setDate(due.getDate() + days);
+    return {
+      cadence,
+      installmentLabel: 'Single Bullet Payment',
+      installmentAmount: Number(loan.total_repayment),
+      termLabel: `${days} days`,
+      interestLabel: `${loan.interest_rate}% for the period`,
+      repaymentSummary: `The Borrower agrees to repay the full amount of K${Number(loan.total_repayment).toLocaleString()} as a single bullet payment on ${due.toLocaleDateString('en-GB')}.`,
+      firstPaymentDate: due,
+    };
+  }
+
+  const first = new Date();
+  first.setMonth(first.getMonth() + 1);
+  return {
+    cadence,
+    installmentLabel: 'Monthly Payment',
+    installmentAmount,
+    termLabel: `${loan.loan_term_months} months`,
+    interestLabel: `${loan.interest_rate}% per month`,
+    repaymentSummary: `The Borrower agrees to repay the loan in ${loan.loan_term_months} equal monthly installments of K${installmentAmount.toLocaleString()} starting ${first.toLocaleDateString('en-GB')}.`,
+    firstPaymentDate: first,
+  };
+};
+
 // Replace placeholders in template content with actual loan data
 const replacePlaceholders = async (content: string, loan: LoanData): Promise<string> => {
   const disbursementDate = new Date();
