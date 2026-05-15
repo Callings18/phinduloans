@@ -983,15 +983,16 @@ export const emailContract = async (loan: LoanData) => {
   const { toast } = await import('sonner');
   
   const subject = `Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`;
+  const cadenceCtx = await resolveCadence(loan);
   const message = 
     `Dear ${loan.full_name},\n\n` +
     `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
     `Loan Details:\n` +
     `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
     `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
-    `- Interest Rate: ${loan.interest_rate}%\n` +
-    `- Monthly Payment: K${loan.monthly_payment.toLocaleString()}\n` +
-    `- Term: ${loan.loan_term_months} months\n` +
+    `- Interest: ${cadenceCtx.interestLabel}\n` +
+    `- ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}\n` +
+    `- Term: ${cadenceCtx.termLabel}\n` +
     `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
     `Please review, sign, and return the contract at your earliest convenience.\n\n` +
     `If you have any questions, please don't hesitate to contact us.\n\n` +
