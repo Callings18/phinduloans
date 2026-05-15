@@ -1017,7 +1017,8 @@ export const emailContract = async (loan: LoanData) => {
 export const smsContract = async (loan: LoanData, companyName?: string) => {
   const { sendSMSDirect } = await import('@/utils/sendDirectNotification');
   
-  const message = `Dear ${loan.full_name}, your loan contract (Ref: PCS-${loan.id.slice(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. Monthly payment: K${loan.monthly_payment.toLocaleString()}. Term: ${loan.loan_term_months} months. Please check your email/WhatsApp for the full contract. - ${companyName || 'Phindu Finance'}`;
+  const cadenceCtx = await resolveCadence(loan);
+  const message = `Dear ${loan.full_name}, your loan contract (Ref: PCS-${loan.id.slice(0, 8).toUpperCase()}) for K${loan.loan_amount.toLocaleString()} has been processed. ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}. Term: ${cadenceCtx.termLabel}. Please check your email/WhatsApp for the full contract. - ${companyName || 'Phindu Finance'}`;
   
   const result = await sendSMSDirect(
     loan.phone,
