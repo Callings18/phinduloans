@@ -988,12 +988,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         const fallbackPaid = r.status === "paid" ? Number(r.original_amount || r.amount || 0) : 0;
         return sum + Number((r.principal_paid ?? fallbackPaid) || 0);
       }, 0);
-      // Reloan carry-forward = total amount due (principal + interest) minus what's been paid.
-      // Penalties are tracked separately and must be settled first via repayments — they are NOT
-      // rolled into the new principal. This matches the long-standing business rule:
-      //   "She paid 2,850 from the 7,836.75 amount due → new reloan figure = 4,986.75"
-      const totalAmountDue = Number(loan.total_repayment || 0);
-      const carryForwardPrincipal = Math.max(0, totalAmountDue - totalAllPaid);
+      // Reloan carry-forward rule for Salary Advance style products:
+      // penalties and interest must be cleared first; only the remaining principal
+      // may become the new reloan principal. Example: K8,505 total on K6,300
+      // principal with K2,700 paid => interest K2,205 cleared, K495 reduces
+      // principal, so reloan principal is K5,805.
+      const principalAmount = Number(loan.loan_amount || 0);
+      const totalAmountDue = Number(loan.total_repayment || principalAmount);
+      const totalInterestDueForReloan = Math.max(0, totalAmountDue - principalAmount);
+      const interestStillDue = Math.max(0, totalInterestDueForReloan - totalAllPaid);
+      const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDueForReloan);
+      const carryForwardPrincipal = Math.max(0, principalAmount - principalPaidAfterInterest);
 
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
@@ -1004,6 +1009,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // Block if penalties are still outstanding (must be cleared via repayment first)
       if (totalUnpaidPenalties > 0.01) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
+      }
+      if (interestStillDue > 0.01) {
+        throw new Error(`Cannot reloan: K${interestStillDue.toLocaleString()} in interest must be cleared first.`);
       }
 
       const isFreshReloan = carryForwardPrincipal <= 0.01;
@@ -1830,13 +1838,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     0
   );
   const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
-  // Reloan eligibility: borrower must clear penalties. The remaining scheduled
-  // balance (principal + unpaid interest) carries forward into the new loan.
+  // Reloan eligibility: borrower must clear penalties and interest first.
+  // Only the remaining principal carries forward into the new loan.
   const interestPaidSoFar = Math.min(totalInterestDue, totalPaidIncludingPartial);
   const reloanInterestOutstanding = Math.max(0, totalInterestDue - interestPaidSoFar);
+  const principalPaidAfterInterest = Math.max(0, totalPaidIncludingPartial - totalInterestDue);
   const reloanCarryForwardPrincipal = Math.max(
     0,
-    Number(loan.total_repayment || loan.loan_amount || 0) - totalPaidIncludingPartial,
+    Number(loan.loan_amount || 0) - principalPaidAfterInterest,
   );
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
@@ -3462,7 +3471,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium text-muted-foreground">
                       K{reloanInterestOutstanding.toLocaleString()}
                     </span>
-                    <span className="text-muted-foreground font-semibold">Reloan Balance (auto)</span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal (auto)</span>
                     <span className="text-right font-bold text-destructive">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
@@ -3482,9 +3491,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-success">
-                      <CheckCircle size={16} /> Remaining balance will carry forward into the reloan
-                    </div>
+                    {reloanInterestOutstanding > 0.01 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Outstanding interest of K{reloanInterestOutstanding.toLocaleString()} — must be cleared
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> Interest cleared — only remaining principal carries forward
+                      </div>
+                    )}
                     {reloanCarryForwardPrincipal <= 0.01 ? (
                       <div className="flex items-center gap-2 text-success">
                         <CheckCircle size={16} /> No outstanding principal — eligible for fresh reloan
@@ -3498,7 +3513,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </div>
 
                 {/* Reloan date — applies to both fresh and carry-forward, but only when eligible */}
-                {totalPenalties === 0 && (
+                {totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border p-4 space-y-2 text-sm">
                     <Label className="text-xs">Reloan date *</Label>
                     <Input
@@ -3511,7 +3526,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Fresh reloan inputs (when previous loan fully paid) */}
-                {reloanCarryForwardPrincipal <= 0.01 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal <= 0.01 && totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">Fresh Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">Previous loan is fully paid. Enter a new principal and term to start a new loan for this borrower.</p>
@@ -3549,7 +3564,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 )}
 
                 {/* Carry-forward Reloan Terms */}
-                {reloanCarryForwardPrincipal > 0.01 && totalPenalties === 0 && (
+                {reloanCarryForwardPrincipal > 0.01 && totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2 text-sm">
                     <h4 className="font-semibold text-foreground">New Reloan Terms</h4>
                     <p className="text-xs text-muted-foreground">
@@ -3630,6 +3645,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               disabled={
                 reloanMutation.isPending ||
                 totalPenalties > 0 ||
+                reloanInterestOutstanding > 0.01 ||
                 !reloanDate ||
                 (reloanCarryForwardPrincipal <= 0.01 && (!Number(reloanFreshPrincipal) || !Number(reloanFreshTermMonths))) ||
                 (reloanTopUpNumeric > 0 && !reloanSourceAccountId)
