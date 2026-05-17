@@ -24,6 +24,14 @@ describe("repaymentFrequencyLabels", () => {
     expect(borrowerSchedulePaymentColumnTitle(loan)).toBe("DAILY PAYMENT");
   });
 
+  it("uses bullet repayment labels before day-based labels", () => {
+    const loan = { term_unit: "days", loan_term_months: 30, repayment_frequency: "bullet" };
+    expect(borrowerTermShortLabel(loan)).toBe("30 days");
+    expect(borrowerInstallmentLabel(loan)).toBe("Single payment");
+    expect(borrowerSchedulePaymentColumnTitle(loan)).toBe("SINGLE PAYMENT");
+    expect(borrowerInterestPeriodLabel(loan)).toBe("per loan");
+  });
+
   it("defaults to monthly", () => {
     const loan = { term_unit: "months", loan_term_months: 6 };
     expect(borrowerTermShortLabel(loan)).toBe("6 mo");
