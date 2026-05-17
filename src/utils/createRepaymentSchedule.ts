@@ -93,10 +93,10 @@ export async function createRepaymentScheduleForLoan(
 
   const isDaily =
     !isBullet && (termUnit === "days" ||
-    (termUnit === "months" && (interestPeriod === "daily" || repaymentFrequency === "daily"));
+    (termUnit === "months" && (interestPeriod === "daily" || repaymentFrequency === "daily")));
   const isWeekly =
     !isBullet && (termUnit === "weeks" ||
-    (termUnit === "months" && (interestPeriod === "weekly" || repaymentFrequency === "weekly"));
+    (termUnit === "months" && (interestPeriod === "weekly" || repaymentFrequency === "weekly")));
 
   let paymentAmount: number;
   let numInstallments: number;
