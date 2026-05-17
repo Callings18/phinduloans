@@ -1838,13 +1838,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     0
   );
   const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
-  // Reloan eligibility: borrower must clear penalties. The remaining scheduled
-  // balance (principal + unpaid interest) carries forward into the new loan.
+  // Reloan eligibility: borrower must clear penalties and interest first.
+  // Only the remaining principal carries forward into the new loan.
   const interestPaidSoFar = Math.min(totalInterestDue, totalPaidIncludingPartial);
   const reloanInterestOutstanding = Math.max(0, totalInterestDue - interestPaidSoFar);
+  const principalPaidAfterInterest = Math.max(0, totalPaidIncludingPartial - totalInterestDue);
   const reloanCarryForwardPrincipal = Math.max(
     0,
-    Number(loan.total_repayment || loan.loan_amount || 0) - totalPaidIncludingPartial,
+    Number(loan.loan_amount || 0) - principalPaidAfterInterest,
   );
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
