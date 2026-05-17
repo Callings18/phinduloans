@@ -445,8 +445,9 @@ export default function ProductLoanFormShell({
   );
 
   const isMarketeer = productCode === "MARKETEER";
+  const isPaydaySoft = productCode === "PAYDAY_SOFT";
   const isSalaryAdvanceFamily = productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF";
-  const usesDailySchedule = termUnit === "days";
+  const usesDailySchedule = termUnit === "days" && !isPaydaySoft;
   const minRepaymentStartDate = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const marketeerMinAmount = isMarketeer ? Number(product?.min_amount || 500) : 0;
   const marketeerMaxAmount = isMarketeer ? Number(product?.max_amount || 10000) : 0;
@@ -500,11 +501,11 @@ export default function ProductLoanFormShell({
     return {
       repayment: calc.totalRepayment,
       interest: calc.totalInterest,
-      installmentLabel: termUnit === "days" ? "Daily installment" : termUnit === "weeks" ? "Weekly installment" : "Monthly installment",
+      installmentLabel: isPaydaySoft ? "Single payment (due on day 30)" : termUnit === "days" ? "Daily installment" : termUnit === "weeks" ? "Weekly installment" : "Monthly installment",
       installment: calc.dailyPayment || calc.weeklyPayment || calc.monthlyPayment,
       dailyRate: null,
     };
-  }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, marketeerResult]);
+  }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, isPaydaySoft, marketeerResult]);
 
   const handleFileSelect = (docLabel: string, file: File | null) => {
     setDocFiles((prev) => ({ ...prev, [docLabel]: file }));
@@ -1302,6 +1303,7 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">
                       Tenure ({termUnit})
                       {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed: 26 days)</span>}
+                      {isPaydaySoft && <span className="text-muted-foreground ml-1">(Fixed: 30 days)</span>}
                       {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(Fixed: 6 months)</span>}
                     </Label>
                     <Input
@@ -1309,7 +1311,7 @@ export default function ProductLoanFormShell({
                       type="number"
                       value={termValue}
                       onChange={(e) => setTermValue(e.target.value)}
-                      disabled={isMarketeer || productCode === "COLLATERAL"}
+                      disabled={isMarketeer || isPaydaySoft || productCode === "COLLATERAL"}
                     />
                   </div>
                   <div className="space-y-1.5">

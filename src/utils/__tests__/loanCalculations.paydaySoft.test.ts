@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { calculateLoan, type LoanProduct } from "../loanCalculations";
 
-// PAYDAY_SOFT: 30-day flat loan @ 18% per month.
-// Stored in DB as: term_unit='days', loan_term_months=30, interest_rate=18,
-// interest_period='monthly', interest_type='flat'.
+// PAYDAY_SOFT: 30-day flat loan @ 30% per loan.
+// Stored in DB as: term_unit='days', loan_term_months=30, interest_rate=30,
+// interest_period='per_loan', repayment_frequency='bullet', interest_type='flat'.
 //
 // REGRESSION: The borrower-facing form historically called calculateLoan
 // without the 4th `termUnit` argument. With the previous default of 'months'
@@ -13,8 +13,8 @@ import { calculateLoan, type LoanProduct } from "../loanCalculations";
 const paydaySoftProduct: LoanProduct = {
   product_name: "Payday Soft Loan",
   product_code: "PAYDAY_SOFT",
-  interest_rate: 18,
-  interest_period: "monthly",
+  interest_rate: 30,
+  interest_period: "per_loan" as any,
   interest_type: "flat",
   term_unit: "days",
 };
@@ -22,15 +22,15 @@ const paydaySoftProduct: LoanProduct = {
 describe("PAYDAY_SOFT calculation (regression: termUnit fallback)", () => {
   it("treats a 30-day loan as 1 month equivalent when termUnit is omitted", () => {
     const r = calculateLoan(1000, 30, paydaySoftProduct);
-    expect(r.totalInterest).toBe(180); // 1000 × 18% × 1
-    expect(r.totalRepayment).toBe(1180);
-    expect(r.monthlyPayment).toBe(1180);
+    expect(r.totalInterest).toBe(300); // 1000 × 30% once
+    expect(r.totalRepayment).toBe(1300);
+    expect(r.monthlyPayment).toBe(1300);
   });
 
   it("matches when caller passes termUnit explicitly", () => {
     const r = calculateLoan(1000, 30, paydaySoftProduct, "days");
-    expect(r.totalInterest).toBe(180);
-    expect(r.totalRepayment).toBe(1180);
+    expect(r.totalInterest).toBe(300);
+    expect(r.totalRepayment).toBe(1300);
   });
 
   it("does NOT regress to 540% interest on a 30-day loan", () => {

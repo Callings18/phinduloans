@@ -19,6 +19,7 @@ import { differenceInCalendarDays, format } from "date-fns";
 import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 import LoanDocumentsCard from "@/components/admin/LoanDocumentsCard";
+import { borrowerInterestPeriodLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
@@ -162,14 +163,14 @@ export default function HouseLoanDetailPage() {
       loanReference: loan.id.slice(0, 8).toUpperCase(),
       loanAmount: Number(loan.loan_amount || 0),
       interestRate: Number(product?.interest_rate || 0),
-      interestPeriod: product?.interest_period || (loan.term_unit === "days" ? "daily" : loan.term_unit === "weeks" ? "weekly" : "monthly"),
+      interestPeriod: borrowerInterestPeriodLabel({ ...loan, repayment_frequency: product?.repayment_frequency, interest_period: product?.interest_period }),
       termMonths: Number(loan.loan_term_months || 0),
       monthlyPayment: Number((loan as any).monthly_payment || repayments[0]?.amount || 0),
       totalRepayment: Number(loan.total_repayment || 0),
       disbursementDate: (loan as any).disbursed_at || loan.created_at,
       firstRepaymentDate: repayments[0]?.due_date || "",
       termSummaryLabel: `${loan.loan_term_months} ${loan.term_unit || product?.term_unit || "months"}`,
-      paymentColumnTitle: loan.term_unit === "days" ? "DAILY PAYMENT" : loan.term_unit === "weeks" ? "WEEKLY PAYMENT" : "MONTHLY PAYMENT",
+      paymentColumnTitle: borrowerSchedulePaymentColumnTitle({ ...loan, repayment_frequency: product?.repayment_frequency }),
       repayments: repayments.map((r: any) => ({
         installmentNumber: r.installment_number,
         dueDate: r.due_date,

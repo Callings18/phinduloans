@@ -19,6 +19,8 @@ export function borrowerTermShortLabel(loan: LoanLikeForFrequency): string {
 
 /** Human label for installment row / table headers. */
 export function borrowerInstallmentLabel(loan: LoanLikeForFrequency): string {
+  const rf = (loan.repayment_frequency || "").toLowerCase();
+  if (rf === "bullet") return "Single payment";
   const unit = (loan.term_unit || "months").toLowerCase();
   if (unit === "days") return "Daily installment";
   if (unit === "weeks") return "Weekly installment";
@@ -28,6 +30,7 @@ export function borrowerInstallmentLabel(loan: LoanLikeForFrequency): string {
 /** Value passed to PDF / statements as interest cadence text. */
 export function borrowerInterestPeriodLabel(loan: LoanLikeForFrequency): string {
   const rf = (loan.repayment_frequency || "").toLowerCase();
+  if (rf === "bullet") return "per loan";
   if (rf === "daily" || rf === "day") return "daily";
   if (rf === "weekly" || rf === "week") return "weekly";
   const unit = (loan.term_unit || "months").toLowerCase();
@@ -51,6 +54,8 @@ export function borrowerTermSummaryLabel(loan: LoanLikeForFrequency): string {
 
 /** PDF column title above periodic payment amount. */
 export function borrowerSchedulePaymentColumnTitle(loan: LoanLikeForFrequency): string {
+  const rf = (loan.repayment_frequency || "").toLowerCase();
+  if (rf === "bullet") return "SINGLE PAYMENT";
   const unit = (loan.term_unit || "months").toLowerCase();
   if (unit === "days") return "DAILY PAYMENT";
   if (unit === "weeks") return "WEEKLY PAYMENT";

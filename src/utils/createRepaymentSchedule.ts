@@ -2,7 +2,7 @@
  * Shared logic to create loan_repayments and set loan status to active.
  * Used on disbursement (AdminApplications, AdminDisbursements) and in Loan Details "Generate Schedule".
  */
-import { format, addMonths } from "date-fns";
+import { format, addDays, addMonths } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getBusinessCalendar, nextBusinessDay } from "@/lib/businessCalendar";
 
@@ -89,18 +89,23 @@ export async function createRepaymentScheduleForLoan(
     }
   }
   const isMarketeer = productCode === "MARKETEER";
+  const isPaydaySoft = productCode === "PAYDAY_SOFT";
+  const isBullet = isPaydaySoft || repaymentFrequency === "bullet";
 
   const isDaily =
-    termUnit === "days" ||
-    (termUnit === "months" && (interestPeriod === "daily" || repaymentFrequency === "daily"));
+    !isBullet && (termUnit === "days" ||
+    (termUnit === "months" && (interestPeriod === "daily" || repaymentFrequency === "daily")));
   const isWeekly =
-    termUnit === "weeks" ||
-    (termUnit === "months" && (interestPeriod === "weekly" || repaymentFrequency === "weekly"));
+    !isBullet && (termUnit === "weeks" ||
+    (termUnit === "months" && (interestPeriod === "weekly" || repaymentFrequency === "weekly")));
 
   let paymentAmount: number;
   let numInstallments: number;
 
-  if (isDaily) {
+  if (isBullet) {
+    numInstallments = 1;
+    paymentAmount = loan.total_repayment;
+  } else if (isDaily) {
     if (termUnit === "days") {
       numInstallments = loan.loan_term_months;
       paymentAmount = loan.total_repayment / numInstallments;
@@ -170,7 +175,11 @@ export async function createRepaymentScheduleForLoan(
     if (lockedNumbers.has(i)) continue; // skip slots already taken by paid/partial rows
     let dueDate: Date;
     const offset = anchorOnStart ? i - 1 : i;
-    if (isDaily) {
+    if (isBullet) {
+      dueDate = isPaydaySoft || !hasExplicitStartDate
+        ? addDays(startDate, isPaydaySoft ? 30 : Number(loan.loan_term_months || 30))
+        : new Date(startDate);
+    } else if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
       dueDate = nextBusinessDay(dueDate, calendar);

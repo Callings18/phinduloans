@@ -1,58 +1,38 @@
-# Fix Marketeer partial payments + product-aware contracts
+## What is going on
 
-Two unrelated bugs reported in one message. Both are frontend-only fixes — the database RPC and product config are already correct.
+Payday Soft is configured as a 30-day product, but the schedule generator treats any `term_unit = days` loan as a daily-installment loan. Because Payday Soft has `term_unit = days` and `loan_term_months = 30`, it generated 30 small repayment rows from disbursement/start date onward. Those early rows are now before today, so the app marks them overdue.
 
-## 1. Marketeer "less than daily" payments appear not to record
+This is not the Payday Soft rule you specified. Payday Soft should be one single bullet payment due exactly 30 days after disbursement, not daily collections.
 
-**Root cause (UI, not DB):** the `record_loan_payment` RPC already supports partial payments — it sets the installment to `status = 'partial'`, stores `principal_paid`, and never marks the loan complete. But `MarketeerDailyCollectionTracker.tsx` only counts rows where `status === 'paid'` when computing `totalPaid` and the outstanding balance:
+## Plan
 
-```ts
-const paid = loanRepayments.filter((r) => r.status === "paid");
-const totalPaid = paid.reduce((s, r) => s + Number(r.principal_paid || r.amount), 0);
-```
+1. **Fix the frontend schedule generator**
+   - In `createRepaymentScheduleForLoan`, detect `repayment_frequency = bullet` / `PAYDAY_SOFT` before daily logic.
+   - Generate exactly 1 repayment row for Payday Soft.
+   - Due date = disbursement date + 30 days, unless an explicit repayment start date is provided.
+   - Amount = full `total_repayment`.
 
-So when a collector enters K20 against a K50 daily, the row goes to `partial` with `principal_paid = 20`, but Outstanding, Total Collected and "Paid / Total" all stay unchanged → looks like nothing happened. The "Today" badge also keeps showing the full K50 instead of the K30 still owed.
+2. **Fix the database schedule function**
+   - Update `public.generate_loan_schedule_for` so bullet loans generate one repayment row.
+   - This prevents backend triggers from creating daily Payday rows during disbursement.
+   - Keep Marketeer daily behavior unchanged.
 
-**Fix in `src/components/admin/marketeer/MarketeerDailyCollectionTracker.tsx`:**
-- Compute `totalPaid` from `principal_paid` across **all** repayments (paid + partial), not only `paid`.
-- Compute today's remaining as `amount - principal_paid` and display "K{remaining} due (K{paid} paid)" when partially paid.
-- Treat a row as "Today" if `due_date === todayStr` and status is not `paid`/`cancelled` (already true — keep partial visible).
-- For overdue rows that are `partial`, use the remaining (`amount - principal_paid`) for the bulk-pay total and per-row Pay button default.
-- Pre-fill the per-row input placeholder with the remaining amount instead of the full daily.
+3. **Repair existing bad Payday schedules**
+   - For active Payday Soft loans with unpaid daily rows, cancel/rebuild those unpaid rows into a single bullet repayment.
+   - Preserve any paid/partial history instead of deleting it.
+   - For the current bad active loans with no payments recorded, this will remove the false overdue daily rows and leave one future due date.
 
-No backend changes — the RPC already accepts partial amounts and chains overpayments to later installments.
+4. **Fix UI labels that infer “daily” from `term_unit = days`**
+   - Update shared labels so `repayment_frequency = bullet` displays as “Single payment” / “BULLET PAYMENT”, not daily installment.
+   - Update Payday house loan detail/schedule display so it does not show daily wording.
 
-## 2. Marketeer / Payday Soft contracts read like monthly loans
+5. **Regression coverage**
+   - Add/update tests for Payday Soft: 30 days, 30% flat, one bullet installment due on day 30.
+   - Keep existing Marketeer daily tests passing conceptually: Marketeer remains daily, Payday Soft is not daily.
 
-**Root cause:** `src/utils/generateLoanContract.ts` (the fallback when no product-specific template exists) hardcodes monthly language regardless of product:
+## Files / backend areas involved
 
-- "Interest Rate: X% **per month**" (line 492)
-- "Loan Term: X **months**" (line 493)
-- "**Monthly Payment**: K…" (lines 494, 876, 908, 934, plus `{{monthly_payment}}` placeholder)
-- "Repay … in X equal **monthly installments** on {first-payment + 1 month}" (lines 506-509)
-
-For Marketeer (26 daily collections, Mon–Sat) and Payday Soft (single bullet at 30 days) this is wrong.
-
-**Fix in `src/utils/generateLoanContract.ts`:**
-- Accept the loan product's `product_code`, `repayment_frequency` and `term_unit` (already on `loan_products`); pass them through from the callers that have the product loaded, and look them up by `loan_product_id` when missing.
-- Derive a `cadence` once: `daily` (Marketeer / any product with `repayment_frequency = 'daily'`), `bullet` (Payday Soft / `repayment_frequency = 'bullet'`), else `monthly`.
-- Render LOAN DETAILS, REPAYMENT, the SMS notice, and the WhatsApp/email summary using cadence-appropriate wording:
-  - daily → "X% flat for the cycle", "Loan Term: N days", "Daily Installment: K…", "repay in N equal daily installments (Mon–Sat) starting {disbursement+1 working day}"
-  - bullet → "X% for the period", "Loan Term: 30 days", "Single Bullet Payment: K{total_repayment}", "repay the full amount on {due date}"
-  - monthly → keep current wording
-- Keep the `{{monthly_payment}}` placeholder working for back-compat, but also expose `{{installment_amount}}`, `{{installment_label}}` (e.g. "Daily Installment"), `{{term_label}}` (e.g. "26 days"), and `{{repayment_schedule_summary}}` so admin templates can be made cadence-neutral.
-- The Marketeer `dailyInstallment` already lives on the application (`monthly_payment` column is reused for the daily figure, plus `product_specific_data.dailyRepayment`). Use the larger / non-zero value, fall back to `total_repayment / loan_term_months` only for true monthly.
-
-## Technical notes
-
-- Files touched:
-  - `src/components/admin/marketeer/MarketeerDailyCollectionTracker.tsx` — partial-aware aggregation + UI labels.
-  - `src/utils/generateLoanContract.ts` — cadence-aware rendering + new placeholders, plus the SMS/WhatsApp/email helpers further down the file.
-  - Callers of `generateLoanContract` only need a tiny tweak if they don't already pass `loan_product_id` (they do — already on `LoanData`).
-- No SQL migration. RPC `record_loan_payment` and product configs (`MARKETEER`, `PAYDAY_SOFT`) are already correct from previous turns.
-- No change to receipt printing, schedule generation, or accounting — only the contract PDF/text and the Marketeer collection screen.
-
-## Out of scope
-
-- Re-issuing PDFs for already-printed contracts. Newly generated contracts will use the corrected wording; existing PDFs are not retroactively rewritten.
-- Changing how "loan completed" is decided (already correct: only when full principal across all installments is reconciled).
+- `src/utils/createRepaymentSchedule.ts`
+- `src/utils/repaymentFrequencyLabels.ts`
+- Payday-related tests in `src/utils/__tests__`
+- Lovable Cloud migration for `generate_loan_schedule_for` and data repair of existing Payday repayment rows
