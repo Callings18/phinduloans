@@ -89,7 +89,8 @@ export async function createRepaymentScheduleForLoan(
     }
   }
   const isMarketeer = productCode === "MARKETEER";
-  const isBullet = productCode === "PAYDAY_SOFT" || repaymentFrequency === "bullet";
+  const isPaydaySoft = productCode === "PAYDAY_SOFT";
+  const isBullet = isPaydaySoft || repaymentFrequency === "bullet";
 
   const isDaily =
     !isBullet && (termUnit === "days" ||
@@ -175,7 +176,9 @@ export async function createRepaymentScheduleForLoan(
     let dueDate: Date;
     const offset = anchorOnStart ? i - 1 : i;
     if (isBullet) {
-      dueDate = addDays(startDate, Number(loan.loan_term_months || 30));
+      dueDate = isPaydaySoft || !hasExplicitStartDate
+        ? addDays(startDate, Number(loan.loan_term_months || 30))
+        : new Date(startDate);
     } else if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
