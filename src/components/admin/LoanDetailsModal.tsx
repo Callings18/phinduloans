@@ -988,12 +988,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         const fallbackPaid = r.status === "paid" ? Number(r.original_amount || r.amount || 0) : 0;
         return sum + Number((r.principal_paid ?? fallbackPaid) || 0);
       }, 0);
-      // Reloan carry-forward = total amount due (principal + interest) minus what's been paid.
-      // Penalties are tracked separately and must be settled first via repayments — they are NOT
-      // rolled into the new principal. This matches the long-standing business rule:
-      //   "She paid 2,850 from the 7,836.75 amount due → new reloan figure = 4,986.75"
-      const totalAmountDue = Number(loan.total_repayment || 0);
-      const carryForwardPrincipal = Math.max(0, totalAmountDue - totalAllPaid);
+      // Reloan carry-forward rule for Salary Advance style products:
+      // penalties and interest must be cleared first; only the remaining principal
+      // may become the new reloan principal. Example: K8,505 total on K6,300
+      // principal with K2,700 paid => interest K2,205 cleared, K495 reduces
+      // principal, so reloan principal is K5,805.
+      const principalAmount = Number(loan.loan_amount || 0);
+      const totalAmountDue = Number(loan.total_repayment || principalAmount);
+      const totalInterestDueForReloan = Math.max(0, totalAmountDue - principalAmount);
+      const interestStillDue = Math.max(0, totalInterestDueForReloan - totalAllPaid);
+      const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDueForReloan);
+      const carryForwardPrincipal = Math.max(0, principalAmount - principalPaidAfterInterest);
 
       // Check for unpaid penalties only (ignore penalties already settled)
       const totalUnpaidPenalties = pendingReps.reduce(
@@ -1004,6 +1009,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       // Block if penalties are still outstanding (must be cleared via repayment first)
       if (totalUnpaidPenalties > 0.01) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
+      }
+      if (interestStillDue > 0.01) {
+        throw new Error(`Cannot reloan: K${interestStillDue.toLocaleString()} in interest must be cleared first.`);
       }
 
       const isFreshReloan = carryForwardPrincipal <= 0.01;
