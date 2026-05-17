@@ -177,7 +177,7 @@ export async function createRepaymentScheduleForLoan(
     const offset = anchorOnStart ? i - 1 : i;
     if (isBullet) {
       dueDate = isPaydaySoft || !hasExplicitStartDate
-        ? addDays(startDate, Number(loan.loan_term_months || 30))
+        ? addDays(startDate, isPaydaySoft ? 30 : Number(loan.loan_term_months || 30))
         : new Date(startDate);
     } else if (isDaily) {
       dueDate = new Date(startDate);
