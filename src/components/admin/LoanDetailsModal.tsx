@@ -3471,7 +3471,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                     <span className="text-right font-medium text-muted-foreground">
                       K{reloanInterestOutstanding.toLocaleString()}
                     </span>
-                    <span className="text-muted-foreground font-semibold">Reloan Balance (auto)</span>
+                    <span className="text-muted-foreground font-semibold">Reloan Principal (auto)</span>
                     <span className="text-right font-bold text-destructive">K{reloanCarryForwardPrincipal.toLocaleString()}</span>
                     <span className="text-muted-foreground">Outstanding Penalties (unpaid)</span>
                     <span className={`text-right font-medium ${totalPenalties > 0 ? "text-destructive" : ""}`}>K{totalPenalties.toLocaleString()}</span>
@@ -3491,9 +3491,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         <CheckCircle size={16} /> No outstanding penalties — eligible
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-success">
-                      <CheckCircle size={16} /> Remaining balance will carry forward into the reloan
-                    </div>
+                    {reloanInterestOutstanding > 0.01 ? (
+                      <div className="flex items-center gap-2 text-destructive">
+                        <XCircle size={16} /> Outstanding interest of K{reloanInterestOutstanding.toLocaleString()} — must be cleared
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-success">
+                        <CheckCircle size={16} /> Interest cleared — only remaining principal carries forward
+                      </div>
+                    )}
                     {reloanCarryForwardPrincipal <= 0.01 ? (
                       <div className="flex items-center gap-2 text-success">
                         <CheckCircle size={16} /> No outstanding principal — eligible for fresh reloan
@@ -3507,7 +3513,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                 </div>
 
                 {/* Reloan date — applies to both fresh and carry-forward, but only when eligible */}
-                {totalPenalties === 0 && (
+                {totalPenalties === 0 && reloanInterestOutstanding <= 0.01 && (
                   <div className="rounded-lg border p-4 space-y-2 text-sm">
                     <Label className="text-xs">Reloan date *</Label>
                     <Input
