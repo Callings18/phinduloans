@@ -1303,6 +1303,7 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">
                       Tenure ({termUnit})
                       {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed: 26 days)</span>}
+                      {isPaydaySoft && <span className="text-muted-foreground ml-1">(Fixed: 30 days)</span>}
                       {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(Fixed: 6 months)</span>}
                     </Label>
                     <Input
@@ -1310,7 +1311,7 @@ export default function ProductLoanFormShell({
                       type="number"
                       value={termValue}
                       onChange={(e) => setTermValue(e.target.value)}
-                      disabled={isMarketeer || productCode === "COLLATERAL"}
+                      disabled={isMarketeer || isPaydaySoft || productCode === "COLLATERAL"}
                     />
                   </div>
                   <div className="space-y-1.5">
