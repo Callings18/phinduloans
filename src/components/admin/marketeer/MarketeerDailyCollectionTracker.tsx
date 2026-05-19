@@ -85,13 +85,28 @@ export default function MarketeerDailyCollectionTracker() {
     queryKey: ["marketeer-repayments", loanIds],
     enabled: loanIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loan_repayments")
-        .select("id, loan_id, amount, due_date, status, principal_paid, installment_number")
-        .in("loan_id", loanIds)
-        .order("due_date", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Repayment[];
+      // Page through results — Supabase caps a single response at 1000 rows.
+      // With ~26 installments per loan, the active marketeer portfolio quickly
+      // exceeds that and later loans were returning truncated row counts
+      // (e.g. "0/11" instead of "0/26"). Fetch in 1000-row chunks until done.
+      const PAGE = 1000;
+      const all: Repayment[] = [];
+      let from = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data, error } = await supabase
+          .from("loan_repayments")
+          .select("id, loan_id, amount, due_date, status, principal_paid, installment_number")
+          .in("loan_id", loanIds)
+          .order("due_date", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const batch = (data ?? []) as Repayment[];
+        all.push(...batch);
+        if (batch.length < PAGE) break;
+        from += PAGE;
+      }
+      return all;
     },
   });
 
