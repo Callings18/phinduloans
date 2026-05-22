@@ -1,38 +1,56 @@
-## What is going on
+# Deep Audit Plan — Phindu LMS/ERP
 
-Payday Soft is configured as a 30-day product, but the schedule generator treats any `term_unit = days` loan as a daily-installment loan. Because Payday Soft has `term_unit = days` and `loan_term_months = 30`, it generated 30 small repayment rows from disbursement/start date onward. Those early rows are now before today, so the app marks them overdue.
+## Goal
+Produce a single comprehensive audit report (markdown + PDF) covering gaps, bugs, dead code, broken/idle buttons, and security/RLS issues across the four focus areas. **No code changes** — read-only analysis.
 
-This is not the Payday Soft rule you specified. Payday Soft should be one single bullet payment due exactly 30 days after disbursement, not daily collections.
+## Deliverable
+`/mnt/documents/PHINDU_DEEP_AUDIT_2026-05-22.md` (and `.pdf` version) containing:
 
-## Plan
+1. **Executive summary** — overall health score, top 10 risks, quick-win count.
+2. **Borrower flow audit**
+   - `/apply` wizard: auth gating, draft persistence, document key mismatches (`selfie` vs `selfie_holding_nrc`), validation gaps, dead buttons.
+   - `/dashboard`: widget data freshness, broken links (`PaymentReminder` target), realtime subscription correctness, payment-claim UX.
+   - `/profile`: deep-link tab handling, doc vault consistency, notification preference persistence.
+   - Payment claim submission path (UI → repository → API → DB).
+3. **Admin loan lifecycle audit**
+   - Applications → Approval → Contract Signing → Disbursement → Repayment.
+   - Direct Supabase writes vs `apps/api-next` transition endpoint (drift).
+   - Bypass risks in `AdminApplications.tsx` / `AdminDisbursements.tsx`.
+   - Repayments & bulk repayments idempotency and atomic RPC usage.
+   - Buttons/actions that look active but are no-ops or unguarded.
+4. **Product house audit** (Salary Advance, Marketeer, Payday, Business, Collateral, Reloan, Top-up, Restructure)
+   - Schedule generation per frequency (recent Payday-as-daily regression).
+   - 1000-row pagination caps in trackers (recent Marketeer fix — verify others).
+   - Fee/penalty/interest math vs `calculateLoan()` and DB triggers.
+   - House-scoped permissions (`useProductAccess`).
+5. **Security, RLS & permissions audit**
+   - `supabase--linter` results.
+   - RLS coverage per table (esp. `payment_claims`, `loan_repayments`, `disbursements`, `profiles`, `user_roles`, KYC storage).
+   - Edge function JWT verification (`verify_jwt`) and service-role misuse.
+   - Fail-open behavior in `usePermissions`, `AdminRoute`, `PermissionRoute`.
+   - Secret exposure in client code; storage bucket policies (signed URL enforcement).
+6. **Dead / idle code inventory**
+   - Unused components, exported-but-never-imported utilities, stale migrations, orphaned edge functions, duplicate logic (e.g. multiple repayment calculators), obsolete docs.
+   - Legacy backend (`backend/` NestJS) vs `apps/api-next` overlap.
+7. **Database hygiene**
+   - Orphaned rows after recent Salary Advance purge.
+   - Trigger conflicts (22+ triggers — overlapping status writers).
+   - Indexes missing on hot query paths.
+8. **Prioritized findings table** — every finding tagged `P0/P1/P2/Cleanup` with file paths and one-line repro/fix hint. **No code written** — just the report.
 
-1. **Fix the frontend schedule generator**
-   - In `createRepaymentScheduleForLoan`, detect `repayment_frequency = bullet` / `PAYDAY_SOFT` before daily logic.
-   - Generate exactly 1 repayment row for Payday Soft.
-   - Due date = disbursement date + 30 days, unless an explicit repayment start date is provided.
-   - Amount = full `total_repayment`.
+## Method
+- `rg` sweeps for: `TODO`, `FIXME`, `console.log`, `// @ts-ignore`, `as any`, disabled buttons, `onClick={() => {}}`, dead routes, unused exports.
+- `code--view` on every flagged file to confirm.
+- `supabase--linter` + targeted `supabase--read_query` for RLS coverage, orphan rows, trigger list.
+- Cross-reference recent fix history (Payday, Marketeer, Twiza reloan, Salary Advance reset) for regressions.
+- `ts-prune`-style scan via `rg` for unimported exports.
+- Edge-function inventory: each function checked for `verify_jwt`, auth header validation, rate limiting.
 
-2. **Fix the database schedule function**
-   - Update `public.generate_loan_schedule_for` so bullet loans generate one repayment row.
-   - This prevents backend triggers from creating daily Payday rows during disbursement.
-   - Keep Marketeer daily behavior unchanged.
+## Out of scope
+- Performance profiling under load.
+- Penetration testing.
+- Mobile (Capacitor) build-specific issues unless code-visible.
+- Any file edits or migrations — report only.
 
-3. **Repair existing bad Payday schedules**
-   - For active Payday Soft loans with unpaid daily rows, cancel/rebuild those unpaid rows into a single bullet repayment.
-   - Preserve any paid/partial history instead of deleting it.
-   - For the current bad active loans with no payments recorded, this will remove the false overdue daily rows and leave one future due date.
-
-4. **Fix UI labels that infer “daily” from `term_unit = days`**
-   - Update shared labels so `repayment_frequency = bullet` displays as “Single payment” / “BULLET PAYMENT”, not daily installment.
-   - Update Payday house loan detail/schedule display so it does not show daily wording.
-
-5. **Regression coverage**
-   - Add/update tests for Payday Soft: 30 days, 30% flat, one bullet installment due on day 30.
-   - Keep existing Marketeer daily tests passing conceptually: Marketeer remains daily, Payday Soft is not daily.
-
-## Files / backend areas involved
-
-- `src/utils/createRepaymentSchedule.ts`
-- `src/utils/repaymentFrequencyLabels.ts`
-- Payday-related tests in `src/utils/__tests__`
-- Lovable Cloud migration for `generate_loan_schedule_for` and data repair of existing Payday repayment rows
+## Time/size expectation
+Report ~30–60 pages, ~80–150 itemized findings. Generated in one pass; no follow-up needed unless you ask for fixes.
