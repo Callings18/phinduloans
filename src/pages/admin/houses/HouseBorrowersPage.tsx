@@ -218,7 +218,7 @@ export default function HouseBorrowersPage() {
                   <Input value={form.nrc_number} onChange={(e) => setForm(f => ({ ...f, nrc_number: e.target.value }))} placeholder="123456/78/1" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone</Label>
+                  <Label>Phone {isMarketeer ? "*" : ""}</Label>
                   <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 967 713 001" />
                 </div>
               </div>
