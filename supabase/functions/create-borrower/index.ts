@@ -54,14 +54,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, full_name, phone, nrc_number, address, city, product_code, gender, marital_status } = await req.json();
+    const body = await req.json();
+    const { full_name, phone, nrc_number, address, city, product_code, gender, marital_status } = body;
+    let { email } = body;
 
-    if (!email || !full_name) {
-      return new Response(JSON.stringify({ error: "Email and full name are required" }), {
+    if (!full_name || (!email && !phone)) {
+      return new Response(JSON.stringify({ error: "Full name and either email or phone are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Synthesise a placeholder email when only phone was provided (Marketeer flow).
+    // Supabase auth still needs a unique email, but the profile row keeps email = null
+    // so the UI never displays the placeholder.
+    const syntheticEmail = !email && phone
+      ? `${String(phone).replace(/[^0-9]/g, "")}@phone.phindu.local`
+      : null;
+    const authEmail = email || syntheticEmail!;
+    const profileEmail = email || null;
 
     let userId: string;
     let createdNew = false;
@@ -69,9 +80,10 @@ Deno.serve(async (req) => {
     // Try to create user first
     const tempPassword = crypto.randomUUID().slice(0, 10) + "Aa1!";
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: authEmail,
       password: tempPassword,
       email_confirm: true,
+      phone: phone || undefined,
       user_metadata: { full_name },
     });
 
