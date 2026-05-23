@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
       .from("profiles")
       .upsert({
         id: userId,
-        email,
+        email: profileEmail,
         full_name,
         phone: phone || null,
         nrc_number: nrc_number || null,
@@ -216,10 +216,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Send SMS with login credentials (phone-only OTP/password) for newly created borrowers
+    // Send SMS with login credentials for newly created borrowers
     if (createdNew && phone) {
       try {
-        const smsBody = `Welcome to Phindu Loans! Your account has been created. Login email: ${email} | Temp password: ${tempPassword} | Or login with phone OTP. https://phindu.com`;
+        const smsBody = profileEmail
+          ? `Welcome to Phindu Loans! Your account has been created. Login email: ${profileEmail} | Temp password: ${tempPassword} | Or login with phone OTP. https://phindu.com`
+          : `Welcome to Phindu Loans! Your account has been created. Login with your phone number using OTP at https://phindu.com`;
         await supabaseAdmin.functions.invoke("excite-sms", {
           body: { to: phone, message: smsBody, userId, title: "Account credentials" },
         });
