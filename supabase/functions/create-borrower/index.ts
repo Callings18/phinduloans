@@ -90,13 +90,13 @@ Deno.serve(async (req) => {
     if (createError) {
       // If email already exists, look up the existing user by querying profiles
       if (createError.message?.includes("already been registered") || (createError as any).code === "email_exists") {
-        console.log("User already exists, looking up by email:", email);
+        console.log("User already exists, looking up by email:", authEmail);
 
         // Look up user via profiles table (more reliable than paginated listUsers)
         const { data: profile, error: profileError } = await supabaseAdmin
           .from("profiles")
           .select("id")
-          .eq("email", email)
+          .eq("email", authEmail)
           .maybeSingle();
 
         if (profileError || !profile) {
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           while (!foundId) {
             const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
             if (listError || !listData.users.length) break;
-            const match = listData.users.find(u => u.email === email);
+            const match = listData.users.find(u => u.email === authEmail);
             if (match) { foundId = match.id; break; }
             if (listData.users.length < 100) break;
             page++;
@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
           .from("profiles")
           .upsert({
             id: userId,
-            email,
+            email: profileEmail,
             full_name,
             phone: phone || null,
             nrc_number: nrc_number || null,
@@ -172,7 +172,9 @@ Deno.serve(async (req) => {
             success: true,
             user_id: userId,
             existing: true,
-            message: `Borrower profile updated. This email (${email}) was already registered.`,
+            message: profileEmail
+              ? `Borrower profile updated. This email (${profileEmail}) was already registered.`
+              : `Borrower profile updated. This phone number was already registered.`,
           }),
           {
             status: 200,
