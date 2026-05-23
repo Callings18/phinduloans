@@ -86,12 +86,19 @@ export default function HouseBorrowersPage() {
     enabled: Boolean(productCode),
   });
 
+  const isMarketeer = productCode === "MARKETEER";
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!form.full_name.trim() || !form.email.trim()) throw new Error("Name and email are required.");
+      if (!form.full_name.trim()) throw new Error("Full name is required.");
+      if (isMarketeer) {
+        if (!form.phone.trim()) throw new Error("Phone number is required for Marketeer borrowers.");
+      } else {
+        if (!form.email.trim()) throw new Error("Email is required.");
+      }
       const response = await supabase.functions.invoke("create-borrower", {
         body: {
-          email: form.email,
+          email: form.email.trim() || null,
           full_name: form.full_name,
           phone: form.phone || null,
           nrc_number: form.nrc_number || null,
@@ -211,7 +218,7 @@ export default function HouseBorrowersPage() {
                   <Input value={form.nrc_number} onChange={(e) => setForm(f => ({ ...f, nrc_number: e.target.value }))} placeholder="123456/78/1" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone</Label>
+                  <Label>Phone {isMarketeer ? "*" : ""}</Label>
                   <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 967 713 001" />
                 </div>
               </div>
@@ -225,8 +232,8 @@ export default function HouseBorrowersPage() {
               </header>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} placeholder="john@example.com" />
+                  <Label>Email {isMarketeer ? "" : "*"}</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} placeholder={isMarketeer ? "Optional for marketeers" : "john@example.com"} />
                 </div>
                 <div className="space-y-2">
                   <Label>City</Label>
