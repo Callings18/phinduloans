@@ -86,12 +86,19 @@ export default function HouseBorrowersPage() {
     enabled: Boolean(productCode),
   });
 
+  const isMarketeer = productCode === "MARKETEER";
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!form.full_name.trim() || !form.email.trim()) throw new Error("Name and email are required.");
+      if (!form.full_name.trim()) throw new Error("Full name is required.");
+      if (isMarketeer) {
+        if (!form.phone.trim()) throw new Error("Phone number is required for Marketeer borrowers.");
+      } else {
+        if (!form.email.trim()) throw new Error("Email is required.");
+      }
       const response = await supabase.functions.invoke("create-borrower", {
         body: {
-          email: form.email,
+          email: form.email.trim() || null,
           full_name: form.full_name,
           phone: form.phone || null,
           nrc_number: form.nrc_number || null,
