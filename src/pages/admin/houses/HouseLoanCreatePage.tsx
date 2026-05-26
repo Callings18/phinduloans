@@ -2,7 +2,7 @@ import { Navigate, useParams } from "react-router-dom";
 import ProductLoanFormShell from "@/components/admin/ProductLoanFormShell";
 import type { LoanProductCode } from "@/config/loanProductModules";
 
-const houseCreateConfig: Record<LoanProductCode, { title: string; description: string; termUnit: "days" | "weeks" | "months"; defaultTermValue: number }> = {
+const houseCreateConfig: Record<string, { title: string; description: string; termUnit: "days" | "weeks" | "months"; defaultTermValue: number }> = {
   SALARY_ADVANCE: { title: "Create Salary Advance", description: "Fast salary-backed lending workflow.", termUnit: "months", defaultTermValue: 1 },
   SALARY_ADVANCE_STAFF: {
     title: "Create Staff Salary Advance",
@@ -19,12 +19,18 @@ const houseCreateConfig: Record<LoanProductCode, { title: string; description: s
 
 export default function HouseLoanCreatePage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
-  const code = productCode as LoanProductCode;
-  const cfg = houseCreateConfig[code];
-  if (!cfg) return <Navigate to="/admin" replace />;
+  const code = productCode.toUpperCase();
+  if (!code) return <Navigate to="/admin" replace />;
+  // Use hard-coded config for legacy products, otherwise sensible defaults for custom products
+  const cfg = houseCreateConfig[code] ?? {
+    title: `Create ${code.replace(/_/g, " ")} Loan`,
+    description: "Custom loan product workflow.",
+    termUnit: "months" as const,
+    defaultTermValue: 12,
+  };
   return (
     <ProductLoanFormShell
-      productCode={code}
+      productCode={code as LoanProductCode}
       title={cfg.title}
       description={cfg.description}
       termUnit={cfg.termUnit}
