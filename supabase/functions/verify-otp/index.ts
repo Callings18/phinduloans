@@ -123,77 +123,109 @@ serve(async (req) => {
 
     // Handle different purposes
     if (purpose === 'signup') {
-      // For signup with password
-      if (email && password && fullName) {
-        // Create user with email/password
+      // Phone-only signup: synthesize a placeholder email so Supabase Auth accepts the row,
+      // but never expose it in the UI.
+      const safePhone = formattedPhone.replace(/[^0-9]/g, "");
+      const syntheticEmail = email && email.includes("@")
+        ? email
+        : `${safePhone}@phone.phindu.local`;
+      const generatedPassword = password || crypto.randomUUID() + crypto.randomUUID();
+
+      // If a profile already exists for this phone, treat as login instead
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .eq("phone", formattedPhone)
+        .maybeSingle();
+
+      let userId: string;
+
+      if (existingProfile) {
+        userId = existingProfile.id;
+      } else {
         const { data: newUser, error: signupError } = await supabase.auth.admin.createUser({
-          email,
-          password,
+          email: syntheticEmail,
+          password: generatedPassword,
           email_confirm: true,
           phone: formattedPhone,
           phone_confirm: true,
-          user_metadata: { full_name: fullName },
+          user_metadata: { full_name: fullName || null },
         });
 
-        if (signupError) {
+        if (signupError || !newUser?.user) {
           console.error("[Verify OTP] Signup error:", signupError);
           return new Response(
-            JSON.stringify({ success: false, error: signupError.message }),
+            JSON.stringify({ success: false, error: signupError?.message || "Failed to create account" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        // Update profile with phone
+        userId = newUser.user.id;
+
+        // Hide synthetic email in profile; store only phone + name
         await supabase
           .from("profiles")
-          .update({ phone: formattedPhone })
-          .eq("id", newUser.user.id);
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Account created successfully",
-            userId: newUser.user.id,
-            verified: true,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } else {
-        // Passwordless signup - just verify the phone for now
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Phone verified successfully",
-            verified: true,
+          .update({
             phone: formattedPhone,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+            full_name: fullName || null,
+            email: syntheticEmail.endsWith("@phone.phindu.local") ? null : syntheticEmail,
+          })
+          .eq("id", userId);
       }
+
+      // Issue a magic link so the borrower lands signed-in immediately
+      const { data: link } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email: syntheticEmail,
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Account ready",
+          userId,
+          verified: true,
+          magicLink: link?.properties?.action_link ?? null,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     } else if (purpose === 'login') {
-      // Find user by phone
+      // Find user by phone (works for both real-email and synthetic-email accounts)
       const { data: profile } = await supabase
         .from("profiles")
         .select("id, email")
         .eq("phone", formattedPhone)
         .maybeSingle();
 
-      if (!profile) {
+      let loginEmail = profile?.email ?? null;
+      let userId = profile?.id ?? null;
+
+      // If profile has no email (phone-only signup), look it up from auth.users via phone
+      if (!loginEmail || !userId) {
+        const safePhone = formattedPhone.replace(/[^0-9]/g, "");
+        const fallback = `${safePhone}@phone.phindu.local`;
+        // Try direct lookup via admin API
+        const { data: usersByEmail } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
+        const match = usersByEmail?.users?.find(
+          (u) => u.phone === formattedPhone.replace(/^\+/, "") || u.email === fallback,
+        );
+        if (match) {
+          userId = match.id;
+          loginEmail = match.email ?? fallback;
+        }
+      }
+
+      if (!userId || !loginEmail) {
         console.log(`[Verify OTP] No account found for phone: ${formattedPhone}`);
         return new Response(
-          JSON.stringify({ success: false, error: "No account found for this number/email." }),
+          JSON.stringify({ success: false, error: "No account found for this number. Please sign up first." }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Generate a magic link or session
-      // For passwordless login, we'll create a session token
       const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
-        email: profile.email,
-        options: {
-          redirectTo: `${Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '')}/dashboard`,
-        },
+        email: loginEmail,
       });
 
       if (sessionError) {
@@ -209,7 +241,7 @@ serve(async (req) => {
           success: true,
           message: "Login successful",
           verified: true,
-          userId: profile.id,
+          userId,
           magicLink: sessionData.properties?.action_link,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
