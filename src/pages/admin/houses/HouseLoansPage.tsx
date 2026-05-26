@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -17,12 +24,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
-import { Search, Plus, Eye, AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Eye,
+  AlertTriangle,
+  Pencil,
+  Trash2,
+  Download,
+  X,
+  ArrowUpDown,
+} from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
-import { format } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
 
 const DELETABLE_STATUSES = new Set([
   "pending",
@@ -36,7 +52,6 @@ const DELETABLE_STATUSES = new Set([
 ]);
 const EDITABLE_STATUSES = new Set(["pending", "under_review", "approved"]);
 
-
 const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
   approved: { label: "Approved", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
@@ -48,15 +63,29 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   rejected: { label: "Rejected", className: "bg-red-500/20 text-red-400 border-red-500/30" },
 };
 
+type DatePreset = "all" | "today" | "7d" | "30d" | "this_month" | "last_month" | "custom";
+type DateField = "created_at" | "disbursement_date";
+type SortKey = "date_desc" | "date_asc" | "amount_desc" | "amount_asc" | "name_asc" | "overdue_desc";
+type LateBucket = "all" | "on_track" | "1_7" | "8_30" | "30_plus" | "defaulted";
+
 export default function HouseLoansPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const { data: loans, isLoading } = useHouseLoans(productCode);
   const { data: repayments } = useHouseRepayments(productCode);
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [lateBucket, setLateBucket] = useState<LateBucket>("all");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [dateField, setDateField] = useState<DateField>("created_at");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("date_desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  
+
   const [deleteLoan, setDeleteLoan] = useState<any>(null);
   const queryClient = useQueryClient();
 
@@ -82,47 +111,139 @@ export default function HouseLoansPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
 
-  // Build overdue stats per loan from repayments — a loan is "overdue" if it has any
-  // pending/overdue installment with due_date < today.
+  // Overdue map: loan_id -> { count, amount, oldestDueDate, daysLate }
   const overdueByLoan = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const map: Record<string, { count: number; amount: number; oldestDueDate: string | null }> = {};
+    const map: Record<string, { count: number; amount: number; oldestDueDate: string | null; daysLate: number }> = {};
     (repayments ?? []).forEach((r: any) => {
       if (r.status === "paid" || r.status === "cancelled") return;
-      if (!r.due_date || r.due_date >= today) return;
-      const entry = map[r.loan_id] ?? { count: 0, amount: 0, oldestDueDate: null };
+      if (!r.due_date || r.due_date >= todayStr) return;
+      const entry = map[r.loan_id] ?? { count: 0, amount: 0, oldestDueDate: null, daysLate: 0 };
       entry.count += 1;
       entry.amount += Number(r.amount || 0);
       entry.oldestDueDate =
         !entry.oldestDueDate || r.due_date < entry.oldestDueDate ? r.due_date : entry.oldestDueDate;
       map[r.loan_id] = entry;
     });
+    Object.values(map).forEach((e) => {
+      e.daysLate = e.oldestDueDate
+        ? Math.max(
+            0,
+            Math.floor(
+              (new Date(todayStr).getTime() - new Date(e.oldestDueDate).getTime()) / (1000 * 60 * 60 * 24),
+            ),
+          )
+        : 0;
+    });
     return map;
-  }, [repayments]);
+  }, [repayments, todayStr]);
+
+  // Date range derived from preset
+  const dateRange = useMemo<{ from: string | null; to: string | null }>(() => {
+    const now = new Date();
+    switch (datePreset) {
+      case "today":
+        return { from: format(now, "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+      case "7d":
+        return { from: format(subDays(now, 7), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+      case "30d":
+        return { from: format(subDays(now, 30), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+      case "this_month":
+        return { from: format(startOfMonth(now), "yyyy-MM-dd"), to: format(endOfMonth(now), "yyyy-MM-dd") };
+      case "last_month": {
+        const lm = subMonths(now, 1);
+        return { from: format(startOfMonth(lm), "yyyy-MM-dd"), to: format(endOfMonth(lm), "yyyy-MM-dd") };
+      }
+      case "custom":
+        return { from: customFrom || null, to: customTo || null };
+      default:
+        return { from: null, to: null };
+    }
+  }, [datePreset, customFrom, customTo]);
 
   const filtered = useMemo(() => {
     if (!loans) return [];
-    return loans.filter((l: any) => {
-      const q = search.toLowerCase();
-      const matchesSearch = !q ||
-        l.full_name?.toLowerCase().includes(q) ||
-        l.email?.toLowerCase().includes(q) ||
-        l.nrc_number?.toLowerCase().includes(q) ||
-        l.phone?.toLowerCase().includes(q);
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "overdue" ? Boolean(overdueByLoan[l.id]) : l.status === statusFilter);
-      return matchesSearch && matchesStatus;
+    const minA = minAmount ? Number(minAmount) : null;
+    const maxA = maxAmount ? Number(maxAmount) : null;
+    const q = search.trim().toLowerCase();
+
+    const result = loans.filter((l: any) => {
+      // Search
+      if (q) {
+        const hay = [l.full_name, l.email, l.nrc_number, l.phone].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      // Status
+      if (statusFilter !== "all" && l.status !== statusFilter) return false;
+      // Late bucket
+      const od = overdueByLoan[l.id];
+      if (lateBucket !== "all") {
+        if (lateBucket === "defaulted" && l.status !== "defaulted") return false;
+        if (lateBucket === "on_track") {
+          if (od || l.status === "defaulted") return false;
+          if (!["active", "disbursed"].includes(l.status)) return false;
+        }
+        if (lateBucket === "1_7" && !(od && od.daysLate >= 1 && od.daysLate <= 7)) return false;
+        if (lateBucket === "8_30" && !(od && od.daysLate >= 8 && od.daysLate <= 30)) return false;
+        if (lateBucket === "30_plus" && !(od && od.daysLate > 30)) return false;
+      }
+      // Date range
+      const dVal: string | null = (l as any)[dateField] ?? null;
+      if (dateRange.from || dateRange.to) {
+        if (!dVal) return false;
+        const d = dVal.slice(0, 10);
+        if (dateRange.from && d < dateRange.from) return false;
+        if (dateRange.to && d > dateRange.to) return false;
+      }
+      // Amount
+      const amt = Number(l.loan_amount || 0);
+      if (minA !== null && amt < minA) return false;
+      if (maxA !== null && amt > maxA) return false;
+      return true;
     });
-  }, [loans, search, statusFilter, overdueByLoan]);
+
+    // Sort
+    const sorted = [...result];
+    sorted.sort((a: any, b: any) => {
+      switch (sortBy) {
+        case "date_asc":
+          return (a.created_at || "").localeCompare(b.created_at || "");
+        case "amount_desc":
+          return Number(b.loan_amount || 0) - Number(a.loan_amount || 0);
+        case "amount_asc":
+          return Number(a.loan_amount || 0) - Number(b.loan_amount || 0);
+        case "name_asc":
+          return (a.full_name || a.email || "").localeCompare(b.full_name || b.email || "");
+        case "overdue_desc":
+          return (overdueByLoan[b.id]?.daysLate || 0) - (overdueByLoan[a.id]?.daysLate || 0);
+        default:
+          return (b.created_at || "").localeCompare(a.created_at || "");
+      }
+    });
+    return sorted;
+  }, [loans, search, statusFilter, lateBucket, overdueByLoan, dateRange, dateField, minAmount, maxAmount, sortBy]);
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // Stats
+  // Stats over ALL loans
   const totalAmount = (loans ?? []).reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
   const activeCount = (loans ?? []).filter((l: any) => ["active", "disbursed"].includes(l.status)).length;
   const overdueCount = Object.keys(overdueByLoan).length;
+  const defaultedCount = (loans ?? []).filter((l: any) => l.status === "defaulted").length;
+  const onTrackCount = (loans ?? []).filter(
+    (l: any) => ["active", "disbursed"].includes(l.status) && !overdueByLoan[l.id],
+  ).length;
+
+  const lateBuckets = useMemo(() => {
+    let b17 = 0, b830 = 0, b30p = 0;
+    Object.values(overdueByLoan).forEach((e) => {
+      if (e.daysLate >= 1 && e.daysLate <= 7) b17++;
+      else if (e.daysLate <= 30) b830++;
+      else b30p++;
+    });
+    return { b17, b830, b30p };
+  }, [overdueByLoan]);
 
   const statusCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -130,39 +251,106 @@ export default function HouseLoansPage() {
     return map;
   }, [loans]);
 
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  // Filtered totals (so user knows the slice they're viewing)
+  const filteredTotal = filtered.reduce((s: number, l: any) => s + Number(l.loan_amount || 0), 0);
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setLateBucket("all");
+    setDatePreset("all");
+    setCustomFrom("");
+    setCustomTo("");
+    setMinAmount("");
+    setMaxAmount("");
+    setSortBy("date_desc");
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters =
+    search ||
+    statusFilter !== "all" ||
+    lateBucket !== "all" ||
+    datePreset !== "all" ||
+    minAmount ||
+    maxAmount ||
+    sortBy !== "date_desc";
+
+  const exportCsv = () => {
+    const rows = [
+      ["Borrower", "Phone", "NRC", "Amount", "Term", "Status", "Days Late", "Overdue Amount", "Created", "Disbursed"],
+      ...filtered.map((l: any) => {
+        const od = overdueByLoan[l.id];
+        return [
+          l.full_name || l.email || "",
+          l.phone || "",
+          l.nrc_number || "",
+          l.loan_amount || 0,
+          `${l.loan_term_months || ""} ${l.term_unit || "months"}`,
+          statusConfig[l.status]?.label || l.status,
+          od?.daysLate ?? 0,
+          od?.amount ?? 0,
+          l.created_at ? format(new Date(l.created_at), "yyyy-MM-dd") : "",
+          l.disbursement_date ? format(new Date(l.disbursement_date), "yyyy-MM-dd") : "",
+        ];
+      }),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${productCode}-loans-${format(new Date(), "yyyyMMdd-HHmm")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold">Loans</h2>
           <p className="text-sm text-muted-foreground">
             {(loans ?? []).length} total · {activeCount} active ·{" "}
-            <span className={overdueCount > 0 ? "text-destructive font-medium" : ""}>
-              {overdueCount} overdue
-            </span>{" "}
-            · K{totalAmount.toLocaleString()} portfolio
+            <span className={overdueCount > 0 ? "text-destructive font-medium" : ""}>{overdueCount} overdue</span>
+            {" · "}K{totalAmount.toLocaleString()} portfolio
           </p>
         </div>
-        <Button asChild size="sm"><Link to={`/admin/houses/${productCode}/loans/create`}><Plus size={16} className="mr-1" /> Create Loan</Link></Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
+            <Download size={14} className="mr-1" /> Export ({filtered.length})
+          </Button>
+          <Button asChild size="sm">
+            <Link to={`/admin/houses/${productCode}/loans/create`}><Plus size={16} className="mr-1" /> Create Loan</Link>
+          </Button>
+        </div>
       </div>
 
-      {/* Status filter pills */}
+      {/* KPI mini-cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">On track</p><p className="text-lg font-bold text-emerald-400">{onTrackCount}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">1–7 days late</p><p className="text-lg font-bold text-yellow-400">{lateBuckets.b17}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">8–30 days late</p><p className="text-lg font-bold text-orange-400">{lateBuckets.b830}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">30+ days late</p><p className="text-lg font-bold text-red-500">{lateBuckets.b30p}</p></CardContent></Card>
+        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Defaulted</p><p className="text-lg font-bold text-red-600">{defaultedCount}</p></CardContent></Card>
+      </div>
+
+      {/* Health quick filters */}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant={lateBucket === "all" ? "default" : "outline"} onClick={() => { setLateBucket("all"); setCurrentPage(1); }}>All</Button>
+        <Button size="sm" variant={lateBucket === "on_track" ? "default" : "outline"} onClick={() => { setLateBucket("on_track"); setCurrentPage(1); }} className={lateBucket !== "on_track" ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10" : ""}>On track ({onTrackCount})</Button>
+        <Button size="sm" variant={lateBucket === "1_7" ? "default" : "outline"} onClick={() => { setLateBucket("1_7"); setCurrentPage(1); }} className={lateBucket !== "1_7" ? "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10" : ""}>1–7 late ({lateBuckets.b17})</Button>
+        <Button size="sm" variant={lateBucket === "8_30" ? "default" : "outline"} onClick={() => { setLateBucket("8_30"); setCurrentPage(1); }} className={lateBucket !== "8_30" ? "border-orange-500/40 text-orange-400 hover:bg-orange-500/10" : ""}>8–30 late ({lateBuckets.b830})</Button>
+        <Button size="sm" variant={lateBucket === "30_plus" ? "destructive" : "outline"} onClick={() => { setLateBucket("30_plus"); setCurrentPage(1); }} className={lateBucket !== "30_plus" ? "border-red-500/40 text-red-500 hover:bg-red-500/10" : ""}><AlertTriangle size={12} className="mr-1" />30+ late ({lateBuckets.b30p})</Button>
+        <Button size="sm" variant={lateBucket === "defaulted" ? "destructive" : "outline"} onClick={() => { setLateBucket("defaulted"); setCurrentPage(1); }} className={lateBucket !== "defaulted" ? "border-red-600/40 text-red-600 hover:bg-red-600/10" : ""}>Defaulted ({defaultedCount})</Button>
+      </div>
+
+      {/* Status pills */}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}>
-          All ({(loans ?? []).length})
+          All statuses ({(loans ?? []).length})
         </Button>
-        {overdueCount > 0 && (
-          <Button
-            size="sm"
-            variant={statusFilter === "overdue" ? "destructive" : "outline"}
-            onClick={() => { setStatusFilter("overdue"); setCurrentPage(1); }}
-            className={statusFilter !== "overdue" ? "border-destructive/50 text-destructive hover:bg-destructive/10" : ""}
-          >
-            <AlertTriangle size={12} className="mr-1" /> Overdue ({overdueCount})
-          </Button>
-        )}
         {Object.entries(statusCounts).sort().map(([status, count]) => (
           <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"} onClick={() => { setStatusFilter(status); setCurrentPage(1); }}>
             {statusConfig[status]?.label || status} ({count})
@@ -170,11 +358,79 @@ export default function HouseLoansPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-        <Input placeholder="Search by name, email, NRC, or phone..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="pl-9" />
-      </div>
+      {/* Filters bar */}
+      <Card>
+        <CardContent className="p-3 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+            <div className="md:col-span-4 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+              <Input placeholder="Search name, NRC, phone..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="pl-9 h-9" />
+            </div>
+
+            <div className="md:col-span-2">
+              <Select value={dateField} onValueChange={(v: DateField) => setDateField(v)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Created date</SelectItem>
+                  <SelectItem value="disbursement_date">Disbursed date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="md:col-span-2">
+              <Select value={datePreset} onValueChange={(v: DatePreset) => { setDatePreset(v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any date</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="this_month">This month</SelectItem>
+                  <SelectItem value="last_month">Last month</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="md:col-span-2">
+              <Input type="number" placeholder="Min K" value={minAmount} onChange={(e) => { setMinAmount(e.target.value); setCurrentPage(1); }} className="h-9" />
+            </div>
+            <div className="md:col-span-2">
+              <Input type="number" placeholder="Max K" value={maxAmount} onChange={(e) => { setMaxAmount(e.target.value); setCurrentPage(1); }} className="h-9" />
+            </div>
+          </div>
+
+          {datePreset === "custom" && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setCurrentPage(1); }} className="h-9" />
+              <Input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setCurrentPage(1); }} className="h-9" />
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 justify-between">
+            <div className="flex items-center gap-2">
+              <ArrowUpDown size={14} className="text-muted-foreground" />
+              <Select value={sortBy} onValueChange={(v: SortKey) => setSortBy(v)}>
+                <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date_desc">Newest first</SelectItem>
+                  <SelectItem value="date_asc">Oldest first</SelectItem>
+                  <SelectItem value="amount_desc">Amount (high → low)</SelectItem>
+                  <SelectItem value="amount_asc">Amount (low → high)</SelectItem>
+                  <SelectItem value="name_asc">Borrower name (A–Z)</SelectItem>
+                  <SelectItem value="overdue_desc">Most overdue first</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>Showing <strong className="text-foreground">{filtered.length}</strong> · K{filteredTotal.toLocaleString()}</span>
+              {hasActiveFilters && (
+                <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7"><X size={12} className="mr-1" /> Clear</Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Table */}
       {isLoading ? (
@@ -190,7 +446,7 @@ export default function HouseLoansPage() {
                   <TableHead>Term</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Overdue</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>{dateField === "disbursement_date" ? "Disbursed" : "Created"}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -198,15 +454,7 @@ export default function HouseLoansPage() {
                 {paginated.map((l: any) => {
                   const cfg = statusConfig[l.status] || statusConfig.pending;
                   const od = overdueByLoan[l.id];
-                  const daysLate = od?.oldestDueDate
-                    ? Math.max(
-                        0,
-                        Math.floor(
-                          (new Date(todayStr).getTime() - new Date(od.oldestDueDate).getTime()) /
-                            (1000 * 60 * 60 * 24),
-                        ),
-                      )
-                    : 0;
+                  const showDate = dateField === "disbursement_date" ? l.disbursement_date : l.created_at;
                   return (
                     <TableRow key={l.id} className={od ? "bg-destructive/5" : undefined}>
                       <TableCell>
@@ -226,14 +474,14 @@ export default function HouseLoansPage() {
                               {od.count} late · K{od.amount.toLocaleString()}
                             </Badge>
                             <span className="text-[10px] text-muted-foreground">
-                              {daysLate} day{daysLate === 1 ? "" : "s"} late
+                              {od.daysLate} day{od.daysLate === 1 ? "" : "s"} late
                             </span>
                           </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{l.created_at ? format(new Date(l.created_at), "dd MMM yyyy") : "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{showDate ? format(new Date(showDate), "dd MMM yyyy") : "—"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button asChild size="sm" variant="ghost" title="View">
@@ -255,7 +503,7 @@ export default function HouseLoansPage() {
                   );
                 })}
                 {paginated.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No loans found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No loans match your filters.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -265,7 +513,6 @@ export default function HouseLoansPage() {
       {filtered.length > pageSize && (
         <PaginationControls currentPage={currentPage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }} />
       )}
-
 
       <AlertDialog open={Boolean(deleteLoan)} onOpenChange={(o) => { if (!o) setDeleteLoan(null); }}>
         <AlertDialogContent>
