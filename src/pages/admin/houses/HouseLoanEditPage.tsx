@@ -24,7 +24,7 @@ export default function HouseLoanEditPage() {
   };
   return (
     <ProductLoanFormShell
-      productCode={code}
+      productCode={code as LoanProductCode}
       title={cfg.title}
       description={cfg.description}
       termUnit={cfg.termUnit}
