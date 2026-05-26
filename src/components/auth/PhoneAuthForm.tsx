@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { OTPInput } from "./OTPInput";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Phone, ArrowRight, Loader2, ArrowLeft, Mail, Lock, User } from "lucide-react";
+import { Phone, ArrowRight, Loader2, ArrowLeft, User } from "lucide-react";
 import { z } from "zod";
 
 const phoneSchema = z.string()
@@ -13,8 +13,6 @@ const phoneSchema = z.string()
   .regex(/^[\d\s+()-]+$/, "Invalid phone number format");
 
 const signupSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
   fullName: z.string().min(2, "Full name is required"),
 });
 
