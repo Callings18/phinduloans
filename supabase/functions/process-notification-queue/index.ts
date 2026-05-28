@@ -58,7 +58,13 @@ serve(async (req) => {
       authorized = true;
     }
 
-    // (3) Authenticated user — must be admin or staff
+    // (3) Anon key (used by pg_cron net.http_post which can't read service role key)
+    // Safe: this function only drains the internal notification_logs queue — no user input.
+    if (!authorized && token && token === anonKey) {
+      authorized = true;
+    }
+
+    // (4) Authenticated user — must be admin or staff
     if (!authorized && token && token !== anonKey) {
       const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: `Bearer ${token}` } },
@@ -77,6 +83,7 @@ serve(async (req) => {
         if (allowed) authorized = true;
       }
     }
+
 
     if (!authorized) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
