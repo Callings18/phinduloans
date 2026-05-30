@@ -24,6 +24,10 @@ interface NotificationRequest {
   signatureUrl?: string;
   // For WhatsApp with media
   mediaUrl?: string;
+  // When true, the caller (e.g. the queue processor) owns the notification_logs
+  // row and will record the outcome itself — so this function must NOT insert
+  // its own log row (prevents duplicate rows per message).
+  skipLog?: boolean;
 }
 
 interface NotificationSettings {
