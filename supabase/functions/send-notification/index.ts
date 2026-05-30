@@ -1019,21 +1019,24 @@ const handler = async (req: Request): Promise<Response> => {
       console.error(`[Notification] Send failed:`, sendError.message);
     }
 
-    // Log to database
-    try {
-      await supabase.from("notification_logs").insert({
-        user_id: userId || null,
-        type: type,
-        recipient: to,
-        title: title || subject || "Notification",
-        message: message,
-        status: status,
-        event_type: eventType,
-        sent_at: status === "sent" ? new Date().toISOString() : null,
-        provider_response: { provider, ...result }
-      });
-    } catch (logError) {
-      console.error("[Notification] Failed to log:", logError);
+    // Log to database — but skip when the caller owns the log row (queue
+    // processor). This prevents a duplicate notification_logs row per message.
+    if (!skipLog) {
+      try {
+        await supabase.from("notification_logs").insert({
+          user_id: userId || null,
+          type: type,
+          recipient: to,
+          title: title || subject || "Notification",
+          message: message,
+          status: status,
+          event_type: eventType,
+          sent_at: status === "sent" ? new Date().toISOString() : null,
+          provider_response: { provider, ...result }
+        });
+      } catch (logError) {
+        console.error("[Notification] Failed to log:", logError);
+      }
     }
 
     if (status === "failed") {
