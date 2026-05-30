@@ -53,18 +53,17 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get pending notifications (limit to 50 per run to avoid timeout)
+    // Atomically CLAIM pending notifications (limit 50 per run).
+    // The DB function locks each row with FOR UPDATE SKIP LOCKED and flips it to
+    // 'processing' in the same statement, so two concurrent/overlapping runs can
+    // NEVER pick up the same message → no duplicate sends.
     const { data: pendingNotifications, error: fetchError } = await supabase
-      .from("notification_logs")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(50);
+      .rpc("claim_pending_notifications", { p_limit: 50 });
 
     if (fetchError) {
-      console.error("[Queue Processor] Error fetching pending notifications:", fetchError);
+      console.error("[Queue Processor] Error claiming pending notifications:", fetchError);
       return new Response(
-        JSON.stringify({ error: "Failed to fetch pending notifications", details: fetchError.message }),
+        JSON.stringify({ error: "Failed to claim pending notifications", details: fetchError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
