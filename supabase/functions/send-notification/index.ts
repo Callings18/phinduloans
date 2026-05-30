@@ -24,6 +24,10 @@ interface NotificationRequest {
   signatureUrl?: string;
   // For WhatsApp with media
   mediaUrl?: string;
+  // When true, the caller (e.g. the queue processor) owns the notification_logs
+  // row and will record the outcome itself — so this function must NOT insert
+  // its own log row (prevents duplicate rows per message).
+  skipLog?: boolean;
 }
 
 interface NotificationSettings {
@@ -885,6 +889,7 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     let { type, to, message, subject, title, userId, htmlContent, eventType, mediaUrl } = request;
+    const skipLog = request.skipLog === true;
     const notifyAdmins = (request as any).notifyAdmins === true;
 
     const settings = await getNotificationSettings(supabase);
@@ -1014,21 +1019,24 @@ const handler = async (req: Request): Promise<Response> => {
       console.error(`[Notification] Send failed:`, sendError.message);
     }
 
-    // Log to database
-    try {
-      await supabase.from("notification_logs").insert({
-        user_id: userId || null,
-        type: type,
-        recipient: to,
-        title: title || subject || "Notification",
-        message: message,
-        status: status,
-        event_type: eventType,
-        sent_at: status === "sent" ? new Date().toISOString() : null,
-        provider_response: { provider, ...result }
-      });
-    } catch (logError) {
-      console.error("[Notification] Failed to log:", logError);
+    // Log to database — but skip when the caller owns the log row (queue
+    // processor). This prevents a duplicate notification_logs row per message.
+    if (!skipLog) {
+      try {
+        await supabase.from("notification_logs").insert({
+          user_id: userId || null,
+          type: type,
+          recipient: to,
+          title: title || subject || "Notification",
+          message: message,
+          status: status,
+          event_type: eventType,
+          sent_at: status === "sent" ? new Date().toISOString() : null,
+          provider_response: { provider, ...result }
+        });
+      } catch (logError) {
+        console.error("[Notification] Failed to log:", logError);
+      }
     }
 
     if (status === "failed") {

@@ -4214,6 +4214,32 @@ export type Database = {
         Args: { p_repayment_id: string }
         Returns: number
       }
+      claim_pending_notifications: {
+        Args: { p_limit?: number }
+        Returns: {
+          created_at: string
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          message: string | null
+          provider_response: Json | null
+          recipient: string
+          retry_count: number
+          sent_at: string | null
+          status: string | null
+          subject: string | null
+          title: string | null
+          type: string
+          updated_at: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cleanup_expired_otps: { Args: never; Returns: undefined }
       complete_disbursement: {
         Args: {

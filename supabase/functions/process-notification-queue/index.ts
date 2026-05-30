@@ -53,18 +53,17 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get pending notifications (limit to 50 per run to avoid timeout)
+    // Atomically CLAIM pending notifications (limit 50 per run).
+    // The DB function locks each row with FOR UPDATE SKIP LOCKED and flips it to
+    // 'processing' in the same statement, so two concurrent/overlapping runs can
+    // NEVER pick up the same message → no duplicate sends.
     const { data: pendingNotifications, error: fetchError } = await supabase
-      .from("notification_logs")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(50);
+      .rpc("claim_pending_notifications", { p_limit: 50 });
 
     if (fetchError) {
-      console.error("[Queue Processor] Error fetching pending notifications:", fetchError);
+      console.error("[Queue Processor] Error claiming pending notifications:", fetchError);
       return new Response(
-        JSON.stringify({ error: "Failed to fetch pending notifications", details: fetchError.message }),
+        JSON.stringify({ error: "Failed to claim pending notifications", details: fetchError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -133,22 +132,14 @@ serve(async (req) => {
           continue;
         }
 
-        const retryCount = (notification as any).retry_count || 0;
-        
-        if (retryCount >= MAX_RETRIES) {
-          await supabase
-            .from("notification_logs")
-            .update({ status: "failed", error_message: "Max retries exceeded", updated_at: new Date().toISOString() })
-            .eq("id", notification.id);
-          results.failed++;
-          continue;
-        }
-
         const payload: any = {
           type: notification.type,
           to: notification.recipient,
           message: notification.message,
           userId: notification.user_id,
+          // Tell the sender NOT to write its own notification_logs row.
+          // This row is the single source of truth and we update it below.
+          skipLog: true,
         };
         if (notification.subject) payload.subject = notification.subject;
         if (notification.title) payload.title = notification.title;
@@ -159,16 +150,20 @@ serve(async (req) => {
         );
 
         if (sendError || !result?.success) {
-          const newRetryCount = retryCount + 1;
+          // TERMINAL failure. We do NOT requeue to 'pending'.
+          // Blind retries were re-sending messages that the provider had already
+          // delivered (e.g. ambiguous/credit-limit responses), which is exactly
+          // what caused clients to receive duplicate SMS. A failed message stays
+          // failed and must be re-triggered manually if needed.
           await supabase
             .from("notification_logs")
             .update({
-              retry_count: newRetryCount,
+              status: "failed",
               error_message: sendError?.message || result?.error || "Failed to send",
               updated_at: new Date().toISOString(),
             })
             .eq("id", notification.id);
-          results.retried++;
+          results.failed++;
         } else {
           await supabase
             .from("notification_logs")
@@ -187,18 +182,16 @@ serve(async (req) => {
 
       } catch (error: any) {
         console.error(`[Queue Processor] Error processing notification ${notification.id}:`, error);
-        const retryCount = ((notification as any).retry_count || 0) + 1;
+        // Mark terminal failed — never requeue, to avoid duplicate delivery.
         await supabase
           .from("notification_logs")
           .update({
-            retry_count: retryCount,
+            status: "failed",
             error_message: error.message,
             updated_at: new Date().toISOString(),
-            ...(retryCount >= MAX_RETRIES ? { status: "failed" } : {}),
           })
           .eq("id", notification.id);
-        if (retryCount >= MAX_RETRIES) results.failed++;
-        else results.retried++;
+        results.failed++;
       }
     }
 
