@@ -889,6 +889,7 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
     let { type, to, message, subject, title, userId, htmlContent, eventType, mediaUrl } = request;
+    const skipLog = request.skipLog === true;
     const notifyAdmins = (request as any).notifyAdmins === true;
 
     const settings = await getNotificationSettings(supabase);
