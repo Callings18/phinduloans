@@ -459,6 +459,14 @@ export default function ProductLoanFormShell({
     [productCode, primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries],
   );
 
+  // Combined list of blocking issues shown to the admin and used to gate submit.
+  const blockingErrors = useMemo(
+    () => (locationError ? [...validationErrors, locationError] : validationErrors),
+    [validationErrors, locationError],
+  );
+
+
+
   const isMarketeer = productCode === "MARKETEER";
   const isPaydaySoft = productCode === "PAYDAY_SOFT";
   const isSalaryAdvanceFamily = productCode === "SALARY_ADVANCE" || productCode === "SALARY_ADVANCE_STAFF";
