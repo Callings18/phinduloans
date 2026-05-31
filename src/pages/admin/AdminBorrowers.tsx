@@ -370,6 +370,8 @@ const AdminBorrowers = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-borrowers'] });
       queryClient.invalidateQueries({ queryKey: ['borrower-loan-counts'] });
       queryClient.invalidateQueries({ queryKey: ['borrower-product-map'] });
+      queryClient.invalidateQueries({ queryKey: ['product-loan-borrowers'] });
+      queryClient.invalidateQueries({ queryKey: ['house-borrowers'] });
       toast({ 
         title: data?.existing ? "Borrower already existed" : "Borrower created successfully",
         description: data?.message,
