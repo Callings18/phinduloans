@@ -436,6 +436,21 @@ export default function ProductLoanFormShell({
     [rules, employmentType, city, loanAmount, termValue, businessMonths, isCivilServantConfirmed, hasLocalAuthorityCompliance, product?.min_amount, product?.max_amount]
   );
 
+  // Surface product location eligibility (mirrors the DB enforce_loan_product_location()
+  // trigger) so admins get a clear message instead of a silent rejected insert.
+  const locationError = useMemo(() => {
+    const locs = ((product as any)?.eligible_locations as string[] | null) ?? null;
+    if (!locs || locs.length === 0) return null; // nationwide product
+    const normalized = locs.map((l) => l.trim().toLowerCase()).filter(Boolean);
+    if (normalized.length === 0) return null;
+    const cityValue = (city || selectedBorrower?.city || "").trim().toLowerCase();
+    if (!cityValue) return `City is required for this product. Available only in: ${locs.join(", ")}.`;
+    if (!normalized.includes(cityValue)) {
+      return `This product is only available in: ${locs.join(", ")}. Borrower city "${city || selectedBorrower?.city}" is not eligible.`;
+    }
+    return null;
+  }, [product, city, selectedBorrower?.city]);
+
   const collateralBorrowersValidation = useMemo(
     () =>
       productCode === "COLLATERAL"
