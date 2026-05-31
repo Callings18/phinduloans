@@ -90,6 +90,7 @@ export default function ProductLoanFormShell({
 
   // --- Core fields ---
   const [borrowerId, setBorrowerId] = useState(initialBorrowerParam);
+  const [borrowerPickerOpen, setBorrowerPickerOpen] = useState(false);
   const [loanAmount, setLoanAmount] = useState("");
   const [termValue, setTermValue] = useState(String(defaultTermValue));
   const [loanPurpose, setLoanPurpose] = useState("");
