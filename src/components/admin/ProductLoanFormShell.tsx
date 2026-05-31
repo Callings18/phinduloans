@@ -436,6 +436,21 @@ export default function ProductLoanFormShell({
     [rules, employmentType, city, loanAmount, termValue, businessMonths, isCivilServantConfirmed, hasLocalAuthorityCompliance, product?.min_amount, product?.max_amount]
   );
 
+  // Surface product location eligibility (mirrors the DB enforce_loan_product_location()
+  // trigger) so admins get a clear message instead of a silent rejected insert.
+  const locationError = useMemo(() => {
+    const locs = ((product as any)?.eligible_locations as string[] | null) ?? null;
+    if (!locs || locs.length === 0) return null; // nationwide product
+    const normalized = locs.map((l) => l.trim().toLowerCase()).filter(Boolean);
+    if (normalized.length === 0) return null;
+    const cityValue = (city || selectedBorrower?.city || "").trim().toLowerCase();
+    if (!cityValue) return `City is required for this product. Available only in: ${locs.join(", ")}.`;
+    if (!normalized.includes(cityValue)) {
+      return `This product is only available in: ${locs.join(", ")}. Borrower city "${city || selectedBorrower?.city}" is not eligible.`;
+    }
+    return null;
+  }, [product, city, selectedBorrower?.city]);
+
   const collateralBorrowersValidation = useMemo(
     () =>
       productCode === "COLLATERAL"
@@ -443,6 +458,14 @@ export default function ProductLoanFormShell({
         : { isValid: true, errors: [] as string[], warnings: [] as string[], signatoryCount: 0 },
     [productCode, primaryBorrowerEntry, coBorrowerEntries, absoluteOwnerEntries],
   );
+
+  // Combined list of blocking issues shown to the admin and used to gate submit.
+  const blockingErrors = useMemo(
+    () => (locationError ? [...validationErrors, locationError] : validationErrors),
+    [validationErrors, locationError],
+  );
+
+
 
   const isMarketeer = productCode === "MARKETEER";
   const isPaydaySoft = productCode === "PAYDAY_SOFT";
@@ -627,7 +650,7 @@ export default function ProductLoanFormShell({
       if (usesDailySchedule && repaymentStartDate < minRepaymentStartDate) {
         throw new Error("Repayment start date must be tomorrow or later.");
       }
-      if (validationErrors.length > 0) throw new Error(validationErrors[0]);
+      if (blockingErrors.length > 0) throw new Error(blockingErrors[0]);
       if (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid) {
         throw new Error(collateralBorrowersValidation.errors[0] || "Borrowers section incomplete.");
       }
@@ -846,7 +869,7 @@ export default function ProductLoanFormShell({
       if (!loanPurpose) missing.push("Loan Purpose");
       if (!monthlyIncome) missing.push(isMarketeer ? "Monthly Business Income" : "Monthly Income");
       if (missing.length > 0) throw new Error(`Missing required fields: ${missing.join(", ")}`);
-      if (validationErrors.length > 0) throw new Error(validationErrors[0]);
+      if (blockingErrors.length > 0) throw new Error(blockingErrors[0]);
       if (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid) {
         throw new Error(collateralBorrowersValidation.errors[0] || "Borrowers section incomplete.");
       }
@@ -1395,12 +1418,12 @@ export default function ProductLoanFormShell({
             </Card>
 
             {/* Validation errors */}
-            {validationErrors.length > 0 && (
+            {blockingErrors.length > 0 && (
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
-                    {validationErrors.map((e) => (
+                    {blockingErrors.map((e) => (
                       <p key={e} className="text-xs text-destructive">{e}</p>
                     ))}
                   </div>
@@ -1420,7 +1443,7 @@ export default function ProductLoanFormShell({
                 <Button variant="outline" size="sm" onClick={() => navigate(-1)}>Cancel</Button>
                 <Button
                   onClick={() => (isEditMode ? updateMutation.mutate() : createMutation.mutate())}
-                    disabled={(isEditMode ? updateMutation.isPending : createMutation.isPending) || docUploading || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
+                    disabled={(isEditMode ? updateMutation.isPending : createMutation.isPending) || docUploading || productLoading || blockingErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
                 >
                   {(isEditMode ? updateMutation.isPending : createMutation.isPending) || docUploading
                     ? (isEditMode ? "Saving..." : "Creating...")
@@ -1448,7 +1471,7 @@ export default function ProductLoanFormShell({
                   <Button
                     size="sm"
                     onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || validationErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
+                    disabled={createMutation.isPending || docUploading || rollbackPending || productLoading || blockingErrors.length > 0 || (productCode === "COLLATERAL" && !collateralBorrowersValidation.isValid)}
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1" /> Retry
                   </Button>

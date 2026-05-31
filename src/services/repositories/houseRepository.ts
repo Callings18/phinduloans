@@ -18,6 +18,7 @@ type HouseProduct = {
   term_unit?: string | null;
   repayment_frequency?: string | null;
   pricing_tiers?: unknown;
+  eligible_locations?: string[] | null;
   is_active: boolean | null;
 };
 
@@ -52,7 +53,7 @@ export async function fetchHouseProductByCode(productCode: string) {
   const normalizedProductCode = productCode.trim().toUpperCase();
   const { data, error } = await supabase
     .from("loan_products")
-    .select("id, name, product_code, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, min_amount, max_amount, term_unit, repayment_frequency, pricing_tiers, is_active")
+    .select("id, name, product_code, interest_rate, interest_period, interest_type, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent, min_amount, max_amount, term_unit, repayment_frequency, pricing_tiers, eligible_locations, is_active")
     .eq("product_code", normalizedProductCode)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
