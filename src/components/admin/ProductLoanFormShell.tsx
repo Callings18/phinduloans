@@ -1121,16 +1121,60 @@ export default function ProductLoanFormShell({
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1.5 md:col-span-2">
                     <Label className="text-xs font-semibold">Borrower *</Label>
-                    <Select value={borrowerId} onValueChange={setBorrowerId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Search and select borrower..." /></SelectTrigger>
-                      <SelectContent>
-                        {(borrowers || []).map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {(b.full_name || b.email) + (b.nrc_number ? ` — ${b.nrc_number}` : "") + (b.phone ? ` — ${b.phone}` : "")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={borrowerPickerOpen} onOpenChange={setBorrowerPickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          className="h-9 w-full justify-between font-normal"
+                        >
+                          <span className="flex items-center gap-2 truncate">
+                            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                            {selectedBorrower
+                              ? `${selectedBorrower.full_name || selectedBorrower.email}${selectedBorrower.nrc_number ? ` — ${selectedBorrower.nrc_number}` : ""}`
+                              : "Search and select borrower..."}
+                          </span>
+                          <ChevronsUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]" align="start">
+                        <Command
+                          filter={(value, search) =>
+                            value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+                          }
+                        >
+                          <CommandInput placeholder="Search by name, NRC, phone, or email…" />
+                          <CommandList>
+                            <CommandEmpty>No matching borrower in this house.</CommandEmpty>
+                            <CommandGroup>
+                              {(borrowers || []).map((b) => {
+                                const valueKey = `${b.full_name || ""}|${b.nrc_number || ""}|${b.phone || ""}|${b.email || ""}`.toLowerCase();
+                                return (
+                                  <CommandItem
+                                    key={b.id}
+                                    value={valueKey}
+                                    onSelect={() => {
+                                      setBorrowerId(b.id);
+                                      setBorrowerPickerOpen(false);
+                                    }}
+                                    className="flex flex-col items-start gap-0.5 py-2"
+                                  >
+                                    <div className="flex w-full items-center gap-2">
+                                      <Check className={cn("h-4 w-4", borrowerId === b.id ? "opacity-100 text-primary" : "opacity-0")} />
+                                      <span className="font-medium text-sm">{b.full_name || b.email || "Unnamed"}</span>
+                                    </div>
+                                    <div className="ml-6 text-[11px] text-muted-foreground">
+                                      {b.nrc_number || "no NRC"} · {b.phone || "no phone"}
+                                    </div>
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {selectedBorrower && (
