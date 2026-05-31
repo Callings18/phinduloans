@@ -113,6 +113,7 @@ export default function HouseBorrowersPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["house-borrowers", productCode] });
+      queryClient.invalidateQueries({ queryKey: ["product-loan-borrowers", productCode] });
       queryClient.invalidateQueries({ queryKey: ["admin-borrowers"] });
       toast({ title: data?.existing ? "Borrower already existed" : "Borrower added", description: data?.message || "Use the Loans tab to create a loan for this borrower." });
       setIsAddOpen(false);

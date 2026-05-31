@@ -22,7 +22,10 @@ import { fetchHouseProductByCode } from "@/services/repositories/houseRepository
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addDays, format } from "date-fns";
-import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2, Save, Loader2, FolderOpen } from "lucide-react";
+import { AlertTriangle, CalendarDays, FileText, User, Briefcase, MapPin, CheckCircle2, Upload, Camera, X, RotateCcw, Trash2, Save, Loader2, FolderOpen, Search, ChevronsUpDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import CollateralBorrowersSection, {
   type CollateralBorrowerEntry,
   makeBlankBorrower,
@@ -87,6 +90,7 @@ export default function ProductLoanFormShell({
 
   // --- Core fields ---
   const [borrowerId, setBorrowerId] = useState(initialBorrowerParam);
+  const [borrowerPickerOpen, setBorrowerPickerOpen] = useState(false);
   const [loanAmount, setLoanAmount] = useState("");
   const [termValue, setTermValue] = useState(String(defaultTermValue));
   const [loanPurpose, setLoanPurpose] = useState("");
@@ -295,14 +299,35 @@ export default function ProductLoanFormShell({
   const { data: borrowers } = useQuery({
     queryKey: ["product-loan-borrowers", productCode],
     queryFn: async () => {
+      // Load borrowers that belong to THIS product house, newest first, so a
+      // freshly added borrower appears at the very top of the picker.
+      const { data: memberships, error: membershipError } = await (supabase.from as any)("product_house_borrowers")
+        .select("borrower_id, created_at")
+        .eq("product_code", productCode)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (membershipError) throw membershipError;
+
+      const orderedIds: string[] = Array.from(
+        new Set(
+          (memberships ?? [])
+            .map((row: { borrower_id: unknown }) => row.borrower_id)
+            .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        )
+      );
+      if (orderedIds.length === 0) return [] as Borrower[];
+
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name, email, phone, nrc_number, address, city, employer_name, employment_type, job_title, net_income, gender, marital_status")
-        .order("created_at", { ascending: false })
-        .limit(300);
+        .in("id", orderedIds);
       if (error) throw error;
-      return data as Borrower[];
+
+      // Preserve the membership ordering (newest borrower first).
+      const map = new Map((data as Borrower[]).map((b) => [b.id, b]));
+      return orderedIds.map((id) => map.get(id)).filter(Boolean) as Borrower[];
     },
+    enabled: Boolean(productCode),
   });
 
   const selectedBorrower = useMemo(
@@ -1096,16 +1121,60 @@ export default function ProductLoanFormShell({
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1.5 md:col-span-2">
                     <Label className="text-xs font-semibold">Borrower *</Label>
-                    <Select value={borrowerId} onValueChange={setBorrowerId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Search and select borrower..." /></SelectTrigger>
-                      <SelectContent>
-                        {(borrowers || []).map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {(b.full_name || b.email) + (b.nrc_number ? ` — ${b.nrc_number}` : "") + (b.phone ? ` — ${b.phone}` : "")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={borrowerPickerOpen} onOpenChange={setBorrowerPickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          className="h-9 w-full justify-between font-normal"
+                        >
+                          <span className="flex items-center gap-2 truncate">
+                            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                            {selectedBorrower
+                              ? `${selectedBorrower.full_name || selectedBorrower.email}${selectedBorrower.nrc_number ? ` — ${selectedBorrower.nrc_number}` : ""}`
+                              : "Search and select borrower..."}
+                          </span>
+                          <ChevronsUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]" align="start">
+                        <Command
+                          filter={(value, search) =>
+                            value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+                          }
+                        >
+                          <CommandInput placeholder="Search by name, NRC, phone, or email…" />
+                          <CommandList>
+                            <CommandEmpty>No matching borrower in this house.</CommandEmpty>
+                            <CommandGroup>
+                              {(borrowers || []).map((b) => {
+                                const valueKey = `${b.full_name || ""}|${b.nrc_number || ""}|${b.phone || ""}|${b.email || ""}`.toLowerCase();
+                                return (
+                                  <CommandItem
+                                    key={b.id}
+                                    value={valueKey}
+                                    onSelect={() => {
+                                      setBorrowerId(b.id);
+                                      setBorrowerPickerOpen(false);
+                                    }}
+                                    className="flex flex-col items-start gap-0.5 py-2"
+                                  >
+                                    <div className="flex w-full items-center gap-2">
+                                      <Check className={cn("h-4 w-4", borrowerId === b.id ? "opacity-100 text-primary" : "opacity-0")} />
+                                      <span className="font-medium text-sm">{b.full_name || b.email || "Unnamed"}</span>
+                                    </div>
+                                    <div className="ml-6 text-[11px] text-muted-foreground">
+                                      {b.nrc_number || "no NRC"} · {b.phone || "no phone"}
+                                    </div>
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {selectedBorrower && (
