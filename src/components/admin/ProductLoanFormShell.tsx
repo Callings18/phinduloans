@@ -295,14 +295,35 @@ export default function ProductLoanFormShell({
   const { data: borrowers } = useQuery({
     queryKey: ["product-loan-borrowers", productCode],
     queryFn: async () => {
+      // Load borrowers that belong to THIS product house, newest first, so a
+      // freshly added borrower appears at the very top of the picker.
+      const { data: memberships, error: membershipError } = await (supabase.from as any)("product_house_borrowers")
+        .select("borrower_id, created_at")
+        .eq("product_code", productCode)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (membershipError) throw membershipError;
+
+      const orderedIds: string[] = Array.from(
+        new Set(
+          (memberships ?? [])
+            .map((row: { borrower_id: unknown }) => row.borrower_id)
+            .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        )
+      );
+      if (orderedIds.length === 0) return [] as Borrower[];
+
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name, email, phone, nrc_number, address, city, employer_name, employment_type, job_title, net_income, gender, marital_status")
-        .order("created_at", { ascending: false })
-        .limit(300);
+        .in("id", orderedIds);
       if (error) throw error;
-      return data as Borrower[];
+
+      // Preserve the membership ordering (newest borrower first).
+      const map = new Map((data as Borrower[]).map((b) => [b.id, b]));
+      return orderedIds.map((id) => map.get(id)).filter(Boolean) as Borrower[];
     },
+    enabled: Boolean(productCode),
   });
 
   const selectedBorrower = useMemo(
