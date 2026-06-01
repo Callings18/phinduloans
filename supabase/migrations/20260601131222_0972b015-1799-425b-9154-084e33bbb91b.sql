@@ -1,0 +1,1 @@
+UPDATE public.loan_products SET interest_period = 'per_loan' WHERE product_code = 'BUSINESS';
