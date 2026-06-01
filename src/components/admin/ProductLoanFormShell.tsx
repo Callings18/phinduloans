@@ -790,6 +790,7 @@ export default function ProductLoanFormShell({
         repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
         product_specific_data: {
           product_code: productCode,
+          interest_period: (interestPeriod || activeProduct.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
           civil_servant_confirmed: isCivilServantConfirmed,
           local_authority_compliance: hasLocalAuthorityCompliance,
