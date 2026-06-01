@@ -581,7 +581,7 @@ export default function ProductLoanFormShell({
       installment: calc.dailyPayment || calc.weeklyPayment || calc.monthlyPayment,
       dailyRate: null,
     };
-  }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, isPaydaySoft, marketeerResult]);
+  }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, isPaydaySoft, marketeerResult, interestRate, interestPeriod]);
 
   const handleFileSelect = (docLabel: string, file: File | null) => {
     setDocFiles((prev) => ({ ...prev, [docLabel]: file }));
