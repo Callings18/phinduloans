@@ -436,6 +436,12 @@ export default function ProductLoanFormShell({
     if (psd.gender) setGender(psd.gender);
     if (psd.marital_status) setMaritalStatus(psd.marital_status);
 
+    // Seed editable interest from the saved loan (falling back to product defaults).
+    setInterestRate(String(loan.interest_rate ?? product?.interest_rate ?? ""));
+    setInterestPeriod((psd.interest_period as string) || (product?.interest_period as string) || "monthly");
+    interestInitedRef.current = true;
+
+
     if (productCode === "COLLATERAL") {
       const rows = editLoanData!.borrowers as any[];
       const primary = rows.find((r) => r.role === "PRIMARY_BORROWER");
