@@ -2607,7 +2607,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">
-                                  {rep.status === "pending" && !rep.is_reversed && (
+                                  {isUnpaid && (
                                     <Button
                                       size="sm"
                                       variant={isOverdue ? "destructive" : isDue ? "default" : "outline"}
@@ -2618,7 +2618,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                       }}
                                     >
                                       <CheckCircle size={14} className="mr-1" /> 
-                                      {isOverdue ? "Pay Overdue" : isDue ? "Pay Now" : "Pay"}
+                                      {isOverdue ? "Pay Overdue" : isDue ? "Pay Now" : rep.status === "partial" || Number(rep.principal_paid || 0) > 0 ? "Pay Balance" : "Pay"}
                                     </Button>
                                   )}
                                   {rep.status === "paid" && !rep.is_reversed && (
