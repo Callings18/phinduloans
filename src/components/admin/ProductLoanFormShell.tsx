@@ -1444,6 +1444,40 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">Purpose *</Label>
                     <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
                   </div>
+                  {!isMarketeer && productCode !== "COLLATERAL" && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Interest Rate (%) *</Label>
+                        <Input
+                          className="h-9"
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={interestRate}
+                          onChange={(e) => { setInterestRate(e.target.value); interestInitedRef.current = true; }}
+                          placeholder="e.g. 48"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Interest Period *</Label>
+                        <Select
+                          value={interestPeriod || "monthly"}
+                          onValueChange={(v) => { setInterestPeriod(v); interestInitedRef.current = true; }}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select period" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="per_loan">One-time total (whole loan)</SelectItem>
+                            <SelectItem value="monthly">Per month</SelectItem>
+                            <SelectItem value="weekly">Per week</SelectItem>
+                            <SelectItem value="daily">Per day</SelectItem>
+                            <SelectItem value="yearly">Per year</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
                   {usesDailySchedule && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Repayment Start Date *</Label>
