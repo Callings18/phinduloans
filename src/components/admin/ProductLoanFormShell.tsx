@@ -242,6 +242,7 @@ export default function ProductLoanFormShell({
       const form_data = {
         loanAmount, termValue, loanPurpose, employmentType, monthlyIncome,
         employerName, jobTitle, city, adminNotes, repaymentStartDate,
+        interestRate, interestPeriod,
         businessMonths, businessAddress, residentialAddress,
         idType, idNumber, gender, maritalStatus, contactNumber,
         // Collateral multi-borrower section (no-op for non-collateral products).
