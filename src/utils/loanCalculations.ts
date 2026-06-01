@@ -6,7 +6,7 @@
 
 import { calculateMarketeerLoan, getMarketeerTiersOrDefault } from "@/lib/marketeerCalculations";
 
-export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'per_loan';
+export type InterestPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'per_loan' | 'per_day' | 'per_week' | 'per_month' | 'per_year';
 export type InterestType = 'flat' | 'reducing';
 export type PenaltyFrequency = 'daily' | 'weekly' | 'monthly' | 'one_time';
 export type TermUnit = 'days' | 'weeks' | 'months' | 'years';
