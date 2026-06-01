@@ -104,6 +104,15 @@ export default function ProductLoanFormShell({
   const [adminNotes, setAdminNotes] = useState("");
   const [repaymentStartDate, setRepaymentStartDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
 
+  // --- Editable interest (admin can override the product defaults per loan) ---
+  // Empty string means "not yet initialised" — defaults are seeded from the
+  // product (or the loan being edited) once data loads.
+  const [interestRate, setInterestRate] = useState("");
+  const [interestPeriod, setInterestPeriod] = useState("");
+  const interestInitedRef = useRef(false);
+
+
+
   // --- Marketeer-specific fields ---
   const [businessMonths, setBusinessMonths] = useState("0");
   const [isCivilServantConfirmed, setIsCivilServantConfirmed] = useState(false);
