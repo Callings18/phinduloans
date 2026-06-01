@@ -44,6 +44,10 @@ interface RecordHousePaymentDialogProps {
     amount: number;
     due_date: string;
     installment_number?: number;
+    original_amount?: number | null;
+    principal_paid?: number | null;
+    penalty_amount?: number | null;
+    penalty_paid?: number | null;
   } | null;
   borrowerName?: string;
   defaultPaymentMethod?: string;
@@ -83,18 +87,31 @@ export function RecordHousePaymentDialog({
     },
   });
 
+  // Remaining balance on the installment = unpaid principal + unpaid penalty.
+  // For a partially-paid (e.g. bullet) installment this is less than the full
+  // amount, so we prefill and cap on the remaining — never the original amount.
+  const principalRemaining = Math.max(
+    Number(repayment?.original_amount ?? repayment?.amount ?? 0) - Number(repayment?.principal_paid ?? 0),
+    0,
+  );
+  const penaltyRemaining = Math.max(
+    Number(repayment?.penalty_amount ?? 0) - Number(repayment?.penalty_paid ?? 0),
+    0,
+  );
+  const maxAmount = principalRemaining + penaltyRemaining;
+
   useEffect(() => {
     if (open && repayment) {
-      setAmount(String(repayment.amount));
+      setAmount(String(maxAmount > 0 ? maxAmount : Number(repayment.amount || 0)));
       setPaymentMethod(defaultPaymentMethod);
       setAccountId(defaultAccountId);
       setTransactionReference("");
       setNotes("");
       setPaidDate(new Date());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, repayment, defaultPaymentMethod, defaultAccountId]);
 
-  const maxAmount = Number(repayment?.amount || 0);
   const numAmount = Number(amount);
   const exceedsOutstanding = numAmount > maxAmount + 0.001;
   const todayStart = new Date();

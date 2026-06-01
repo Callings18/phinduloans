@@ -58,6 +58,30 @@ export default function HouseCollectionsPage() {
     [repayments, todayStr]
   );
 
+  // Count installments per loan so we can recognise single-payment "bullet" loans
+  // (e.g. Collateral). Their one installment must be collectable even before its
+  // due date — otherwise staff have "no way to record" the payment here.
+  const installmentCountByLoan = useMemo(() => {
+    const map: Record<string, number> = {};
+    (repayments ?? []).forEach((r: any) => { map[r.loan_id] = (map[r.loan_id] || 0) + 1; });
+    return map;
+  }, [repayments]);
+
+  // Still-owing installments that are NOT yet due/overdue but should be collectable now:
+  //  - already partially paid (finish the balance), or
+  //  - the sole installment of a bullet loan (Collateral / Payday Soft).
+  const inProgress = useMemo(() =>
+    (repayments ?? []).filter((r: any) => {
+      if (r.status === "paid" || r.status === "cancelled") return false;
+      if (!r.due_date || r.due_date <= todayStr) return false; // already covered by todayDue/overdue
+      const partiallyPaid = Number(r.principal_paid || 0) > 0;
+      const isBullet = (installmentCountByLoan[r.loan_id] || 0) <= 1;
+      return partiallyPaid || isBullet;
+    }),
+    [repayments, todayStr, installmentCountByLoan]
+  );
+
+
   // Anything updated today with cash applied (paid in full OR partial today)
   const paidToday = useMemo(
     () =>
@@ -121,7 +145,7 @@ export default function HouseCollectionsPage() {
     },
   });
 
-  const allItems = [...todayDue, ...overdue].sort((a: any, b: any) => a.due_date.localeCompare(b.due_date));
+  const allItems = [...todayDue, ...overdue, ...inProgress].sort((a: any, b: any) => a.due_date.localeCompare(b.due_date));
 
   return (
     <div className="space-y-4">
@@ -219,17 +243,30 @@ export default function HouseCollectionsPage() {
             <TableBody>
               {allItems.map((r: any) => {
                 const loan = loanMap[r.loan_id];
-                const isOverdue = r.due_date !== todayStr;
+                const dueStr = String(r.due_date).slice(0, 10);
+                const rowState = dueStr < todayStr ? "overdue" : dueStr === todayStr ? "today" : "upcoming";
+                const partiallyPaid = Number(r.principal_paid || 0) > 0;
                 return (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{loan?.full_name || "—"}</TableCell>
-                    <TableCell className="text-sm">{format(new Date(r.due_date), "dd MMM yyyy")}</TableCell>
-                    <TableCell className="text-right font-medium">K{Number(r.amount || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm">{format(new Date(`${dueStr}T12:00:00`), "dd MMM yyyy")}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      K{Number(r.amount || 0).toLocaleString()}
+                      {partiallyPaid && (
+                        <span className="block text-xs text-success">
+                          balance K{Math.max(Number(r.amount || 0) - Number(r.principal_paid || 0), 0).toLocaleString()}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
-                      {isOverdue ? (
+                      {rowState === "overdue" ? (
                         <Badge variant="destructive" className="text-xs">Overdue</Badge>
-                      ) : (
+                      ) : rowState === "today" ? (
                         <Badge variant="secondary" className="text-xs">Due today</Badge>
+                      ) : partiallyPaid ? (
+                        <Badge variant="outline" className="text-xs">In progress</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">Upcoming</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">#{r.installment_number}</TableCell>

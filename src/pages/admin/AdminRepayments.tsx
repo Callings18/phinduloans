@@ -26,7 +26,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { format, differenceInDays, isAfter } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import {
   Receipt,
   Search,
@@ -479,10 +479,14 @@ const AdminRepayments = () => {
   };
 
   const getStatusInfo = (repayment: Repayment) => {
-    const today = new Date();
-    const dueDate = new Date(repayment.due_date);
-    const isOverdue = repayment.status === "pending" && isAfter(today, dueDate);
-    const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
+    // Compare on calendar-day strings (YYYY-MM-DD) so an installment due TODAY is
+    // never wrongly flagged overdue. due_date is a date-only string; parsing it
+    // with new Date() yields UTC midnight which, in UTC+2, is 02:00 local — that
+    // made today's dues flip to "overdue" from 2am. String compare avoids this.
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const dueStr = String(repayment.due_date).slice(0, 10);
+    const isOverdue = repayment.status === "pending" && dueStr < todayStr;
+    const daysOverdue = isOverdue ? differenceInDays(new Date(`${todayStr}T00:00:00`), new Date(`${dueStr}T00:00:00`)) : 0;
 
     if (repayment.status === "paid") {
       return { status: "paid", color: "bg-success/20 text-success border-success/30", icon: CheckCircle };
@@ -582,14 +586,15 @@ const AdminRepayments = () => {
   };
 
   // Calculate stats
-  const today = new Date();
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const stats = {
     total: repayments?.length || 0,
     pending: repayments?.filter((r) => r.status === "pending" || r.status === "partial").length || 0,
     paid: repayments?.filter((r) => r.status === "paid").length || 0,
-    // Overdue = anything not yet fully paid/cancelled whose due date has passed
+    // Overdue = anything not yet fully paid/cancelled whose due date is BEFORE today.
+    // String compare on YYYY-MM-DD so today's dues are never counted as overdue.
     overdue: repayments?.filter((r) =>
-      r.status !== "paid" && r.status !== "cancelled" && isAfter(today, new Date(r.due_date))
+      r.status !== "paid" && r.status !== "cancelled" && String(r.due_date).slice(0, 10) < todayStr
     ).length || 0,
     // Total collected = principal_paid across paid + partial rows (real cash in)
     totalCollected: repayments
