@@ -44,6 +44,10 @@ interface RecordHousePaymentDialogProps {
     amount: number;
     due_date: string;
     installment_number?: number;
+    original_amount?: number | null;
+    principal_paid?: number | null;
+    penalty_amount?: number | null;
+    penalty_paid?: number | null;
   } | null;
   borrowerName?: string;
   defaultPaymentMethod?: string;
