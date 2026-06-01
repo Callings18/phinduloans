@@ -78,14 +78,18 @@ export interface RepaymentScheduleItem {
 export function normalizeToMonthlyRate(rate: number, period: InterestPeriod = 'monthly'): number {
   switch (period) {
     case 'daily':
+    case 'per_day':
       // Daily rate × 30 days = monthly rate
       return rate * 30;
     case 'weekly':
+    case 'per_week':
       // Weekly rate × ~4.33 weeks = monthly rate
       return rate * 4.33;
     case 'monthly':
+    case 'per_month':
       return rate;
     case 'yearly':
+    case 'per_year':
       // Yearly rate ÷ 12 = monthly rate
       return rate / 12;
     case 'per_loan':
