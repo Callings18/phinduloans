@@ -884,7 +884,8 @@ const AdminLoans = () => {
                     <TableBody>
                       {paginatedLoans.map((loan) => {
                         const dueDate = loanDueDates?.[loan.id];
-                        const isOverdue = dueDate && new Date(dueDate) < new Date(new Date().toDateString());
+                        // Compare YYYY-MM-DD strings so a loan due TODAY is not treated as overdue.
+                        const isOverdue = !!dueDate && String(dueDate).slice(0, 10) < format(new Date(), "yyyy-MM-dd");
                         const product = loanProducts?.find(p => p.id === loan.loan_product_id);
                         const loanPrincipal = Number(loan.loan_amount);
                         const processingFee = product?.processing_fee_percent ? (loanPrincipal * product.processing_fee_percent / 100) : 0;
