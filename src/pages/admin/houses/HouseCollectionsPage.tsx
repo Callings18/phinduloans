@@ -58,6 +58,30 @@ export default function HouseCollectionsPage() {
     [repayments, todayStr]
   );
 
+  // Count installments per loan so we can recognise single-payment "bullet" loans
+  // (e.g. Collateral). Their one installment must be collectable even before its
+  // due date — otherwise staff have "no way to record" the payment here.
+  const installmentCountByLoan = useMemo(() => {
+    const map: Record<string, number> = {};
+    (repayments ?? []).forEach((r: any) => { map[r.loan_id] = (map[r.loan_id] || 0) + 1; });
+    return map;
+  }, [repayments]);
+
+  // Still-owing installments that are NOT yet due/overdue but should be collectable now:
+  //  - already partially paid (finish the balance), or
+  //  - the sole installment of a bullet loan (Collateral / Payday Soft).
+  const inProgress = useMemo(() =>
+    (repayments ?? []).filter((r: any) => {
+      if (r.status === "paid" || r.status === "cancelled") return false;
+      if (!r.due_date || r.due_date <= todayStr) return false; // already covered by todayDue/overdue
+      const partiallyPaid = Number(r.principal_paid || 0) > 0;
+      const isBullet = (installmentCountByLoan[r.loan_id] || 0) <= 1;
+      return partiallyPaid || isBullet;
+    }),
+    [repayments, todayStr, installmentCountByLoan]
+  );
+
+
   // Anything updated today with cash applied (paid in full OR partial today)
   const paidToday = useMemo(
     () =>
