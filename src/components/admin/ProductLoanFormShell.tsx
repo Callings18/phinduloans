@@ -940,8 +940,8 @@ export default function ProductLoanFormShell({
           Number(termValue),
           {
             product_code: productCode,
-            interest_rate: Number(activeProduct.interest_rate || 0),
-            interest_period: (activeProduct.interest_period || "monthly") as any,
+            interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
+            interest_period: ((interestPeriod || activeProduct.interest_period || "monthly")) as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as any,
             processing_fee_percent: Number(activeProduct.processing_fee_percent || 0),
             enforcement_fee_percent: Number(activeProduct.enforcement_fee_percent || 0),
