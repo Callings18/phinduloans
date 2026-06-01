@@ -314,10 +314,9 @@ export function calculateLoan(
     } else {
       // Flat interest:
       // - interest_period = 'per_loan': total rate is one-time over the full term
-      //   (regardless of how many months). e.g. Collateral 30% flat / loan.
-      // - Business Loan - Short Term (legacy name match): same one-time semantics.
-      // - All other products: recurring interest by period.
-      const isPerLoanFlat = (interestPeriod as string) === 'per_loan' || isBusinessShortTerm;
+      //   (regardless of how many months). e.g. Collateral / Business 30% flat / loan.
+      // - All other periods: recurring interest by period.
+      const isPerLoanFlat = (interestPeriod as string) === 'per_loan';
       totalInterest = isPerLoanFlat
         ? principal * (product.interest_rate / 100)
         : calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);
