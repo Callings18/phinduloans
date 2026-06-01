@@ -305,6 +305,19 @@ export default function ProductLoanFormShell({
     queryFn: () => resolveProduct(productCode),
   });
 
+  // Seed the editable interest rate/period from the product defaults once it loads.
+  // In edit mode the dedicated edit-hydration effect seeds these instead (so we skip
+  // here once that has run). After the first seed the admin's manual edits stick.
+  useEffect(() => {
+    if (interestInitedRef.current) return;
+    if (isEditMode) return; // edit hydration handles seeding
+    if (!product) return;
+    setInterestRate(String(product.interest_rate ?? ""));
+    setInterestPeriod(((product.interest_period as string) || "monthly"));
+    interestInitedRef.current = true;
+  }, [product, isEditMode]);
+
+
   const { data: borrowers } = useQuery({
     queryKey: ["product-loan-borrowers", productCode],
     queryFn: async () => {
