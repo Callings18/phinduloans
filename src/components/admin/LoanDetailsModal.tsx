@@ -2482,12 +2482,20 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       <TableBody>
                         {repayments.map((rep) => {
                           const today = new Date();
-                          const dueDate = new Date(rep.due_date);
-                          const isOverdue = rep.status === "pending" && dueDate < today;
-                          const isDue = rep.status === "pending" && dueDate.toDateString() === today.toDateString();
-                          const isUpcoming = rep.status === "pending" && dueDate > today;
-                          const daysOverdue = isOverdue ? Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-                          
+                          const todayStr = format(today, "yyyy-MM-dd");
+                          const dueStr = String(rep.due_date).slice(0, 10);
+                          const dueDate = new Date(`${dueStr}T12:00:00`);
+                          // "Unpaid" covers pending, partial and overdue — so a partially-paid
+                          // bullet installment still shows a Pay button for the remaining balance.
+                          const isUnpaid = _isUnpaidStatus(rep.status) && !rep.is_reversed;
+                          // Compare calendar-day strings so an installment due TODAY is "due", not overdue.
+                          const isOverdue = isUnpaid && dueStr < todayStr;
+                          const isDue = isUnpaid && dueStr === todayStr;
+                          const isUpcoming = isUnpaid && dueStr > todayStr;
+                          const daysOverdue = isOverdue
+                            ? Math.max(0, differenceInDays(new Date(`${todayStr}T12:00:00`), dueDate))
+                            : 0;
+
                           const displayStatus = rep.is_reversed 
                             ? "reversed" 
                             : isOverdue 
@@ -2496,8 +2504,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                                 ? "due" 
                                 : rep.status === "paid"
                                   ? "paid"
-                                  : "pending";
-                          const totalDue = rep.amount + Math.max(0, (rep.penalty_amount || 0) - (rep.penalty_paid || 0));
+                                  : rep.status === "partial"
+                                    ? "partial"
+                                    : "pending";
+                          // Remaining = unpaid principal on this installment + any unpaid penalty.
+                          const principalRemaining = Math.max(0, Number(rep.original_amount || rep.amount || 0) - Number(rep.principal_paid || 0));
+                          const penaltyRemaining = Math.max(0, Number(rep.penalty_amount || 0) - Number(rep.penalty_paid || 0));
+                          const totalDue = principalRemaining + penaltyRemaining;
+
 
                           // Format date based on frequency
                           const dateFormat = isDaily ? "MMM dd, yyyy" : isWeekly ? "MMM dd, yyyy" : "MMM dd, yyyy";
