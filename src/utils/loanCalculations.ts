@@ -253,7 +253,12 @@ export function calculateLoan(
   }
 
   const normalizedProductName = (product.product_name || "").trim().toLowerCase();
+  const normalizedProductCode = (product.product_code || "").trim().toUpperCase();
+  // Business loan = one-time flat % of principal over the whole term (NOT a recurring
+  // monthly rate). Detect by product_code OR legacy product_name so the rule works even
+  // when callers only pass the code (e.g. the admin House loan form).
   const isBusinessShortTerm =
+    normalizedProductCode === "BUSINESS" ||
     normalizedProductName === "business loan - short term" ||
     (normalizedProductName.includes("business loan") && normalizedProductName.includes("short term"));
   const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
