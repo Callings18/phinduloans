@@ -974,9 +974,11 @@ export default function ProductLoanFormShell({
         repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
         monthly_payment: installmentAmount,
         total_repayment: totalRepayment,
+        interest_rate: Number(interestRate || (activeProduct as any)?.interest_rate || 0),
         product_specific_data: {
           ...existingPsd,
           product_code: productCode,
+          interest_period: (interestPeriod || (activeProduct as any)?.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
           civil_servant_confirmed: isCivilServantConfirmed,
           local_authority_compliance: hasLocalAuthorityCompliance,
