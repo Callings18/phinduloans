@@ -781,7 +781,7 @@ export default function ProductLoanFormShell({
         loan_term_months: Number(termValue),
         term_unit: termUnit,
         loan_purpose: loanPurpose,
-        interest_rate: Number(activeProduct.interest_rate || 0),
+        interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
         monthly_payment: installmentAmount,
         total_repayment: totalRepayment,
         admin_notes: adminNotes || null,
