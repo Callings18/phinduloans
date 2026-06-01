@@ -252,15 +252,10 @@ export function calculateLoan(
     }
   }
 
-  const normalizedProductName = (product.product_name || "").trim().toLowerCase();
-  const normalizedProductCode = (product.product_code || "").trim().toUpperCase();
-  // Business loan = one-time flat % of principal over the whole term (NOT a recurring
-  // monthly rate). Detect by product_code OR legacy product_name so the rule works even
-  // when callers only pass the code (e.g. the admin House loan form).
-  const isBusinessShortTerm =
-    normalizedProductCode === "BUSINESS" ||
-    normalizedProductName === "business loan - short term" ||
-    (normalizedProductName.includes("business loan") && normalizedProductName.includes("short term"));
+  // NOTE: Whether interest is a one-time total (per_loan) or recurs per period is now
+  // driven entirely by the `interest_period` the admin selects on the loan form —
+  // no product-name/code special-casing. Set interest_period = 'per_loan' for a
+  // one-time flat % of principal over the whole term (e.g. Business / Collateral).
   const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const rawInterestType = (product.interest_type as string) || 'flat';
   const interestType = (rawInterestType === 'reducing_balance'
@@ -319,10 +314,9 @@ export function calculateLoan(
     } else {
       // Flat interest:
       // - interest_period = 'per_loan': total rate is one-time over the full term
-      //   (regardless of how many months). e.g. Collateral 30% flat / loan.
-      // - Business Loan - Short Term (legacy name match): same one-time semantics.
-      // - All other products: recurring interest by period.
-      const isPerLoanFlat = (interestPeriod as string) === 'per_loan' || isBusinessShortTerm;
+      //   (regardless of how many months). e.g. Collateral / Business 30% flat / loan.
+      // - All other periods: recurring interest by period.
+      const isPerLoanFlat = (interestPeriod as string) === 'per_loan';
       totalInterest = isPerLoanFlat
         ? principal * (product.interest_rate / 100)
         : calculateFlatInterest(principal, monthlyRate, termMonths, interestPeriod);

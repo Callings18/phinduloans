@@ -104,6 +104,15 @@ export default function ProductLoanFormShell({
   const [adminNotes, setAdminNotes] = useState("");
   const [repaymentStartDate, setRepaymentStartDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
 
+  // --- Editable interest (admin can override the product defaults per loan) ---
+  // Empty string means "not yet initialised" — defaults are seeded from the
+  // product (or the loan being edited) once data loads.
+  const [interestRate, setInterestRate] = useState("");
+  const [interestPeriod, setInterestPeriod] = useState("");
+  const interestInitedRef = useRef(false);
+
+
+
   // --- Marketeer-specific fields ---
   const [businessMonths, setBusinessMonths] = useState("0");
   const [isCivilServantConfirmed, setIsCivilServantConfirmed] = useState(false);
@@ -159,6 +168,8 @@ export default function ProductLoanFormShell({
     if (f.city) setCity(f.city);
     if (f.adminNotes) setAdminNotes(f.adminNotes);
     if (f.repaymentStartDate) setRepaymentStartDate(f.repaymentStartDate);
+    if (f.interestRate != null && f.interestRate !== "") { setInterestRate(String(f.interestRate)); interestInitedRef.current = true; }
+    if (f.interestPeriod) { setInterestPeriod(f.interestPeriod); interestInitedRef.current = true; }
     if (f.businessMonths) setBusinessMonths(f.businessMonths);
     if (f.businessAddress) setBusinessAddress(f.businessAddress);
     if (f.residentialAddress) setResidentialAddress(f.residentialAddress);
@@ -231,6 +242,7 @@ export default function ProductLoanFormShell({
       const form_data = {
         loanAmount, termValue, loanPurpose, employmentType, monthlyIncome,
         employerName, jobTitle, city, adminNotes, repaymentStartDate,
+        interestRate, interestPeriod,
         businessMonths, businessAddress, residentialAddress,
         idType, idNumber, gender, maritalStatus, contactNumber,
         // Collateral multi-borrower section (no-op for non-collateral products).
@@ -295,6 +307,19 @@ export default function ProductLoanFormShell({
     queryKey: ["product-by-code", productCode],
     queryFn: () => resolveProduct(productCode),
   });
+
+  // Seed the editable interest rate/period from the product defaults once it loads.
+  // In edit mode the dedicated edit-hydration effect seeds these instead (so we skip
+  // here once that has run). After the first seed the admin's manual edits stick.
+  useEffect(() => {
+    if (interestInitedRef.current) return;
+    if (isEditMode) return; // edit hydration handles seeding
+    if (!product) return;
+    setInterestRate(String(product.interest_rate ?? ""));
+    setInterestPeriod(((product.interest_period as string) || "monthly"));
+    interestInitedRef.current = true;
+  }, [product, isEditMode]);
+
 
   const { data: borrowers } = useQuery({
     queryKey: ["product-loan-borrowers", productCode],
@@ -413,6 +438,12 @@ export default function ProductLoanFormShell({
     if (psd.id_type) setIdType(psd.id_type);
     if (psd.gender) setGender(psd.gender);
     if (psd.marital_status) setMaritalStatus(psd.marital_status);
+
+    // Seed editable interest from the saved loan (falling back to product defaults).
+    setInterestRate(String(loan.interest_rate ?? product?.interest_rate ?? ""));
+    setInterestPeriod((psd.interest_period as string) || (product?.interest_period as string) || "monthly");
+    interestInitedRef.current = true;
+
 
     if (productCode === "COLLATERAL") {
       const rows = editLoanData!.borrowers as any[];
@@ -535,8 +566,8 @@ export default function ProductLoanFormShell({
       Number(termValue),
       {
         product_code: productCode,
-        interest_rate: Number(product.interest_rate || 0),
-        interest_period: (product.interest_period || "monthly") as "daily" | "weekly" | "monthly" | "yearly",
+        interest_rate: Number(interestRate || product.interest_rate || 0),
+        interest_period: ((interestPeriod || product.interest_period || "monthly")) as any,
         interest_type: ((product.interest_type as string) || "flat") as "flat" | "reducing",
         processing_fee_percent: Number(product.processing_fee_percent || 0),
         enforcement_fee_percent: Number(product.enforcement_fee_percent || 0),
@@ -553,7 +584,7 @@ export default function ProductLoanFormShell({
       installment: calc.dailyPayment || calc.weeklyPayment || calc.monthlyPayment,
       dailyRate: null,
     };
-  }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, isPaydaySoft, marketeerResult]);
+  }, [product, loanAmount, termValue, productCode, termUnit, isMarketeer, isPaydaySoft, marketeerResult, interestRate, interestPeriod]);
 
   const handleFileSelect = (docLabel: string, file: File | null) => {
     setDocFiles((prev) => ({ ...prev, [docLabel]: file }));
@@ -721,8 +752,8 @@ export default function ProductLoanFormShell({
           Number(termValue),
           {
             product_code: productCode,
-            interest_rate: Number(activeProduct.interest_rate || 0),
-            interest_period: (activeProduct.interest_period || "monthly") as "daily" | "weekly" | "monthly" | "yearly",
+            interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
+            interest_period: ((interestPeriod || activeProduct.interest_period || "monthly")) as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as "flat" | "reducing",
             processing_fee_percent: Number(activeProduct.processing_fee_percent || 0),
             enforcement_fee_percent: Number(activeProduct.enforcement_fee_percent || 0),
@@ -753,7 +784,7 @@ export default function ProductLoanFormShell({
         loan_term_months: Number(termValue),
         term_unit: termUnit,
         loan_purpose: loanPurpose,
-        interest_rate: Number(activeProduct.interest_rate || 0),
+        interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
         monthly_payment: installmentAmount,
         total_repayment: totalRepayment,
         admin_notes: adminNotes || null,
@@ -762,6 +793,7 @@ export default function ProductLoanFormShell({
         repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
         product_specific_data: {
           product_code: productCode,
+          interest_period: (interestPeriod || activeProduct.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
           civil_servant_confirmed: isCivilServantConfirmed,
           local_authority_compliance: hasLocalAuthorityCompliance,
@@ -911,8 +943,8 @@ export default function ProductLoanFormShell({
           Number(termValue),
           {
             product_code: productCode,
-            interest_rate: Number(activeProduct.interest_rate || 0),
-            interest_period: (activeProduct.interest_period || "monthly") as any,
+            interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
+            interest_period: ((interestPeriod || activeProduct.interest_period || "monthly")) as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as any,
             processing_fee_percent: Number(activeProduct.processing_fee_percent || 0),
             enforcement_fee_percent: Number(activeProduct.enforcement_fee_percent || 0),
@@ -945,9 +977,11 @@ export default function ProductLoanFormShell({
         repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
         monthly_payment: installmentAmount,
         total_repayment: totalRepayment,
+        interest_rate: Number(interestRate || (activeProduct as any)?.interest_rate || 0),
         product_specific_data: {
           ...existingPsd,
           product_code: productCode,
+          interest_period: (interestPeriod || (activeProduct as any)?.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
           civil_servant_confirmed: isCivilServantConfirmed,
           local_authority_compliance: hasLocalAuthorityCompliance,
@@ -1410,6 +1444,40 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">Purpose *</Label>
                     <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
                   </div>
+                  {!isMarketeer && productCode !== "COLLATERAL" && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Interest Rate (%) *</Label>
+                        <Input
+                          className="h-9"
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={interestRate}
+                          onChange={(e) => { setInterestRate(e.target.value); interestInitedRef.current = true; }}
+                          placeholder="e.g. 48"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Interest Period *</Label>
+                        <Select
+                          value={interestPeriod || "monthly"}
+                          onValueChange={(v) => { setInterestPeriod(v); interestInitedRef.current = true; }}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select period" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="per_loan">One-time total (whole loan)</SelectItem>
+                            <SelectItem value="monthly">Per month</SelectItem>
+                            <SelectItem value="weekly">Per week</SelectItem>
+                            <SelectItem value="daily">Per day</SelectItem>
+                            <SelectItem value="yearly">Per year</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
                   {usesDailySchedule && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Repayment Start Date *</Label>
