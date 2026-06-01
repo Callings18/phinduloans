@@ -168,6 +168,8 @@ export default function ProductLoanFormShell({
     if (f.city) setCity(f.city);
     if (f.adminNotes) setAdminNotes(f.adminNotes);
     if (f.repaymentStartDate) setRepaymentStartDate(f.repaymentStartDate);
+    if (f.interestRate != null && f.interestRate !== "") { setInterestRate(String(f.interestRate)); interestInitedRef.current = true; }
+    if (f.interestPeriod) { setInterestPeriod(f.interestPeriod); interestInitedRef.current = true; }
     if (f.businessMonths) setBusinessMonths(f.businessMonths);
     if (f.businessAddress) setBusinessAddress(f.businessAddress);
     if (f.residentialAddress) setResidentialAddress(f.residentialAddress);
