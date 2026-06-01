@@ -563,8 +563,8 @@ export default function ProductLoanFormShell({
       Number(termValue),
       {
         product_code: productCode,
-        interest_rate: Number(product.interest_rate || 0),
-        interest_period: (product.interest_period || "monthly") as "daily" | "weekly" | "monthly" | "yearly",
+        interest_rate: Number(interestRate || product.interest_rate || 0),
+        interest_period: ((interestPeriod || product.interest_period || "monthly")) as any,
         interest_type: ((product.interest_type as string) || "flat") as "flat" | "reducing",
         processing_fee_percent: Number(product.processing_fee_percent || 0),
         enforcement_fee_percent: Number(product.enforcement_fee_percent || 0),
