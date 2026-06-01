@@ -145,7 +145,7 @@ export default function HouseCollectionsPage() {
     },
   });
 
-  const allItems = [...todayDue, ...overdue].sort((a: any, b: any) => a.due_date.localeCompare(b.due_date));
+  const allItems = [...todayDue, ...overdue, ...inProgress].sort((a: any, b: any) => a.due_date.localeCompare(b.due_date));
 
   return (
     <div className="space-y-4">
