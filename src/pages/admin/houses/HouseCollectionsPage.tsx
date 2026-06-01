@@ -243,17 +243,30 @@ export default function HouseCollectionsPage() {
             <TableBody>
               {allItems.map((r: any) => {
                 const loan = loanMap[r.loan_id];
-                const isOverdue = r.due_date !== todayStr;
+                const dueStr = String(r.due_date).slice(0, 10);
+                const rowState = dueStr < todayStr ? "overdue" : dueStr === todayStr ? "today" : "upcoming";
+                const partiallyPaid = Number(r.principal_paid || 0) > 0;
                 return (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{loan?.full_name || "—"}</TableCell>
-                    <TableCell className="text-sm">{format(new Date(r.due_date), "dd MMM yyyy")}</TableCell>
-                    <TableCell className="text-right font-medium">K{Number(r.amount || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm">{format(new Date(`${dueStr}T12:00:00`), "dd MMM yyyy")}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      K{Number(r.amount || 0).toLocaleString()}
+                      {partiallyPaid && (
+                        <span className="block text-xs text-success">
+                          balance K{Math.max(Number(r.amount || 0) - Number(r.principal_paid || 0), 0).toLocaleString()}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
-                      {isOverdue ? (
+                      {rowState === "overdue" ? (
                         <Badge variant="destructive" className="text-xs">Overdue</Badge>
-                      ) : (
+                      ) : rowState === "today" ? (
                         <Badge variant="secondary" className="text-xs">Due today</Badge>
+                      ) : partiallyPaid ? (
+                        <Badge variant="outline" className="text-xs">In progress</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">Upcoming</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">#{r.installment_number}</TableCell>
