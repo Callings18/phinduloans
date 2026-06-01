@@ -586,14 +586,15 @@ const AdminRepayments = () => {
   };
 
   // Calculate stats
-  const today = new Date();
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const stats = {
     total: repayments?.length || 0,
     pending: repayments?.filter((r) => r.status === "pending" || r.status === "partial").length || 0,
     paid: repayments?.filter((r) => r.status === "paid").length || 0,
-    // Overdue = anything not yet fully paid/cancelled whose due date has passed
+    // Overdue = anything not yet fully paid/cancelled whose due date is BEFORE today.
+    // String compare on YYYY-MM-DD so today's dues are never counted as overdue.
     overdue: repayments?.filter((r) =>
-      r.status !== "paid" && r.status !== "cancelled" && isAfter(today, new Date(r.due_date))
+      r.status !== "paid" && r.status !== "cancelled" && String(r.due_date).slice(0, 10) < todayStr
     ).length || 0,
     // Total collected = principal_paid across paid + partial rows (real cash in)
     totalCollected: repayments
