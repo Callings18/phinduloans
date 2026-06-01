@@ -225,7 +225,7 @@ export default function HouseCollectionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Due & overdue — {format(new Date(), "EEEE, dd MMM yyyy")}
+            Due, overdue & in-progress — {format(new Date(), "EEEE, dd MMM yyyy")}
           </CardTitle>
         </CardHeader>
         <CardContent>
