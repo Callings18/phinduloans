@@ -90,7 +90,10 @@ export async function createRepaymentScheduleForLoan(
   }
   const isMarketeer = productCode === "MARKETEER";
   const isPaydaySoft = productCode === "PAYDAY_SOFT";
-  const isBullet = isPaydaySoft || repaymentFrequency === "bullet";
+  const isCollateral = productCode === "COLLATERAL";
+  // Collateral loans are a single 30-day bullet payment (like Payday Soft),
+  // not a 6-month installment plan.
+  const isBullet = isPaydaySoft || isCollateral || repaymentFrequency === "bullet";
 
   const isDaily =
     !isBullet && (termUnit === "days" ||
