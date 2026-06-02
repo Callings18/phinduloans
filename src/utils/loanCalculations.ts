@@ -238,7 +238,7 @@ export function calculateLoan(
   }
 
   // Determine payment frequency based on the working term unit
-  const isWeekly = !isCollateral && (workingTermUnit === 'weeks' || (workingTermUnit === 'months' && interestPeriod === 'weekly'));
+  const isWeekly = workingTermUnit === 'weeks' || (workingTermUnit === 'months' && interestPeriod === 'weekly');
   
   let totalInterest: number;
   let monthlyPayment: number = 0;
