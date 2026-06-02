@@ -30,11 +30,6 @@ export interface LoanProduct {
   term_unit?: TermUnit | null; // NEW: Unit for loan term
 }
 
-function isCollateralProduct(product: LoanProduct): boolean {
-  const productCode = (product.product_code || "").trim().toUpperCase();
-  const productName = (product.product_name || "").trim().toLowerCase();
-  return productCode === "COLLATERAL" || productName.includes("collateral");
-}
 
 export interface LoanCalculationResult {
   principal: number;
