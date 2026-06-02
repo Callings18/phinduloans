@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format, addMonths } from 'date-fns';
+import { format } from 'date-fns';
 
 interface LoanScheduleData {
   borrowerName: string;
@@ -13,11 +13,10 @@ interface LoanScheduleData {
   termMonths: number;
   monthlyPayment: number;
   totalRepayment: number;
+  outstandingBalance?: number;
   disbursementDate: string;
   firstRepaymentDate: string;
-  /** e.g. "12 weeks" — defaults to "N months" from termMonths when omitted */
   termSummaryLabel?: string;
-  /** PDF column above installment amount — defaults to MONTHLY PAYMENT */
   paymentColumnTitle?: string;
   repayments: Array<{
     installmentNumber: number;
@@ -31,6 +30,14 @@ interface LoanScheduleData {
   companyPhone?: string;
 }
 
+const BRAND = {
+  primary: [244, 36, 140] as [number, number, number],
+  primaryDark: [108, 26, 58] as [number, number, number],
+  soft: [248, 238, 243] as [number, number, number],
+  ink: [36, 16, 24] as [number, number, number],
+  muted: [99, 88, 94] as [number, number, number],
+};
+
 export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -38,9 +45,9 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   const companyName = data.companyName || 'PHINDU Finance';
   const companyAddress = data.companyAddress || 'Lusaka, Zambia';
   const companyPhone = data.companyPhone || '+260 967 713 001';
+  const outstandingBalance = Number(data.outstandingBalance || 0);
 
-  // Header - App theme color (pink/magenta: RGB 255, 51, 153)
-  doc.setFillColor(255, 51, 153);
+  doc.setFillColor(...BRAND.primaryDark);
   doc.rect(0, 0, pageWidth, 40, 'F');
 
   doc.setTextColor(255, 255, 255);
@@ -52,13 +59,11 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   doc.setFont('helvetica', 'normal');
   doc.text('LOAN REPAYMENT SCHEDULE', pageWidth / 2, 32, { align: 'center' });
 
-  // Loan Info Section
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(...BRAND.ink);
   doc.setFontSize(10);
   doc.text(`Generated: ${format(new Date(), 'MMMM dd, yyyy')}`, pageWidth - 15, 50, { align: 'right' });
 
-  // Borrower & Loan Details
-  doc.setFillColor(245, 245, 245);
+  doc.setFillColor(...BRAND.soft);
   doc.rect(15, 55, pageWidth - 30, 45, 'F');
 
   doc.setFontSize(11);
@@ -76,54 +81,63 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   doc.text(`Loan Reference: ${data.loanReference}`, col2, y);
 
   y += 8;
-  doc.text(`Phone: ${data.borrowerPhone}`, col1, y);
+  doc.text(`Phone: ${data.borrowerPhone || '-'}`, col1, y);
   doc.text(`Principal Amount: K${data.loanAmount.toLocaleString()}`, col2, y);
 
   y += 8;
-  doc.text(`Email: ${data.borrowerEmail}`, col1, y);
+  doc.text(`Email: ${data.borrowerEmail || '-'}`, col1, y);
   doc.text(`Interest Rate: ${data.interestRate}% (${data.interestPeriod})`, col2, y);
 
-  // Summary Box - App theme color
-  doc.setFillColor(255, 51, 153);
-  doc.rect(15, 105, (pageWidth - 30) / 3, 25, 'F');
-  doc.rect(15 + (pageWidth - 30) / 3, 105, (pageWidth - 30) / 3, 25, 'F');
-  doc.rect(15 + 2 * (pageWidth - 30) / 3, 105, (pageWidth - 30) / 3, 25, 'F');
+  doc.setFillColor(...BRAND.primary);
+  const boxWidth = (pageWidth - 30) / 3;
+  doc.rect(15, 105, boxWidth, 25, 'F');
+  doc.rect(15 + boxWidth, 105, boxWidth, 25, 'F');
+  doc.rect(15 + 2 * boxWidth, 105, boxWidth, 25, 'F');
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
-  const paymentCol = data.paymentColumnTitle || 'MONTHLY PAYMENT';
-  doc.text('TERM', 15 + (pageWidth - 30) / 6, 113, { align: 'center' });
-  doc.text(paymentCol, 15 + (pageWidth - 30) / 2, 113, { align: 'center' });
-  doc.text('TOTAL REPAYMENT', 15 + 5 * (pageWidth - 30) / 6, 113, { align: 'center' });
+  const paymentCol = data.paymentColumnTitle || 'INSTALLMENT';
+  doc.text('TERM', 15 + boxWidth / 2, 113, { align: 'center' });
+  doc.text(paymentCol, 15 + boxWidth + boxWidth / 2, 113, { align: 'center' });
+  doc.text('TOTAL REPAYMENT', 15 + 2 * boxWidth + boxWidth / 2, 113, { align: 'center' });
 
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   const termSummary = data.termSummaryLabel || `${data.termMonths} Months`;
-  doc.text(termSummary, 15 + (pageWidth - 30) / 6, 124, { align: 'center' });
-  doc.text(`K${data.monthlyPayment.toLocaleString()}`, 15 + (pageWidth - 30) / 2, 124, { align: 'center' });
-  doc.text(`K${data.totalRepayment.toLocaleString()}`, 15 + 5 * (pageWidth - 30) / 6, 124, { align: 'center' });
+  doc.text(termSummary, 15 + boxWidth / 2, 124, { align: 'center' });
+  doc.text(`K${data.monthlyPayment.toLocaleString()}`, 15 + boxWidth + boxWidth / 2, 124, { align: 'center' });
+  doc.text(`K${data.totalRepayment.toLocaleString()}`, 15 + 2 * boxWidth + boxWidth / 2, 124, { align: 'center' });
 
-  // Repayment Schedule Table
-  doc.setTextColor(0, 0, 0);
+  if (outstandingBalance > 0) {
+    doc.setFillColor(...BRAND.soft);
+    doc.rect(15, 136, pageWidth - 30, 12, 'F');
+    doc.setFontSize(10);
+    doc.setTextColor(...BRAND.ink);
+    doc.setFont('helvetica', 'bold');
+    doc.text('OUTSTANDING BALANCE', 20, 144);
+    doc.text(`K${outstandingBalance.toLocaleString()}`, pageWidth - 20, 144, { align: 'right' });
+  }
+
+  doc.setTextColor(...BRAND.ink);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('REPAYMENT SCHEDULE', 20, 145);
+  doc.text('REPAYMENT SCHEDULE', 20, outstandingBalance > 0 ? 160 : 145);
 
-  const tableData = data.repayments.map((rep, idx) => [
+  const tableData = data.repayments.map((rep) => [
     rep.installmentNumber.toString(),
     format(new Date(rep.dueDate), 'MMM dd, yyyy'),
     `K${rep.amount.toLocaleString()}`,
     rep.status.charAt(0).toUpperCase() + rep.status.slice(1),
-    rep.paidDate ? format(new Date(rep.paidDate), 'MMM dd, yyyy') : '-'
+    rep.paidDate ? format(new Date(rep.paidDate), 'MMM dd, yyyy') : '-',
   ]);
 
   autoTable(doc, {
-    startY: 150,
+    startY: outstandingBalance > 0 ? 165 : 150,
     head: [['#', 'Due Date', 'Amount', 'Status', 'Paid Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
-      fillColor: [255, 51, 153],
+      fillColor: BRAND.primary,
       textColor: [255, 255, 255],
       fontStyle: 'bold',
     },
@@ -139,10 +153,9 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
     },
   });
 
-  // Footer (optional chaining in case lastAutoTable is missing)
   const finalY = ((doc as any).lastAutoTable?.finalY ?? 130) + 15;
   doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(...BRAND.muted);
   doc.text('This is a computer-generated document and does not require a signature.', pageWidth / 2, finalY, { align: 'center' });
   doc.text(`${companyName} | ${companyAddress} | ${companyPhone}`, pageWidth / 2, finalY + 7, { align: 'center' });
 

@@ -107,7 +107,10 @@ export default function HouseBorrowersPage() {
           product_code: productCode,
         },
       });
-      if (response.error) throw response.error;
+      if (response.error) {
+        const details = (response.error as any)?.context?.json?.error || (response.error as any)?.message;
+        throw new Error(details || "Borrower creation failed.");
+      }
       if (response.data?.error) throw new Error(response.data.error);
       return response.data;
     },
@@ -120,7 +123,7 @@ export default function HouseBorrowersPage() {
       setForm({ full_name: "", email: "", phone: "", nrc_number: "", address: "", city: "Lusaka" });
     },
     onError: (e: any) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error creating borrower", description: e.message, variant: "destructive" });
     },
   });
 

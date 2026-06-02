@@ -2272,7 +2272,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             <RefreshCw size={14} className="mr-1" /> Restructure
                           </Button>
                         )}
-                        {(loan.status === "active" || loan.status === "disbursed") && (
+                        {(["active", "disbursed", "completed"].includes(loan.status)) && (
                           <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
                             <ArrowRight size={14} className="mr-1" /> Reloan
                           </Button>

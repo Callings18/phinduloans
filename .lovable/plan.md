@@ -1,42 +1,26 @@
-# Fix urgent admin-side loan issues
+## Plan
 
-Three confirmed problems across the loan houses, plus a guardrail so high interest rates work. Marketeer stays exactly as-is (30% / 26 days).
+1. Fix Marketeer borrower creation failure
+- Trace the create-borrower flow from the Marketeer add-borrower dialog into the backend function.
+- Patch the failure path so phone-only borrower creation succeeds reliably for Marketeer borrowers.
+- Improve the returned error handling so admins see the actual reason instead of the generic non-2xx function message.
 
-## 1. "Current date not recognized" — overdue/today logic
+2. Correct the loan statement and detail summary
+- Update the statement/loan schedule styling to use the current landing-page theme color tokens instead of the old hardcoded pink.
+- Add a clear outstanding balance figure to the generated loan statement/PDF and align the on-screen loan summary with the same numbers.
+- Review the collateral loan summary math so totals shown for principal, repayment, paid, and balance reflect the real repayment state.
 
-**Cause:** Due dates are stored as `YYYY-MM-DD` and read as UTC midnight, while "today" is the local clock (Zambia is UTC+2). The two don't line up, so:
-- **Admin → Repayments**: installments due *today* flip to "overdue" from 02:00 AM on the due date.
-- **Admin → Loans**: today's due installments never show as overdue all day.
+3. Restore servicing actions for reloan and restructure
+- Inspect the current visibility rules for reloan, restructure, and related servicing options in the full loan details screen.
+- Restore those actions where they should be available based on the loan state and existing workflow rules, without reintroducing invalid states.
+- Ensure the quick actions shown in the modal and house views are consistent.
 
-**Fix:** Compare dates as plain `YYYY-MM-DD` strings (same approach already used correctly on the House pages), so "due today" is never wrongly treated as overdue or missed.
-- `src/pages/admin/AdminRepayments.tsx` (the overdue check and overdue-count tally)
-- `src/pages/admin/AdminLoans.tsx` (desktop table + mobile cards overdue badge)
-
-## 2. Collateral single-bullet loan — record the remaining / full payment
-
-**Cause:** On the full loan details **Repayments** tab, the per-row **Pay** button only renders for installments with status `pending`. A collateral loan is a single bullet installment; once a partial payment is recorded it becomes `partial`, so the row loses its Pay button and staff see "no way to record" the rest. Future-dated bullet installments also don't surface on the Collections page.
-
-**Fix:**
-- In `src/components/admin/LoanDetailsModal.tsx`, show the per-row **Pay** button for `partial` and `overdue` rows too (not just `pending`), pre-filled with the remaining balance. This lets staff record the rest of a bullet payment directly on the row.
-- Confirm the existing "Record Payment" quick action + payment RPC correctly close the loan when the bullet is fully paid (it already flags `loan_completed`); surface the "Loan fully paid" confirmation.
-- `src/pages/admin/houses/HouseCollectionsPage.tsx`: include the still-owing bullet installment so a collateral loan can be collected there even when its single due date isn't exactly today.
-
-No schema change needed — payments still go through the existing `record_loan_payment` flow.
-
-## 3. Business loan interest — remove any cap, keep math correct
-
-**Decision:** Business loan model stays the same (one-time flat % of principal); just make sure any rate can be entered and is never silently mis-handled. Marketeer stays fixed at 30% / 26 days (no change).
-
-**Fix:**
-- Ensure the interest rate input in `src/pages/admin/AdminLoanProducts.tsx` accepts any positive value (no hidden cap).
-- In `src/utils/loanCalculations.ts`, teach the rate normalizer to recognise the database's period aliases (`per_month`, `per_year`, `per_week`, `per_day`) instead of falling through to a default, so displayed/derived rates stay accurate for high rates and long terms.
-
-## Verification
-- Re-run unit tests for loan calculations (collateral, marketeer, payday soft) to confirm no regression.
-- Spot-check: an installment due *today* shows as "due", not "overdue", on Admin → Repayments and Admin → Loans.
-- Spot-check: a partially-paid collateral bullet shows a Pay button for the remaining balance and closes the loan when fully paid.
+4. Validate the affected flows
+- Re-check Marketeer borrower add flow.
+- Re-check collateral/business loan detail totals and outstanding balance display.
+- Re-check that reloan/restructure actions appear for eligible loans and remain hidden for ineligible ones.
 
 ## Technical notes
-- Date fixes use string `YYYY-MM-DD` comparison via `format(new Date(), "yyyy-MM-dd")` to match the pattern already proven on House pages.
-- Pay-button condition changes from `status === "pending"` to the shared unpaid check (`pending | partial | overdue`) that the quick actions already use.
-- Interest normalizer extends the existing `switch` in `normalizeToMonthlyRate`; per-loan flat business logic is unchanged.
+- Likely touchpoints: `supabase/functions/create-borrower/index.ts`, `src/pages/admin/houses/HouseBorrowersPage.tsx`, `src/utils/generateLoanSchedule.ts`, `src/pages/admin/houses/HouseLoanDetailPage.tsx`, and `src/components/admin/LoanDetailsModal.tsx`.
+- I already confirmed the app theme still uses magenta-based primary tokens, while the PDF is using old hardcoded RGB values.
+- I also confirmed the reloan/restructure logic still exists in the modal code, so this is likely a visibility/gating issue rather than missing functionality.
