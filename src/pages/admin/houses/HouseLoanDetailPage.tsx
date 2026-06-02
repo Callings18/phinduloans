@@ -167,6 +167,7 @@ export default function HouseLoanDetailPage() {
       termMonths: Number(loan.loan_term_months || 0),
       monthlyPayment: Number((loan as any).monthly_payment || repayments[0]?.amount || 0),
       totalRepayment: Number(loan.total_repayment || 0),
+      outstandingBalance: Math.max(Number(loan.total_repayment || 0) - repayments.reduce((s: number, r: any) => s + Number(r.principal_paid || (r.status === "paid" ? r.amount : 0) || 0), 0), 0) + repayments.reduce((s: number, r: any) => s + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)), 0),
       disbursementDate: (loan as any).disbursed_at || loan.created_at,
       firstRepaymentDate: repayments[0]?.due_date || "",
       termSummaryLabel: `${loan.loan_term_months} ${loan.term_unit || product?.term_unit || "months"}`,
@@ -194,7 +195,12 @@ export default function HouseLoanDetailPage() {
     (s: number, r: any) => s + Number(r.principal_paid || (r.status === "paid" ? r.amount : 0) || 0),
     0,
   );
+  const totalPenaltyOutstanding = repayments.reduce(
+    (s: number, r: any) => s + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+    0,
+  );
   const outstanding = Math.max(Number(loan.total_repayment || loan.loan_amount || 0) - totalPaid, 0);
+  const remainingBalance = outstanding + totalPenaltyOutstanding;
   const paidCount = repayments.filter((r: any) => r.status === "paid").length;
   const partialCount = repayments.filter((r: any) => r.status === "partial").length;
   const pendingRepayments = repayments.filter((r: any) => r.status !== "paid" && r.status !== "cancelled");
@@ -264,8 +270,8 @@ export default function HouseLoanDetailPage() {
               <p className="font-bold text-success mt-0.5">K{totalPaid.toLocaleString()}</p>
             </div>
             <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
-              <p className="text-xs text-muted-foreground">Outstanding</p>
-              <p className="font-bold text-destructive mt-0.5">K{outstanding.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Outstanding Balance</p>
+              <p className="font-bold text-destructive mt-0.5">K{remainingBalance.toLocaleString()}</p>
             </div>
             <div className="rounded-lg bg-background/60 backdrop-blur p-3 border border-border/50">
               <p className="text-xs text-muted-foreground">Progress</p>
