@@ -368,13 +368,12 @@ export function generateRepaymentSchedule(
 ): RepaymentScheduleItem[] {
   const resolvedTermUnit: TermUnit =
     termUnit ?? (product.term_unit as TermUnit | null | undefined) ?? 'months';
-  const isCollateral = isCollateralProduct(product);
   const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const interestType = (product.interest_type as InterestType) || 'flat';
 
   // Determine if this is a weekly or daily loan
   const isWeekly = resolvedTermUnit === 'weeks' || (resolvedTermUnit === 'months' && interestPeriod === 'weekly');
-  const isDaily = !isCollateral && resolvedTermUnit === 'days';
+  const isDaily = resolvedTermUnit === 'days';
 
   // Calculate loan details
   const loanCalc = calculateLoan(principal, termValue, product, resolvedTermUnit);
