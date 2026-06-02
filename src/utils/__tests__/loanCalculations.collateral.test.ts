@@ -6,8 +6,11 @@ import {
   type LoanProduct,
 } from "../loanCalculations";
 
-// Collateral loans are a SINGLE 30-day bullet payment at a flat % of principal
-// (30% by default). They are NOT split into monthly installments.
+// Collateral loans are NOT a forced 30-day bullet payment. They follow the
+// term and interest the admin enters on the loan form, exactly like any other
+// product. A "per_loan" flat interest means the stated % applies once over the
+// whole term (e.g. 30% of principal), but the schedule still spreads across the
+// chosen number of installments — collateral can run beyond 30 days.
 const collateralProduct: LoanProduct = {
   product_name: "Collateral Loan",
   product_code: "COLLATERAL",
@@ -17,45 +20,28 @@ const collateralProduct: LoanProduct = {
   term_unit: "months",
 };
 
-describe("Collateral loan (single 30-day payment, 30% flat)", () => {
-  it("P=10,000 -> interest 3,000, total 13,000, single payment 13,000", () => {
+describe("Collateral loan (admin-driven term & interest)", () => {
+  it("per_loan flat: interest is the stated % of principal, once", () => {
     const r = calculateLoan(10_000, 1, collateralProduct, "months");
     expect(r.totalInterest).toBe(3000);
     expect(r.totalRepayment).toBe(13_000);
-    expect(r.monthlyPayment).toBe(13_000);
   });
 
-  it("P=50,000 -> interest 15,000, total 65,000, single payment 65,000", () => {
-    const r = calculateLoan(50_000, 1, collateralProduct, "months");
-    expect(r.totalInterest).toBe(15_000);
-    expect(r.totalRepayment).toBe(65_000);
-    expect(r.monthlyPayment).toBe(65_000);
-  });
-
-  it("interest is always 30% of principal regardless of term passed", () => {
+  it("interest stays a one-time % of principal regardless of term length", () => {
     for (const term of [1, 3, 6, 12]) {
       const r = calculateLoan(20_000, term, collateralProduct, "months");
       expect(r.totalInterest).toBe(6000);
       expect(r.totalRepayment).toBe(26_000);
-      expect(r.monthlyPayment).toBe(26_000); // single bullet payment
     }
   });
 
-  it("schedule has a single installment for the full repayment", () => {
+  it("can run for multiple monthly installments (not forced to a single payment)", () => {
     const start = new Date("2026-01-15T12:00:00Z");
-    const schedule = generateRepaymentSchedule(50_000, 1, collateralProduct, start, "months");
-    expect(schedule).toHaveLength(1);
-    expect(schedule[0].totalPayment).toBeCloseTo(65_000, 2);
-    expect(schedule[0].remainingBalance).toBe(0);
-  });
-
-  it("the single installment is due 30 days after the start date", () => {
-    const start = new Date("2026-01-10T12:00:00Z");
-    const schedule = generateRepaymentSchedule(60_000, 1, collateralProduct, start, "months");
-    const expected = new Date(start);
-    expected.setDate(expected.getDate() + 30);
-    expect(schedule[0].dueDate.getTime()).toBe(expected.getTime());
-    expect(schedule[0].installmentNumber).toBe(1);
+    const schedule = generateRepaymentSchedule(60_000, 6, collateralProduct, start, "months");
+    expect(schedule).toHaveLength(6);
+    const totalPaid = schedule.reduce((sum, s) => sum + s.totalPayment, 0);
+    expect(totalPaid).toBeCloseTo(78_000, 0); // 60,000 + 30% interest
+    expect(schedule[schedule.length - 1].remainingBalance).toBe(0);
   });
 
   it("penalty calc on overdue collateral principal honors grace period", () => {
