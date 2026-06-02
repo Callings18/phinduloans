@@ -402,9 +402,7 @@ export function generateRepaymentSchedule(
     const dueDate = new Date(startDate);
 
     // Calculate due date based on payment frequency
-    if (isCollateral) {
-      dueDate.setDate(dueDate.getDate() + 30); // single payment 30 days out
-    } else if (isDaily) {
+    if (isDaily) {
       dueDate.setDate(dueDate.getDate() + i);
     } else if (isWeekly) {
       dueDate.setDate(dueDate.getDate() + (i * 7));
