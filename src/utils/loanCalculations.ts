@@ -185,11 +185,13 @@ export function calculateLoan(
   const isCollateral = isCollateralProduct(product);
 
   if (isCollateral) {
-    const fixedTermMonths = 6;
-    const collateralInterestRateTotal = 30;
+    // Collateral loans are a SINGLE 30-day payment at a flat % of principal
+    // (default 30%). They are NOT split into monthly installments — the previous
+    // hardcoded 6-month split produced wrong "monthly" figures (e.g. K1,840).
+    const collateralInterestRateTotal = product.interest_rate || 30;
     const totalInterest = principal * (collateralInterestRateTotal / 100);
     const totalRepayment = principal + totalInterest;
-    const monthlyPayment = totalRepayment / fixedTermMonths;
+    const monthlyPayment = totalRepayment; // one bullet payment
 
     const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
     const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
@@ -203,7 +205,7 @@ export function calculateLoan(
 
     return {
       principal,
-      monthlyInterestRate: 5,
+      monthlyInterestRate: collateralInterestRateTotal,
       totalInterest: Math.round(totalInterest * 100) / 100,
       processingFee: Math.round(processingFee * 100) / 100,
       enforcementFee: Math.round(enforcementFee * 100) / 100,
@@ -215,7 +217,7 @@ export function calculateLoan(
       disbursementAmount: Math.round(disbursementAmount * 100) / 100,
       totalRepayment: Math.round(totalRepayment * 100) / 100,
       monthlyPayment: Math.round(monthlyPayment * 100) / 100,
-      effectiveAnnualRate: Math.round(monthlyToAnnualRate(5) * 100) / 100,
+      effectiveAnnualRate: Math.round(monthlyToAnnualRate(collateralInterestRateTotal) * 100) / 100,
       paymentFrequency: "monthly",
     };
   }
@@ -422,9 +424,10 @@ export function generateRepaymentSchedule(
   const schedule: RepaymentScheduleItem[] = [];
   let remainingBalance = principal;
 
-  // Determine number of installments and payment amount
+  // Determine number of installments and payment amount.
+  // Collateral is a single 30-day bullet payment (not 6 monthly installments).
   const numInstallments = isCollateral
-    ? 6
+    ? 1
     : isDaily
       ? termValue
       : resolvedTermUnit === 'weeks'
@@ -445,7 +448,9 @@ export function generateRepaymentSchedule(
     const dueDate = new Date(startDate);
 
     // Calculate due date based on payment frequency
-    if (isDaily) {
+    if (isCollateral) {
+      dueDate.setDate(dueDate.getDate() + 30); // single payment 30 days out
+    } else if (isDaily) {
       dueDate.setDate(dueDate.getDate() + i);
     } else if (isWeekly) {
       dueDate.setDate(dueDate.getDate() + (i * 7));

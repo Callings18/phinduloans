@@ -95,11 +95,17 @@ Deno.serve(async (req) => {
     let createdNew = false;
 
     const tempPassword = crypto.randomUUID().slice(0, 10) + "Aa1!";
+    // IMPORTANT: when a phone is provided we MUST also pass phone_confirm: true.
+    // Otherwise GoTrue treats the phone as unconfirmed and tries to dispatch an
+    // SMS confirmation, which fails (no SMS provider configured in auth) and the
+    // whole createUser call returns a non-2xx error — this was breaking Marketeer
+    // borrower creation (phone-only borrowers). The OTP signup flow (verify-otp)
+    // already creates phone users with phone_confirm: true, so mirror it here.
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: authEmail,
       password: tempPassword,
       email_confirm: true,
-      phone: normalizedPhone || undefined,
+      ...(normalizedPhone ? { phone: normalizedPhone, phone_confirm: true } : {}),
       user_metadata: { full_name },
     });
 

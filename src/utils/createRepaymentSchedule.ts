@@ -90,7 +90,10 @@ export async function createRepaymentScheduleForLoan(
   }
   const isMarketeer = productCode === "MARKETEER";
   const isPaydaySoft = productCode === "PAYDAY_SOFT";
-  const isBullet = isPaydaySoft || repaymentFrequency === "bullet";
+  const isCollateral = productCode === "COLLATERAL";
+  // Collateral loans are a single 30-day bullet payment (like Payday Soft),
+  // not a 6-month installment plan.
+  const isBullet = isPaydaySoft || isCollateral || repaymentFrequency === "bullet";
 
   const isDaily =
     !isBullet && (termUnit === "days" ||
@@ -176,8 +179,9 @@ export async function createRepaymentScheduleForLoan(
     let dueDate: Date;
     const offset = anchorOnStart ? i - 1 : i;
     if (isBullet) {
-      dueDate = isPaydaySoft || !hasExplicitStartDate
-        ? addDays(startDate, isPaydaySoft ? 30 : Number(loan.loan_term_months || 30))
+      // Payday Soft and Collateral are fixed 30-day single payments.
+      dueDate = isPaydaySoft || isCollateral || !hasExplicitStartDate
+        ? addDays(startDate, isPaydaySoft || isCollateral ? 30 : Number(loan.loan_term_months || 30))
         : new Date(startDate);
     } else if (isDaily) {
       dueDate = new Date(startDate);
