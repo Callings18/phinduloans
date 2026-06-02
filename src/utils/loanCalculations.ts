@@ -30,11 +30,6 @@ export interface LoanProduct {
   term_unit?: TermUnit | null; // NEW: Unit for loan term
 }
 
-function isCollateralProduct(product: LoanProduct): boolean {
-  const productCode = (product.product_code || "").trim().toUpperCase();
-  const productName = (product.product_name || "").trim().toLowerCase();
-  return productCode === "COLLATERAL" || productName.includes("collateral");
-}
 
 export interface LoanCalculationResult {
   principal: number;
@@ -182,45 +177,8 @@ export function calculateLoan(
 ): LoanCalculationResult {
   const resolvedTermUnit: TermUnit =
     termUnit ?? (product.term_unit as TermUnit | null | undefined) ?? 'months';
-  const isCollateral = isCollateralProduct(product);
 
-  if (isCollateral) {
-    // Collateral loans are a SINGLE 30-day payment at a flat % of principal
-    // (default 30%). They are NOT split into monthly installments — the previous
-    // hardcoded 6-month split produced wrong "monthly" figures (e.g. K1,840).
-    const collateralInterestRateTotal = product.interest_rate || 30;
-    const totalInterest = principal * (collateralInterestRateTotal / 100);
-    const totalRepayment = principal + totalInterest;
-    const monthlyPayment = totalRepayment; // one bullet payment
 
-    const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
-    const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
-    const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
-    const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
-    const vatableAmount = processingFee + enforcementFee + platformFee;
-    const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
-    const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
-    const feesDeductedUpfront = totalFees;
-    const disbursementAmount = principal - feesDeductedUpfront;
-
-    return {
-      principal,
-      monthlyInterestRate: collateralInterestRateTotal,
-      totalInterest: Math.round(totalInterest * 100) / 100,
-      processingFee: Math.round(processingFee * 100) / 100,
-      enforcementFee: Math.round(enforcementFee * 100) / 100,
-      insuranceFee: Math.round(insuranceFee * 100) / 100,
-      vatAmount: Math.round(vatAmount * 100) / 100,
-      platformFee: Math.round(platformFee * 100) / 100,
-      totalFees: Math.round(totalFees * 100) / 100,
-      feesDeductedUpfront: Math.round(feesDeductedUpfront * 100) / 100,
-      disbursementAmount: Math.round(disbursementAmount * 100) / 100,
-      totalRepayment: Math.round(totalRepayment * 100) / 100,
-      monthlyPayment: Math.round(monthlyPayment * 100) / 100,
-      effectiveAnnualRate: Math.round(monthlyToAnnualRate(collateralInterestRateTotal) * 100) / 100,
-      paymentFrequency: "monthly",
-    };
-  }
 
   if (product.product_code === "MARKETEER") {
     const tiers = getMarketeerTiersOrDefault(product.pricing_tiers);
@@ -280,7 +238,7 @@ export function calculateLoan(
   }
 
   // Determine payment frequency based on the working term unit
-  const isWeekly = !isCollateral && (workingTermUnit === 'weeks' || (workingTermUnit === 'months' && interestPeriod === 'weekly'));
+  const isWeekly = workingTermUnit === 'weeks' || (workingTermUnit === 'months' && interestPeriod === 'weekly');
   
   let totalInterest: number;
   let monthlyPayment: number = 0;
@@ -410,13 +368,12 @@ export function generateRepaymentSchedule(
 ): RepaymentScheduleItem[] {
   const resolvedTermUnit: TermUnit =
     termUnit ?? (product.term_unit as TermUnit | null | undefined) ?? 'months';
-  const isCollateral = isCollateralProduct(product);
   const interestPeriod = (product.interest_period as InterestPeriod) || 'monthly';
   const interestType = (product.interest_type as InterestType) || 'flat';
 
   // Determine if this is a weekly or daily loan
   const isWeekly = resolvedTermUnit === 'weeks' || (resolvedTermUnit === 'months' && interestPeriod === 'weekly');
-  const isDaily = !isCollateral && resolvedTermUnit === 'days';
+  const isDaily = resolvedTermUnit === 'days';
 
   // Calculate loan details
   const loanCalc = calculateLoan(principal, termValue, product, resolvedTermUnit);
@@ -425,14 +382,11 @@ export function generateRepaymentSchedule(
   let remainingBalance = principal;
 
   // Determine number of installments and payment amount.
-  // Collateral is a single 30-day bullet payment (not 6 monthly installments).
-  const numInstallments = isCollateral
-    ? 1
-    : isDaily
+  const numInstallments = isDaily
+    ? termValue
+    : resolvedTermUnit === 'weeks'
       ? termValue
-      : resolvedTermUnit === 'weeks'
-        ? termValue
-        : termValue;
+      : termValue;
   const paymentAmount = isDaily && loanCalc.dailyPayment
     ? loanCalc.dailyPayment
     : isWeekly && loanCalc.weeklyPayment
@@ -448,9 +402,7 @@ export function generateRepaymentSchedule(
     const dueDate = new Date(startDate);
 
     // Calculate due date based on payment frequency
-    if (isCollateral) {
-      dueDate.setDate(dueDate.getDate() + 30); // single payment 30 days out
-    } else if (isDaily) {
+    if (isDaily) {
       dueDate.setDate(dueDate.getDate() + i);
     } else if (isWeekly) {
       dueDate.setDate(dueDate.getDate() + (i * 7));
