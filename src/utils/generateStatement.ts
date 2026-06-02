@@ -103,7 +103,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
             head: [["#", "Date", "Method", "Amount", "Status"]],
             body: tableData,
             theme: "striped",
-            headStyles: { fillColor: [255, 51, 153], textColor: [255, 255, 255] },
+            headStyles: { fillColor: [244, 36, 140], textColor: [255, 255, 255] },
             margin: { left: 14, right: 14 }
         });
     }
