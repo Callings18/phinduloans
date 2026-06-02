@@ -382,14 +382,11 @@ export function generateRepaymentSchedule(
   let remainingBalance = principal;
 
   // Determine number of installments and payment amount.
-  // Collateral is a single 30-day bullet payment (not 6 monthly installments).
-  const numInstallments = isCollateral
-    ? 1
-    : isDaily
+  const numInstallments = isDaily
+    ? termValue
+    : resolvedTermUnit === 'weeks'
       ? termValue
-      : resolvedTermUnit === 'weeks'
-        ? termValue
-        : termValue;
+      : termValue;
   const paymentAmount = isDaily && loanCalc.dailyPayment
     ? loanCalc.dailyPayment
     : isWeekly && loanCalc.weeklyPayment
