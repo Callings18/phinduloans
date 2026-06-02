@@ -2267,17 +2267,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             <Calculator size={14} className="mr-1" /> Early Settlement
                           </Button>
                         )}
-                        {(loan.status === "active" || loan.status === "disbursed") && (
+                        {(loan.status === "active" || loan.status === "disbursed" || loan.status === "defaulted") && (
                           <Button size="sm" variant="outline" onClick={() => setIsRestructureOpen(true)}>
                             <RefreshCw size={14} className="mr-1" /> Restructure
                           </Button>
                         )}
-                        {(["active", "disbursed", "completed"].includes(loan.status)) && (
+                        {(["active", "disbursed", "completed", "defaulted"].includes(loan.status)) && (
                           <Button size="sm" variant="outline" onClick={() => setIsReloanOpen(true)}>
                             <ArrowRight size={14} className="mr-1" /> Reloan
                           </Button>
                         )}
-                        {(loan.status === "active" || loan.status === "disbursed") && (
+                        {(loan.status === "active" || loan.status === "disbursed" || loan.status === "defaulted") && (
                           <Button size="sm" variant="outline" onClick={() => setIsTopUpOpen(true)}>
                             <Plus size={14} className="mr-1" /> Top Up
                           </Button>
