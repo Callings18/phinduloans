@@ -177,45 +177,8 @@ export function calculateLoan(
 ): LoanCalculationResult {
   const resolvedTermUnit: TermUnit =
     termUnit ?? (product.term_unit as TermUnit | null | undefined) ?? 'months';
-  const isCollateral = isCollateralProduct(product);
 
-  if (isCollateral) {
-    // Collateral loans are a SINGLE 30-day payment at a flat % of principal
-    // (default 30%). They are NOT split into monthly installments — the previous
-    // hardcoded 6-month split produced wrong "monthly" figures (e.g. K1,840).
-    const collateralInterestRateTotal = product.interest_rate || 30;
-    const totalInterest = principal * (collateralInterestRateTotal / 100);
-    const totalRepayment = principal + totalInterest;
-    const monthlyPayment = totalRepayment; // one bullet payment
 
-    const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
-    const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
-    const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
-    const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
-    const vatableAmount = processingFee + enforcementFee + platformFee;
-    const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
-    const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
-    const feesDeductedUpfront = totalFees;
-    const disbursementAmount = principal - feesDeductedUpfront;
-
-    return {
-      principal,
-      monthlyInterestRate: collateralInterestRateTotal,
-      totalInterest: Math.round(totalInterest * 100) / 100,
-      processingFee: Math.round(processingFee * 100) / 100,
-      enforcementFee: Math.round(enforcementFee * 100) / 100,
-      insuranceFee: Math.round(insuranceFee * 100) / 100,
-      vatAmount: Math.round(vatAmount * 100) / 100,
-      platformFee: Math.round(platformFee * 100) / 100,
-      totalFees: Math.round(totalFees * 100) / 100,
-      feesDeductedUpfront: Math.round(feesDeductedUpfront * 100) / 100,
-      disbursementAmount: Math.round(disbursementAmount * 100) / 100,
-      totalRepayment: Math.round(totalRepayment * 100) / 100,
-      monthlyPayment: Math.round(monthlyPayment * 100) / 100,
-      effectiveAnnualRate: Math.round(monthlyToAnnualRate(collateralInterestRateTotal) * 100) / 100,
-      paymentFrequency: "monthly",
-    };
-  }
 
   if (product.product_code === "MARKETEER") {
     const tiers = getMarketeerTiersOrDefault(product.pricing_tiers);
