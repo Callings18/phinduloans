@@ -1539,7 +1539,7 @@ export default function ProductLoanFormShell({
                     {preview.dailyRate && (
                       <p className="text-[10px] text-muted-foreground text-center mt-1">Daily rate: {preview.dailyRate}/day</p>
                     )}
-                    {productCode === "COLLATERAL" && Number(termValue) > 0 && (
+                    {productCode === "COLLATERAL" && Number(termValue) > 0 && (interestPeriod || product?.interest_period) === "per_loan" && (
                       <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2">
                         <span className="font-medium text-foreground">{Number(interestRate || 0)}% flat interest charged once on the principal,</span> repaid over a
                         <span className="font-medium"> {Number(termValue)}-month</span> term ({(Number(interestRate || 0) / Number(termValue)).toFixed(2)}% / month effective).
