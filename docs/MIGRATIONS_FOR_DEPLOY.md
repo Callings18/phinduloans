@@ -1,8 +1,10 @@
-# SQL migrations to apply (Phase 1 handover)
+# SQL migrations to apply (Phases 1–3 handover)
 
 Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `supabase db push`, or SQL Editor in Lovable/dashboard).
 
-## Phase 1 — collateral term + installment repair (2026-06-03)
+## June 2026 — collateral term + installment repair (3 migrations)
+
+All three files are dated **2026-06-03**. Run them sequentially; skip any step already applied in your environment.
 
 | Order | File | Purpose |
 |------:|------|---------|
@@ -12,7 +14,7 @@ Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `
 
 If migration (1) is already applied in Lovable, run **only** (2) then (3) in the SQL editor.
 
-See also [`PHASE2_HANDOVER.md`](./PHASE2_HANDOVER.md) for CI secrets, E2E local run, and per-house UAT checklist.
+See also [`PHASE3_HANDOVER.md`](./PHASE3_HANDOVER.md) for admin consolidation, notification checklist, and sign-off. Phase 2 CI/UAT: [`PHASE2_HANDOVER.md`](./PHASE2_HANDOVER.md).
 
 ## Lovable / hosted Supabase — paste checklist
 
