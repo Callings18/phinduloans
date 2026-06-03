@@ -533,8 +533,9 @@ export default function ProductLoanFormShell({
   const marketeerRangeLabel = `K${marketeerMinAmount.toLocaleString()} – K${marketeerMaxAmount.toLocaleString()}`;
   const collateralTermOptions = useMemo(() => {
     if (productCode !== "COLLATERAL") return [] as number[];
-    const min = Math.max(1, Number((product as any)?.min_term_months || 1));
-    const max = Math.min(12, Math.max(min, Number((product as any)?.max_term_months || 12)));
+    // Keep UI aligned with current policy even if a stale catalog row still says 6/6.
+    const min = 1;
+    const max = 12;
     return Array.from({ length: max - min + 1 }, (_, i) => min + i);
   }, [productCode, product]);
 

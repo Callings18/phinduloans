@@ -46,8 +46,7 @@ function getProductLock(productCode: string | null | undefined): ProductLock | n
   switch ((productCode || "").toUpperCase()) {
     case "COLLATERAL":
       return {
-        fixedTerm: { value: 6, unit: "months" },
-        note: "Collateral loans are fixed at 6 months / 30% total interest. Term cannot be changed.",
+        note: "Collateral loans allow 1-12 months. Use a term within this range.",
       };
     case "PAYDAY_SOFT":
       return {
@@ -275,6 +274,9 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
         if (amt < min || amt > max) {
           throw new Error(`Amount must be between K${min.toLocaleString()} and K${max.toLocaleString()}`);
         }
+      }
+      if (isCollateralProduct && (term < 1 || term > 12)) {
+        throw new Error("Collateral loan term must be between 1 and 12 months.");
       }
       if (lock?.fixedTerm && term !== lock.fixedTerm.value) {
         throw new Error(`Term is fixed at ${lock.fixedTerm.value} ${lock.fixedTerm.unit} for this product`);
@@ -596,11 +598,15 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
                   <Label htmlFor="edit-term">
                     Term ({lock?.fixedTerm?.unit || (product as any)?.term_unit || loan?.term_unit || "months"})
                     {termLocked && <span className="ml-1 text-xs text-muted-foreground">(fixed)</span>}
+                    {isCollateralProduct && !termLocked && (
+                      <span className="ml-1 text-xs text-muted-foreground">(1-12 months)</span>
+                    )}
                   </Label>
                   <Input
                     id="edit-term"
                     type="number"
                     min={1}
+                    max={isCollateralProduct ? 12 : undefined}
                     value={termMonths}
                     onChange={(e) => setTermMonths(e.target.value)}
                     disabled={!editable || termLocked || productLoading}

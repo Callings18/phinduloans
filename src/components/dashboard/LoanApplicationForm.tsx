@@ -66,6 +66,14 @@ interface RequiredDoc {
   display_order: number;
 }
 
+const getTermBounds = (product: LoanProduct) => {
+  // Collateral policy moved to variable tenor (1-12 months) regardless of older catalog rows.
+  if ((product.product_code || "").toUpperCase() === "COLLATERAL") {
+    return { min: 1, max: 12 };
+  }
+  return { min: product.min_term_months, max: product.max_term_months };
+};
+
 interface Profile {
   id: string;
   email: string | null;
@@ -222,9 +230,10 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     if (initialProductId) {
       const p = loanProducts.find(lp => lp.id === initialProductId);
       if (p) {
+        const termBounds = getTermBounds(p);
         setSelectedProduct(p);
         if (initialAmount) setLoanAmount(Math.max(p.min_amount, Math.min(initialAmount, p.max_amount)));
-        if (initialTerm) setLoanTerm(Math.max(p.min_term_months, Math.min(initialTerm, p.max_term_months)));
+        if (initialTerm) setLoanTerm(Math.max(termBounds.min, Math.min(initialTerm, termBounds.max)));
         setStep(1);
       }
     }
@@ -249,8 +258,9 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
   useEffect(() => {
     if (selectedProduct) {
+      const termBounds = getTermBounds(selectedProduct);
       setLoanAmount(prev => Math.max(selectedProduct.min_amount, Math.min(prev, selectedProduct.max_amount)));
-      setLoanTerm(prev => Math.max(selectedProduct.min_term_months, Math.min(prev, selectedProduct.max_term_months)));
+      setLoanTerm(prev => Math.max(termBounds.min, Math.min(prev, termBounds.max)));
     }
   }, [selectedProduct]);
 
@@ -298,6 +308,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const isPaydaySoft = productCode === "PAYDAY_SOFT";
   const isMarketeer = productCode === "MARKETEER";
   const termUnitLabel = selectedProduct?.term_unit || "months";
+  const selectedTermBounds = selectedProduct ? getTermBounds(selectedProduct) : { min: 1, max: 12 };
 
   const collateralBorrowersValidation = useMemo(
     () => validateCollateralBorrowers(primaryBorrower, coBorrowers, absoluteOwners),
@@ -689,8 +700,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Array.from(
-                      { length: selectedProduct.max_term_months - selectedProduct.min_term_months + 1 },
-                      (_, i) => selectedProduct.min_term_months + i,
+                      { length: selectedTermBounds.max - selectedTermBounds.min + 1 },
+                      (_, i) => selectedTermBounds.min + i,
                     ).map((n) => (
                       <SelectItem key={n} value={String(n)}>
                         {n} {n === 1 ? "month" : "months"}
@@ -700,12 +711,12 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   Collateral loans carry a <strong>fixed {selectedProduct.interest_rate}% total interest</strong> regardless of term.
-                  Pick {selectedProduct.min_term_months}–{selectedProduct.max_term_months} months — your monthly installment changes,
+                  Pick {selectedTermBounds.min}–{selectedTermBounds.max} months — your monthly installment changes,
                   the total cost stays the same.
                 </p>
               </>
             ) : (
-              <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedProduct.min_term_months} max={selectedProduct.max_term_months} step={1} />
+              <Slider value={[loanTerm]} onValueChange={([v]) => setLoanTerm(v)} min={selectedTermBounds.min} max={selectedTermBounds.max} step={1} />
             )}
           </div>
 
@@ -1017,8 +1028,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               <div><span className="text-muted-foreground">Total Repayment:</span> <span className="font-bold ml-1 text-primary">{formatCurrency(loanCalc.totalRepayment)}</span></div>
               {selectedProduct.product_code === "COLLATERAL" && (
                 <>
-                  <div><span className="text-muted-foreground">Interest model:</span> <span className="font-medium ml-1">30% total over 6 months</span></div>
-                  <div><span className="text-muted-foreground">Equivalent rate:</span> <span className="font-medium ml-1">5% per month (display only)</span></div>
+                  <div><span className="text-muted-foreground">Interest model:</span> <span className="font-medium ml-1">{selectedProduct.interest_rate}% total across selected term</span></div>
+                  <div><span className="text-muted-foreground">Equivalent rate:</span> <span className="font-medium ml-1">{(selectedProduct.interest_rate / Math.max(loanTerm, 1)).toFixed(2)}% per month (display only)</span></div>
                 </>
               )}
               {loanCalc.feesDeductedUpfront > 0 && (
@@ -1027,8 +1038,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               {isCollateralLoan && (
                 <div className="col-span-1 sm:col-span-2 mt-2 rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
                   <div className="font-medium text-foreground">Collateral Loan Pricing</div>
-                  <div>30% total interest over 6 months (equivalent to 5% per month, flat).</div>
-                  <div>6 equal monthly installments. Term is fixed at 6 months.</div>
+                  <div>{selectedProduct.interest_rate}% total interest across {loanTerm} {loanTerm === 1 ? "month" : "months"}.</div>
+                  <div>Equivalent monthly rate: {(selectedProduct.interest_rate / Math.max(loanTerm, 1)).toFixed(2)}% (flat display).</div>
                 </div>
               )}
             </CardContent>
