@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader } from "@/components/layout/PageShell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,19 +73,24 @@ const AdminReports = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">Reports & Export</h1>
-          <p className="text-muted-foreground mt-1">Generate, analyze, and export operational reports</p>
-          {!canExport && (
-            <p className="text-sm text-muted-foreground mt-2">
-              You can view reports. Export (PDF/Excel) requires <code className="text-xs">reports:export</code> permission.
-            </p>
-          )}
-        </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Reports & Export"
+          description={
+            <>
+              Generate, analyze, and export operational reports
+              {!canExport && (
+                <span className="mt-2 block text-sm">
+                  You can view reports. Export (PDF/Excel) requires{" "}
+                  <code className="text-xs">reports:export</code> permission.
+                </span>
+              )}
+            </>
+          }
+        />
 
         <Tabs defaultValue="loan-book" className="space-y-4">
-          <TabsList className="bg-muted/50 border border-border/50">
+          <TabsList className="flex h-auto w-full flex-nowrap gap-1 overflow-x-auto bg-muted/50 border border-border/50 p-1">
             <TabsTrigger value="loan-book" className="gap-2 data-[state=active]:bg-card">
               <FileText size={14} /> Loan Book
             </TabsTrigger>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -333,13 +334,12 @@ const AdminAccounts = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Capital & Accounts</h1>
-            <p className="text-muted-foreground">Manage your funds and wallets</p>
-          </div>
-          <div className="flex gap-2">
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Capital & Accounts"
+          description="Manage your funds and wallets"
+          actions={
+            <>
             <AddOtherIncomeDialog />
             <Dialog open={addFundsOpen} onOpenChange={setAddFundsOpen}>
               <DialogTrigger asChild>
@@ -552,8 +552,9 @@ const AdminAccounts = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Total Balance Card */}
         <Card className="gradient-primary text-primary-foreground">

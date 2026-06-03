@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,10 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
+import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
+import { mapSupabaseError } from "@/utils/mapSupabaseError";
+import { houseLoanDetailPath, normalizeProductCode } from "@/utils/adminHousePaths";
+import { Link } from "react-router-dom";
 import { BORROWER_SELFIE_VAULT_ALIASES, latestVerifiedByVaultDocType } from "@/constants/borrowerKycDocs";
 import {
   Banknote,
@@ -45,6 +50,7 @@ import {
   Send,
   RefreshCw,
   Smartphone,
+  ExternalLink,
 } from "lucide-react";
 
 interface Disbursement {
@@ -64,6 +70,8 @@ interface Disbursement {
     email: string;
     loan_amount: number;
     user_id?: string;
+    loan_product_id?: string | null;
+    loan_products?: { product_code?: string | null } | null;
   };
 }
 
@@ -97,7 +105,9 @@ const AdminDisbursements = () => {
             full_name,
             email,
             loan_amount,
-            user_id
+            user_id,
+            loan_product_id,
+            loan_products ( product_code )
           )
         `)
         .order("created_at", { ascending: false });
@@ -333,7 +343,7 @@ const AdminDisbursements = () => {
         entity_id: selectedLoan || "",
         module: "disbursement",
       });
-      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to create disbursement"));
+      toast.error(handled ? "You don't have permission to perform this action." : mapSupabaseError(error, "Failed to create disbursement"));
     },
   });
 
@@ -405,13 +415,13 @@ const AdminDisbursements = () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments"] });
       toast.success(variables.status === "completed" ? "Disbursement completed, schedule generated, and account balance updated" : "Disbursement status updated");
     },
-    onError: async (error: any, variables) => {
+    onError: async (error: unknown, variables) => {
       const handled = await handleUnauthorized(error, {
         entity_type: "disbursement",
         entity_id: variables?.id ?? "",
         module: "disbursement",
       });
-      toast.error(handled ? "You don't have permission to perform this action." : (error.message || "Failed to update status"));
+      toast.error(handled ? "You don't have permission to perform this action." : mapSupabaseError(error, "Failed to update status"));
     },
   });
 
@@ -470,15 +480,11 @@ const AdminDisbursements = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Disbursements</h1>
-            <p className="text-muted-foreground mt-1">
-              Track and manage loan disbursements
-            </p>
-          </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Disbursements"
+          description="Track and manage loan disbursements"
+          actions={
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gradient-primary shadow-button" disabled={!canCreateDisbursement}
@@ -720,10 +726,13 @@ const AdminDisbursements = () => {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
+
+        <LegacyAdminPathBanner page="disbursements" />
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsGrid>
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
@@ -768,7 +777,7 @@ const AdminDisbursements = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </StatsGrid>
 
         {/* Filters */}
         <Card className="border-border/50 bg-card/50">
@@ -885,7 +894,21 @@ const AdminDisbursements = () => {
                           )}
                         </td>
                         <td className="py-4 px-4 text-right">
-                          {disbursement.status === "pending" && (
+                          <div className="flex items-center justify-end gap-2">
+                            {(() => {
+                              const code = normalizeProductCode(
+                                disbursement.loan_applications?.loan_products?.product_code,
+                              );
+                              return code ? (
+                                <Button asChild size="sm" variant="ghost" className="h-8">
+                                  <Link to={houseLoanDetailPath(code, disbursement.loan_id)}>
+                                    <ExternalLink size={14} className="mr-1" />
+                                    House
+                                  </Link>
+                                </Button>
+                              ) : null;
+                            })()}
+                            {disbursement.status === "pending" && (
                             <div className="flex items-center justify-end gap-2">
                               {canApproveDisbursement ? (
                                 <>
@@ -927,6 +950,7 @@ const AdminDisbursements = () => {
                               )}
                             </div>
                           )}
+                          </div>
                         </td>
                       </tr>
                     ))}

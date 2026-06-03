@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -212,15 +213,11 @@ const AdminEmployers = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">External Employers</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage external employers (companies where borrowers work)
-            </p>
-          </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="External Employers"
+          description="Manage external employers (companies where borrowers work)"
+          actions={
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) resetForm();
@@ -333,7 +330,8 @@ const AdminEmployers = () => {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
 
         {/* Search */}
         <Card className="border-border/50 bg-card/50">

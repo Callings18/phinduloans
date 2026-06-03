@@ -6,14 +6,22 @@ import {
   Banknote,
   ArrowUpRight,
   Smartphone,
+  LayoutGrid,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const quickActions = [
   {
+    icon: LayoutGrid,
+    label: "Product Houses",
+    description: "Canonical loan workflows",
+    path: "/admin/houses",
+    color: "from-violet-500 to-primary",
+  },
+  {
     icon: FileText,
     label: "New Application",
-    description: "Create loan application",
+    description: "Legacy applications inbox",
     path: "/admin/applications?action=new",
     color: "from-primary to-primary/80",
   },

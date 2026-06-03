@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -254,12 +255,11 @@ const AdminExpenses = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Expenses</h1>
-            <p className="text-muted-foreground">Track and manage business expenses</p>
-          </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Expenses"
+          description="Track and manage business expenses"
+          actions={
           <Dialog open={addExpenseOpen} onOpenChange={setAddExpenseOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2" disabled={!canCreateExpense} title={!canCreateExpense ? "No permission to create expenses" : undefined}>
@@ -384,7 +384,8 @@ const AdminExpenses = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
 
         {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-3">

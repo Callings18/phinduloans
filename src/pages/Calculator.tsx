@@ -100,7 +100,7 @@ const Calculator = () => {
           <div className="max-w-5xl mx-auto">
             <div className="grid lg:grid-cols-2 gap-8">
               {/* Calculator */}
-              <div className="glass rounded-3xl p-8">
+              <div className="glass rounded-3xl p-4 sm:p-8">
                 <h2 className="text-xl font-semibold text-foreground mb-8">Loan Setup</h2>
 
                 {isLoading ? (
@@ -317,7 +317,7 @@ const Calculator = () => {
               </div>
 
               {/* Repayment Schedule */}
-              <div className="glass rounded-3xl p-8">
+              <div className="glass rounded-3xl p-4 sm:p-8">
                 <h2 className="text-xl font-semibold text-foreground mb-6">
                   Amortization Schedule
                 </h2>

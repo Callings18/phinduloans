@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,21 +12,19 @@ export default function AdminHousesIndex() {
 
   return (
     <AdminLayout>
-      <div className="space-y-4">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Loan Product Houses</h1>
-            <p className="text-muted-foreground text-sm">
-              Each loan product has its own house — open one to run dashboards, borrowers, loans, collections and reports.
-            </p>
-          </div>
-          <Button asChild variant="outline">
-            <Link to="/admin/loan-products">
-              <Plus size={16} className="mr-2" />
-              Create New Loan Product
-            </Link>
-          </Button>
-        </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Loan Product Houses"
+          description="Each loan product has its own house — open one to run dashboards, borrowers, loans, collections and reports."
+          actions={
+            <Button asChild variant="outline">
+              <Link to="/admin/loan-products">
+                <Plus size={16} className="mr-2" />
+                Create New Loan Product
+              </Link>
+            </Button>
+          }
+        />
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">

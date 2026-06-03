@@ -4,6 +4,7 @@ import { BetaBadge } from "@/components/admin/BetaBadge";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
 import { isBetaModule } from "@/config/featureRollout";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ import {
   Phone,
   Building,
   Banknote,
+  ExternalLink,
 } from "lucide-react";
 import {
   Table,
@@ -70,6 +72,14 @@ import PaginationControls from "@/components/common/PaginationControls";
 import { DesktopTableWrap, MobileCardStack } from "@/components/common/ResponsiveDataViews";
 import { useAuth } from "@/hooks/useAuth";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
+import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
+import { mapSupabaseError } from "@/utils/mapSupabaseError";
+import {
+  resolveProductCodeFromId,
+  houseLoanDetailPath,
+  houseLoanEditPath,
+} from "@/utils/adminHousePaths";
+import { Link } from "react-router-dom";
 
 interface Loan {
   id: string;
@@ -111,6 +121,7 @@ interface Loan {
 interface LoanProduct {
   id: string;
   name: string;
+  product_code?: string | null;
   interest_rate: number;
   processing_fee_percent: number | null;
   enforcement_fee_percent?: number | null;
@@ -235,7 +246,7 @@ const AdminLoans = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_products")
-        .select("id, name, interest_rate, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent")
+        .select("id, name, product_code, interest_rate, processing_fee_percent, enforcement_fee_percent, insurance_percent, vat_percent, platform_fee_percent")
         .eq("is_active", true);
       if (error) throw error;
       return data as LoanProduct[];
@@ -271,7 +282,7 @@ const AdminLoans = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       toast.success("Loan moved to defaulted");
     },
-    onError: (err: any) => toast.error(err.message || "Failed to update status"),
+    onError: (err: unknown) => toast.error(mapSupabaseError(err, "Failed to update status")),
   });
 
   // Disburse loan mutation - moves awaiting_disbursement → disbursed, creates disbursement record, deducts from source account
@@ -378,7 +389,7 @@ const AdminLoans = () => {
       setDisbursementSourceAccountId("");
       setDisbursementReference("");
     },
-    onError: (err: any) => toast.error(err.message || "Failed to disburse loan"),
+    onError: (err: unknown) => toast.error(mapSupabaseError(err, "Failed to disburse loan")),
   });
 
   // Edit loan mutation
@@ -659,7 +670,9 @@ const AdminLoans = () => {
     return [{ value: "all", label: "All" }];
   };
 
-  const LoanActionsMenu = ({ loan }: { loan: Loan }) => (
+  const LoanActionsMenu = ({ loan }: { loan: Loan }) => {
+    const productCode = resolveProductCodeFromId(loanProducts, loan.loan_product_id);
+    return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="min-h-11 min-w-[7rem] shrink-0 md:min-h-9">
@@ -677,12 +690,27 @@ const AdminLoans = () => {
           <Eye size={14} className="mr-2" />
           View Details
         </DropdownMenuItem>
-        {can("loans", "edit") && (
+        {productCode ? (
+          <DropdownMenuItem asChild>
+            <Link to={houseLoanDetailPath(productCode, loan.id)}>
+              <ExternalLink size={14} className="mr-2" />
+              Open in {productCode} house
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
+        {can("loans", "edit") && ["pending", "under_review", "approved", "awaiting_disbursement", "contract_signing"].includes(loan.status) && productCode ? (
+          <DropdownMenuItem asChild>
+            <Link to={houseLoanEditPath(productCode, loan.id)}>
+              <Edit size={14} className="mr-2" />
+              Edit in Product House
+            </Link>
+          </DropdownMenuItem>
+        ) : can("loans", "edit") ? (
           <DropdownMenuItem onClick={() => openEditDialog(loan)}>
             <Edit size={14} className="mr-2" />
             Edit Loan
           </DropdownMenuItem>
-        )}
+        ) : null}
         {["awaiting_disbursement", "approved"].includes(loan.status) && can("loans", "edit") && (
           <>
             <DropdownMenuSeparator />
@@ -744,22 +772,28 @@ const AdminLoans = () => {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+    );
+  };
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2 flex-wrap">
-            Loan Portfolio
-            {isBetaModule("loans_by_product") ? <BetaBadge /> : null}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Monitor active, completed, and defaulted loans
-            {selectedProductId ? " — filtered by loan product." : ""}
-          </p>
-        </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title={
+            <>
+              Loan Portfolio
+              {isBetaModule("loans_by_product") ? <BetaBadge /> : null}
+            </>
+          }
+          description={
+            <>
+              Monitor active, completed, and defaulted loans
+              {selectedProductId ? " — filtered by loan product." : ""}
+            </>
+          }
+        />
+
+        <LegacyAdminPathBanner page="loans" />
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

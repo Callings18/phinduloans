@@ -147,8 +147,12 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-foreground font-sans antialiased overflow-x-clip;
     font-family: 'Outfit', sans-serif;
+  }
+
+  #root {
+    @apply min-h-screen overflow-x-clip;
   }
 
   /* Modern gradient scrollbars (WebKit) */
@@ -235,6 +239,10 @@
 @layer utilities {
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-nav {
+    @apply pt-16 sm:pt-20;
   }
   .gradient-primary {
     background: var(--gradient-primary);

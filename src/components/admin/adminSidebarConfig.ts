@@ -56,19 +56,17 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "Lending",
     items: [
-      { icon: FileText, label: "Applications", path: "/admin/applications", perm: { module: "loans", action: "view" } },
+      { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
+      { icon: FileText, label: "Applications (inbox)", path: "/admin/applications", perm: { module: "loans", action: "view" } },
       { icon: FileEdit, label: "Loan drafts", path: "/admin/loan-drafts", perm: { module: "loans", action: "view" } },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", perm: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employers", path: "/admin/employers", perm: { module: "borrowers", action: "view" } },
       {
         icon: CreditCard,
-        label: "Loans",
+        label: "Loans (portfolio)",
         path: "/admin/loans",
         perm: { module: "loans", action: "view" },
         betaKey: "loans_by_product",
-        children: [
-          { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
-        ],
       },
     ],
   },
@@ -82,7 +80,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "Finance",
     items: [
-      { icon: CreditCard, label: "Disbursements", path: "/admin/disbursements", perm: { module: "disbursement", action: "view" } },
+      { icon: CreditCard, label: "Disbursements (global)", path: "/admin/disbursements", perm: { module: "disbursement", action: "view" } },
       { icon: Banknote, label: "Repayments", path: "/admin/repayments", perm: { module: "repayments", action: "view" } },
       { icon: ListOrdered, label: "Bulk repayments", path: "/admin/bulk-repayments", perm: { module: "repayments", action: "view" } },
       { icon: Wallet, label: "Accounts", path: "/admin/accounts", perm: { module: "disbursement", action: "view" } },

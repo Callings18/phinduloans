@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -466,14 +467,14 @@ const AdminCollections = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Collections Management</h1>
-          <p className="text-muted-foreground mt-1">Track overdue accounts, PTPs, and recovery actions</p>
-        </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Collections Management"
+          description="Track overdue accounts, PTPs, and recovery actions"
+        />
 
         {/* Stats Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <StatsGrid className="sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <Card className="glass border-border/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-destructive/20 flex items-center justify-center text-destructive">
@@ -529,7 +530,7 @@ const AdminCollections = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </StatsGrid>
 
         {/* Automation Panel */}
         <CollectionsAutomation 
@@ -539,7 +540,7 @@ const AdminCollections = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+          <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 gap-1 sm:grid-cols-4">
             <TabsTrigger value="overdue">
               <AlertCircle size={16} className="mr-2" /> Overdue
             </TabsTrigger>

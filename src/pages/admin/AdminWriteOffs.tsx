@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -205,14 +206,14 @@ const AdminWriteOffs = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Write-Off Management</h1>
-          <p className="text-muted-foreground mt-1">Review and manage loan write-off requests</p>
-        </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Write-Off Management"
+          description="Review and manage loan write-off requests"
+        />
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatsGrid>
           <Card className="glass border-border/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-warning/20 flex items-center justify-center text-warning">
@@ -257,7 +258,7 @@ const AdminWriteOffs = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </StatsGrid>
 
         {/* Search */}
         <Card className="glass border-border/50">

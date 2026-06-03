@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notificationService } from "@/utils/notificationService";
@@ -665,17 +666,14 @@ const AdminRepayments = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Repayments</h1>
-          <p className="text-muted-foreground mt-1">
-            Track and record loan repayments
-          </p>
-        </div>
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Repayments"
+          description="Track and record loan repayments"
+        />
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+        <StatsGrid className="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Card className="border-border/50 bg-card/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
@@ -742,7 +740,7 @@ const AdminRepayments = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </StatsGrid>
 
         {/* Filters */}
         <Card className="border-border/50 bg-card/50">

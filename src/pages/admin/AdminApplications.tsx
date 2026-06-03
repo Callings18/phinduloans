@@ -85,6 +85,10 @@ import { transitionLoanStatus } from "@/services/repositories/workflowRepository
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { assertBusinessDayForDisbursement } from "@/lib/disbursementCalendar";
 import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
+import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
+import { mapSupabaseError } from "@/utils/mapSupabaseError";
+import { resolveProductCodeFromId, houseLoanDetailPath } from "@/utils/adminHousePaths";
+import { Link } from "react-router-dom";
 
 const statusConfig = {
   pending: { label: "Pending", color: "bg-warning/20 text-warning border-warning/30" },
@@ -570,7 +574,11 @@ const AdminApplications = () => {
       setReviewComment("");
     },
     onError: (error: Error) => {
-      toast({ title: "Review update failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Review update failed",
+        description: mapSupabaseError(error, error.message),
+        variant: "destructive",
+      });
     },
   });
 
@@ -696,7 +704,7 @@ const AdminApplications = () => {
       });
       toast({
         title: handled ? "You don't have permission to perform this action." : "Error disbursing loan",
-        description: handled ? undefined : (error as Error).message,
+        description: handled ? undefined : mapSupabaseError(error),
         variant: "destructive",
       });
     },
@@ -1001,7 +1009,11 @@ const AdminApplications = () => {
       .upload(fileName, file);
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
+      toast({
+        title: "Document upload failed",
+        description: mapSupabaseError(uploadError),
+        variant: "destructive",
+      });
       return null;
     }
 
@@ -1021,7 +1033,11 @@ const AdminApplications = () => {
       .createSignedUrl(filePath, 3600); // 1 hour expiry
     
     if (error) {
-      console.error('Failed to create signed URL:', error);
+      toast({
+        title: "Could not open document",
+        description: mapSupabaseError(error),
+        variant: "destructive",
+      });
       return null;
     }
     return data.signedUrl;
@@ -1428,6 +1444,8 @@ const AdminApplications = () => {
             Add Loan
           </Button>
         </div>
+
+        <LegacyAdminPathBanner page="applications" />
 
         {/* Filters */}
         <Card className="glass border-border/50 tour-apps-filters">
@@ -2512,6 +2530,19 @@ const AdminApplications = () => {
 
           <DialogFooter className="gap-2 flex-wrap">
             <div className="flex gap-2 flex-wrap">
+              {selectedApp && resolveProductCodeFromId(loanProducts, selectedApp.loan_product_id) ? (
+                <Button asChild variant="secondary" size="sm">
+                  <Link
+                    to={houseLoanDetailPath(
+                      resolveProductCodeFromId(loanProducts, selectedApp.loan_product_id)!,
+                      selectedApp.id,
+                    )}
+                  >
+                    <ExternalLink size={16} className="mr-1" />
+                    Open in Product House
+                  </Link>
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 size="sm"
