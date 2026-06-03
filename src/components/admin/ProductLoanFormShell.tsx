@@ -553,8 +553,10 @@ export default function ProductLoanFormShell({
 
     if (isMarketeer && marketeerResult) {
       return {
+        principal,
         repayment: marketeerResult.totalRepayment,
         interest: marketeerResult.totalInterest,
+        disbursement: principal,
         installmentLabel: `Daily installment (${marketeerResult.durationDays} days, Mon–Sat)`,
         installment: marketeerResult.dailyInstallment,
         dailyRate: `${(marketeerResult.tier.interestPercent / marketeerResult.durationDays).toFixed(3)}%`,
@@ -578,8 +580,10 @@ export default function ProductLoanFormShell({
       termUnit
     );
     return {
+      principal,
       repayment: calc.totalRepayment,
       interest: calc.totalInterest,
+      disbursement: calc.disbursementAmount,
       installmentLabel: isPaydaySoft ? "Single payment (due on day 30)" : termUnit === "days" ? "Daily installment" : termUnit === "weeks" ? "Weekly installment" : "Monthly installment",
       installment: calc.dailyPayment || calc.weeklyPayment || calc.monthlyPayment,
       dailyRate: null,
@@ -1459,7 +1463,7 @@ export default function ProductLoanFormShell({
                     <Label className="text-xs">Purpose *</Label>
                     <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
                   </div>
-                  {!isMarketeer && productCode !== "COLLATERAL" && (
+                  {!isMarketeer && (
                     <>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Interest Rate (%) *</Label>
@@ -1470,7 +1474,7 @@ export default function ProductLoanFormShell({
                           min={0}
                           value={interestRate}
                           onChange={(e) => { setInterestRate(e.target.value); interestInitedRef.current = true; }}
-                          placeholder="e.g. 48"
+                          placeholder={productCode === "COLLATERAL" ? "e.g. 30" : "e.g. 48"}
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -1493,23 +1497,6 @@ export default function ProductLoanFormShell({
                       </div>
                     </>
                   )}
-                  {productCode === "COLLATERAL" && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Total Interest Rate (%) *</Label>
-                      <Input
-                        className="h-9"
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        value={interestRate}
-                        onChange={(e) => { setInterestRate(e.target.value); interestInitedRef.current = true; }}
-                        placeholder="e.g. 30"
-                      />
-                      <p className="text-[10px] text-muted-foreground">
-                        One-time total over the whole loan, split flat across the chosen months.
-                      </p>
-                    </div>
-                  )}
                   {usesDailySchedule && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Repayment Start Date *</Label>
@@ -1527,7 +1514,7 @@ export default function ProductLoanFormShell({
                 {/* Loan Preview */}
                 {preview && (
                   <div className="mt-3 bg-primary/5 border border-primary/20 rounded-lg p-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Principal</p>
                         <p className="font-bold text-sm">K{Number(loanAmount).toLocaleString()}</p>
@@ -1535,6 +1522,10 @@ export default function ProductLoanFormShell({
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Interest</p>
                         <p className="font-bold text-sm">K{Number(preview.interest).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">Borrower Receives</p>
+                        <p className="font-bold text-sm text-success">K{Number(preview.disbursement).toLocaleString()}</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Total Repayment</p>
