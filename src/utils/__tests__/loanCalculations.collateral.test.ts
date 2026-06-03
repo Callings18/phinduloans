@@ -44,6 +44,42 @@ describe("Collateral loan (admin-driven term & interest)", () => {
     expect(schedule[schedule.length - 1].remainingBalance).toBe(0);
   });
 
+  it("term 1 month: whole rate applies that single month (no split)", () => {
+    const r = calculateLoan(8_495, 1, collateralProduct, "months");
+    expect(r.totalInterest).toBeCloseTo(2_548.5, 2); // 30% of 8,495
+    expect(r.totalRepayment).toBeCloseTo(11_043.5, 2);
+    expect(r.monthlyPayment).toBeCloseTo(11_043.5, 2); // single installment = full repayment
+  });
+
+  it("entered rate is split flat across the chosen months (1/3/6/10/12)", () => {
+    // The admin-entered % is the TOTAL over the loan; each installment carries
+    // an equal flat slice of both principal and interest.
+    const principal = 100_000;
+    for (const term of [1, 3, 6, 10, 12]) {
+      // Use 48% so 48/12 = 4% per month is easy to verify.
+      const product: LoanProduct = { ...collateralProduct, interest_rate: 48 };
+      const r = calculateLoan(principal, term, product, "months");
+      expect(r.totalInterest).toBeCloseTo(48_000, 2); // 48% once, regardless of term
+      expect(r.totalRepayment).toBeCloseTo(148_000, 2);
+      // Flat installment = total repayment / months
+      expect(r.monthlyPayment).toBeCloseTo(148_000 / term, 2);
+    }
+  });
+
+  it("48% over 12 months => 4% interest portion per installment", () => {
+    const product: LoanProduct = { ...collateralProduct, interest_rate: 48 };
+    const start = new Date("2026-01-15T12:00:00Z");
+    const schedule = generateRepaymentSchedule(100_000, 12, product, start, "months");
+    expect(schedule).toHaveLength(12);
+    // Each installment's interest = 48,000 / 12 = 4,000 (= 4% of principal)
+    for (const item of schedule) {
+      expect(item.interest).toBeCloseTo(4_000, 2);
+    }
+    const totalPaid = schedule.reduce((sum, s) => sum + s.totalPayment, 0);
+    expect(totalPaid).toBeCloseTo(148_000, 0);
+    expect(schedule[schedule.length - 1].remainingBalance).toBe(0);
+  });
+
   it("penalty calc on overdue collateral principal honors grace period", () => {
     const productWithPenalty: LoanProduct = {
       ...collateralProduct,
