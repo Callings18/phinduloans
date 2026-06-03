@@ -531,6 +531,12 @@ export default function ProductLoanFormShell({
   const marketeerMinAmount = isMarketeer ? Number(product?.min_amount || 500) : 0;
   const marketeerMaxAmount = isMarketeer ? Number(product?.max_amount || 10000) : 0;
   const marketeerRangeLabel = `K${marketeerMinAmount.toLocaleString()} – K${marketeerMaxAmount.toLocaleString()}`;
+  const collateralTermOptions = useMemo(() => {
+    if (productCode !== "COLLATERAL") return [] as number[];
+    const min = Math.max(1, Number(product?.min_term_months || 1));
+    const max = Math.min(12, Math.max(min, Number(product?.max_term_months || 12)));
+    return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+  }, [productCode, product?.min_term_months, product?.max_term_months]);
 
   const marketeerResult = useMemo(() => {
     if (!isMarketeer || !product || !loanAmount) return null;
@@ -1434,15 +1440,15 @@ export default function ProductLoanFormShell({
                       Tenure ({termUnit})
                       {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed: 26 days)</span>}
                       {isPaydaySoft && <span className="text-muted-foreground ml-1">(Fixed: 30 days)</span>}
-                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(1–12 months)</span>}
+                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(select 1–12 months)</span>}
                     </Label>
                     {productCode === "COLLATERAL" ? (
-                      <Select value={termValue} onValueChange={(v) => setTermValue(v)}>
+                      <Select value={termValue} onValueChange={setTermValue}>
                         <SelectTrigger className="h-9">
                           <SelectValue placeholder="Select months" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                          {collateralTermOptions.map((m) => (
                             <SelectItem key={m} value={String(m)}>
                               {m} {m === 1 ? "month" : "months"}
                             </SelectItem>
