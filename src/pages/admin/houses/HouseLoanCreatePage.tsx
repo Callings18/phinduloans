@@ -11,7 +11,7 @@ const houseCreateConfig: Record<string, { title: string; description: string; te
     defaultTermValue: 1,
   },
   PAYDAY_SOFT: { title: "Create Payday Soft Loan", description: "Short-tenor payroll cycle lending.", termUnit: "days", defaultTermValue: 30 },
-  COLLATERAL: { title: "Create Collateral Loan", description: "Collateral-secured lending workflow.", termUnit: "months", defaultTermValue: 6 },
+  COLLATERAL: { title: "Create Collateral Loan", description: "Collateral-secured lending workflow.", termUnit: "months", defaultTermValue: 1 },
   BUSINESS: { title: "Create Business Loan", description: "Working capital and business growth lending.", termUnit: "months", defaultTermValue: 12 },
   MOTOR_VEHICLE: { title: "Create Motor Vehicle Loan", description: "Vehicle-backed lending with structured terms.", termUnit: "months", defaultTermValue: 24 },
   MARKETEER: { title: "Create Marketeer Loan", description: "Fixed daily-collection workflow at 30% over 26 days (Sundays excluded).", termUnit: "days", defaultTermValue: 26 },
