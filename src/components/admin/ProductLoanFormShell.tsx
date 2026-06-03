@@ -533,10 +533,10 @@ export default function ProductLoanFormShell({
   const marketeerRangeLabel = `K${marketeerMinAmount.toLocaleString()} – K${marketeerMaxAmount.toLocaleString()}`;
   const collateralTermOptions = useMemo(() => {
     if (productCode !== "COLLATERAL") return [] as number[];
-    const min = Math.max(1, Number(product?.min_term_months || 1));
-    const max = Math.min(12, Math.max(min, Number(product?.max_term_months || 12)));
+    const min = Math.max(1, Number((product as any)?.min_term_months || 1));
+    const max = Math.min(12, Math.max(min, Number((product as any)?.max_term_months || 12)));
     return Array.from({ length: max - min + 1 }, (_, i) => min + i);
-  }, [productCode, product?.min_term_months, product?.max_term_months]);
+  }, [productCode, product]);
 
   const marketeerResult = useMemo(() => {
     if (!isMarketeer || !product || !loanAmount) return null;
