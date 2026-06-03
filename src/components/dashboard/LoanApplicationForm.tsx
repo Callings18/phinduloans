@@ -631,7 +631,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                           <span>K{product.min_amount.toLocaleString()} – K{product.max_amount.toLocaleString()}</span>
                           <span>
                             {(product.product_code || "") === "COLLATERAL"
-                              ? "30% total over 6 months (5%/month equivalent)"
+                              ? `${product.interest_rate}% total over ${product.min_term_months}–${product.max_term_months} months`
                               : `${product.interest_rate}% ${getInterestPeriodLabel(product.interest_period as any)}`}
                           </span>
                           <span>{product.min_term_months}–{product.max_term_months} {(product.term_unit || 'months')}</span>
