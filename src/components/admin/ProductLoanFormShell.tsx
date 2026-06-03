@@ -1430,15 +1430,30 @@ export default function ProductLoanFormShell({
                       Tenure ({termUnit})
                       {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed: 26 days)</span>}
                       {isPaydaySoft && <span className="text-muted-foreground ml-1">(Fixed: 30 days)</span>}
-                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(Fixed: 6 months)</span>}
+                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(1–12 months)</span>}
                     </Label>
-                    <Input
-                      className="h-9"
-                      type="number"
-                      value={termValue}
-                      onChange={(e) => setTermValue(e.target.value)}
-                      disabled={isMarketeer || isPaydaySoft || productCode === "COLLATERAL"}
-                    />
+                    {productCode === "COLLATERAL" ? (
+                      <Select value={termValue} onValueChange={(v) => setTermValue(v)}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select months" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                            <SelectItem key={m} value={String(m)}>
+                              {m} {m === 1 ? "month" : "months"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="h-9"
+                        type="number"
+                        value={termValue}
+                        onChange={(e) => setTermValue(e.target.value)}
+                        disabled={isMarketeer || isPaydaySoft}
+                      />
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Purpose *</Label>
