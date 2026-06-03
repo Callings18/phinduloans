@@ -435,7 +435,8 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
           mime_type: item.file.type || null,
           file_size: item.file.size,
           loan_product_id: loan.loan_product_id ?? null,
-          uploaded_by: user?.id ?? null,
+          uploaded_by: user?.id ?? "admin",
+          status: "uploaded",
         });
         if (docErr) throw docErr;
       }

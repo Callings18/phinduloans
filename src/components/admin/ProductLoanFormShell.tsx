@@ -869,7 +869,10 @@ export default function ProductLoanFormShell({
           })),
         ];
         const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(rows);
-        if (borrowersErr) console.error("Failed to insert loan_borrowers:", borrowersErr);
+        if (borrowersErr) {
+          setPendingLoanId(inserted.id);
+          throw new Error(`Loan was created but co-borrower records failed to save: ${borrowersErr.message}. Use Rollback draft or retry.`);
+        }
       }
 
       if (inserted?.id) {

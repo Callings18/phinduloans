@@ -71,7 +71,7 @@ describe("houseWorkflowRepository", () => {
     });
     expect(rpcMock).toHaveBeenNthCalledWith(4, "record_loan_payment", {
       p_repayment_id: "rep-1",
-      p_amount: 0,
+      p_amount: 100,
       p_payment_method: "cash",
       p_account_id: null,
       p_transaction_reference: null,
@@ -79,15 +79,13 @@ describe("houseWorkflowRepository", () => {
     });
   });
 
-  it("falls back to repayment amount when payment RPC first fails", async () => {
-    rpcMock
-      .mockRejectedValueOnce(new Error("first attempt failed"))
-      .mockResolvedValueOnce({ data: { success: true }, error: null });
+  it("loads the installment amount before calling record_loan_payment", async () => {
+    rpcMock.mockResolvedValueOnce({ data: { success: true }, error: null });
 
     await houseMarkRepaymentPaid("rep-2");
 
     expect(fromMock).toHaveBeenCalledWith("loan_repayments");
-    expect(rpcMock).toHaveBeenLastCalledWith("record_loan_payment", {
+    expect(rpcMock).toHaveBeenCalledWith("record_loan_payment", {
       p_repayment_id: "rep-2",
       p_amount: 100,
       p_payment_method: "cash",

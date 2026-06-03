@@ -116,17 +116,25 @@ export async function houseMarkDisbursementCompleted(params: CompleteDisbursemen
 }
 
 export async function houseMarkRepaymentPaid(repaymentId: string) {
-  return recordLoanPayment({ repaymentId, amount: 0 }).catch(async () => {
-    const { data } = await supabase
-      .from("loan_repayments")
-      .select("amount")
-      .eq("id", repaymentId)
-      .maybeSingle();
-    if (data) {
-      return recordLoanPayment({ repaymentId, amount: Number(data.amount) });
-    }
+  const { data, error } = await supabase
+    .from("loan_repayments")
+    .select("amount, original_amount, principal_paid, penalty_amount, penalty_paid")
+    .eq("id", repaymentId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || "Could not load repayment");
+  if (!data) throw new Error("Could not determine repayment amount");
+
+  const principalBase = Number(data.original_amount ?? data.amount ?? 0);
+  const principalPaid = Number(data.principal_paid ?? 0);
+  const penaltyBase = Number(data.penalty_amount ?? 0);
+  const penaltyPaid = Number(data.penalty_paid ?? 0);
+  const remaining =
+    Math.max(0, principalBase - principalPaid) + Math.max(0, penaltyBase - penaltyPaid);
+  const amount = remaining > 0 ? remaining : Number(data.amount ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Could not determine repayment amount");
-  });
+  }
+  return recordLoanPayment({ repaymentId, amount });
 }
 
 /* ============================================================
