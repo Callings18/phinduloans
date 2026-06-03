@@ -1430,15 +1430,30 @@ export default function ProductLoanFormShell({
                       Tenure ({termUnit})
                       {isMarketeer && <span className="text-muted-foreground ml-1">(Fixed: 26 days)</span>}
                       {isPaydaySoft && <span className="text-muted-foreground ml-1">(Fixed: 30 days)</span>}
-                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(Fixed: 6 months)</span>}
+                      {productCode === "COLLATERAL" && <span className="text-muted-foreground ml-1">(1–12 months)</span>}
                     </Label>
-                    <Input
-                      className="h-9"
-                      type="number"
-                      value={termValue}
-                      onChange={(e) => setTermValue(e.target.value)}
-                      disabled={isMarketeer || isPaydaySoft || productCode === "COLLATERAL"}
-                    />
+                    {productCode === "COLLATERAL" ? (
+                      <Select value={termValue} onValueChange={(v) => setTermValue(v)}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select months" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                            <SelectItem key={m} value={String(m)}>
+                              {m} {m === 1 ? "month" : "months"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="h-9"
+                        type="number"
+                        value={termValue}
+                        onChange={(e) => setTermValue(e.target.value)}
+                        disabled={isMarketeer || isPaydaySoft}
+                      />
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Purpose *</Label>
@@ -1478,6 +1493,23 @@ export default function ProductLoanFormShell({
                       </div>
                     </>
                   )}
+                  {productCode === "COLLATERAL" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Total Interest Rate (%) *</Label>
+                      <Input
+                        className="h-9"
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={interestRate}
+                        onChange={(e) => { setInterestRate(e.target.value); interestInitedRef.current = true; }}
+                        placeholder="e.g. 30"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        One-time total over the whole loan, split flat across the chosen months.
+                      </p>
+                    </div>
+                  )}
                   {usesDailySchedule && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Repayment Start Date *</Label>
@@ -1516,10 +1548,10 @@ export default function ProductLoanFormShell({
                     {preview.dailyRate && (
                       <p className="text-[10px] text-muted-foreground text-center mt-1">Daily rate: {preview.dailyRate}/day</p>
                     )}
-                    {productCode === "COLLATERAL" && (
+                    {productCode === "COLLATERAL" && Number(termValue) > 0 && (
                       <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2">
-                        <span className="font-medium text-foreground">30% flat interest charged once on the principal,</span> repaid over a fixed
-                        <span className="font-medium"> 6-month</span> term ({(30 / 6).toFixed(2)}% / month effective).
+                        <span className="font-medium text-foreground">{Number(interestRate || 0)}% flat interest charged once on the principal,</span> repaid over a
+                        <span className="font-medium"> {Number(termValue)}-month</span> term ({(Number(interestRate || 0) / Number(termValue)).toFixed(2)}% / month effective).
                       </p>
                     )}
                   </div>
