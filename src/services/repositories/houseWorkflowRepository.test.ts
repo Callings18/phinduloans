@@ -4,6 +4,7 @@ import {
   houseMarkRepaymentPaid,
   houseSetLoanStatus,
   houseStageReview,
+  recordLoanPayment,
 } from "./houseWorkflowRepository";
 
 const { rpcMock, fromMock, updateMock, updateEqMock, selectMock, selectEqMock, maybeSingleMock } = vi.hoisted(() => ({
@@ -92,6 +93,53 @@ describe("houseWorkflowRepository", () => {
       p_account_id: null,
       p_transaction_reference: null,
       p_paid_date: null,
+    });
+  });
+
+  it("uses remaining principal+penalty for partially paid installments", async () => {
+    maybeSingleMock.mockResolvedValueOnce({
+      data: {
+        amount: 500,
+        original_amount: 500,
+        principal_paid: 200,
+        penalty_amount: 50,
+        penalty_paid: 10,
+      },
+      error: null,
+    });
+    rpcMock.mockResolvedValueOnce({ data: { success: true, receipt_no: "R-1" }, error: null });
+
+    await houseMarkRepaymentPaid("rep-partial");
+
+    expect(rpcMock).toHaveBeenCalledWith("record_loan_payment", {
+      p_repayment_id: "rep-partial",
+      p_amount: 340,
+      p_payment_method: "cash",
+      p_account_id: null,
+      p_transaction_reference: null,
+      p_paid_date: null,
+    });
+  });
+
+  it("passes penalty split to record_loan_payment when provided", async () => {
+    rpcMock.mockResolvedValueOnce({ data: { success: true, receipt_no: "R-2" }, error: null });
+
+    await recordLoanPayment({
+      repaymentId: "rep-3",
+      amount: 150,
+      penaltyAmount: 25,
+      accountId: "acct-9",
+      paymentMethod: "mobile_money",
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith("record_loan_payment", {
+      p_repayment_id: "rep-3",
+      p_amount: 150,
+      p_payment_method: "mobile_money",
+      p_account_id: "acct-9",
+      p_transaction_reference: null,
+      p_paid_date: null,
+      p_penalty_amount: 25,
     });
   });
 

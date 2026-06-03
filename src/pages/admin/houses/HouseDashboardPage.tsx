@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useHouseReportSummary } from "@/hooks/useHouseData";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
@@ -22,6 +23,7 @@ type RepaymentSummaryRow = {
 
 export default function HouseDashboardPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
+  const { toast } = useToast();
   const { data } = useHouseReportSummary(productCode);
 
   // Live updates for the house dashboard whenever loans, repayments,
@@ -39,7 +41,7 @@ export default function HouseDashboardPage() {
   );
 
   // For non-Marketeer products: fetch repayment summary
-  const { data: repaymentStats } = useQuery({
+  const { data: repaymentStats, isError: repaymentStatsError, error: repaymentStatsErr } = useQuery({
     queryKey: ["house-repayment-stats", productCode],
     enabled: productCode !== "MARKETEER" && Boolean(productCode),
     queryFn: async () => {
@@ -86,6 +88,16 @@ export default function HouseDashboardPage() {
       };
     },
   });
+
+  useEffect(() => {
+    if (repaymentStatsError && repaymentStatsErr) {
+      toast({
+        title: "Could not load collection stats",
+        description: repaymentStatsErr instanceof Error ? repaymentStatsErr.message : "Try refreshing the page.",
+        variant: "destructive",
+      });
+    }
+  }, [repaymentStatsError, repaymentStatsErr, toast]);
 
   const topCards = [
     { label: "Total loans", value: data?.totalLoans ?? 0, icon: Users, accent: "from-primary/20 to-primary/5", iconClass: "text-primary" },

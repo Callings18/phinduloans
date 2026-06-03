@@ -7,16 +7,21 @@ Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `
 | Order | File | Purpose |
 |------:|------|---------|
 | 1 | [`supabase/migrations/20260603185037_443ee6b5-5131-4ee1-9b54-a4a7e1a48593.sql`](../supabase/migrations/20260603185037_443ee6b5-5131-4ee1-9b54-a4a7e1a48593.sql) | Collateral catalog bounds (1–12 months) + `enforce_house_product_rules()` guard. |
-| 2 | [`supabase/migrations/20260603204500_collateral_term_1_12_everywhere.sql`](../supabase/migrations/20260603204500_collateral_term_1_12_everywhere.sql) | **Data repair**: recompute `monthly_payment` and pending/overdue installments for collateral loans with no paid installments (fixes old 6-way split artifacts). |
+| 2 | [`supabase/migrations/20260603204500_collateral_term_1_12_everywhere.sql`](../supabase/migrations/20260603204500_collateral_term_1_12_everywhere.sql) | **Data repair**: recompute `monthly_payment` and pending/overdue installments for collateral loans with **no paid installments** (fixes old 6-way split artifacts). |
+| 3 | [`supabase/migrations/20260603213000_collateral_partial_payment_repair.sql`](../supabase/migrations/20260603213000_collateral_partial_payment_repair.sql) | **Data repair (Phase 2)**: collateral loans **with** paid/partial installments — fix `monthly_payment`, redistribute remaining balance across untouched pending/overdue rows. Skips rows with `principal_paid > 0`. |
 
-If migration (1) is already applied in Lovable, run **only** (2) in the SQL editor.
+If migration (1) is already applied in Lovable, run **only** (2) then (3) in the SQL editor.
+
+See also [`PHASE2_HANDOVER.md`](./PHASE2_HANDOVER.md) for CI secrets, E2E local run, and per-house UAT checklist.
 
 ## Lovable / hosted Supabase — paste checklist
 
 1. Open **SQL Editor** in the Supabase project linked to Lovable.
 2. Run `20260603185037_…sql` if collateral term edits still fail with “must equal 6 months” or product max term is still 6.
-3. Run `20260603204500_collateral_term_1_12_everywhere.sql` to fix stored installment amounts on affected collateral loans.
-4. Verify: `SELECT product_code, min_term_months, max_term_months FROM loan_products WHERE product_code = 'COLLATERAL';` → `1`, `12`.
+3. Run `20260603204500_collateral_term_1_12_everywhere.sql` to fix stored installment amounts on collateral loans with no payments yet.
+4. Run `20260603213000_collateral_partial_payment_repair.sql` for collateral loans that already have paid or partial installments.
+5. Verify: `SELECT product_code, min_term_months, max_term_months FROM loan_products WHERE product_code = 'COLLATERAL';` → `1`, `12`.
+6. Spot-check: loans with partial installments — confirm untouched pending rows sum to remaining balance; manually review any `partial` rows with `principal_paid > 0`.
 
 CLI (when linked): from repo root, `supabase db push`.
 
