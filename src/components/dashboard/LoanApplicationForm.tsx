@@ -854,7 +854,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 </h4>
                 {selectedProduct.product_code === "COLLATERAL" && (
                   <p className="text-xs text-muted-foreground mb-2">
-                    30% total interest over 6 months. Equivalent display rate: 5% per month.
+                    {selectedProduct.interest_rate}% total interest split flat across {loanTerm} {loanTerm === 1 ? "month" : "months"}
+                    {" "}({(selectedProduct.interest_rate / loanTerm).toFixed(2)}% per month equivalent).
                   </p>
                 )}
                 <div className="grid grid-cols-2 gap-2 text-sm">
