@@ -1108,7 +1108,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => { onClose(); navigate("/profile?tab=kyc"); }}
+                  onClick={() => { onClose(); navigate("/dashboard?tab=profile&kyc=documents"); }}
                 >
                   Add payout details
                 </Button>

@@ -11,6 +11,7 @@ import {
   mapLatestVaultRowByDocType,
   vaultDocForSlot,
 } from "@/constants/borrowerKycDocs";
+import { borrowerDashboardProfileHref } from "@/utils/borrowerDashboardLinks";
 
 const KYC_DOC_TYPES = BORROWER_VAULT_KYC_DOC_TYPES.map(({ type, label }) => ({ type, label }));
 
@@ -24,10 +25,13 @@ export default function KYCStatusWidget({ userId, onOpenDocuments }: KYCStatusWi
   const [searchParams] = useSearchParams();
   const profileDocumentsHref = (() => {
     const v = searchParams.get("view");
-    const qs = new URLSearchParams();
-    qs.set("tab", "profile");
-    if (v) qs.set("view", v);
-    return `/dashboard?${qs.toString()}`;
+    if (v) {
+      const qs = new URLSearchParams();
+      qs.set("tab", "documents");
+      qs.set("view", v);
+      return `/profile?${qs.toString()}`;
+    }
+    return borrowerDashboardProfileHref({ openKycWorkspace: true });
   })();
 
   const { data: vaultDocs = [] } = useQuery({

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import {
   Download,
 } from "lucide-react";
 import { exportBorrowerData } from "@/utils/exportBorrowerData";
+import type { BorrowerProfileSection } from "@/utils/borrowerDashboardLinks";
 import WhatsAppOptInCard from "@/components/dashboard/WhatsAppOptInCard";
 import ProfileDocumentVault from "@/components/dashboard/ProfileDocumentVault";
 import KYCFinancialInfo from "@/components/dashboard/KYCFinancialInfo";
@@ -52,7 +54,9 @@ interface Props {
   onSignOut: () => void;
 }
 
-type ProfileSectionTab = "personal" | "kyc" | "security" | "notifications";
+type ProfileSectionTab = BorrowerProfileSection;
+
+const PROFILE_SECTIONS: ProfileSectionTab[] = ["personal", "kyc", "security", "notifications"];
 
 function profileFormFromProfile(profile: any) {
   return {
@@ -76,6 +80,7 @@ function notificationFormFromProfile(profile: any) {
 export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenKycWorkspace, onSignOut }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [profileTab, setProfileTab] = useState<ProfileSectionTab>("personal");
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -108,6 +113,13 @@ export default function BorrowerProfileTab({ user, profile, kycVerified, onOpenK
     setProfileForm(profileFormFromProfile(profile));
     setNotificationForm(notificationFormFromProfile(profile));
   }, [profile]);
+
+  useEffect(() => {
+    const section = searchParams.get("profileSection");
+    if (section && PROFILE_SECTIONS.includes(section as ProfileSectionTab)) {
+      setProfileTab(section as ProfileSectionTab);
+    }
+  }, [searchParams]);
 
   const normalizedProfile = useMemo(
     () => ({

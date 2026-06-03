@@ -42,6 +42,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { borrowerDashboardHrefFromLegacyProfileTab } from "@/utils/borrowerDashboardLinks";
 
 interface Profile {
     id: string;
@@ -123,6 +124,16 @@ const Profile = () => {
             navigate('/auth');
         }
     }, [user, authLoading, navigate]);
+
+    /** Borrowers use the dashboard profile module; keep `/profile` for staff `?view=` preview only. */
+    useEffect(() => {
+        if (authLoading || !user) return;
+        if (searchParams.has("view")) return;
+        if (isStaff) return;
+
+        const legacyTab = searchParams.get("tab");
+        navigate(borrowerDashboardHrefFromLegacyProfileTab(legacyTab), { replace: true });
+    }, [authLoading, user, isStaff, searchParams, navigate]);
 
     useEffect(() => {
         if (!authLoading && user && isStaff && !searchParams.has("view")) {
