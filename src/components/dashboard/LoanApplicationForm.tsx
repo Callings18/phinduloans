@@ -631,7 +631,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                           <span>K{product.min_amount.toLocaleString()} – K{product.max_amount.toLocaleString()}</span>
                           <span>
                             {(product.product_code || "") === "COLLATERAL"
-                              ? "30% total over 6 months (5%/month equivalent)"
+                              ? `${product.interest_rate}% total over ${product.min_term_months}–${product.max_term_months} months`
                               : `${product.interest_rate}% ${getInterestPeriodLabel(product.interest_period as any)}`}
                           </span>
                           <span>{product.min_term_months}–{product.max_term_months} {(product.term_unit || 'months')}</span>
@@ -688,7 +688,10 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 <Select value={String(loanTerm)} onValueChange={(v) => setLoanTerm(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                    {Array.from(
+                      { length: selectedProduct.max_term_months - selectedProduct.min_term_months + 1 },
+                      (_, i) => selectedProduct.min_term_months + i,
+                    ).map((n) => (
                       <SelectItem key={n} value={String(n)}>
                         {n} {n === 1 ? "month" : "months"}
                       </SelectItem>
@@ -696,8 +699,9 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Collateral loans carry a <strong>fixed 30% total interest</strong> regardless of term. Pick 1–6 months —
-                  your monthly installment changes, the total cost stays the same.
+                  Collateral loans carry a <strong>fixed {selectedProduct.interest_rate}% total interest</strong> regardless of term.
+                  Pick {selectedProduct.min_term_months}–{selectedProduct.max_term_months} months — your monthly installment changes,
+                  the total cost stays the same.
                 </p>
               </>
             ) : (
@@ -850,7 +854,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
                 </h4>
                 {selectedProduct.product_code === "COLLATERAL" && (
                   <p className="text-xs text-muted-foreground mb-2">
-                    30% total interest over 6 months. Equivalent display rate: 5% per month.
+                    {selectedProduct.interest_rate}% total interest split flat across {loanTerm} {loanTerm === 1 ? "month" : "months"}
+                    {" "}({(selectedProduct.interest_rate / loanTerm).toFixed(2)}% per month equivalent).
                   </p>
                 )}
                 <div className="grid grid-cols-2 gap-2 text-sm">

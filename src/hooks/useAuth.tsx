@@ -109,12 +109,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        setIsLoading(false);
 
         if (currentSession?.user) {
-          fetchUserRoles(currentSession.user.id).then(setRoles);
+          // Keep loading until roles are resolved so route guards don't
+          // momentarily treat an admin as a borrower (and vice versa).
+          fetchUserRoles(currentSession.user.id)
+            .then(setRoles)
+            .finally(() => setIsLoading(false));
         } else {
           setRoles([]);
+          setIsLoading(false);
         }
       }
     );
@@ -136,10 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-      setIsLoading(false);
 
       if (currentSession?.user) {
-        fetchUserRoles(currentSession.user.id).then(setRoles);
+        fetchUserRoles(currentSession.user.id)
+          .then(setRoles)
+          .finally(() => setIsLoading(false));
+      } else {
+        setRoles([]);
+        setIsLoading(false);
       }
     });
 
