@@ -1,46 +1,45 @@
 ## Goal
 
-Fix four related problems reported on the lending platform:
-1. "Add Borrower" to a Marketeer house fails with an Edge Function non-2xx error.
-2. Reloan / Restructure / Top-Up disappear on loans that are marked Defaulted (client paid in full + excess and needs a reloan).
-3. The Loan Schedule and Account Statement PDFs use bright pink instead of the brand magenta/burgundy, and lack a reliable Outstanding Balance.
-4. Collateral loans (which are 30-day single-payment loans) are wrongly shown with a monthly installment (e.g. K1,840), caused by a hardcoded 6-month split.
+Make collateral-based loans support a flexible term of **1 to 12 months**, where the interest rate the admin enters is the **total** interest over the whole loan, split equally into flat monthly installments. Also repair existing collateral loans that show wrong installment amounts (e.g. Manase's K1,840).
 
-## Root Causes Found
+## What's already correct (no change needed)
 
-- **Write failures (reloan/restructure/record payment + likely borrower link):** `audit_logs` has row-level security enabled but **no INSERT policy**. The audit triggers (`log_loan_changes` on `loan_applications`, `log_repayment_activity` on `loan_repayments`) try to insert an audit row and are denied, which rolls back the entire loan/repayment write. This silently breaks reloan, restructure, top-up and payment recording.
-- **Collateral miscalculation:** `src/utils/loanCalculations.ts` has a hardcoded branch forcing collateral to `fixedTermMonths = 6`, so total repayment is divided by 6 → wrong "monthly" figure. Collateral is meant to be a single 30-day payment at 30% flat.
-- **Reloan hidden on defaulted:** In `LoanDetailsModal.tsx`, Reloan/Restructure/Top-Up are only shown for active/disbursed/completed status, so Defaulted loans show nothing.
-- **PDF colors:** `generateStatement.ts` still uses hot pink `RGB(255,51,153)`; `generateLoanSchedule.ts` is mostly themed but should share the same brand palette and always show outstanding balance.
+The calculation engine already does exactly what you described. The collateral product is configured as `per_loan` flat interest, so:
 
-## Plan
+```text
+Enter 48% for 12 months  → total interest = 48% of principal, split into 12 equal flat installments (4%/month)
+Enter 30% for 3 months   → total interest = 30% of principal, split 10/10/10
+Enter 30% for 1 month    → 30% applies that single month
+Enter 30% for 6 months   → 30% total, divided across 6 installments
+```
 
-### 1. Database: allow audit log inserts (migration)
-Add an INSERT policy on `public.audit_logs` so the SECURITY DEFINER audit triggers can write. Allow inserts when there is an authenticated user (the trigger records `auth.uid()`), and keep the existing admin/auditor read policy. This unblocks reloan, restructure, top-up, and payment recording.
+The loan-creation form already lets the admin type a custom rate and term, and feeds them into this engine. The problem is purely the **"6 months only" locks** plus **stale saved data** on old loans.
 
-### 2. Fix the Marketeer "Add Borrower" error
-Reproduce by calling the `create-borrower` function with a Marketeer-style payload (phone only, synthetic email) to capture the exact failure, then fix the specific cause. Likely candidates: the synthetic `@phone.phindu.local` email being rejected, or the phone-duplicate resolution path. Harden the function to:
-- Return the precise upstream auth error message (not a generic 4xx).
-- Use a valid synthetic email domain and tolerate auth phone validation.
-- Confirm the existing duplicate-resolution path returns 200.
+## Changes
 
-### 3. Collateral calculation = single 30-day payment
-In `src/utils/loanCalculations.ts`, remove the hardcoded 6-month collateral branch and let collateral be driven by its product config (`interest_period = per_loan`, 30% flat) as a **single** 30-day payment, so total repayment is not split into 6. Align `generateRepaymentSchedule` (UI preview) and `src/utils/createRepaymentSchedule.ts` (authoritative schedule) so collateral creates **one** installment due 30 days after disbursement (bullet behaviour), matching the correctly-rendered example loans. Verify with the reported figure (balance K8,495 → +30% = K11,043.5 due once, not K1,840 × 6).
+### 1. Remove the "fixed at 6 months" locks (allow 1–12)
 
-### 4. Enable Reloan/Restructure/Top-Up on Defaulted loans
-In `LoanDetailsModal.tsx`, add `"defaulted"` to the status conditions that show Reloan, Restructure and Top-Up (matching the user's confirmation that defaulted-but-paid clients must be able to reloan). With the audit_logs fix in place, these actions will complete successfully.
+- **Database trigger** `enforce_house_product_rules()`: change the COLLATERAL rule from "must equal 6 months" to "must be 1–12 months" (term_unit = months).
+- **Frontend validation** `src/hooks/useProductLoanRules.ts` (COLLATERAL block): replace the `termValue !== 6` error with a 1–12 month range check.
+- **Product config**: raise the collateral product's `max_term_months` from 6 to 12 (min stays 1) via migration, so the form's amount/term guards accept up to 12.
 
-### 5. Re-theme both PDFs + accurate Outstanding Balance
-- `src/utils/generateStatement.ts`: replace hot-pink `RGB(255,51,153)` with the brand palette used in `generateLoanSchedule.ts` (primary magenta `RGB(244,36,140)` / dark burgundy `RGB(108,26,58)` header). Ensure the Outstanding Balance is computed from principal remaining + unpaid penalties (not just total − paid).
-- `src/utils/generateLoanSchedule.ts`: keep the shared brand palette and always render the Outstanding Balance row; confirm term/installment labels reflect the corrected collateral math.
+### 2. Keep the form usable
 
-## Verification
-- Run the loan-calculation unit tests; add/adjust a collateral case (single 30-day payment).
-- Manually confirm a Defaulted loan now shows Reloan/Restructure/Top-Up and that performing a Reloan succeeds (no audit_logs RLS error in logs).
-- Re-create a Marketeer borrower and confirm success.
-- Regenerate both PDFs and visually QA: magenta/burgundy theme, correct outstanding balance, correct collateral installment.
+- `HouseLoanCreatePage` keeps a sensible default term (e.g. 6) but the term field stays fully editable from 1–12. No engine change — the entered rate continues to be treated as the total split across the chosen months.
 
-## Technical Notes (for reference)
-- Migration target: `public.audit_logs` — add `FOR INSERT WITH CHECK (auth.uid() IS NOT NULL)` (read policy unchanged).
-- Files: `supabase/functions/create-borrower/index.ts`, `src/utils/loanCalculations.ts`, `src/utils/createRepaymentSchedule.ts`, `src/components/admin/LoanDetailsModal.tsx`, `src/utils/generateStatement.ts`, `src/utils/generateLoanSchedule.ts`.
-- Brand palette already defined as `BRAND` in `generateLoanSchedule.ts`; reuse the same values in `generateStatement.ts`.
+### 3. Repair existing miscalculated collateral loans (data fix)
+
+A migration that, for collateral loans whose stored installment was computed with the old 6-way split:
+- Recompute `monthly_payment = total_repayment / loan_term_months`.
+- For loans with **no payments yet**, rewrite the amount on each **pending/unpaid** installment so the schedule sums to `total_repayment` (Manase's active loan: single installment becomes K11,043.50 instead of K1,840.58; `total_repayment` of K11,043.50 is already correct).
+- Loans with existing payments are handled conservatively — only unpaid installments are adjusted, and any loan where this can't be done cleanly is left untouched and reported.
+
+### 4. Tests
+
+- Extend `loanCalculations.collateral.test.ts` to assert the split across 1, 3, 6, 10, and 12-month terms (e.g. 48%/12 months → 4% interest portion per installment) so the "split across months" rule is locked in.
+
+## Technical details
+
+- DB trigger edit and product `max_term_months` update ship in one migration; the data-repair runs in a second migration after inspecting affected rows.
+- No change to `loanCalculations.ts` or `createRepaymentSchedule.ts` logic — they already produce the correct split; the schedule helper reads the corrected `monthly_payment`.
+- Verification: re-query Manase's loan + schedule to confirm the single installment equals K11,043.50, and run the collateral test file.

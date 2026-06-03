@@ -96,12 +96,12 @@ const productRules: Record<LoanProductCode, ProductLoanRuleSet> = {
       const errors: string[] = [];
       // Mirrors enforce_house_product_rules() in the DB:
       //   IF v_product_code = 'COLLATERAL' THEN
-      //     IF coalesce(NEW.loan_term_months, 0) <> 6 THEN
-      //       RAISE EXCEPTION 'Collateral loan term must be fixed at 6 months';
-      //     END IF;
+      //     IF coalesce(NEW.loan_term_months, 0) < 1 OR > 12 THEN ...
       //   END IF;
-      if (values.termValue !== 6) {
-        errors.push("Collateral loan term is fixed at 6 months (30% total interest).");
+      // Collateral runs 1–12 months. The entered interest rate is the TOTAL
+      // over the whole loan, split equally (flat) across the chosen months.
+      if (!Number.isInteger(values.termValue) || values.termValue < 1 || values.termValue > 12) {
+        errors.push("Collateral loan term must be between 1 and 12 months.");
       }
       return errors;
     },
