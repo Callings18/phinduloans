@@ -1493,6 +1493,23 @@ export default function ProductLoanFormShell({
                       </div>
                     </>
                   )}
+                  {productCode === "COLLATERAL" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Total Interest Rate (%) *</Label>
+                      <Input
+                        className="h-9"
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={interestRate}
+                        onChange={(e) => { setInterestRate(e.target.value); interestInitedRef.current = true; }}
+                        placeholder="e.g. 30"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        One-time total over the whole loan, split flat across the chosen months.
+                      </p>
+                    </div>
+                  )}
                   {usesDailySchedule && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Repayment Start Date *</Label>
