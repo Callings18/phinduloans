@@ -97,3 +97,65 @@ export function useHouseExpenses(productCode: string) {
     enabled: Boolean(productCode),
   });
 }
+
+export interface AccessibleHouse {
+  productCode: string;
+  name: string;
+}
+
+const STAFF_ROLES = [
+  "super_admin",
+  "admin",
+  "loan_officer",
+  "credit_officer",
+  "finance_officer",
+  "collections_officer",
+];
+
+/**
+ * Houses the current user can open: staff roles see every active house;
+ * everyone else is filtered by their `user_product_access` grants.
+ */
+export function useAccessibleHouses() {
+  const { user, hasRole } = useAuth();
+  const { data: modules, isLoading: modulesLoading } = useLoanProductModules();
+
+  const query = useQuery({
+    queryKey: ["accessible-houses", user?.id, (modules ?? []).map((m) => m.productCode).join(",")],
+    enabled: Boolean(user?.id) && !modulesLoading,
+    queryFn: async (): Promise<AccessibleHouse[]> => {
+      const houses: AccessibleHouse[] = (modules ?? [])
+        .filter((m) => m.enabled)
+        .map((m) => ({ productCode: m.productCode, name: m.name }));
+
+      const isStaff = STAFF_ROLES.some((r) => hasRole(r));
+      if (isStaff) return houses;
+
+      if (!user?.id) return [];
+      const { data, error } = await (supabase.from as any)("user_product_access")
+        .select("product_code")
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+      if (error) throw error;
+      const allowed = new Set(
+        (data ?? []).map((row: { product_code: string }) => (row.product_code || "").toUpperCase()),
+      );
+      return houses.filter((h) => allowed.has(h.productCode.toUpperCase()));
+    },
+  });
+
+  return query;
+}
+
+/**
+ * Loans, repayments, expenses and disbursements across one or many houses,
+ * used by the Reports page for single-house or "All houses" aggregation.
+ */
+export function useHousesReportBundle(productCodes: string[]) {
+  const codes = Array.from(new Set((productCodes ?? []).map((c) => c.toUpperCase()).filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["houses-report-bundle", codes.join(",")],
+    queryFn: () => fetchHousesReportBundle(codes),
+    enabled: codes.length > 0,
+  });
+}
