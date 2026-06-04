@@ -28,6 +28,7 @@ import {
   Wallet,
   CalendarIcon,
   Building2,
+  ChevronRight,
 } from "lucide-react";
 import {
   isPast,
