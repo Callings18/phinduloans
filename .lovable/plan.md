@@ -1,45 +1,51 @@
-## Goal
+# Advance Loan House Reporting — Monthly Profit View
 
-Make collateral-based loans support a flexible term of **1 to 12 months**, where the interest rate the admin enters is the **total** interest over the whole loan, split equally into flat monthly installments. Also repair existing collateral loans that show wrong installment amounts (e.g. Manase's K1,840).
+## Goal (from client's WhatsApp feedback)
+On the Loan House **Reports** page she wants:
+1. The monthly graph to show **how much interest/profit was made each month** (May, June, etc.) — not just the raw "Collected" amount.
+2. A side-by-side view of **profit expected vs profit made** per month.
+3. The broken **"Interest Made" card (currently K0)** fixed to show real interest, plus a **Net Profit** figure (interest earned minus expenses, per her choice "net of expenses").
 
-## What's already correct (no change needed)
+This is a reporting/presentation enhancement. No database schema changes are needed — all numbers are derived on the frontend by combining the house's loans, repayments, and expenses that are already loaded.
 
-The calculation engine already does exactly what you described. The collateral product is configured as `per_loan` flat interest, so:
+## How the numbers are calculated
+
+For each loan in the house we know `loan_amount`, `total_repayment`, and term. The interest baked into a loan is `total_repayment − loan_amount`. Each installment carries a proportional slice of that interest:
 
 ```text
-Enter 48% for 12 months  → total interest = 48% of principal, split into 12 equal flat installments (4%/month)
-Enter 30% for 3 months   → total interest = 30% of principal, split 10/10/10
-Enter 30% for 1 month    → 30% applies that single month
-Enter 30% for 6 months   → 30% total, divided across 6 installments
+interestRatio(loan)   = (total_repayment − loan_amount) / total_repayment
+expected interest     = installment.amount      × interestRatio   (counted in DUE month)
+interest made         = amount actually paid     × interestRatio   (counted in PAID month)
 ```
 
-The loan-creation form already lets the admin type a custom rate and term, and feeds them into this engine. The problem is purely the **"6 months only" locks** plus **stale saved data** on old loans.
+- **Expected line** = sum of expected interest for installments **due** in each month.
+- **Made line** = sum of interest from amounts **actually paid** in each month (handles partials correctly).
+- **Expenses** = expenses linked to this house's loans (via `loan_id`), summed by `expense_date` month. (Expense data is currently sparse and not all expenses link to a house, so where none exist the deduction is simply K0 and gross = net.)
+- **Net profit (made)** = interest made − expenses for that month.
 
-## Changes
+Showing both lines is exactly what she asked for ("profit expected or made in May, June").
 
-### 1. Remove the "fixed at 6 months" locks (allow 1–12)
+## What changes
 
-- **Database trigger** `enforce_house_product_rules()`: change the COLLATERAL rule from "must equal 6 months" to "must be 1–12 months" (term_unit = months).
-- **Frontend validation** `src/hooks/useProductLoanRules.ts` (COLLATERAL block): replace the `termValue !== 6` error with a 1–12 month range check.
-- **Product config**: raise the collateral product's `max_term_months` from 6 to 12 (min stays 1) via migration, so the form's amount/term guards accept up to 12.
+### 1. New pure utility `src/utils/houseProfit.ts`
+- `computeMonthlyProfit(loans, repayments, expenses, monthsBack)` → returns an array of `{ monthKey, label, expectedInterest, interestMade, expenses, netProfit }` for the last N months (default 12).
+- Also returns totals: total expected interest, total interest made, total expenses, total net profit.
+- Fully unit-testable; covered with a small test file `src/utils/__tests__/houseProfit.test.ts`.
 
-### 2. Keep the form usable
+### 2. `src/pages/admin/houses/HouseReportsPage.tsx` (main work)
+- Replace the single-series **"Monthly Collections"** bar chart with a **grouped bar chart: "Interest Expected" vs "Interest Made" per month**, titled **"Monthly Profit (Interest)"**. The tooltip for each month shows: Expected interest, Interest made, Expenses, and **Net profit** — so clicking/hovering a month answers "how much interest/profit was made in May/June".
+- Fix the **"Interest Made"** summary card to use the interest-ratio calc (no longer K0).
+- Add a **"Net Profit"** summary card (interest made − expenses).
+- Add a **"Monthly Profit Breakdown"** table under the chart: one row per month with columns *Month · Expected · Made · Expenses · Net Profit*, with totals — this is the "summary of profit made in May, June etc." she described.
+- Keep existing Total Disbursed / Total Collected / Outstanding / Overdue cards and the Loan Status Breakdown.
 
-- `HouseLoanCreatePage` keeps a sensible default term (e.g. 6) but the term field stays fully editable from 1–12. No engine change — the entered rate continues to be treated as the total split across the chosen months.
+### 3. Export ("Export + Post")
+- Add the monthly profit breakdown (expected, made, expenses, net) to the CSV so the posted report carries the same numbers shown on screen.
 
-### 3. Repair existing miscalculated collateral loans (data fix)
+## Out of scope
+- No DB migrations, no changes to how repayments/expenses are recorded.
+- Expense-to-house attribution stays as-is (via `loan_id`); a future step could add a dedicated house/branch tag on expenses if she wants overhead costs included.
 
-A migration that, for collateral loans whose stored installment was computed with the old 6-way split:
-- Recompute `monthly_payment = total_repayment / loan_term_months`.
-- For loans with **no payments yet**, rewrite the amount on each **pending/unpaid** installment so the schedule sums to `total_repayment` (Manase's active loan: single installment becomes K11,043.50 instead of K1,840.58; `total_repayment` of K11,043.50 is already correct).
-- Loans with existing payments are handled conservatively — only unpaid installments are adjusted, and any loan where this can't be done cleanly is left untouched and reported.
-
-### 4. Tests
-
-- Extend `loanCalculations.collateral.test.ts` to assert the split across 1, 3, 6, 10, and 12-month terms (e.g. 48%/12 months → 4% interest portion per installment) so the "split across months" rule is locked in.
-
-## Technical details
-
-- DB trigger edit and product `max_term_months` update ship in one migration; the data-repair runs in a second migration after inspecting affected rows.
-- No change to `loanCalculations.ts` or `createRepaymentSchedule.ts` logic — they already produce the correct split; the schedule helper reads the corrected `monthly_payment`.
-- Verification: re-query Manase's loan + schedule to confirm the single installment equals K11,043.50, and run the collateral test file.
+## Technical notes
+- All styling uses existing semantic tokens (`hsl(var(--primary))`, `--border`, etc.) and the recharts setup already on the page; the second series uses a muted/secondary token so the two bars are clearly distinguishable.
+- Calculations live in the pure util so the page stays presentation-only and the logic is tested.
