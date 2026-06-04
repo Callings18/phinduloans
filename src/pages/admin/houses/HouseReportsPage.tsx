@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAccessibleHouses, useHouseProduct, useHousesReportBundle } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
