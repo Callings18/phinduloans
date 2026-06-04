@@ -646,7 +646,7 @@ export default function HouseReportsPage() {
                   <span className="inline-block h-2.5 w-2.5 rounded-sm bg-muted-foreground/50" />
                   Expected — installments due ({drillData?.expected.length ?? 0})
                 </h4>
-                <DrillTable rows={drillData?.expected ?? []} loanName={loanName} mode="expected" />
+                <DrillTable rows={drillData?.expected ?? []} loanName={loanName} mode="expected" total={drillData?.expectedTotal ?? 0} />
               </div>
 
               {/* Made: installments paid this month */}
@@ -655,7 +655,7 @@ export default function HouseReportsPage() {
                   <span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary" />
                   Made — installments paid ({drillData?.made.length ?? 0})
                 </h4>
-                <DrillTable rows={drillData?.made ?? []} loanName={loanName} mode="made" />
+                <DrillTable rows={drillData?.made ?? []} loanName={loanName} mode="made" total={drillData?.madeTotal ?? 0} />
               </div>
             </div>
           </ScrollArea>
@@ -670,10 +670,12 @@ function DrillTable({
   rows,
   loanName,
   mode,
+  total,
 }: {
   rows: import("@/utils/houseProfit").ProfitContributionRow[];
   loanName: (loanId: string) => string;
   mode: "expected" | "made";
+  total: number;
 }) {
   if (rows.length === 0) {
     return (
@@ -682,7 +684,7 @@ function DrillTable({
       </p>
     );
   }
-  const total = Math.round(rows.reduce((s, r) => s + r.interest, 0));
+  const displayTotal = Math.round(total);
   return (
     <div className="overflow-x-auto rounded-md border border-border/60">
       <table className="w-full text-sm">
@@ -693,11 +695,13 @@ function DrillTable({
             <th className="py-2 px-3 font-medium">Status</th>
             <th className="py-2 px-3 font-medium text-right">Repayment</th>
             <th className="py-2 px-3 font-medium text-right">Interest</th>
+            <th className="py-2 px-3 font-medium text-right">% of {mode === "expected" ? "Expected" : "Made"}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => {
             const dateStr = mode === "expected" ? r.dueDate : r.paidDate;
+            const pct = total > 0 ? Math.round((r.interest / total) * 1000) / 10 : 0;
             return (
               <tr key={`${r.loanId}-${i}`} className="border-b border-border/40">
                 <td className="py-2 px-3">{loanName(r.loanId)}</td>
@@ -709,6 +713,20 @@ function DrillTable({
                 </td>
                 <td className="py-2 px-3 text-right text-muted-foreground">{fmtK(r.repaymentAmount)}</td>
                 <td className="py-2 px-3 text-right font-medium">{fmtK(r.interest)}</td>
+                <td className="py-2 px-3 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs text-muted-foreground">{pct}%</span>
+                    <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          mode === "expected" ? "bg-muted-foreground/60" : "bg-primary"
+                        )}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </td>
               </tr>
             );
           })}
@@ -716,7 +734,8 @@ function DrillTable({
         <tfoot>
           <tr className="border-t border-border font-semibold">
             <td className="py-2 px-3" colSpan={4}>Total interest</td>
-            <td className="py-2 px-3 text-right">{fmtK(total)}</td>
+            <td className="py-2 px-3 text-right">{fmtK(displayTotal)}</td>
+            <td className="py-2 px-3 text-right text-muted-foreground">{total > 0 ? "100%" : "—"}</td>
           </tr>
         </tfoot>
       </table>
