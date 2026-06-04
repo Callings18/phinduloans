@@ -836,7 +836,7 @@ export default function ProductLoanFormShell({
           {
             product_code: productCode,
             interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            interest_period: (productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || activeProduct.interest_period || "monthly") as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as "flat" | "reducing",
