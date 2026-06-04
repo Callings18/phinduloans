@@ -132,6 +132,12 @@ export default function HouseReportsPage() {
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  // Keep scope in sync when navigating between house reports routes.
+  useEffect(() => {
+    setScope(productCode);
+  }, [productCode]);
+
+
   const accessibleCodes = useMemo(
     () => (accessibleHouses ?? []).map((h) => h.productCode),
     [accessibleHouses],
