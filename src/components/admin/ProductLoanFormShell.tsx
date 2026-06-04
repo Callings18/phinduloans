@@ -48,6 +48,21 @@ type Borrower = {
   marital_status: string | null;
 };
 
+const LOAN_PURPOSE_OPTIONS = [
+  "Business expansion",
+  "Working capital",
+  "Stock / inventory purchase",
+  "Asset / equipment purchase",
+  "Vehicle purchase",
+  "Home improvement / construction",
+  "School / education fees",
+  "Medical expenses",
+  "Debt consolidation",
+  "Agriculture / farming",
+  "Personal / emergency",
+  "Other",
+] as const;
+
 interface ProductLoanFormShellProps {
   productCode: LoanProductCode;
   title: string;
@@ -94,6 +109,7 @@ export default function ProductLoanFormShell({
   const [loanAmount, setLoanAmount] = useState("");
   const [termValue, setTermValue] = useState(String(defaultTermValue));
   const [loanPurpose, setLoanPurpose] = useState("");
+  const [purposeOther, setPurposeOther] = useState(false);
   const [employmentType, setEmploymentType] = useState<"employed" | "self_employed" | "contract" | "other">(
     productCode === "MARKETEER" ? "self_employed" : "employed"
   );
@@ -594,7 +610,7 @@ export default function ProductLoanFormShell({
         ? {
             product_code: productCode,
             interest_rate: Number(interestRate || product.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            interest_period: (productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || product.interest_period || "monthly") as any,
             interest_type: ((product.interest_type as string) || "flat") as "flat" | "reducing",
@@ -820,7 +836,7 @@ export default function ProductLoanFormShell({
           {
             product_code: productCode,
             interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            interest_period: (productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || activeProduct.interest_period || "monthly") as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as "flat" | "reducing",
@@ -865,7 +881,7 @@ export default function ProductLoanFormShell({
         product_specific_data: {
           product_code: productCode,
           interest_period:
-            productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : (interestPeriod || activeProduct.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
@@ -1021,7 +1037,7 @@ export default function ProductLoanFormShell({
           {
             product_code: productCode,
             interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            interest_period: (productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || activeProduct.interest_period || "monthly") as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as any,
@@ -1063,7 +1079,7 @@ export default function ProductLoanFormShell({
           ...existingPsd,
           product_code: productCode,
           interest_period:
-            productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : (interestPeriod || (activeProduct as any)?.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
@@ -1541,7 +1557,45 @@ export default function ProductLoanFormShell({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Purpose *</Label>
-                    <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
+                    {(() => {
+                      const opts = LOAN_PURPOSE_OPTIONS as readonly string[];
+                      const purposeInList = opts.includes(loanPurpose) && loanPurpose !== "Other";
+                      const showCustomPurpose = purposeOther || (loanPurpose !== "" && !purposeInList);
+                      const selectValue = showCustomPurpose ? "Other" : (purposeInList ? loanPurpose : "");
+                      return (
+                        <>
+                          <Select
+                            value={selectValue}
+                            onValueChange={(v) => {
+                              if (v === "Other") {
+                                setPurposeOther(true);
+                                setLoanPurpose("");
+                              } else {
+                                setPurposeOther(false);
+                                setLoanPurpose(v);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Select purpose" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {opts.map((p) => (
+                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {showCustomPurpose && (
+                            <Input
+                              className="h-9 mt-1.5"
+                              value={loanPurpose}
+                              onChange={(e) => setLoanPurpose(e.target.value)}
+                              placeholder="Enter purpose"
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   {!isMarketeer && (
                     <>
@@ -1559,11 +1613,11 @@ export default function ProductLoanFormShell({
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Interest Period *</Label>
-                        {productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT" ? (
+                        {productCode === "PAYDAY_SOFT" ? (
                           <Input className="h-9 bg-muted" readOnly value="One-time total (whole loan)" />
                         ) : (
                           <Select
-                            value={interestPeriod || "monthly"}
+                            value={interestPeriod || (productCode === "COLLATERAL" ? "per_loan" : "monthly")}
                             onValueChange={(v) => { setInterestPeriod(v); interestInitedRef.current = true; }}
                           >
                             <SelectTrigger className="h-9">
@@ -1626,8 +1680,17 @@ export default function ProductLoanFormShell({
                     {productCode === "COLLATERAL" && Number(termValue) > 0 && (
                       <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2 space-y-1">
                         <span className="block">
-                          <span className="font-medium text-foreground">{Number(interestRate || 0)}% total interest on principal</span> (one-time, not per month), split evenly over{" "}
-                          <span className="font-medium">{Number(termValue)}</span> monthly installment{Number(termValue) === 1 ? "" : "s"}.
+                          {preview.interestPeriodUsed === "per_loan" ? (
+                            <>
+                              <span className="font-medium text-foreground">{Number(interestRate || 0)}% total interest on principal</span> (one-time, not per month), split evenly over{" "}
+                              <span className="font-medium">{Number(termValue)}</span> monthly installment{Number(termValue) === 1 ? "" : "s"}.
+                            </>
+                          ) : (
+                            <>
+                              <span className="font-medium text-foreground">{Number(interestRate || 0)}% interest per {preview.interestPeriodUsed === "monthly" ? "month" : preview.interestPeriodUsed === "weekly" ? "week" : preview.interestPeriodUsed === "daily" ? "day" : "year"}</span>, applied across{" "}
+                              <span className="font-medium">{Number(termValue)}</span> {termUnit} — total interest grows with the term.
+                            </>
+                          )}
                         </span>
                         {Number(preview.processingFeePercent) > 0 && (
                           <span className="block">
@@ -1647,9 +1710,14 @@ export default function ProductLoanFormShell({
                         )}
                       </p>
                     )}
-                    {(productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT") && preview.interestPeriodUsed === "monthly" && (
+                    {productCode === "PAYDAY_SOFT" && preview.interestPeriodUsed === "monthly" && (
                       <p className="text-[11px] text-destructive text-center mt-1">
                         Warning: &quot;Per month&quot; interest multiplies the rate by term months and will overcharge. Use one-time total.
+                      </p>
+                    )}
+                    {productCode === "COLLATERAL" && preview.interestPeriodUsed !== "per_loan" && (
+                      <p className="text-[11px] text-warning text-center mt-1">
+                        Heads up: this period multiplies interest by the term, so total repayment grows as you change the months. Pick &quot;One-time total&quot; to keep a flat 30%.
                       </p>
                     )}
                     {isMarketeer && Number(preview.processingFeePercent) > 0 && (
