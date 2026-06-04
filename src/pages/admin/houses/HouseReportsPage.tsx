@@ -217,6 +217,24 @@ export default function HouseReportsPage() {
     return Object.entries(map).sort(([, a], [, b]) => b - a);
   }, [loans]);
 
+  const loanLookup = useMemo(() => {
+    const map = new Map<string, HouseLoanRow>();
+    loans.forEach((l) => map.set(l.id, l));
+    return map;
+  }, [loans]);
+
+  const loanName = (loanId: string) => {
+    const l = loanLookup.get(loanId);
+    return l?.full_name || l?.email || `Loan ${loanId.slice(0, 8)}`;
+  };
+
+  // Repayment-level drill-down for the selected month
+  const drillData = useMemo(() => {
+    if (!drillMonth) return null;
+    return computeMonthContributions(loans, repayments, drillMonth.monthKey);
+  }, [drillMonth, loans, repayments]);
+
+
   const handleScopeChange = (value: string) => {
     if (value === ALL) {
       setScope(ALL);
