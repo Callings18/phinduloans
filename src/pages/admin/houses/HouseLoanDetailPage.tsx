@@ -528,6 +528,9 @@ export default function HouseLoanDetailPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Payment audit trail — who recorded, source, amounts, resulting status */}
+      <PaymentAuditTrail loanId={loanId} />
     </div>
   );
 }
