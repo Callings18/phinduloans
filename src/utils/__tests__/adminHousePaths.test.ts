@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  houseCollectionsPath,
   houseDisbursementsPath,
   houseLoanDetailPath,
   houseLoanEditPath,
@@ -20,6 +21,7 @@ describe("adminHousePaths", () => {
     expect(houseLoanDetailPath("COLLATERAL", "abc-123")).toBe("/admin/houses/COLLATERAL/loans/abc-123");
     expect(houseLoanEditPath("COLLATERAL", "abc-123")).toBe("/admin/houses/COLLATERAL/loans/abc-123/edit");
     expect(houseDisbursementsPath("PAYDAY_SOFT")).toBe("/admin/houses/PAYDAY_SOFT/disbursements");
+    expect(houseCollectionsPath("MARKETEER")).toBe("/admin/houses/MARKETEER/collections");
   });
 
   it("resolves product code from loan product id", () => {

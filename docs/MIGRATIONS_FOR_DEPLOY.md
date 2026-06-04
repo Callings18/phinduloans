@@ -59,3 +59,7 @@ CLI (when linked): from repo root, `supabase db push`.
 Browser push subscriptions use the existing **`push_subscriptions`** table from  
 [`supabase/migrations/20260108171013_68fb6947-6cc4-4eb3-8e58-7d2d0511db79.sql`](../supabase/migrations/20260108171013_68fb6947-6cc4-4eb3-8e58-7d2d0511db79.sql).  
 Deploy the **`send-web-push`** Edge Function and set VAPID secrets (see [`supabase/functions/send-web-push/README.md`](../supabase/functions/send-web-push/README.md)).
+
+## Loan house audit
+
+After applying migrations above, use [`LOAN_HOUSE_STAGING_BASELINE.md`](./LOAN_HOUSE_STAGING_BASELINE.md) and [`LOAN_HOUSE_PRODUCTION_ROLLOUT.md`](./LOAN_HOUSE_PRODUCTION_ROLLOUT.md) for seven-house sign-off.

@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:integration:loan-flow": "vitest run tests/integration/loan-flow.full.test.ts",
+    "test:integration:houses": "node scripts/run-loan-flow-all-houses.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
     "test:e2e:borrower": "playwright test tests/e2e/borrower-critical.spec.ts",

@@ -3,12 +3,18 @@ import { LayoutGrid, ArrowUpRight, ExternalLink } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
+  houseCollectionsPath,
   houseDisbursementsPath,
   houseLoanDetailPath,
   houseRootPath,
 } from "@/utils/adminHousePaths";
 
-type LegacyPage = "applications" | "loans" | "disbursements";
+type LegacyPage =
+  | "applications"
+  | "loans"
+  | "disbursements"
+  | "repayments"
+  | "collections";
 
 const PAGE_COPY: Record<
   LegacyPage,
@@ -32,6 +38,18 @@ const PAGE_COPY: Record<
     housesLink: "/admin/houses",
     housesLabel: "Product House disbursements",
   },
+  repayments: {
+    title: "Record repayments in the product house when possible",
+    body: "House collections use product schedules and completion rules. This global repayments view remains for cross-product claims and finance oversight.",
+    housesLink: "/admin/houses",
+    housesLabel: "Product House collections",
+  },
+  collections: {
+    title: "Recover overdue accounts from the product house when possible",
+    body: "House collections pages tie payments to the correct schedule and product rules. This global collections desk remains for cross-product recovery.",
+    housesLink: "/admin/houses",
+    housesLabel: "Product House collections",
+  },
 };
 
 type Props = {
@@ -49,7 +67,9 @@ export function LegacyAdminPathBanner({ page, productCode, loanId }: Props) {
       : code
         ? page === "disbursements"
           ? houseDisbursementsPath(code)
-          : houseRootPath(code)
+          : page === "repayments" || page === "collections"
+            ? houseCollectionsPath(code)
+            : houseRootPath(code)
         : null;
 
   return (

@@ -2,6 +2,8 @@
 
 Use this for **client demos and release sign-off**: each **active** loan product in production should pass the golden path once end-to-end.
 
+**Loan house deep audit (2026):** Track staging/production sign-off in [`LOAN_HOUSE_AUDIT_MATRIX.md`](./LOAN_HOUSE_AUDIT_MATRIX.md). Run UAT steps from [`LOAN_HOUSE_UAT_RUNBOOK.md`](./LOAN_HOUSE_UAT_RUNBOOK.md). Apply production migrations and health SQL per [`LOAN_HOUSE_PRODUCTION_ROLLOUT.md`](./LOAN_HOUSE_PRODUCTION_ROLLOUT.md).
+
 ## Canonical `product_code` list (repo + DB)
 
 These codes are defined or seeded in Supabase migrations (see `20260413130000_loan_products_extensions_and_phindu_catalog.sql`, `20260414131455_c914345f-4105-401a-acc5-5d34baa66170.sql`, and related patches):

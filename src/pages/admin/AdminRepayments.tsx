@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
 import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -671,6 +672,7 @@ const AdminRepayments = () => {
           title="Repayments"
           description="Track and record loan repayments"
         />
+        <LegacyAdminPathBanner page="repayments" />
 
         {/* Stats */}
         <StatsGrid className="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

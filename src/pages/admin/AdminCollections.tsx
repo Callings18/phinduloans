@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
 import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -472,6 +473,7 @@ const AdminCollections = () => {
           title="Collections Management"
           description="Track overdue accounts, PTPs, and recovery actions"
         />
+        <LegacyAdminPathBanner page="collections" />
 
         {/* Stats Summary */}
         <StatsGrid className="sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">

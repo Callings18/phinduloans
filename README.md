@@ -89,3 +89,12 @@ For production readiness and launch checks, review:
 
 - `PROJECT_CHECKLIST_AND_NOTES.md`
 - `LAUNCH_READINESS_CHECKLIST.md`
+
+### Loan house deep audit (seven product houses)
+
+- `docs/LOAN_HOUSE_AUDIT_MATRIX.md` — sign-off grid
+- `docs/LOAN_HOUSE_STAGING_BASELINE.md` — Phase 0 migrations + catalog SQL
+- `docs/LOAN_HOUSE_UAT_RUNBOOK.md` — staging/production golden path
+- `docs/LOAN_HOUSE_HEALTH_SQL.md` — data health queries
+- `docs/LOAN_HOUSE_INTEGRATION.md` — `npm run test:integration:houses`
+- `docs/LOAN_HOUSE_PRODUCTION_ROLLOUT.md` — production rollout
