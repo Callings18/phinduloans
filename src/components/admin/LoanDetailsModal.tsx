@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
+import { callRpc } from "@/utils/rpcResult";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -584,6 +585,43 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     onError: (error: any) => {
       // Long messages are common now — give the toast room and keep it visible.
       toast.error(error?.message || "Failed to record payment", { duration: 8000 });
+    },
+  });
+
+  const reconcileCompletionMutation = useMutation({
+    mutationFn: async () => {
+      if (!loan?.id) throw new Error("No loan selected");
+      const res = await callRpc<{
+        updated?: boolean;
+        status?: string;
+        total_paid?: number;
+        total_due?: number;
+        principal_reconciled?: boolean;
+        all_installments_clear?: boolean;
+      }>("admin_reconcile_loan_completion", { p_loan_id: loan.id });
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      if (data?.updated) {
+        toast.success("Loan marked as completed — borrower can apply for a new loan.");
+      } else if (data?.principal_reconciled === false) {
+        toast.error(
+          `Cannot complete yet: recorded payments (K${Number(data?.total_paid || 0).toLocaleString()}) are below total due (K${Number(data?.total_due || 0).toLocaleString()}). Review the schedule or record the remaining balance.`,
+          { duration: 10000 },
+        );
+      } else if (data?.all_installments_clear === false) {
+        toast.error("Cannot complete yet: one or more installments still show an outstanding balance.", { duration: 8000 });
+      } else {
+        toast.info(`Loan status unchanged (${data?.status || "unknown"}).`);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Could not reconcile loan completion", { duration: 8000 });
     },
   });
 
@@ -1850,6 +1888,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
+  const canReconcileCompletion =
+    (loan.status === "active" || loan.status === "disbursed") &&
+    totalOutstanding <= 0.01 &&
+    Number(loan.total_repayment || 0) > 0 &&
+    totalPaidIncludingPartial >= Number(loan.total_repayment || 0) - 0.01;
   // Overdue / next-due include "partial" rows so quick-actions and KPIs reflect partially-paid installments correctly.
   const _isUnpaidStatus = (s?: string) => s === "pending" || s === "partial" || s === "overdue";
   const overdueCount = repayments?.filter(r => _isUnpaidStatus(r.status) && !r.is_reversed && new Date(r.due_date) < new Date()).length || 0;
@@ -2265,6 +2308,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         {loan.status === "active" && (
                           <Button size="sm" variant="outline" onClick={() => calculateEarlySettlementMutation.mutate()}>
                             <Calculator size={14} className="mr-1" /> Early Settlement
+                          </Button>
+                        )}
+                        {canReconcileCompletion && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={reconcileCompletionMutation.isPending}
+                            onClick={() => reconcileCompletionMutation.mutate()}
+                          >
+                            <CheckCircle size={14} className="mr-1" />
+                            {reconcileCompletionMutation.isPending ? "Syncing…" : "Mark completed"}
                           </Button>
                         )}
                         {(loan.status === "active" || loan.status === "disbursed" || loan.status === "defaulted") && (

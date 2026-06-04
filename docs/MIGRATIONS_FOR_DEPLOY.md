@@ -2,6 +2,14 @@
 
 Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `supabase db push`, or SQL Editor in Lovable/dashboard).
 
+## June 2026 — fully paid loans stuck as active (blocks new applications)
+
+| Order | File | Purpose |
+|------:|------|---------|
+| 1 | [`supabase/migrations/20260604100000_reconcile_fully_paid_loan_statuses.sql`](../supabase/migrations/20260604100000_reconcile_fully_paid_loan_statuses.sql) | **Data repair + guard:** sets `completed` when all installments are cleared and principal paid ≥ `total_repayment`; backfills stuck `active`/`disbursed` loans; trigger on `loan_repayments` for future payments. |
+
+**Symptom:** “Borrower already has an active loan” after they paid off in full. **After applying:** retry the new loan; use **Mark completed** on the old loan in loan details if needed.
+
 ## June 2026 — collateral term + installment repair (3 migrations)
 
 All three files are dated **2026-06-03**. Run them sequentially; skip any step already applied in your environment.
