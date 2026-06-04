@@ -43,6 +43,8 @@ See [`MIGRATIONS_FOR_DEPLOY.md`](./MIGRATIONS_FOR_DEPLOY.md):
 | `20260604100000_reconcile_fully_paid_loan_statuses.sql` |
 | `20260604130000_collateral_per_loan_interest_catalog.sql` |
 | `20260604150000_collateral_processing_fee_5_percent.sql` |
+| `20260604160000_restore_house_product_enforce_rules.sql` |
+| `20260604170000_payday_per_loan_interest_catalog.sql` |
 
 **Operator / date applied:** _______________________
 

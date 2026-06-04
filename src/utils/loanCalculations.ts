@@ -30,6 +30,8 @@ export interface LoanProduct {
   grace_period_days?: number | null;
   early_repayment_fee_percent?: number | null;
   term_unit?: TermUnit | null; // NEW: Unit for loan term
+  min_amount?: number | null;
+  max_amount?: number | null;
 }
 
 
@@ -241,12 +243,14 @@ export function calculateLoan(
 
 
   if (product.product_code === "MARKETEER") {
-    const tiers = getMarketeerTiersOrDefault(product.pricing_tiers);
+    const tiers = getMarketeerTiersOrDefault(
+      product.pricing_tiers,
+      product.min_amount ?? null,
+      product.max_amount ?? null,
+    );
     const m = calculateMarketeerLoan(principal, tiers);
     if (m) {
-      // Marketeer is a fixed-term per-loan product (30% / 26 days).
-      // Express an equivalent "monthly" rate purely for display: total interest %
-      // scaled by (30 / durationDays) so a 26-day, 30% loan reads ~34.6%/month.
+      const upfront = computeUpfrontProductFees(principal, product);
       const interestPercentTotal = m.tier.interestPercent;
       const equivMonthlyRate = m.tier.durationDays > 0
         ? (interestPercentTotal * 30) / m.tier.durationDays
@@ -255,16 +259,16 @@ export function calculateLoan(
         principal,
         monthlyInterestRate: Math.round(equivMonthlyRate * 100) / 100,
         totalInterest: m.totalInterest,
-        processingFee: 0,
-        enforcementFee: 0,
-        insuranceFee: 0,
-        vatAmount: 0,
-        platformFee: 0,
-        totalFees: 0,
-        feesDeductedUpfront: 0,
-        disbursementAmount: principal,
-        legalFeeAmount: 0,
-        netToBorrower: principal,
+        processingFee: upfront.processingFee,
+        enforcementFee: upfront.enforcementFee,
+        insuranceFee: upfront.insuranceFee,
+        vatAmount: upfront.vatAmount,
+        platformFee: upfront.platformFee,
+        totalFees: upfront.feesDeductedUpfront,
+        feesDeductedUpfront: upfront.feesDeductedUpfront,
+        disbursementAmount: upfront.disbursementAmount,
+        legalFeeAmount: upfront.legalFeeAmount,
+        netToBorrower: upfront.netToBorrower,
         totalRepayment: m.totalRepayment,
         monthlyPayment: m.dailyInstallment,
         dailyPayment: m.dailyInstallment,

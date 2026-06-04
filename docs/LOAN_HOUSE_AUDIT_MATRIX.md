@@ -54,9 +54,9 @@ Modules: **Dash** | **Borr** | **Create** | **Edit** | **Loans** | **Detail** | 
 
 | Module | Staging | Prod | Code review | Notes |
 |--------|:-------:|:----:|:-------------:|-------|
-| Dash | — | — | P | Daily KPIs |
+| Dash | — | — | P | Daily KPIs; fees in preview |
 | Borr | — | — | P | |
-| Create | — | — | P | 26 days; compliance flags |
+| Create | — | — | P | 26 days; compliance; processing fee deducted; DB term guard restored (`04160000`) |
 | Edit | — | — | P | |
 | Loans | — | — | P | |
 | Detail | — | — | P | |
@@ -75,7 +75,7 @@ Modules: **Dash** | **Borr** | **Create** | **Edit** | **Loans** | **Detail** | 
 |--------|:-------:|:----:|:-------------:|-------|
 | Dash | — | — | P | |
 | Borr | — | — | P | |
-| Create | — | — | P | Lusaka + 30 days enforced |
+| Create | — | — | P | Lusaka + 30 days; `per_loan` interest locked (`04170000`) |
 | Edit | — | — | P | |
 | Loans | — | — | P | |
 | Detail | — | — | P | |

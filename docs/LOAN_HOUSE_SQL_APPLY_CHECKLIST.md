@@ -18,6 +18,8 @@ Apply in this order:
 | 4 | [ ] | `supabase/migrations/20260604100000_reconcile_fully_paid_loan_statuses.sql` |
 | 5 | [ ] | `supabase/migrations/20260604130000_collateral_per_loan_interest_catalog.sql` |
 | 6 | [ ] | `supabase/migrations/20260604150000_collateral_processing_fee_5_percent.sql` |
+| 7 | [ ] | `supabase/migrations/20260604160000_restore_house_product_enforce_rules.sql` |
+| 8 | [ ] | `supabase/migrations/20260604170000_payday_per_loan_interest_catalog.sql` |
 
 **Do not apply** `20260604101141_e278dd20-….sql` — duplicate of step 4 (removed from repo).
 

@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { calculateLoan } from "@/utils/loanCalculations";
+import { calculateLoan, computeUpfrontProductFees } from "@/utils/loanCalculations";
 import { useProductLoanRules } from "@/hooks/useProductLoanRules";
 import type { LoanProductCode } from "@/config/loanProductModules";
 import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCollectionDates } from "@/lib/marketeerCalculations";
@@ -343,7 +343,11 @@ export default function ProductLoanFormShell({
     if (!product) return;
     setInterestRate(String(product.interest_rate ?? ""));
     // Collateral: entered % is TOTAL interest over the whole loan (per_loan), not per month.
-    setInterestPeriod(productCode === "COLLATERAL" ? "per_loan" : ((product.interest_period as string) || "monthly"));
+    setInterestPeriod(
+      productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+        ? "per_loan"
+        : ((product.interest_period as string) || "monthly"),
+    );
     interestInitedRef.current = true;
   }, [product, isEditMode, productCode]);
 
@@ -590,7 +594,7 @@ export default function ProductLoanFormShell({
         ? {
             product_code: productCode,
             interest_rate: Number(interestRate || product.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL"
+            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || product.interest_period || "monthly") as any,
             interest_type: ((product.interest_type as string) || "flat") as "flat" | "reducing",
@@ -613,14 +617,17 @@ export default function ProductLoanFormShell({
     if (principal <= 0) return null;
 
     if (isMarketeer && marketeerResult) {
+      const upfront = computeUpfrontProductFees(principal, calcProductInput);
       return {
         principal,
         repayment: marketeerResult.totalRepayment,
         interest: marketeerResult.totalInterest,
-        disbursement: principal,
-        netToBorrower: principal,
-        feesDeducted: 0,
-        legalFee: 0,
+        disbursement: upfront.disbursementAmount,
+        netToBorrower: upfront.netToBorrower,
+        feesDeducted: upfront.feesDeductedUpfront,
+        processingFee: upfront.processingFee,
+        processingFeePercent: Number(product.processing_fee_percent || 0),
+        legalFee: upfront.legalFeeAmount,
         installmentLabel: `Daily installment (${marketeerResult.durationDays} days, Mon–Sat)`,
         installment: marketeerResult.dailyInstallment,
         dailyRate: `${(marketeerResult.tier.interestPercent / marketeerResult.durationDays).toFixed(3)}%`,
@@ -813,7 +820,7 @@ export default function ProductLoanFormShell({
           {
             product_code: productCode,
             interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL"
+            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || activeProduct.interest_period || "monthly") as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as "flat" | "reducing",
@@ -857,7 +864,10 @@ export default function ProductLoanFormShell({
         repayment_start_date: usesDailySchedule ? repaymentStartDate : null,
         product_specific_data: {
           product_code: productCode,
-          interest_period: productCode === "COLLATERAL" ? "per_loan" : (interestPeriod || activeProduct.interest_period || "monthly"),
+          interest_period:
+            productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+              ? "per_loan"
+              : (interestPeriod || activeProduct.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
           civil_servant_confirmed: isCivilServantConfirmed,
           local_authority_compliance: hasLocalAuthorityCompliance,
@@ -1011,7 +1021,7 @@ export default function ProductLoanFormShell({
           {
             product_code: productCode,
             interest_rate: Number(interestRate || activeProduct.interest_rate || 0),
-            interest_period: (productCode === "COLLATERAL"
+            interest_period: (productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : interestPeriod || activeProduct.interest_period || "monthly") as any,
             interest_type: ((activeProduct.interest_type as string) || "flat") as any,
@@ -1052,7 +1062,10 @@ export default function ProductLoanFormShell({
         product_specific_data: {
           ...existingPsd,
           product_code: productCode,
-          interest_period: productCode === "COLLATERAL" ? "per_loan" : (interestPeriod || (activeProduct as any)?.interest_period || "monthly"),
+          interest_period:
+            productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+              ? "per_loan"
+              : (interestPeriod || (activeProduct as any)?.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
           civil_servant_confirmed: isCivilServantConfirmed,
           local_authority_compliance: hasLocalAuthorityCompliance,
@@ -1546,7 +1559,7 @@ export default function ProductLoanFormShell({
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Interest Period *</Label>
-                        {productCode === "COLLATERAL" ? (
+                        {productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT" ? (
                           <Input className="h-9 bg-muted" readOnly value="One-time total (whole loan)" />
                         ) : (
                           <Select
@@ -1634,9 +1647,16 @@ export default function ProductLoanFormShell({
                         )}
                       </p>
                     )}
-                    {productCode === "COLLATERAL" && preview.interestPeriodUsed === "monthly" && (
+                    {(productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT") && preview.interestPeriodUsed === "monthly" && (
                       <p className="text-[11px] text-destructive text-center mt-1">
                         Warning: &quot;Per month&quot; interest multiplies the rate by term months and will overcharge. Use one-time total.
+                      </p>
+                    )}
+                    {isMarketeer && Number(preview.processingFeePercent) > 0 && (
+                      <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2">
+                        Processing fee ({Number(preview.processingFeePercent)}% of principal):{" "}
+                        <span className="font-medium text-destructive">−K{Number(preview.processingFee ?? 0).toLocaleString()}</span>
+                        {" "}deducted before disbursement.
                       </p>
                     )}
                   </div>

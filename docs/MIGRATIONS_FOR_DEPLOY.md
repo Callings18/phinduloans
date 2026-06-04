@@ -15,6 +15,8 @@ Run after deploy of the matching frontend (collateral form locks to per_loan and
 | Order | File | Purpose |
 |------:|------|---------|
 | 2 | [`supabase/migrations/20260604150000_collateral_processing_fee_5_percent.sql`](../supabase/migrations/20260604150000_collateral_processing_fee_5_percent.sql) | Sets `COLLATERAL.processing_fee_percent = 5` (deducted from principal at disbursement; editable in house product config). |
+| 3 | [`supabase/migrations/20260604160000_restore_house_product_enforce_rules.sql`](../supabase/migrations/20260604160000_restore_house_product_enforce_rules.sql) | Restores full `enforce_house_product_rules()` including Marketeer 26-day term and salary term/amount guards. |
+| 4 | [`supabase/migrations/20260604170000_payday_per_loan_interest_catalog.sql`](../supabase/migrations/20260604170000_payday_per_loan_interest_catalog.sql) | Sets `PAYDAY_SOFT.interest_period = per_loan` (30% total over 30 days). |
 
 ## June 2026 — fully paid loans stuck as active (blocks new applications)
 
