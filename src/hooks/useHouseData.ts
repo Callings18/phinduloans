@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useLoanProductModules } from "@/hooks/useLoanProductModules";
 import {
   fetchHouseBorrowers,
   fetchHouseDisbursements,
@@ -9,7 +11,9 @@ import {
   fetchHouseProductByCode,
   fetchHouseRepayments,
   fetchHouseReportSummary,
+  fetchHousesReportBundle,
 } from "@/services/repositories/houseRepository";
+
 
 export function useHouseProduct(productCode: string) {
   const queryClient = useQueryClient();
