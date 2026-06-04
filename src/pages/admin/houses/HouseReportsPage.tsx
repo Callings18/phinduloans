@@ -134,6 +134,7 @@ export default function HouseReportsPage() {
   const [preset, setPreset] = useState<PresetKey>("year");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [drillMonth, setDrillMonth] = useState<MonthlyProfitRow | null>(null);
 
   // Keep scope in sync when navigating between house reports routes.
   useEffect(() => {
