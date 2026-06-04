@@ -85,3 +85,11 @@ export function useHouseReportSummary(productCode: string) {
     enabled: Boolean(productCode),
   });
 }
+
+export function useHouseExpenses(productCode: string) {
+  return useQuery({
+    queryKey: ["house-expenses", productCode],
+    queryFn: () => fetchHouseExpenses(productCode),
+    enabled: Boolean(productCode),
+  });
+}
