@@ -1557,7 +1557,45 @@ export default function ProductLoanFormShell({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Purpose *</Label>
-                    <Input className="h-9" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={isMarketeer ? "Stock purchase, working capital" : "Loan purpose"} />
+                    {(() => {
+                      const opts = LOAN_PURPOSE_OPTIONS as readonly string[];
+                      const purposeInList = opts.includes(loanPurpose) && loanPurpose !== "Other";
+                      const showCustomPurpose = purposeOther || (loanPurpose !== "" && !purposeInList);
+                      const selectValue = showCustomPurpose ? "Other" : (purposeInList ? loanPurpose : "");
+                      return (
+                        <>
+                          <Select
+                            value={selectValue}
+                            onValueChange={(v) => {
+                              if (v === "Other") {
+                                setPurposeOther(true);
+                                setLoanPurpose("");
+                              } else {
+                                setPurposeOther(false);
+                                setLoanPurpose(v);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Select purpose" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {opts.map((p) => (
+                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {showCustomPurpose && (
+                            <Input
+                              className="h-9 mt-1.5"
+                              value={loanPurpose}
+                              onChange={(e) => setLoanPurpose(e.target.value)}
+                              placeholder="Enter purpose"
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   {!isMarketeer && (
                     <>
@@ -1575,11 +1613,11 @@ export default function ProductLoanFormShell({
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Interest Period *</Label>
-                        {productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT" ? (
+                        {productCode === "PAYDAY_SOFT" ? (
                           <Input className="h-9 bg-muted" readOnly value="One-time total (whole loan)" />
                         ) : (
                           <Select
-                            value={interestPeriod || "monthly"}
+                            value={interestPeriod || (productCode === "COLLATERAL" ? "per_loan" : "monthly")}
                             onValueChange={(v) => { setInterestPeriod(v); interestInitedRef.current = true; }}
                           >
                             <SelectTrigger className="h-9">
