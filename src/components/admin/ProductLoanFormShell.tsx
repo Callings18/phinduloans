@@ -1710,9 +1710,14 @@ export default function ProductLoanFormShell({
                         )}
                       </p>
                     )}
-                    {(productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT") && preview.interestPeriodUsed === "monthly" && (
+                    {productCode === "PAYDAY_SOFT" && preview.interestPeriodUsed === "monthly" && (
                       <p className="text-[11px] text-destructive text-center mt-1">
                         Warning: &quot;Per month&quot; interest multiplies the rate by term months and will overcharge. Use one-time total.
+                      </p>
+                    )}
+                    {productCode === "COLLATERAL" && preview.interestPeriodUsed !== "per_loan" && (
+                      <p className="text-[11px] text-warning text-center mt-1">
+                        Heads up: this period multiplies interest by the term, so total repayment grows as you change the months. Pick &quot;One-time total&quot; to keep a flat 30%.
                       </p>
                     )}
                     {isMarketeer && Number(preview.processingFeePercent) > 0 && (
