@@ -306,7 +306,33 @@ export default function ProductLoanFormShell({
   const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ["product-by-code", productCode],
     queryFn: () => resolveProduct(productCode),
+    staleTime: 0,
   });
+
+  // Refresh fee % and limits when product config is edited (e.g. processing fee on collateral house).
+  useEffect(() => {
+    if (!productCode) return;
+    const channel = supabase
+      .channel(`loan-product-live-${productCode}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "loan_products",
+          filter: `product_code=eq.${productCode}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["product-by-code", productCode] });
+          queryClient.invalidateQueries({ queryKey: ["house-product", productCode] });
+          queryClient.invalidateQueries({ queryKey: ["house-product-config", productCode] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [productCode, queryClient]);
 
   // Seed the editable interest rate/period from the product defaults once it loads.
   // In edit mode the dedicated edit-hydration effect seeds these instead (so we skip
@@ -610,6 +636,8 @@ export default function ProductLoanFormShell({
       disbursement: calc.disbursementAmount,
       netToBorrower: calc.netToBorrower,
       feesDeducted: calc.feesDeductedUpfront,
+      processingFee: calc.processingFee,
+      processingFeePercent: Number(product.processing_fee_percent || 0),
       legalFee: calc.legalFeeAmount,
       installmentLabel: isPaydaySoft ? "Single payment (due on day 30)" : termUnit === "days" ? "Daily installment" : termUnit === "weeks" ? "Weekly installment" : "Monthly installment",
       installment: calc.dailyPayment || calc.weeklyPayment || calc.monthlyPayment,
@@ -1583,15 +1611,26 @@ export default function ProductLoanFormShell({
                       <p className="text-[10px] text-muted-foreground text-center mt-1">Daily rate: {preview.dailyRate}/day</p>
                     )}
                     {productCode === "COLLATERAL" && Number(termValue) > 0 && (
-                      <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2">
-                        <span className="font-medium text-foreground">{Number(interestRate || 0)}% total interest on principal</span> (one-time, not per month), split evenly over{" "}
-                        <span className="font-medium">{Number(termValue)}</span> monthly installment{Number(termValue) === 1 ? "" : "s"}.
-                        {(preview.feesDeducted > 0 || preview.legalFee > 0) && (
-                          <>
-                            {" "}
-                            Upfront deductions: product fees K{Number(preview.feesDeducted).toLocaleString()}
+                      <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2 space-y-1">
+                        <span className="block">
+                          <span className="font-medium text-foreground">{Number(interestRate || 0)}% total interest on principal</span> (one-time, not per month), split evenly over{" "}
+                          <span className="font-medium">{Number(termValue)}</span> monthly installment{Number(termValue) === 1 ? "" : "s"}.
+                        </span>
+                        {Number(preview.processingFeePercent) > 0 && (
+                          <span className="block">
+                            Processing fee ({Number(preview.processingFeePercent)}% of principal):{" "}
+                            <span className="font-medium text-destructive">−K{Number(preview.processingFee ?? 0).toLocaleString()}</span>
+                            {" "}deducted before disbursement (borrower repays full principal + interest).
+                          </span>
+                        )}
+                        {(preview.feesDeducted > Number(preview.processingFee || 0) || preview.legalFee > 0) && (
+                          <span className="block">
+                            Other upfront deductions
+                            {preview.feesDeducted > Number(preview.processingFee || 0)
+                              ? `: product fees K${Number(preview.feesDeducted).toLocaleString()}`
+                              : ""}
                             {preview.legalFee > 0 ? `, legal fee K${Number(preview.legalFee).toLocaleString()}` : ""}.
-                          </>
+                          </span>
                         )}
                       </p>
                     )}

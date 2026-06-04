@@ -80,6 +80,18 @@ describe("Collateral loan (admin-driven term & interest)", () => {
     expect(schedule[schedule.length - 1].remainingBalance).toBe(0);
   });
 
+  it("deducts processing fee percent from principal before disbursement", () => {
+    const withProcessing: LoanProduct = {
+      ...collateralProduct,
+      processing_fee_percent: 5,
+    };
+    const r = calculateLoan(10_000, 6, withProcessing, "months");
+    expect(r.processingFee).toBe(500);
+    expect(r.disbursementAmount).toBe(9500);
+    expect(r.netToBorrower).toBe(9500);
+    expect(r.totalRepayment).toBe(13_000);
+  });
+
   it("net to borrower deducts upfront legal fee when configured", () => {
     const withLegal: LoanProduct = {
       ...collateralProduct,

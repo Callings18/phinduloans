@@ -70,6 +70,60 @@ export interface RepaymentScheduleItem {
   remainingBalance: number;
 }
 
+export type UpfrontFeeProduct = Pick<
+  LoanProduct,
+  | "processing_fee_percent"
+  | "enforcement_fee_percent"
+  | "insurance_percent"
+  | "vat_percent"
+  | "platform_fee_percent"
+  | "legal_fee_percent"
+  | "legal_fee_deduction_mode"
+>;
+
+export interface UpfrontFeeBreakdown {
+  processingFee: number;
+  enforcementFee: number;
+  insuranceFee: number;
+  platformFee: number;
+  vatAmount: number;
+  feesDeductedUpfront: number;
+  disbursementAmount: number;
+  legalFeeAmount: number;
+  netToBorrower: number;
+}
+
+/** Product fees deducted from principal before cash is sent to the borrower. */
+export function computeUpfrontProductFees(principal: number, product: UpfrontFeeProduct): UpfrontFeeBreakdown {
+  const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
+  const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
+  const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
+  const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
+  const vatableAmount = processingFee + enforcementFee + platformFee;
+  const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
+  const feesDeductedUpfront = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
+  const disbursementAmount = principal - feesDeductedUpfront;
+  const legalFeeMode = (product.legal_fee_deduction_mode || "none").toLowerCase();
+  const legalFeePercent = Number(product.legal_fee_percent || 0);
+  const legalFeeAmount =
+    legalFeeMode === "upfront_net" && legalFeePercent > 0
+      ? disbursementAmount * (legalFeePercent / 100)
+      : 0;
+  const netToBorrower = disbursementAmount - legalFeeAmount;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    processingFee: round2(processingFee),
+    enforcementFee: round2(enforcementFee),
+    insuranceFee: round2(insuranceFee),
+    platformFee: round2(platformFee),
+    vatAmount: round2(vatAmount),
+    feesDeductedUpfront: round2(feesDeductedUpfront),
+    disbursementAmount: round2(disbursementAmount),
+    legalFeeAmount: round2(legalFeeAmount),
+    netToBorrower: round2(netToBorrower),
+  };
+}
+
 /**
  * Normalizes any interest rate to a MONTHLY rate
  * @param rate - The stated interest rate as a percentage (e.g., 15 for 15%)
@@ -297,29 +351,19 @@ export function calculateLoan(
     }
   }
   
-  // Calculate fees - these are DEDUCTED from disbursement, not added to repayment
-  const processingFee = principal * ((product.processing_fee_percent || 0) / 100);
-  const enforcementFee = principal * ((product.enforcement_fee_percent || 0) / 100);
-  const insuranceFee = principal * ((product.insurance_percent || 0) / 100);
-  const platformFee = principal * ((product.platform_fee_percent || 0) / 100);
-  
-  // VAT on fees (not on principal or interest typically)
-  const vatableAmount = processingFee + enforcementFee + platformFee;
-  const vatAmount = vatableAmount * ((product.vat_percent || 0) / 100);
-  
-  const totalFees = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
-  
-  // ALL fees are deducted upfront from disbursement
-  const feesDeductedUpfront = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
-  const disbursementAmount = principal - feesDeductedUpfront;
-
-  const legalFeeMode = (product.legal_fee_deduction_mode || "none").toLowerCase();
-  const legalFeePercent = Number(product.legal_fee_percent || 0);
-  const legalFeeAmount =
-    legalFeeMode === "upfront_net" && legalFeePercent > 0
-      ? disbursementAmount * (legalFeePercent / 100)
-      : 0;
-  const netToBorrower = disbursementAmount - legalFeeAmount;
+  const upfront = computeUpfrontProductFees(principal, product);
+  const {
+    processingFee,
+    enforcementFee,
+    insuranceFee,
+    platformFee,
+    vatAmount,
+    feesDeductedUpfront,
+    disbursementAmount,
+    legalFeeAmount,
+    netToBorrower,
+  } = upfront;
+  const totalFees = feesDeductedUpfront;
 
   // Total repayment is just principal + interest (fees already deducted from disbursement)
   const totalRepayment = principal + totalInterest;

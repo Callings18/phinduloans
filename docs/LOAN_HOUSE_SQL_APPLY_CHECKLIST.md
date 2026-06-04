@@ -17,6 +17,7 @@ Apply in this order:
 | 3 | [ ] | `supabase/migrations/20260603213000_collateral_partial_payment_repair.sql` |
 | 4 | [ ] | `supabase/migrations/20260604100000_reconcile_fully_paid_loan_statuses.sql` |
 | 5 | [ ] | `supabase/migrations/20260604130000_collateral_per_loan_interest_catalog.sql` |
+| 6 | [ ] | `supabase/migrations/20260604150000_collateral_processing_fee_5_percent.sql` |
 
 **Do not apply** `20260604101141_e278dd20-….sql` — duplicate of step 4 (removed from repo).
 
@@ -65,6 +66,13 @@ SELECT public.admin_reconcile_loan_completion('<loan_application_uuid>'::uuid);
 ```sql
 SELECT product_code, interest_period FROM public.loan_products WHERE product_code = 'COLLATERAL';
 -- Expect: per_loan
+```
+
+### After step 6
+
+```sql
+SELECT product_code, processing_fee_percent FROM public.loan_products WHERE product_code = 'COLLATERAL';
+-- Expect: 5 (or your chosen % — change in Collateral house → Product configuration)
 ```
 
 ---

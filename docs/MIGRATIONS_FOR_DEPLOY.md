@@ -12,6 +12,10 @@ Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `
 
 Run after deploy of the matching frontend (collateral form locks to per_loan and shows net borrower receivable including legal fees).
 
+| Order | File | Purpose |
+|------:|------|---------|
+| 2 | [`supabase/migrations/20260604150000_collateral_processing_fee_5_percent.sql`](../supabase/migrations/20260604150000_collateral_processing_fee_5_percent.sql) | Sets `COLLATERAL.processing_fee_percent = 5` (deducted from principal at disbursement; editable in house product config). |
+
 ## June 2026 — fully paid loans stuck as active (blocks new applications)
 
 | Order | File | Purpose |

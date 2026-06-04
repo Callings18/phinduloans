@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   Pencil,
 } from "lucide-react";
+import { computeUpfrontProductFees } from "@/utils/loanCalculations";
 
 const PERIOD_LABEL: Record<string, string> = {
   per_day: "/ day",
@@ -148,6 +149,7 @@ export default function HouseProductConfigCard({ productCode }: { productCode: s
             <div>
               <p className="text-xs text-muted-foreground">Processing fee</p>
               <p className="font-semibold">{procPct > 0 ? `${procPct}%` : "—"}</p>
+              <p className="text-xs text-muted-foreground">Deducted from principal at disbursement</p>
             </div>
           </div>
 
@@ -247,6 +249,19 @@ function EditProductConfigDialog({
     return Number.isFinite(n) ? n : null;
   };
 
+  const feePreview = useMemo(() => {
+    const samplePrincipal = 10_000;
+    return computeUpfrontProductFees(samplePrincipal, {
+      processing_fee_percent: num(form.processing_fee_percent) ?? 0,
+      enforcement_fee_percent: 0,
+      insurance_percent: 0,
+      vat_percent: 0,
+      platform_fee_percent: 0,
+      legal_fee_percent: num(form.legal_fee_percent) ?? 0,
+      legal_fee_deduction_mode: form.legal_fee_deduction_mode ?? "none",
+    });
+  }, [form.processing_fee_percent, form.legal_fee_percent, form.legal_fee_deduction_mode]);
+
   const handleSave = async () => {
     // Basic validation
     if (form.min_term_months !== null && form.max_term_months !== null && form.min_term_months > form.max_term_months) {
@@ -289,6 +304,8 @@ function EditProductConfigDialog({
     }
     toast({ title: "Product updated", description: `${initial.name ?? productCode} configuration saved.` });
     qc.invalidateQueries({ queryKey: ["house-product-config", productCode] });
+    qc.invalidateQueries({ queryKey: ["house-product", productCode] });
+    qc.invalidateQueries({ queryKey: ["product-by-code", productCode] });
     qc.invalidateQueries({ queryKey: ["loan-products"] });
     onOpenChange(false);
   };
@@ -365,9 +382,13 @@ function EditProductConfigDialog({
             <Input
               type="number"
               step="0.01"
+              min={0}
               value={form.processing_fee_percent ?? ""}
               onChange={(e) => setForm({ ...form, processing_fee_percent: num(e.target.value) })}
             />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              % of loan principal withheld at disbursement (not added to repayment).
+            </p>
           </div>
           <div>
             <Label>Late payment penalty (%)</Label>
@@ -456,6 +477,26 @@ function EditProductConfigDialog({
             />
           </div>
         </div>
+
+        {Number(form.processing_fee_percent) > 0 || Number(form.legal_fee_percent) > 0 ? (
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
+            <p className="text-xs font-medium text-foreground">Live preview (K10,000 principal)</p>
+            {Number(form.processing_fee_percent) > 0 ? (
+              <p className="text-muted-foreground">
+                Processing fee ({Number(form.processing_fee_percent)}%):{" "}
+                <span className="font-medium text-destructive">−K{feePreview.processingFee.toLocaleString()}</span>
+              </p>
+            ) : null}
+            {feePreview.legalFeeAmount > 0 ? (
+              <p className="text-muted-foreground">
+                Legal fee: <span className="font-medium text-destructive">−K{feePreview.legalFeeAmount.toLocaleString()}</span>
+              </p>
+            ) : null}
+            <p className="font-semibold text-success">
+              Borrower receives: K{feePreview.netToBorrower.toLocaleString()}
+            </p>
+          </div>
+        ) : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
