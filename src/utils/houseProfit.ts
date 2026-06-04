@@ -218,3 +218,76 @@ export function computeMonthlyProfit(
 
   return { rows, totals, hasData };
 }
+
+export interface ProfitContributionRow {
+  loanId: string;
+  repaymentAmount: number;
+  interest: number;
+  dueDate?: string | null;
+  paidDate?: string | null;
+  status?: string | null;
+}
+
+export interface MonthContributions {
+  monthKey: string;
+  expected: ProfitContributionRow[];
+  made: ProfitContributionRow[];
+  expectedTotal: number;
+  madeTotal: number;
+}
+
+/**
+ * Per-repayment breakdown of what produced a given month's expected vs made interest.
+ * - `expected` = installments DUE in that month (regardless of payment).
+ * - `made` = installments PAID (or partial) in that month.
+ * Interest per row uses the same loan interest-ratio model as computeMonthlyProfit.
+ */
+export function computeMonthContributions(
+  loans: ProfitLoanInput[] = [],
+  repayments: ProfitRepaymentInput[] = [],
+  monthKey: string,
+): MonthContributions {
+  const ratioByLoan = new Map<string, number>();
+  for (const loan of loans) {
+    if (loan?.id) ratioByLoan.set(loan.id, interestRatioFor(loan));
+  }
+
+  const expected: ProfitContributionRow[] = [];
+  const made: ProfitContributionRow[] = [];
+
+  for (const rep of repayments) {
+    if (rep?.is_reversed) continue;
+    if (rep?.status === "cancelled") continue;
+    const ratio = rep?.loan_id ? ratioByLoan.get(rep.loan_id) ?? 0 : 0;
+    const amount = num(rep.amount);
+    const interest = Math.round(amount * ratio * 100) / 100;
+
+    if (rep.due_date && rep.due_date.slice(0, 7) === monthKey) {
+      expected.push({
+        loanId: rep.loan_id ?? "",
+        repaymentAmount: amount,
+        interest,
+        dueDate: rep.due_date,
+        paidDate: rep.paid_date,
+        status: rep.status,
+      });
+    }
+
+    const isPaid = rep.status === "paid" || rep.status === "partial";
+    if (isPaid && rep.paid_date && rep.paid_date.slice(0, 7) === monthKey) {
+      made.push({
+        loanId: rep.loan_id ?? "",
+        repaymentAmount: amount,
+        interest,
+        dueDate: rep.due_date,
+        paidDate: rep.paid_date,
+        status: rep.status,
+      });
+    }
+  }
+
+  const expectedTotal = Math.round(expected.reduce((s, r) => s + r.interest, 0) * 100) / 100;
+  const madeTotal = Math.round(made.reduce((s, r) => s + r.interest, 0) * 100) / 100;
+
+  return { monthKey, expected, made, expectedTotal, madeTotal };
+}
