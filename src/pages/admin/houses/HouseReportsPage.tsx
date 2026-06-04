@@ -530,6 +530,7 @@ export default function HouseReportsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2"><Percent size={16} /> Monthly Profit Breakdown</CardTitle>
+          <p className="text-xs text-muted-foreground">Click a month to see the repayments behind its expected vs made interest.</p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -539,22 +540,44 @@ export default function HouseReportsPage() {
                 <th className="py-2 px-3 font-medium text-right">Expected</th>
                 <th className="py-2 px-3 font-medium text-right">Made</th>
                 <th className="py-2 px-3 font-medium text-right">Expenses</th>
-                <th className="py-2 pl-3 font-medium text-right">Net Profit</th>
+                <th className="py-2 px-3 font-medium text-right">Net Profit</th>
+                <th className="py-2 pl-3 font-medium text-right sr-only">Drill down</th>
               </tr>
             </thead>
             <tbody>
-              {profit.rows.map((r) => (
-                <tr key={r.monthKey} className="border-b border-border/50">
-                  <td className="py-2 pr-3">{r.label}</td>
-                  <td className="py-2 px-3 text-right text-muted-foreground">{fmtK(r.expectedInterest)}</td>
-                  <td className="py-2 px-3 text-right font-medium">{fmtK(r.interestMade)}</td>
-                  <td className="py-2 px-3 text-right text-muted-foreground">{fmtK(r.expenses)}</td>
-                  <td className={`py-2 pl-3 text-right font-semibold ${r.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtK(r.netProfit)}</td>
-                </tr>
-              ))}
+              {profit.rows.map((r) => {
+                const hasRows = r.expectedInterest > 0 || r.interestMade > 0;
+                return (
+                  <tr
+                    key={r.monthKey}
+                    className={cn(
+                      "border-b border-border/50 transition-colors",
+                      hasRows && "cursor-pointer hover:bg-muted/50",
+                    )}
+                    onClick={() => hasRows && setDrillMonth(r)}
+                    role={hasRows ? "button" : undefined}
+                    tabIndex={hasRows ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (hasRows && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        setDrillMonth(r);
+                      }
+                    }}
+                  >
+                    <td className="py-2 pr-3 font-medium">{r.label}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{fmtK(r.expectedInterest)}</td>
+                    <td className="py-2 px-3 text-right font-medium">{fmtK(r.interestMade)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{fmtK(r.expenses)}</td>
+                    <td className={`py-2 px-3 text-right font-semibold ${r.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtK(r.netProfit)}</td>
+                    <td className="py-2 pl-3 text-right">
+                      {hasRows && <ChevronRight size={14} className="inline text-muted-foreground" />}
+                    </td>
+                  </tr>
+                );
+              })}
               {profit.rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-4 text-center text-muted-foreground">No data in this period.</td>
+                  <td colSpan={6} className="py-4 text-center text-muted-foreground">No data in this period.</td>
                 </tr>
               )}
             </tbody>
@@ -564,10 +587,12 @@ export default function HouseReportsPage() {
                 <td className="py-2 px-3 text-right">{fmtK(profit.totals.expectedInterest)}</td>
                 <td className="py-2 px-3 text-right">{fmtK(profit.totals.interestMade)}</td>
                 <td className="py-2 px-3 text-right">{fmtK(profit.totals.expenses)}</td>
-                <td className={`py-2 pl-3 text-right ${profit.totals.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtK(profit.totals.netProfit)}</td>
+                <td className={`py-2 px-3 text-right ${profit.totals.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtK(profit.totals.netProfit)}</td>
+                <td className="py-2 pl-3" />
               </tr>
             </tfoot>
           </table>
+
         </CardContent>
       </Card>
 
