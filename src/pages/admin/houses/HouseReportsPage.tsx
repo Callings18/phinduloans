@@ -625,6 +625,43 @@ export default function HouseReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Drill-down: repayments behind a month's expected vs made interest */}
+      <Dialog open={!!drillMonth} onOpenChange={(open) => !open && setDrillMonth(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Percent size={16} /> {drillMonth?.label} — Interest contributions
+            </DialogTitle>
+            <DialogDescription>
+              {scopeLabel} · Expected {fmtK(drillData?.expectedTotal ?? 0)} · Made {fmtK(drillData?.madeTotal ?? 0)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh] pr-3">
+            <div className="space-y-6">
+              {/* Expected: installments due this month */}
+              <div>
+                <h4 className="mb-2 text-sm font-semibold flex items-center gap-2">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-muted-foreground/50" />
+                  Expected — installments due ({drillData?.expected.length ?? 0})
+                </h4>
+                <DrillTable rows={drillData?.expected ?? []} loanName={loanName} mode="expected" />
+              </div>
+
+              {/* Made: installments paid this month */}
+              <div>
+                <h4 className="mb-2 text-sm font-semibold flex items-center gap-2">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary" />
+                  Made — installments paid ({drillData?.made.length ?? 0})
+                </h4>
+                <DrillTable rows={drillData?.made ?? []} loanName={loanName} mode="made" />
+              </div>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
