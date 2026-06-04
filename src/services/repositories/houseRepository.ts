@@ -142,6 +142,68 @@ export async function fetchHouseExpenses(productCode: string) {
   return data ?? [];
 }
 
+export interface HousesReportBundle {
+  loans: HouseLoan[];
+  repayments: Array<Record<string, unknown>>;
+  expenses: Array<Record<string, unknown>>;
+  disbursements: Array<Record<string, unknown>>;
+}
+
+/**
+ * Fetch loans, repayments, expenses and disbursements across one or many houses
+ * (product codes) in a few batched queries. A single code behaves like one house;
+ * multiple codes aggregate across all of them.
+ */
+export async function fetchHousesReportBundle(productCodes: string[]): Promise<HousesReportBundle> {
+  const empty: HousesReportBundle = { loans: [], repayments: [], expenses: [], disbursements: [] };
+  const codes = Array.from(
+    new Set((productCodes ?? []).map((c) => (c || "").trim().toUpperCase()).filter(Boolean)),
+  );
+  if (codes.length === 0) return empty;
+
+  const { data: products, error: productError } = await supabase
+    .from("loan_products")
+    .select("id, product_code, is_active")
+    .in("product_code", codes)
+    .eq("is_active", true);
+  if (productError) throw productError;
+
+  const productIds = Array.from(new Set((products ?? []).map((p) => p.id).filter(Boolean)));
+  if (productIds.length === 0) return empty;
+
+  const { data: loanData, error: loanError } = await supabase
+    .from("loan_applications")
+    .select("*")
+    .in("loan_product_id", productIds)
+    .order("created_at", { ascending: false })
+    .limit(2000);
+  if (loanError) throw loanError;
+  const loans = (loanData ?? []) as HouseLoan[];
+
+  const loanIds = Array.from(new Set(loans.map((l) => l.id)));
+  if (loanIds.length === 0) return { ...empty, loans };
+
+  const [repaymentsRes, expensesRes, disbursementsRes] = await Promise.all([
+    supabase.from("loan_repayments").select("*").in("loan_id", loanIds).order("due_date", { ascending: true }),
+    supabase
+      .from("expenses")
+      .select("id, loan_id, amount, expense_date, status, expense_category")
+      .in("loan_id", loanIds)
+      .order("expense_date", { ascending: false }),
+    supabase.from("disbursements").select("*").in("loan_id", loanIds).order("created_at", { ascending: false }),
+  ]);
+  if (repaymentsRes.error) throw repaymentsRes.error;
+  if (expensesRes.error) throw expensesRes.error;
+  if (disbursementsRes.error) throw disbursementsRes.error;
+
+  return {
+    loans,
+    repayments: (repaymentsRes.data ?? []) as Array<Record<string, unknown>>,
+    expenses: (expensesRes.data ?? []) as Array<Record<string, unknown>>,
+    disbursements: (disbursementsRes.data ?? []) as Array<Record<string, unknown>>,
+  };
+}
+
 export async function fetchHouseReportSummary(productCode: string) {
   const [loans, repayments, disbursements] = await Promise.all([
     fetchHouseLoans(productCode),
