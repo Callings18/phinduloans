@@ -56,4 +56,34 @@ describe("computeMonthlyProfit", () => {
     expect(res.totals.interestMade).toBe(0);
     expect(res.totals.expectedInterest).toBe(0);
   });
+
+  it("restricts results to an explicit from/to window", () => {
+    const loans = [{ id: "L1", loan_amount: 1000, total_repayment: 1200 }];
+    const repayments = [
+      { loan_id: "L1", amount: 600, status: "paid", due_date: dayIn(0), paid_date: dayIn(0) },
+      { loan_id: "L1", amount: 600, status: "paid", due_date: dayIn(3), paid_date: dayIn(3) },
+    ];
+    // Window covers only the last two months — the 3-months-ago payment is excluded.
+    const res = computeMonthlyProfit(loans, repayments, [], {
+      from: subMonths(new Date(), 1),
+      to: new Date(),
+    });
+    expect(res.rows).toHaveLength(2);
+    expect(res.totals.interestMade).toBeCloseTo(100, 1);
+    expect(res.totals.collected).toBeCloseTo(600, 1);
+  });
+
+  it("derives the window from data when no range is given (all time)", () => {
+    const loans = [{ id: "L1", loan_amount: 1000, total_repayment: 1200 }];
+    const repayments = [
+      { loan_id: "L1", amount: 600, status: "paid", due_date: dayIn(4), paid_date: dayIn(4) },
+      { loan_id: "L1", amount: 600, status: "paid", due_date: dayIn(0), paid_date: dayIn(0) },
+    ];
+    const res = computeMonthlyProfit(loans, repayments, [], {});
+    // From 4 months ago through this month inclusive = 5 buckets.
+    expect(res.rows).toHaveLength(5);
+    expect(res.totals.interestMade).toBeCloseTo(200, 1);
+    expect(res.totals.collected).toBeCloseTo(1200, 1);
+  });
 });
+

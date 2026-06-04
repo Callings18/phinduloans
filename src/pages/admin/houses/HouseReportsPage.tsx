@@ -1,12 +1,45 @@
-import { useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useHouseReportSummary, useHouseLoans, useHouseRepayments, useHouseProduct, useHouseExpenses } from "@/hooks/useHouseData";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { useAccessibleHouses, useHouseProduct, useHousesReportBundle } from "@/hooks/useHouseData";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, TrendingUp, AlertTriangle, CheckCircle2, Download, PieChart, Percent, BarChart3, Wallet } from "lucide-react";
-import { isPast, format } from "date-fns";
+import {
+  Banknote,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  PieChart,
+  Percent,
+  BarChart3,
+  Wallet,
+  CalendarIcon,
+  Building2,
+} from "lucide-react";
+import {
+  isPast,
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfQuarter,
+  endOfQuarter,
+  startOfYear,
+  endOfYear,
+  subMonths,
+} from "date-fns";
+import type { DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
@@ -34,76 +67,182 @@ type HouseLoanRow = {
   created_at: string;
 };
 
+type HouseDisbursementRow = {
+  status: string;
+  amount: number | null;
+  disbursed_at?: string | null;
+  created_at?: string | null;
+};
+
 const fmtK = (v: number) => `K${Math.round(v).toLocaleString()}`;
+
+const ALL = "ALL";
+
+type PresetKey = "this_month" | "last_month" | "quarter" | "year" | "all" | "custom";
+
+const PRESETS: { key: PresetKey; label: string }[] = [
+  { key: "this_month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "quarter", label: "This quarter" },
+  { key: "year", label: "This year" },
+  { key: "all", label: "All time" },
+];
+
+function resolvePeriod(preset: PresetKey, custom?: DateRange): { from: Date | null; to: Date | null; label: string } {
+  const now = new Date();
+  switch (preset) {
+    case "this_month":
+      return { from: startOfMonth(now), to: endOfMonth(now), label: `This month (${format(now, "MMM yyyy")})` };
+    case "last_month": {
+      const lm = subMonths(now, 1);
+      return { from: startOfMonth(lm), to: endOfMonth(lm), label: `Last month (${format(lm, "MMM yyyy")})` };
+    }
+    case "quarter":
+      return { from: startOfQuarter(now), to: endOfQuarter(now), label: `This quarter (${format(now, "QQQ yyyy")})` };
+    case "year":
+      return { from: startOfYear(now), to: endOfYear(now), label: `This year (${format(now, "yyyy")})` };
+    case "all":
+      return { from: null, to: now, label: "All time" };
+    case "custom":
+      if (custom?.from) {
+        const to = custom.to ?? custom.from;
+        return {
+          from: custom.from,
+          to,
+          label: `${format(custom.from, "dd MMM yyyy")} – ${format(to, "dd MMM yyyy")}`,
+        };
+      }
+      return { from: null, to: now, label: "Custom range" };
+    default:
+      return { from: startOfYear(now), to: endOfYear(now), label: `This year (${format(now, "yyyy")})` };
+  }
+}
 
 export default function HouseReportsPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: product } = useHouseProduct(productCode);
-  const { data } = useHouseReportSummary(productCode);
-  const { data: loans } = useHouseLoans(productCode);
-  const { data: repayments } = useHouseRepayments(productCode);
-  const { data: expenses } = useHouseExpenses(productCode);
+  const { data: accessibleHouses } = useAccessibleHouses();
   const { toast } = useToast();
 
-  const repaymentStats = useMemo(() => {
-    const reps = (repayments ?? []) as HouseRepaymentRow[];
-    const today = format(new Date(), "yyyy-MM-dd");
-    const monthStart = format(new Date(), "yyyy-MM-01");
-    const totalPaid = reps
-      .filter((r) => r.status === "paid")
-      .reduce((s, r) => s + Number(r.amount || 0), 0);
-    const totalDue = reps
-      .filter((r) => r.status !== "paid" && r.status !== "cancelled")
-      .reduce((s, r) => s + Number(r.amount || 0), 0);
-    const overdueCount = reps.filter((r) => r.status !== "paid" && r.status !== "cancelled" && isPast(new Date(r.due_date)) && r.due_date !== today).length;
-    const collectedThisMonth = reps
-      .filter((r) => r.status === "paid" && r.paid_date && r.paid_date >= monthStart)
-      .reduce((s, r) => s + Number(r.amount || 0), 0);
-    const repaymentRate = reps.length > 0 ? Math.round((reps.filter((r) => r.status === "paid").length / reps.length) * 100) : 0;
-    return { totalPaid, totalDue, overdueCount, collectedThisMonth, repaymentRate };
-  }, [repayments]);
+  // Filters
+  const [scope, setScope] = useState<string>(productCode); // productCode or ALL
+  const [preset, setPreset] = useState<PresetKey>("year");
+  const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // Keep scope in sync when navigating between house reports routes.
+  useEffect(() => {
+    setScope(productCode);
+  }, [productCode]);
+
+
+  const accessibleCodes = useMemo(
+    () => (accessibleHouses ?? []).map((h) => h.productCode),
+    [accessibleHouses],
+  );
+  const activeCodes = useMemo(
+    () => (scope === ALL ? (accessibleCodes.length ? accessibleCodes : [productCode]) : [productCode]),
+    [scope, accessibleCodes, productCode],
+  );
+
+  const { data: bundle, isLoading } = useHousesReportBundle(activeCodes);
+  const loans = (bundle?.loans ?? []) as HouseLoanRow[];
+  const repayments = (bundle?.repayments ?? []) as HouseRepaymentRow[];
+  const expenses = (bundle?.expenses ?? []) as {
+    loan_id?: string | null;
+    amount?: number | null;
+    expense_date?: string | null;
+    status?: string | null;
+  }[];
+  const disbursements = (bundle?.disbursements ?? []) as HouseDisbursementRow[];
+
+  const period = useMemo(() => resolvePeriod(preset, customRange), [preset, customRange]);
+
+  const scopeLabel = scope === ALL ? "All houses" : product?.name || productCode;
 
   // Monthly profit: interest expected (by due month) vs interest made (by paid month), net of expenses
   const profit = useMemo(
-    () =>
-      computeMonthlyProfit(
-        (loans ?? []) as HouseLoanRow[],
-        (repayments ?? []) as HouseRepaymentRow[],
-        (expenses ?? []) as { loan_id?: string | null; amount?: number | null; expense_date?: string | null; status?: string | null }[],
-        12,
-      ),
-    [loans, repayments, expenses],
+    () => computeMonthlyProfit(loans, repayments, expenses, { from: period.from, to: period.to }),
+    [loans, repayments, expenses, period],
   );
 
-  const currentMonthRow = useMemo<MonthlyProfitRow | undefined>(() => {
-    const key = format(new Date(), "yyyy-MM");
-    return profit.rows.find((r) => r.monthKey === key);
-  }, [profit]);
+  // Period-scoped disbursed total (by disbursed_at / created_at within range)
+  const disbursedInPeriod = useMemo(() => {
+    const fromKey = period.from ? format(startOfMonth(period.from), "yyyy-MM-dd") : null;
+    const toKey = period.to ? format(endOfMonth(period.to), "yyyy-MM-dd") : null;
+    return disbursements
+      .filter((d) => d.status === "completed")
+      .filter((d) => {
+        const raw = d.disbursed_at || d.created_at;
+        if (!raw) return false;
+        const day = raw.slice(0, 10);
+        if (fromKey && day < fromKey) return false;
+        if (toKey && day > toKey) return false;
+        return true;
+      })
+      .reduce((s, d) => s + Number(d.amount || 0), 0);
+  }, [disbursements, period]);
+
+  // Live snapshot (point-in-time) — not period bound
+  const liveStats = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const totalDue = repayments
+      .filter((r) => r.status !== "paid" && r.status !== "cancelled" && !r.is_reversed)
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+    const overdueCount = repayments.filter(
+      (r) =>
+        r.status !== "paid" &&
+        r.status !== "cancelled" &&
+        !r.is_reversed &&
+        r.due_date &&
+        isPast(new Date(r.due_date)) &&
+        r.due_date !== today,
+    ).length;
+    const paidCount = repayments.filter((r) => r.status === "paid").length;
+    const repaymentRate = repayments.length > 0 ? Math.round((paidCount / repayments.length) * 100) : 0;
+    return { totalDue, overdueCount, repaymentRate };
+  }, [repayments]);
 
   const statusBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
-    (loans ?? []).forEach((l) => {
+    loans.forEach((l) => {
       map[l.status] = (map[l.status] || 0) + 1;
     });
     return Object.entries(map).sort(([, a], [, b]) => b - a);
   }, [loans]);
 
+  const handleScopeChange = (value: string) => {
+    if (value === ALL) {
+      setScope(ALL);
+      return;
+    }
+    if (value === productCode) {
+      setScope(productCode);
+      return;
+    }
+    // Navigate to the chosen house's reports (keeps header/tabs + deep link in sync)
+    navigate(`/admin/houses/${value}/reports`);
+  };
+
   const exportCsv = async () => {
+    const scopeKey = scope === ALL ? "all-houses" : productCode.toLowerCase();
     const headers = ["metric", "value"];
     const rows = [
-      ["total_loans", data?.totalLoans ?? 0],
-      ["active_loans", data?.activeLoans ?? 0],
-      ["overdue_installments", repaymentStats.overdueCount],
-      ["total_disbursed", data?.totalDisbursed ?? 0],
-      ["total_collected", repaymentStats.totalPaid],
+      ["scope", scopeLabel],
+      ["period", period.label],
+      ["total_loans", loans.length],
+      ["active_loans", loans.filter((l) => ["active", "disbursed"].includes(l.status)).length],
+      ["overdue_installments", liveStats.overdueCount],
+      ["disbursed_in_period", Math.round(disbursedInPeriod)],
+      ["collected_in_period", Math.round(profit.totals.collected)],
       ["interest_made", Math.round(profit.totals.interestMade)],
       ["expected_interest", Math.round(profit.totals.expectedInterest)],
       ["total_expenses", Math.round(profit.totals.expenses)],
       ["net_profit", Math.round(profit.totals.netProfit)],
-      ["total_outstanding", repaymentStats.totalDue],
-      ["collected_this_month", repaymentStats.collectedThisMonth],
-      ["repayment_rate_percent", repaymentStats.repaymentRate],
+      ["total_outstanding", Math.round(liveStats.totalDue)],
+      ["repayment_rate_percent", liveStats.repaymentRate],
     ];
 
     const profitHeaders = ["month", "expected_interest", "interest_made", "expenses", "net_profit"];
@@ -116,7 +255,7 @@ export default function HouseReportsPage() {
     ]);
 
     const loanHeaders = ["loan_id", "borrower", "amount", "status", "term", "created_at"];
-    const loanRows = ((loans ?? []) as HouseLoanRow[]).map((l) => [
+    const loanRows = loans.map((l) => [
       l.id,
       l.full_name || l.email || "",
       l.loan_amount ?? 0,
@@ -127,44 +266,45 @@ export default function HouseReportsPage() {
 
     const csvContent = [
       headers.join(","),
-      ...rows.map(r => r.join(",")),
+      ...rows.map((r) => r.join(",")),
       "",
-      "--- Monthly Profit (Interest) ---",
+      `--- Monthly Profit (Interest) · ${scopeLabel} · ${period.label} ---`,
       profitHeaders.join(","),
-      ...profitRows.map(r => r.join(",")),
+      ...profitRows.map((r) => r.join(",")),
       "",
       "--- Loan Details ---",
       loanHeaders.join(","),
-      ...loanRows.map(r => r.join(","))
+      ...loanRows.map((r) => r.join(",")),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${productCode.toLowerCase()}-house-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `${scopeKey}-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     if (user?.id) {
       const { error: postError } = await (supabase.from as any)("product_house_report_posts").insert({
-        product_code: productCode,
-        product_name: product?.name ?? productCode,
+        product_code: scope === ALL ? "ALL" : productCode,
+        product_name: scopeLabel,
         report_type: "house_summary",
         posted_by: user.id,
         report_payload: {
+          scope: scopeLabel,
+          period: period.label,
           metrics: {
-            total_loans: data?.totalLoans ?? 0,
-            active_loans: data?.activeLoans ?? 0,
-            overdue_installments: repaymentStats.overdueCount,
-            total_disbursed: data?.totalDisbursed ?? 0,
-            total_collected: repaymentStats.totalPaid,
+            total_loans: loans.length,
+            active_loans: loans.filter((l) => ["active", "disbursed"].includes(l.status)).length,
+            overdue_installments: liveStats.overdueCount,
+            disbursed_in_period: Math.round(disbursedInPeriod),
+            collected_in_period: Math.round(profit.totals.collected),
             interest_made: Math.round(profit.totals.interestMade),
             expected_interest: Math.round(profit.totals.expectedInterest),
             total_expenses: Math.round(profit.totals.expenses),
             net_profit: Math.round(profit.totals.netProfit),
-            total_outstanding: repaymentStats.totalDue,
-            collected_this_month: repaymentStats.collectedThisMonth,
-            repayment_rate_percent: repaymentStats.repaymentRate,
+            total_outstanding: Math.round(liveStats.totalDue),
+            repayment_rate_percent: liveStats.repaymentRate,
           },
           monthly_profit: profit.rows.map((r) => ({
             month: r.label,
@@ -186,10 +326,81 @@ export default function HouseReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Reports</h2>
-        <Button size="sm" onClick={() => void exportCsv()}><Download size={14} className="mr-1" /> Export + Post</Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Reports</h2>
+          <p className="text-xs text-muted-foreground">
+            {scopeLabel} · {period.label}
+            {scope === ALL && " — showing all houses you can access"}
+          </p>
+        </div>
+        <Button size="sm" onClick={() => void exportCsv()}>
+          <Download size={14} className="mr-1" /> Export + Post
+        </Button>
       </div>
+
+      {/* Filter bar */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 pt-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 size={16} className="text-muted-foreground" />
+            <Select value={scope} onValueChange={handleScopeChange}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select house" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value={ALL}>All houses</SelectItem>
+                {(accessibleHouses ?? []).map((h) => (
+                  <SelectItem key={h.productCode} value={h.productCode}>
+                    {h.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PRESETS.map((p) => (
+              <Button
+                key={p.key}
+                size="sm"
+                variant={preset === p.key ? "default" : "outline"}
+                onClick={() => setPreset(p.key)}
+              >
+                {p.label}
+              </Button>
+            ))}
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant={preset === "custom" ? "default" : "outline"}
+                  className={cn(!customRange?.from && preset !== "custom" && "text-muted-foreground")}
+                >
+                  <CalendarIcon size={14} className="mr-1" />
+                  {preset === "custom" && customRange?.from
+                    ? `${format(customRange.from, "dd MMM")}${customRange.to ? ` – ${format(customRange.to, "dd MMM")}` : ""}`
+                    : "Custom"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 bg-popover" align="end">
+                <Calendar
+                  mode="range"
+                  selected={customRange}
+                  onSelect={(range) => {
+                    setCustomRange(range);
+                    setPreset("custom");
+                    if (range?.from && range?.to) setCalendarOpen(false);
+                  }}
+                  numberOfMonths={2}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -197,8 +408,9 @@ export default function HouseReportsPage() {
           <CardContent className="pt-4 flex items-center gap-3">
             <TrendingUp className="h-8 w-8 text-primary" />
             <div>
-              <p className="text-xs text-muted-foreground">Total Disbursed</p>
-              <p className="text-lg font-bold">{fmtK(Number(data?.totalDisbursed ?? 0))}</p>
+              <p className="text-xs text-muted-foreground">Disbursed</p>
+              <p className="text-lg font-bold">{fmtK(disbursedInPeriod)}</p>
+              <p className="text-[10px] text-muted-foreground">in period</p>
             </div>
           </CardContent>
         </Card>
@@ -206,8 +418,9 @@ export default function HouseReportsPage() {
           <CardContent className="pt-4 flex items-center gap-3">
             <CheckCircle2 className="h-8 w-8 text-green-600" />
             <div>
-              <p className="text-xs text-muted-foreground">Total Collected</p>
-              <p className="text-lg font-bold text-green-600">{fmtK(repaymentStats.totalPaid)}</p>
+              <p className="text-xs text-muted-foreground">Collected</p>
+              <p className="text-lg font-bold text-green-600">{fmtK(profit.totals.collected)}</p>
+              <p className="text-[10px] text-muted-foreground">in period</p>
             </div>
           </CardContent>
         </Card>
@@ -236,7 +449,8 @@ export default function HouseReportsPage() {
             <Banknote className="h-8 w-8 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Outstanding</p>
-              <p className="text-lg font-bold">{fmtK(repaymentStats.totalDue)}</p>
+              <p className="text-lg font-bold">{fmtK(liveStats.totalDue)}</p>
+              <p className="text-[10px] text-muted-foreground">as of today</p>
             </div>
           </CardContent>
         </Card>
@@ -245,7 +459,8 @@ export default function HouseReportsPage() {
             <AlertTriangle className="h-8 w-8 text-destructive" />
             <div>
               <p className="text-xs text-muted-foreground">Overdue Items</p>
-              <p className="text-lg font-bold text-destructive">{repaymentStats.overdueCount}</p>
+              <p className="text-lg font-bold text-destructive">{liveStats.overdueCount}</p>
+              <p className="text-[10px] text-muted-foreground">as of today</p>
             </div>
           </CardContent>
         </Card>
@@ -254,15 +469,14 @@ export default function HouseReportsPage() {
       {/* Monthly profit graph: expected vs made */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2"><BarChart3 size={16} /> Monthly Profit — Interest Expected vs Made (last 12 months)</CardTitle>
-          {currentMonthRow && (
-            <p className="text-xs text-muted-foreground">
-              This month ({currentMonthRow.label}): interest made <strong className="text-foreground">{fmtK(currentMonthRow.interestMade)}</strong> of {fmtK(currentMonthRow.expectedInterest)} expected · net profit <strong className="text-emerald-600">{fmtK(currentMonthRow.netProfit)}</strong>
-            </p>
-          )}
+          <CardTitle className="text-sm flex items-center gap-2">
+            <BarChart3 size={16} /> Interest Expected vs Made — {scopeLabel} · {period.label}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {profit.hasData ? (
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Loading…</p>
+          ) : profit.hasData ? (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={profit.rows} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
@@ -285,7 +499,7 @@ export default function HouseReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No interest or profit recorded yet.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No interest or profit recorded in this period.</p>
           )}
         </CardContent>
       </Card>
@@ -316,6 +530,11 @@ export default function HouseReportsPage() {
                   <td className={`py-2 pl-3 text-right font-semibold ${r.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtK(r.netProfit)}</td>
                 </tr>
               ))}
+              {profit.rows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-4 text-center text-muted-foreground">No data in this period.</td>
+                </tr>
+              )}
             </tbody>
             <tfoot>
               <tr className="border-t border-border font-semibold">
@@ -336,11 +555,11 @@ export default function HouseReportsPage() {
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><PieChart size={16} /> Repayment Rate</CardTitle></CardHeader>
           <CardContent>
             <div className="text-center">
-              <p className="text-4xl font-bold text-primary">{repaymentStats.repaymentRate}%</p>
-              <p className="text-xs text-muted-foreground mt-1">of installments paid on time</p>
+              <p className="text-4xl font-bold text-primary">{liveStats.repaymentRate}%</p>
+              <p className="text-xs text-muted-foreground mt-1">of installments paid (all time)</p>
             </div>
             <div className="mt-3 text-sm space-y-1">
-              <p>Collected this month: <strong>{fmtK(repaymentStats.collectedThisMonth)}</strong></p>
+              <p>Collected in period: <strong>{fmtK(profit.totals.collected)}</strong></p>
             </div>
           </CardContent>
         </Card>
