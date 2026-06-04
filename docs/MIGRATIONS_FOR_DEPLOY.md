@@ -2,6 +2,14 @@
 
 Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `supabase db push`, or SQL Editor in Lovable/dashboard).
 
+## June 2026 — collateral interest catalog (per_loan total %)
+
+| Order | File | Purpose |
+|------:|------|---------|
+| 1 | [`supabase/migrations/20260604130000_collateral_per_loan_interest_catalog.sql`](../supabase/migrations/20260604130000_collateral_per_loan_interest_catalog.sql) | Sets `COLLATERAL` product to `interest_period = per_loan` so entered % is **total** over the term (fixes inflated interest when catalog was `monthly`). |
+
+Run after deploy of the matching frontend (collateral form locks to per_loan and shows net borrower receivable including legal fees).
+
 ## June 2026 — fully paid loans stuck as active (blocks new applications)
 
 | Order | File | Purpose |

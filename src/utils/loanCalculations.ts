@@ -23,6 +23,8 @@ export interface LoanProduct {
   insurance_percent?: number | null;
   vat_percent?: number | null;
   platform_fee_percent?: number | null;
+  legal_fee_percent?: number | null;
+  legal_fee_deduction_mode?: string | null;
   late_payment_penalty_percent?: number | null;
   penalty_frequency?: PenaltyFrequency | null;
   grace_period_days?: number | null;
@@ -44,8 +46,12 @@ export interface LoanCalculationResult {
   totalFees: number;
   /** Amount deducted before disbursement (processing fee, VAT, etc.) */
   feesDeductedUpfront: number;
-  /** Actual amount borrower receives after fee deductions */
+  /** Principal minus product fees (processing, VAT, etc.) before optional legal fee */
   disbursementAmount: number;
+  /** Legal fee withheld at disbursement when mode is upfront_net */
+  legalFeeAmount: number;
+  /** Cash/net amount borrower receives after all upfront deductions */
+  netToBorrower: number;
   /** Total amount borrower repays (principal + interest only, fees already deducted) */
   totalRepayment: number;
   monthlyPayment: number;
@@ -203,6 +209,8 @@ export function calculateLoan(
         totalFees: 0,
         feesDeductedUpfront: 0,
         disbursementAmount: principal,
+        legalFeeAmount: 0,
+        netToBorrower: principal,
         totalRepayment: m.totalRepayment,
         monthlyPayment: m.dailyInstallment,
         dailyPayment: m.dailyInstallment,
@@ -304,7 +312,15 @@ export function calculateLoan(
   // ALL fees are deducted upfront from disbursement
   const feesDeductedUpfront = processingFee + enforcementFee + insuranceFee + platformFee + vatAmount;
   const disbursementAmount = principal - feesDeductedUpfront;
-  
+
+  const legalFeeMode = (product.legal_fee_deduction_mode || "none").toLowerCase();
+  const legalFeePercent = Number(product.legal_fee_percent || 0);
+  const legalFeeAmount =
+    legalFeeMode === "upfront_net" && legalFeePercent > 0
+      ? disbursementAmount * (legalFeePercent / 100)
+      : 0;
+  const netToBorrower = disbursementAmount - legalFeeAmount;
+
   // Total repayment is just principal + interest (fees already deducted from disbursement)
   const totalRepayment = principal + totalInterest;
   
@@ -344,6 +360,8 @@ export function calculateLoan(
     totalFees: Math.round(totalFees * 100) / 100,
     feesDeductedUpfront: Math.round(feesDeductedUpfront * 100) / 100,
     disbursementAmount: Math.round(disbursementAmount * 100) / 100,
+    legalFeeAmount: Math.round(legalFeeAmount * 100) / 100,
+    netToBorrower: Math.round(netToBorrower * 100) / 100,
     totalRepayment: Math.round(totalRepayment * 100) / 100,
     monthlyPayment: Math.round(monthlyPayment * 100) / 100,
     weeklyPayment: isWeekly ? Math.round(weeklyPayment * 100) / 100 : undefined,

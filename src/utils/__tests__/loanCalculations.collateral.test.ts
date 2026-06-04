@@ -80,6 +80,21 @@ describe("Collateral loan (admin-driven term & interest)", () => {
     expect(schedule[schedule.length - 1].remainingBalance).toBe(0);
   });
 
+  it("net to borrower deducts upfront legal fee when configured", () => {
+    const withLegal: LoanProduct = {
+      ...collateralProduct,
+      processing_fee_percent: 2,
+      legal_fee_percent: 10,
+      legal_fee_deduction_mode: "upfront_net",
+    };
+    const r = calculateLoan(10_000, 6, withLegal, "months");
+    expect(r.feesDeductedUpfront).toBe(200);
+    expect(r.disbursementAmount).toBe(9800);
+    expect(r.legalFeeAmount).toBe(980);
+    expect(r.netToBorrower).toBe(8820);
+    expect(r.totalRepayment).toBe(13_000);
+  });
+
   it("penalty calc on overdue collateral principal honors grace period", () => {
     const productWithPenalty: LoanProduct = {
       ...collateralProduct,
