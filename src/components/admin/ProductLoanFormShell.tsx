@@ -1680,8 +1680,17 @@ export default function ProductLoanFormShell({
                     {productCode === "COLLATERAL" && Number(termValue) > 0 && (
                       <p className="text-[11px] text-muted-foreground text-center mt-2 border-t border-primary/20 pt-2 space-y-1">
                         <span className="block">
-                          <span className="font-medium text-foreground">{Number(interestRate || 0)}% total interest on principal</span> (one-time, not per month), split evenly over{" "}
-                          <span className="font-medium">{Number(termValue)}</span> monthly installment{Number(termValue) === 1 ? "" : "s"}.
+                          {preview.interestPeriodUsed === "per_loan" ? (
+                            <>
+                              <span className="font-medium text-foreground">{Number(interestRate || 0)}% total interest on principal</span> (one-time, not per month), split evenly over{" "}
+                              <span className="font-medium">{Number(termValue)}</span> monthly installment{Number(termValue) === 1 ? "" : "s"}.
+                            </>
+                          ) : (
+                            <>
+                              <span className="font-medium text-foreground">{Number(interestRate || 0)}% interest per {preview.interestPeriodUsed === "monthly" ? "month" : preview.interestPeriodUsed === "weekly" ? "week" : preview.interestPeriodUsed === "daily" ? "day" : "year"}</span>, applied across{" "}
+                              <span className="font-medium">{Number(termValue)}</span> {termUnit} — total interest grows with the term.
+                            </>
+                          )}
                         </span>
                         {Number(preview.processingFeePercent) > 0 && (
                           <span className="block">
