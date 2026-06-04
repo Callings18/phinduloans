@@ -665,3 +665,62 @@ export default function HouseReportsPage() {
 
   );
 }
+
+function DrillTable({
+  rows,
+  loanName,
+  mode,
+}: {
+  rows: import("@/utils/houseProfit").ProfitContributionRow[];
+  loanName: (loanId: string) => string;
+  mode: "expected" | "made";
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-3">
+        {mode === "expected" ? "No installments due in this month." : "No payments received in this month."}
+      </p>
+    );
+  }
+  const total = Math.round(rows.reduce((s, r) => s + r.interest, 0));
+  return (
+    <div className="overflow-x-auto rounded-md border border-border/60">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/30">
+            <th className="py-2 px-3 font-medium">Borrower</th>
+            <th className="py-2 px-3 font-medium">{mode === "expected" ? "Due" : "Paid"}</th>
+            <th className="py-2 px-3 font-medium">Status</th>
+            <th className="py-2 px-3 font-medium text-right">Repayment</th>
+            <th className="py-2 px-3 font-medium text-right">Interest</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const dateStr = mode === "expected" ? r.dueDate : r.paidDate;
+            return (
+              <tr key={`${r.loanId}-${i}`} className="border-b border-border/40">
+                <td className="py-2 px-3">{loanName(r.loanId)}</td>
+                <td className="py-2 px-3 text-muted-foreground">
+                  {dateStr ? format(new Date(dateStr), "dd MMM yyyy") : "—"}
+                </td>
+                <td className="py-2 px-3">
+                  <Badge variant="outline" className="text-[10px] capitalize">{(r.status || "").replace(/_/g, " ") || "—"}</Badge>
+                </td>
+                <td className="py-2 px-3 text-right text-muted-foreground">{fmtK(r.repaymentAmount)}</td>
+                <td className="py-2 px-3 text-right font-medium">{fmtK(r.interest)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border font-semibold">
+            <td className="py-2 px-3" colSpan={4}>Total interest</td>
+            <td className="py-2 px-3 text-right">{fmtK(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
