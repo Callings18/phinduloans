@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fetchHouseBorrowers,
   fetchHouseDisbursements,
+  fetchHouseExpenses,
   fetchHouseLoans,
   fetchHouseProductByCode,
   fetchHouseRepayments,
@@ -81,6 +82,14 @@ export function useHouseReportSummary(productCode: string) {
   return useQuery({
     queryKey: ["house-report-summary", productCode],
     queryFn: () => fetchHouseReportSummary(productCode),
+    enabled: Boolean(productCode),
+  });
+}
+
+export function useHouseExpenses(productCode: string) {
+  return useQuery({
+    queryKey: ["house-expenses", productCode],
+    queryFn: () => fetchHouseExpenses(productCode),
     enabled: Boolean(productCode),
   });
 }
