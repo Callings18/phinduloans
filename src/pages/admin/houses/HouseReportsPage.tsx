@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { computeMonthlyProfit, type MonthlyProfitRow } from "@/utils/houseProfit";
+import { computeMonthContributions, computeMonthlyProfit, type MonthlyProfitRow } from "@/utils/houseProfit";
 
 type HouseRepaymentRow = {
   status: string;
