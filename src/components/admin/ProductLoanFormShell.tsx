@@ -109,6 +109,7 @@ export default function ProductLoanFormShell({
   const [loanAmount, setLoanAmount] = useState("");
   const [termValue, setTermValue] = useState(String(defaultTermValue));
   const [loanPurpose, setLoanPurpose] = useState("");
+  const [purposeOther, setPurposeOther] = useState(false);
   const [employmentType, setEmploymentType] = useState<"employed" | "self_employed" | "contract" | "other">(
     productCode === "MARKETEER" ? "self_employed" : "employed"
   );
