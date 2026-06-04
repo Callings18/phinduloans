@@ -365,6 +365,19 @@ function App() {
                           </PermissionRoute>
                         }
                       />
+                      <Route
+                        path="reconciliation"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "collections_view" },
+                              { module: "house", action: "collections_manage" },
+                            ]}
+                          >
+                            <HouseReconciliationPage />
+                          </PermissionRoute>
+                        }
+                      />
                     </Route>
                     <Route
                       path="repayments"
