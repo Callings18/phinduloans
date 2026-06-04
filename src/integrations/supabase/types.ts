@@ -4183,6 +4183,10 @@ export type Database = {
         Args: { p_loan_id: string; p_reason: string }
         Returns: Json
       }
+      admin_reconcile_loan_completion: {
+        Args: { p_loan_id: string }
+        Returns: Json
+      }
       admin_record_writeoff_recovery: {
         Args: { p_amount: number; p_notes: string; p_writeoff_id: string }
         Returns: Json
@@ -4380,6 +4384,10 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       transition_loan_status: {
         Args: { p_action: string; p_loan_id: string; p_reason?: string }
+        Returns: Json
+      }
+      try_complete_loan_if_fully_paid: {
+        Args: { p_loan_id: string }
         Returns: Json
       }
       waive_loan_penalty: {
