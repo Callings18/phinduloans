@@ -144,6 +144,35 @@ export default function HouseLoanDetailPage() {
     },
   });
 
+  const guidedMutation = useMutation({
+    mutationFn: async (value: GuidedPaymentValue) => {
+      return recordLoanPayment({
+        repaymentId: value.repaymentId,
+        amount: value.amount,
+        penaltyAmount: value.penaltyAmount,
+        paymentMethod: value.paymentMethod,
+        accountId: value.accountId,
+        paidDate: value.paidDate,
+        transactionReference: value.transactionReference || null,
+      });
+    },
+    onSuccess: (receipt) => {
+      setGuidedOpen(false);
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["payment-audit-trail", loanId] });
+      toast({
+        title: receipt?.loan_completed ? "🎉 Loan fully paid!" : "✅ Payment recorded",
+        description: `Receipt: ${receipt?.receipt_no}`,
+      });
+      downloadReceiptFromRpc(receipt, { loanReferenceFallback: loanId.slice(0, 8) });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Payment failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+
+
   const handleDownloadSchedule = async () => {
     if (!loan || repayments.length === 0) {
       toast({ title: "No repayment schedule yet", description: "Disburse the loan first.", variant: "destructive" });
