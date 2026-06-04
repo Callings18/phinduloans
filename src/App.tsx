@@ -63,6 +63,7 @@ import HouseReviewPage from "./pages/admin/houses/HouseReviewPage";
 import HouseDisbursementsPage from "./pages/admin/houses/HouseDisbursementsPage";
 import HouseCollectionsPage from "./pages/admin/houses/HouseCollectionsPage";
 import HouseReportsPage from "./pages/admin/houses/HouseReportsPage";
+import HouseReconciliationPage from "./pages/admin/houses/HouseReconciliationPage";
 
 // Inline Theme - no external module
 type Theme = "dark" | "light" | "system";
@@ -362,6 +363,19 @@ function App() {
                             ]}
                           >
                             <HouseReportsPage />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route
+                        path="reconciliation"
+                        element={
+                          <PermissionRoute
+                            anyOf={[
+                              { module: "house", action: "collections_view" },
+                              { module: "house", action: "collections_manage" },
+                            ]}
+                          >
+                            <HouseReconciliationPage />
                           </PermissionRoute>
                         }
                       />

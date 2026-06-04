@@ -20,6 +20,8 @@ import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, Fil
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 import LoanDocumentsCard from "@/components/admin/LoanDocumentsCard";
 import { borrowerInterestPeriodLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
+import { GuidedPaymentDialog, type GuidedPaymentValue } from "@/components/admin/houses/GuidedPaymentDialog";
+import { PaymentAuditTrail } from "@/components/admin/houses/PaymentAuditTrail";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
@@ -33,6 +35,7 @@ export default function HouseLoanDetailPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
+  const [guidedOpen, setGuidedOpen] = useState(false);
   const creditToRef = useRef<HTMLButtonElement | null>(null);
 
   const focusCreditTo = () => {
@@ -141,6 +144,35 @@ export default function HouseLoanDetailPage() {
     },
   });
 
+  const guidedMutation = useMutation({
+    mutationFn: async (value: GuidedPaymentValue) => {
+      return recordLoanPayment({
+        repaymentId: value.repaymentId,
+        amount: value.amount,
+        penaltyAmount: value.penaltyAmount,
+        paymentMethod: value.paymentMethod,
+        accountId: value.accountId,
+        paidDate: value.paidDate,
+        transactionReference: value.transactionReference || null,
+      });
+    },
+    onSuccess: (receipt) => {
+      setGuidedOpen(false);
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["payment-audit-trail", loanId] });
+      toast({
+        title: receipt?.loan_completed ? "🎉 Loan fully paid!" : "✅ Payment recorded",
+        description: `Receipt: ${receipt?.receipt_no}`,
+      });
+      downloadReceiptFromRpc(receipt, { loanReferenceFallback: loanId.slice(0, 8) });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Payment failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+
+
   const handleDownloadSchedule = async () => {
     if (!loan || repayments.length === 0) {
       toast({ title: "No repayment schedule yet", description: "Disburse the loan first.", variant: "destructive" });
@@ -221,10 +253,28 @@ export default function HouseLoanDetailPage() {
             <ArrowLeft size={14} className="mr-1" /> Back to loans
           </Link>
         </Button>
-        <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
-          <FileText size={14} className="mr-1" /> Open full loan details
-        </Button>
+        <div className="flex items-center gap-2">
+          {pendingRepayments.length > 0 && (
+            <Button size="sm" variant="hero" onClick={() => setGuidedOpen(true)}>
+              <Banknote size={14} className="mr-1" /> Record payment
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
+            <FileText size={14} className="mr-1" /> Open full loan details
+          </Button>
+        </div>
       </div>
+
+      <GuidedPaymentDialog
+        open={guidedOpen}
+        onOpenChange={setGuidedOpen}
+        borrowerName={loan.full_name || borrowerProfile?.full_name}
+        repayments={repayments as any}
+        accounts={accounts as any}
+        defaultAccountId={selectedAccount}
+        isSubmitting={guidedMutation.isPending}
+        onConfirm={(value) => guidedMutation.mutate(value)}
+      />
 
       <LoanDetailsModal
         loan={loan as any}
@@ -478,6 +528,9 @@ export default function HouseLoanDetailPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Payment audit trail — who recorded, source, amounts, resulting status */}
+      <PaymentAuditTrail loanId={loanId} />
     </div>
   );
 }
