@@ -39,14 +39,27 @@ export interface MonthlyProfitResult {
     interestMade: number;
     expenses: number;
     netProfit: number;
+    collected: number; // total paid amount (principal + interest) in range
   };
   hasData: boolean;
+}
+
+export interface ProfitPeriodOptions {
+  /** Inclusive start of the reporting window. When omitted it is derived from data (all-time). */
+  from?: Date | null;
+  /** Inclusive end of the reporting window. Defaults to now. */
+  to?: Date | null;
+  /** Legacy: number of months to look back from `to`. Used only when `from` is not provided. */
+  monthsBack?: number;
 }
 
 const num = (v: unknown) => {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
 };
+
+// Hard cap so an "all time" window never explodes the chart axis.
+const MAX_MONTHS = 120;
 
 /**
  * Interest baked into a loan as a fraction of the total repayable amount.
@@ -61,43 +74,93 @@ function interestRatioFor(loan: ProfitLoanInput | undefined): number {
   return (total - principal) / total;
 }
 
+function normalizeOptions(
+  options: number | ProfitPeriodOptions | undefined,
+): ProfitPeriodOptions {
+  if (typeof options === "number") return { monthsBack: options };
+  return options ?? {};
+}
+
+/** Earliest yyyy-MM appearing in the data, or null when there is nothing. */
+function earliestMonthKey(
+  repayments: ProfitRepaymentInput[],
+  expenses: ProfitExpenseInput[],
+): string | null {
+  let earliest: string | null = null;
+  const consider = (d?: string | null) => {
+    if (!d) return;
+    const key = d.slice(0, 7);
+    if (!earliest || key < earliest) earliest = key;
+  };
+  for (const r of repayments) {
+    consider(r.due_date);
+    consider(r.paid_date);
+  }
+  for (const e of expenses) consider(e.expense_date);
+  return earliest;
+}
+
 /**
- * Compute month-by-month profit for a loan house.
+ * Compute month-by-month profit for one or many loan houses.
  * - Expected interest is counted in the month an installment is DUE.
  * - Interest made is counted in the month an installment was PAID.
  * - Expenses (tied to the house's loans) are counted by expense_date month.
  * - Net profit (made) = interest made - expenses.
+ *
+ * The reporting window is controlled via `options`:
+ * - `{ from, to }` for an explicit sub-period (presets / custom range),
+ * - `{ monthsBack }` (or a bare number) for a trailing window,
+ * - omitted `from` falls back to the earliest data month (all-time).
  */
 export function computeMonthlyProfit(
   loans: ProfitLoanInput[] = [],
   repayments: ProfitRepaymentInput[] = [],
   expenses: ProfitExpenseInput[] = [],
-  monthsBack = 12,
+  options: number | ProfitPeriodOptions = 12,
 ): MonthlyProfitResult {
-  const now = new Date();
+  const opts = normalizeOptions(options);
   const ratioByLoan = new Map<string, number>();
   for (const loan of loans) {
     if (loan?.id) ratioByLoan.set(loan.id, interestRatioFor(loan));
   }
 
-  // Seed the last `monthsBack` months so the chart has a continuous axis.
+  const to = startOfMonth(opts.to ?? new Date());
+  let from: Date;
+  if (opts.from) {
+    from = startOfMonth(opts.from);
+  } else if (typeof opts.monthsBack === "number") {
+    from = startOfMonth(subMonths(to, Math.max(0, opts.monthsBack - 1)));
+  } else {
+    const earliest = earliestMonthKey(repayments, expenses);
+    from = earliest ? startOfMonth(new Date(`${earliest}-01T00:00:00`)) : startOfMonth(subMonths(to, 11));
+  }
+  if (from > to) from = to;
+
+  const fromKey = format(from, "yyyy-MM");
+  const toKey = format(to, "yyyy-MM");
+
+  // Seed every month in the window so the chart has a continuous axis.
   const order: string[] = [];
   const bucket = new Map<string, MonthlyProfitRow>();
-  for (let i = monthsBack - 1; i >= 0; i--) {
-    const d = startOfMonth(subMonths(now, i));
-    const key = format(d, "yyyy-MM");
+  let cursor = from;
+  while (format(cursor, "yyyy-MM") <= toKey && order.length < MAX_MONTHS) {
+    const key = format(cursor, "yyyy-MM");
     order.push(key);
     bucket.set(key, {
       monthKey: key,
-      label: format(d, "MMM yy"),
+      label: format(cursor, "MMM yy"),
       expectedInterest: 0,
       interestMade: 0,
       expenses: 0,
       netProfit: 0,
     });
+    cursor = startOfMonth(subMonths(cursor, -1));
   }
 
+  const inRange = (key: string) => key >= fromKey && key <= toKey;
   const ensure = (key: string): MonthlyProfitRow | null => bucket.get(key) ?? null;
+
+  let collected = 0;
 
   for (const rep of repayments) {
     if (rep?.is_reversed) continue;
@@ -118,6 +181,7 @@ export function computeMonthlyProfit(
       const key = rep.paid_date.slice(0, 7);
       const row = ensure(key);
       if (row) row.interestMade += amount * ratio;
+      if (inRange(key)) collected += amount;
     }
   }
 
@@ -146,8 +210,9 @@ export function computeMonthlyProfit(
       acc.netProfit += r.netProfit;
       return acc;
     },
-    { expectedInterest: 0, interestMade: 0, expenses: 0, netProfit: 0 },
+    { expectedInterest: 0, interestMade: 0, expenses: 0, netProfit: 0, collected: 0 },
   );
+  totals.collected = Math.round(collected * 100) / 100;
 
   const hasData = rows.some((r) => r.expectedInterest > 0 || r.interestMade > 0 || r.expenses > 0);
 
