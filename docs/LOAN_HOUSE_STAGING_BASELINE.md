@@ -11,6 +11,8 @@ Complete this **once** on the staging / Lovable preview Supabase project before 
 
 Apply via `supabase db push` (linked CLI) or Lovable **SQL Editor**. Skip files already applied.
 
+**Step-by-step:** [`LOAN_HOUSE_SQL_APPLY_CHECKLIST.md`](./LOAN_HOUSE_SQL_APPLY_CHECKLIST.md).
+
 ### House platform pack (if not on DB yet)
 
 See [`LOVABLE_MIGRATION_PACK.md`](./LOVABLE_MIGRATION_PACK.md):

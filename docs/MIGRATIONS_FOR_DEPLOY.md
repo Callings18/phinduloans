@@ -2,6 +2,8 @@
 
 Apply these **in timestamp order** on your Supabase/Postgres environment (CLI: `supabase db push`, or SQL Editor in Lovable/dashboard).
 
+**Operator checklist (June 2026 + verify SQL):** [`LOAN_HOUSE_SQL_APPLY_CHECKLIST.md`](./LOAN_HOUSE_SQL_APPLY_CHECKLIST.md).
+
 ## June 2026 — collateral interest catalog (per_loan total %)
 
 | Order | File | Purpose |
@@ -17,6 +19,8 @@ Run after deploy of the matching frontend (collateral form locks to per_loan and
 | 1 | [`supabase/migrations/20260604100000_reconcile_fully_paid_loan_statuses.sql`](../supabase/migrations/20260604100000_reconcile_fully_paid_loan_statuses.sql) | **Data repair + guard:** sets `completed` when all installments are cleared and principal paid ≥ `total_repayment`; backfills stuck `active`/`disbursed` loans; trigger on `loan_repayments` for future payments. |
 
 **Symptom:** “Borrower already has an active loan” after they paid off in full. **After applying:** retry the new loan; use **Mark completed** on the old loan in loan details if needed.
+
+**Note:** Do not apply `20260604101141_…sql` (Lovable duplicate of this file — removed from repo).
 
 ## June 2026 — collateral term + installment repair (3 migrations)
 

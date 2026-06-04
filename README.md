@@ -93,6 +93,7 @@ For production readiness and launch checks, review:
 ### Loan house deep audit (seven product houses)
 
 - `docs/LOAN_HOUSE_AUDIT_MATRIX.md` — sign-off grid
+- `docs/LOAN_HOUSE_SQL_APPLY_CHECKLIST.md` — paste-order SQL for staging/production
 - `docs/LOAN_HOUSE_STAGING_BASELINE.md` — Phase 0 migrations + catalog SQL
 - `docs/LOAN_HOUSE_UAT_RUNBOOK.md` — staging/production golden path
 - `docs/LOAN_HOUSE_HEALTH_SQL.md` — data health queries
