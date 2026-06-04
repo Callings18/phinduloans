@@ -35,6 +35,7 @@ export default function HouseLoanDetailPage() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
+  const [guidedOpen, setGuidedOpen] = useState(false);
   const creditToRef = useRef<HTMLButtonElement | null>(null);
 
   const focusCreditTo = () => {
