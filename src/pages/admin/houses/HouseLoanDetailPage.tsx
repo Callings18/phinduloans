@@ -20,6 +20,8 @@ import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, Fil
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 import LoanDocumentsCard from "@/components/admin/LoanDocumentsCard";
 import { borrowerInterestPeriodLabel, borrowerSchedulePaymentColumnTitle } from "@/utils/repaymentFrequencyLabels";
+import { GuidedPaymentDialog, type GuidedPaymentValue } from "@/components/admin/houses/GuidedPaymentDialog";
+import { PaymentAuditTrail } from "@/components/admin/houses/PaymentAuditTrail";
 
 export default function HouseLoanDetailPage() {
   const { productCode = "", loanId = "" } = useParams<{ productCode: string; loanId: string }>();
