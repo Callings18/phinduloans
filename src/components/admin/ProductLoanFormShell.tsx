@@ -48,6 +48,21 @@ type Borrower = {
   marital_status: string | null;
 };
 
+const LOAN_PURPOSE_OPTIONS = [
+  "Business expansion",
+  "Working capital",
+  "Stock / inventory purchase",
+  "Asset / equipment purchase",
+  "Vehicle purchase",
+  "Home improvement / construction",
+  "School / education fees",
+  "Medical expenses",
+  "Debt consolidation",
+  "Agriculture / farming",
+  "Personal / emergency",
+  "Other",
+] as const;
+
 interface ProductLoanFormShellProps {
   productCode: LoanProductCode;
   title: string;
