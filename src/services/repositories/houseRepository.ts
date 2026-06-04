@@ -129,6 +129,19 @@ export async function fetchHouseDisbursements(productCode: string) {
   return data ?? [];
 }
 
+export async function fetchHouseExpenses(productCode: string) {
+  const loans = await fetchHouseLoans(productCode);
+  const loanIds = Array.from(new Set(loans.map((l) => l.id)));
+  if (loanIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("id, loan_id, amount, expense_date, status, expense_category")
+    .in("loan_id", loanIds)
+    .order("expense_date", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function fetchHouseReportSummary(productCode: string) {
   const [loans, repayments, disbursements] = await Promise.all([
     fetchHouseLoans(productCode),
