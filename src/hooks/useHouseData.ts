@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fetchHouseBorrowers,
   fetchHouseDisbursements,
+  fetchHouseExpenses,
   fetchHouseLoans,
   fetchHouseProductByCode,
   fetchHouseRepayments,
