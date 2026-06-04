@@ -881,7 +881,7 @@ export default function ProductLoanFormShell({
         product_specific_data: {
           product_code: productCode,
           interest_period:
-            productCode === "COLLATERAL" || productCode === "PAYDAY_SOFT"
+            productCode === "PAYDAY_SOFT"
               ? "per_loan"
               : (interestPeriod || activeProduct.interest_period || "monthly"),
           business_months: Number(businessMonths || 0),
