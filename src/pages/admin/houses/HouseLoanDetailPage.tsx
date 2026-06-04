@@ -253,10 +253,28 @@ export default function HouseLoanDetailPage() {
             <ArrowLeft size={14} className="mr-1" /> Back to loans
           </Link>
         </Button>
-        <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
-          <FileText size={14} className="mr-1" /> Open full loan details
-        </Button>
+        <div className="flex items-center gap-2">
+          {pendingRepayments.length > 0 && (
+            <Button size="sm" variant="hero" onClick={() => setGuidedOpen(true)}>
+              <Banknote size={14} className="mr-1" /> Record payment
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setFullDetailsOpen(true)}>
+            <FileText size={14} className="mr-1" /> Open full loan details
+          </Button>
+        </div>
       </div>
+
+      <GuidedPaymentDialog
+        open={guidedOpen}
+        onOpenChange={setGuidedOpen}
+        borrowerName={loan.full_name || borrowerProfile?.full_name}
+        repayments={repayments as any}
+        accounts={accounts as any}
+        defaultAccountId={selectedAccount}
+        isSubmitting={guidedMutation.isPending}
+        onConfirm={(value) => guidedMutation.mutate(value)}
+      />
 
       <LoanDetailsModal
         loan={loan as any}
