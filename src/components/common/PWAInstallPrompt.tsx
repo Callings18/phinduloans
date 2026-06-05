@@ -144,19 +144,19 @@ export const PWAInstallPrompt = () => {
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-md animate-slide-up">
-      <Card className="relative overflow-hidden border-0 shadow-2xl text-primary-foreground bg-gradient-to-br from-primary via-primary to-[hsl(var(--primary)/0.85)]">
-        <div className="pointer-events-none absolute -top-20 -right-20 h-56 w-56 rounded-full bg-primary-foreground/10 blur-3xl" />
+      <Card className="relative overflow-hidden border border-border shadow-elevated bg-card text-card-foreground">
+        <div className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full bg-primary/15 blur-3xl" />
         <CardContent className="relative p-5">
           <button
             onClick={handleClose}
             aria-label="Close"
-            className="absolute top-2 right-2 text-primary-foreground/80 hover:text-primary-foreground transition-colors"
+            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X size={18} />
           </button>
 
           <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-primary-foreground flex items-center justify-center flex-shrink-0 shadow-lg">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center flex-shrink-0 shadow-lg">
               <img
                 src="/icons/icon-512.png"
                 alt="Phindu Credit"
@@ -166,26 +166,26 @@ export const PWAInstallPrompt = () => {
 
             <div className="flex-1 space-y-3 min-w-0">
               <div>
-                <h3 className="font-semibold text-primary-foreground mb-1">
+                <h3 className="font-semibold text-foreground mb-1">
                   Install the Phindu Loans app
                 </h3>
-                <p className="text-sm text-primary-foreground/85">
+                <p className="text-sm text-muted-foreground">
                   Apply for loans faster, get push reminders, and use the app offline.
                 </p>
               </div>
 
               {isLikelyIOS && !deferredPrompt ? (
-                <ol className="text-xs text-primary-foreground/90 space-y-2">
+                <ol className="text-xs text-muted-foreground space-y-2">
                   <li className="flex gap-2 items-start">
-                    <Share className="shrink-0 mt-0.5" size={14} />
+                    <Share className="shrink-0 mt-0.5 text-primary" size={14} />
                     <span>
-                      Tap <strong>Share</strong> in Safari.
+                      Tap <strong className="text-foreground">Share</strong> in Safari.
                     </span>
                   </li>
                   <li className="flex gap-2 items-start">
-                    <PlusSquare className="shrink-0 mt-0.5" size={14} />
+                    <PlusSquare className="shrink-0 mt-0.5 text-primary" size={14} />
                     <span>
-                      Choose <strong>Add to Home Screen</strong>.
+                      Choose <strong className="text-foreground">Add to Home Screen</strong>.
                     </span>
                   </li>
                 </ol>
@@ -195,23 +195,19 @@ export const PWAInstallPrompt = () => {
                 <Button
                   size="sm"
                   onClick={handleInstall}
-                  className="flex-1 min-w-[140px] bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                  className="flex-1 min-w-[140px]"
                 >
                   <Download size={16} className="mr-2" />
                   {isAndroidDevice() ? "Download App (APK)" : "Install App"}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
-                    >
+                    <Button size="sm" variant="outline">
                       <Clock size={14} className="mr-1" />
                       Mute
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="bg-popover">
                     {SNOOZE_OPTIONS.map((opt) => (
                       <DropdownMenuItem
                         key={opt.label}
@@ -225,13 +221,13 @@ export const PWAInstallPrompt = () => {
               </div>
 
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-primary-foreground/80">
+                <p className="text-xs text-muted-foreground">
                   ✓ Works offline • ✓ Faster • ✓ Push
                 </p>
                 <Link
                   to="/install"
-                  onClick={() => setShowPrompt(false)}
-                  className="text-xs underline text-primary-foreground/90 hover:text-primary-foreground whitespace-nowrap"
+                  onClick={handleClose}
+                  className="text-xs underline text-primary hover:text-primary/80 whitespace-nowrap"
                 >
                   More options
                 </Link>
