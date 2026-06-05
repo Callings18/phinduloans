@@ -15,7 +15,9 @@ import { downloadApk, isAndroidDevice } from "@/utils/appDownload";
 import { Link } from "react-router-dom";
 
 const SNOOZE_KEY = "pwa-install-snooze-until";
-const REOPEN_INTERVAL_MS = 10_000; // re-show every 10s while not snoozed/installed
+const FIRST_DELAY_MS = 12_000; // first gentle nudge after 12s
+const RECHECK_INTERVAL_MS = 60_000; // re-evaluate every minute (respects mute)
+const CLOSE_SNOOZE_MS = 6 * 60 * 60 * 1000; // plain close = quiet for 6h
 
 const SNOOZE_OPTIONS = [
   { label: "Mute for 1 hour", ms: 60 * 60 * 1000 },
