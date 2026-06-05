@@ -109,15 +109,20 @@ export const PWAInstallPrompt = () => {
         intervalRef.current = null;
       }
     } else {
-      // Treat declined as a 1-hour snooze so we don't immediately re-pop.
-      localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_OPTIONS[0].ms));
+      // Treat declined as a snooze so we don't immediately re-pop.
+      localStorage.setItem(SNOOZE_KEY, String(Date.now() + CLOSE_SNOOZE_MS));
       setShowPrompt(false);
     }
   };
 
   const handleClose = () => {
-    // Plain close = next 10s tick will re-open. Encourages install.
+    // Plain close = stay quiet for a while instead of nagging every minute.
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + CLOSE_SNOOZE_MS));
     setShowPrompt(false);
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
   };
 
   const handleSnooze = (ms: number, label: string) => {
