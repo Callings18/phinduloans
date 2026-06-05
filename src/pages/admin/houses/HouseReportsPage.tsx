@@ -53,6 +53,7 @@ type HouseRepaymentRow = {
   due_date: string;
   amount: number | null;
   principal_paid: number | null;
+  interest_paid?: number | null;
   paid_date: string | null;
   loan_id?: string | null;
   is_reversed?: boolean | null;
@@ -194,7 +195,13 @@ export default function HouseReportsPage() {
     const today = format(new Date(), "yyyy-MM-dd");
     const totalDue = repayments
       .filter((r) => r.status !== "paid" && r.status !== "cancelled" && !r.is_reversed)
-      .reduce((s, r) => s + Number(r.amount || 0), 0);
+      .reduce((s, r) => {
+        const amount = Number(r.amount || 0);
+        // For partially-paid installments only the unpaid remainder is still owed.
+        const alreadyPaid =
+          r.status === "partial" ? Number(r.principal_paid || 0) + Number(r.interest_paid || 0) : 0;
+        return s + Math.max(0, amount - alreadyPaid);
+      }, 0);
     const overdueCount = repayments.filter(
       (r) =>
         r.status !== "paid" &&

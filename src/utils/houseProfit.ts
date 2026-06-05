@@ -14,6 +14,9 @@ export interface ProfitRepaymentInput {
   due_date?: string | null;
   paid_date?: string | null;
   is_reversed?: boolean | null;
+  principal_paid?: number | null;
+  interest_paid?: number | null;
+  penalty_paid?: number | null;
 }
 
 export interface ProfitExpenseInput {
@@ -57,6 +60,21 @@ const num = (v: unknown) => {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
 };
+
+/**
+ * Amount actually paid toward the loan (principal + interest) for a repayment.
+ * - "paid" installments: the full `amount` was settled.
+ * - "partial" installments: only `principal_paid + interest_paid` came in, so the
+ *   full installment `amount` would overstate what was really collected.
+ * Penalties are excluded — they are not part of loan principal/interest.
+ */
+function paidTowardLoan(rep: ProfitRepaymentInput): number {
+  if (rep.status === "partial") {
+    const paid = num(rep.principal_paid) + num(rep.interest_paid);
+    return paid > 0 ? paid : num(rep.amount);
+  }
+  return num(rep.amount);
+}
 
 // Hard cap so an "all time" window never explodes the chart axis.
 const MAX_MONTHS = 120;
@@ -175,13 +193,14 @@ export function computeMonthlyProfit(
       if (row) row.expectedInterest += amount * ratio;
     }
 
-    // Interest made -> paid month (paid + partial)
+    // Interest made -> paid month (paid + partial), based on what was actually paid
     const isPaid = rep.status === "paid" || rep.status === "partial";
     if (isPaid && rep.paid_date) {
       const key = rep.paid_date.slice(0, 7);
+      const paid = paidTowardLoan(rep);
       const row = ensure(key);
-      if (row) row.interestMade += amount * ratio;
-      if (inRange(key)) collected += amount;
+      if (row) row.interestMade += paid * ratio;
+      if (inRange(key)) collected += paid;
     }
   }
 
@@ -260,13 +279,13 @@ export function computeMonthContributions(
     if (rep?.status === "cancelled") continue;
     const ratio = rep?.loan_id ? ratioByLoan.get(rep.loan_id) ?? 0 : 0;
     const amount = num(rep.amount);
-    const interest = Math.round(amount * ratio * 100) / 100;
+    const expectedInterest = Math.round(amount * ratio * 100) / 100;
 
     if (rep.due_date && rep.due_date.slice(0, 7) === monthKey) {
       expected.push({
         loanId: rep.loan_id ?? "",
         repaymentAmount: amount,
-        interest,
+        interest: expectedInterest,
         dueDate: rep.due_date,
         paidDate: rep.paid_date,
         status: rep.status,
@@ -275,10 +294,11 @@ export function computeMonthContributions(
 
     const isPaid = rep.status === "paid" || rep.status === "partial";
     if (isPaid && rep.paid_date && rep.paid_date.slice(0, 7) === monthKey) {
+      const paid = paidTowardLoan(rep);
       made.push({
         loanId: rep.loan_id ?? "",
-        repaymentAmount: amount,
-        interest,
+        repaymentAmount: paid,
+        interest: Math.round(paid * ratio * 100) / 100,
         dueDate: rep.due_date,
         paidDate: rep.paid_date,
         status: rep.status,
