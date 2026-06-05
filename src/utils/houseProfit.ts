@@ -14,6 +14,9 @@ export interface ProfitRepaymentInput {
   due_date?: string | null;
   paid_date?: string | null;
   is_reversed?: boolean | null;
+  principal_paid?: number | null;
+  interest_paid?: number | null;
+  penalty_paid?: number | null;
 }
 
 export interface ProfitExpenseInput {
