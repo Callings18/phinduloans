@@ -193,13 +193,14 @@ export function computeMonthlyProfit(
       if (row) row.expectedInterest += amount * ratio;
     }
 
-    // Interest made -> paid month (paid + partial)
+    // Interest made -> paid month (paid + partial), based on what was actually paid
     const isPaid = rep.status === "paid" || rep.status === "partial";
     if (isPaid && rep.paid_date) {
       const key = rep.paid_date.slice(0, 7);
+      const paid = paidTowardLoan(rep);
       const row = ensure(key);
-      if (row) row.interestMade += amount * ratio;
-      if (inRange(key)) collected += amount;
+      if (row) row.interestMade += paid * ratio;
+      if (inRange(key)) collected += paid;
     }
   }
 
