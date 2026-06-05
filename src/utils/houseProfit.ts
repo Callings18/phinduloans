@@ -61,6 +61,21 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/**
+ * Amount actually paid toward the loan (principal + interest) for a repayment.
+ * - "paid" installments: the full `amount` was settled.
+ * - "partial" installments: only `principal_paid + interest_paid` came in, so the
+ *   full installment `amount` would overstate what was really collected.
+ * Penalties are excluded — they are not part of loan principal/interest.
+ */
+function paidTowardLoan(rep: ProfitRepaymentInput): number {
+  if (rep.status === "partial") {
+    const paid = num(rep.principal_paid) + num(rep.interest_paid);
+    return paid > 0 ? paid : num(rep.amount);
+  }
+  return num(rep.amount);
+}
+
 // Hard cap so an "all time" window never explodes the chart axis.
 const MAX_MONTHS = 120;
 
