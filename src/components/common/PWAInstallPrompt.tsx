@@ -128,6 +128,10 @@ export const PWAInstallPrompt = () => {
   const handleSnooze = (ms: number, label: string) => {
     localStorage.setItem(SNOOZE_KEY, String(Date.now() + ms));
     setShowPrompt(false);
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     toast({
       title: "Install reminder muted",
       description: `We'll stop nudging you ${label.toLowerCase()}.`,
