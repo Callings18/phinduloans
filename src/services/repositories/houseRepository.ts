@@ -188,36 +188,40 @@ export async function fetchHousesReportBundle(productCodes: string[]): Promise<H
   const productIds = Array.from(new Set((products ?? []).map((p) => p.id).filter(Boolean)));
   if (productIds.length === 0) return empty;
 
-  const { data: loanData, error: loanError } = await supabase
-    .from("loan_applications")
-    .select("*")
-    .in("loan_product_id", productIds)
-    .order("created_at", { ascending: false })
-    .limit(2000);
-  if (loanError) throw loanError;
-  const loans = (loanData ?? []) as HouseLoan[];
+  const loans = await fetchAllPages<HouseLoan>((from, to) =>
+    supabase
+      .from("loan_applications")
+      .select("*")
+      .in("loan_product_id", productIds)
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
 
   const loanIds = Array.from(new Set(loans.map((l) => l.id)));
   if (loanIds.length === 0) return { ...empty, loans };
 
-  const [repaymentsRes, expensesRes, disbursementsRes] = await Promise.all([
-    supabase.from("loan_repayments").select("*").in("loan_id", loanIds).order("due_date", { ascending: true }),
-    supabase
-      .from("expenses")
-      .select("id, loan_id, amount, expense_date, status, expense_category")
-      .in("loan_id", loanIds)
-      .order("expense_date", { ascending: false }),
-    supabase.from("disbursements").select("*").in("loan_id", loanIds).order("created_at", { ascending: false }),
+  const [repayments, expenses, disbursements] = await Promise.all([
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      supabase.from("loan_repayments").select("*").in("loan_id", loanIds).order("due_date", { ascending: true }).range(from, to),
+    ),
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      supabase
+        .from("expenses")
+        .select("id, loan_id, amount, expense_date, status, expense_category")
+        .in("loan_id", loanIds)
+        .order("expense_date", { ascending: false })
+        .range(from, to),
+    ),
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      supabase.from("disbursements").select("*").in("loan_id", loanIds).order("created_at", { ascending: false }).range(from, to),
+    ),
   ]);
-  if (repaymentsRes.error) throw repaymentsRes.error;
-  if (expensesRes.error) throw expensesRes.error;
-  if (disbursementsRes.error) throw disbursementsRes.error;
 
   return {
     loans,
-    repayments: (repaymentsRes.data ?? []) as Array<Record<string, unknown>>,
-    expenses: (expensesRes.data ?? []) as Array<Record<string, unknown>>,
-    disbursements: (disbursementsRes.data ?? []) as Array<Record<string, unknown>>,
+    repayments,
+    expenses,
+    disbursements,
   };
 }
 
