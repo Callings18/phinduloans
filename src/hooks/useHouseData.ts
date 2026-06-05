@@ -153,9 +153,37 @@ export function useAccessibleHouses() {
  */
 export function useHousesReportBundle(productCodes: string[]) {
   const codes = Array.from(new Set((productCodes ?? []).map((c) => c.toUpperCase()).filter(Boolean))).sort();
+  const queryClient = useQueryClient();
+  const key = codes.join(",");
+
+  // Keep the report live: any change to the underlying tables refetches the bundle.
+  useEffect(() => {
+    if (!key) return;
+    const channel = supabase
+      .channel(`houses-report-bundle-${key}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_repayments" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["houses-report-bundle", key] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "disbursements" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["houses-report-bundle", key] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["houses-report-bundle", key] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_applications" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["houses-report-bundle", key] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [key, queryClient]);
+
   return useQuery({
-    queryKey: ["houses-report-bundle", codes.join(",")],
+    queryKey: ["houses-report-bundle", key],
     queryFn: () => fetchHousesReportBundle(codes),
     enabled: codes.length > 0,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
