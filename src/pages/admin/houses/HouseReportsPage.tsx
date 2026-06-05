@@ -53,6 +53,7 @@ type HouseRepaymentRow = {
   due_date: string;
   amount: number | null;
   principal_paid: number | null;
+  interest_paid?: number | null;
   paid_date: string | null;
   loan_id?: string | null;
   is_reversed?: boolean | null;
