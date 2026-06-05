@@ -61,9 +61,9 @@ export const PWAInstallPrompt = () => {
       setShowPrompt(true);
     };
 
-    // First nudge after 10s, then re-pop every 10s if user closed without snoozing.
-    const firstTimer = window.setTimeout(tryShow, REOPEN_INTERVAL_MS);
-    intervalRef.current = window.setInterval(tryShow, REOPEN_INTERVAL_MS);
+    // First gentle nudge, then re-evaluate each minute (mute/snooze always wins).
+    const firstTimer = window.setTimeout(tryShow, FIRST_DELAY_MS);
+    intervalRef.current = window.setInterval(tryShow, RECHECK_INTERVAL_MS);
 
     return () => {
       window.clearTimeout(firstTimer);
