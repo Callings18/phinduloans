@@ -279,13 +279,13 @@ export function computeMonthContributions(
     if (rep?.status === "cancelled") continue;
     const ratio = rep?.loan_id ? ratioByLoan.get(rep.loan_id) ?? 0 : 0;
     const amount = num(rep.amount);
-    const interest = Math.round(amount * ratio * 100) / 100;
+    const expectedInterest = Math.round(amount * ratio * 100) / 100;
 
     if (rep.due_date && rep.due_date.slice(0, 7) === monthKey) {
       expected.push({
         loanId: rep.loan_id ?? "",
         repaymentAmount: amount,
-        interest,
+        interest: expectedInterest,
         dueDate: rep.due_date,
         paidDate: rep.paid_date,
         status: rep.status,
@@ -294,10 +294,11 @@ export function computeMonthContributions(
 
     const isPaid = rep.status === "paid" || rep.status === "partial";
     if (isPaid && rep.paid_date && rep.paid_date.slice(0, 7) === monthKey) {
+      const paid = paidTowardLoan(rep);
       made.push({
         loanId: rep.loan_id ?? "",
-        repaymentAmount: amount,
-        interest,
+        repaymentAmount: paid,
+        interest: Math.round(paid * ratio * 100) / 100,
         dueDate: rep.due_date,
         paidDate: rep.paid_date,
         status: rep.status,
