@@ -75,3 +75,31 @@ export function borrowerVaultCoreSlotsUploaded(docTypes: Iterable<string>): bool
   const hasSelfie = BORROWER_SELFIE_VAULT_ALIASES.some((t) => set.has(t));
   return set.has("nrc_front") && set.has("nrc_back") && hasSelfie;
 }
+
+/**
+ * Normalize a document label/type to a comparable key: lowercase, alphanumeric only.
+ * Used to match historical documents (vault + previous loans) to checklist slots
+ * regardless of underscores/spacing differences (e.g. "NRC (Front)" -> "nrcfront").
+ */
+export function normalizeDocKey(value: string): string {
+  return (value || "").replace(/[^a-z0-9]+/gi, "").toLowerCase();
+}
+
+/**
+ * Groups of normalized doc keys that should be treated as equivalent when matching
+ * historical documents to a checklist slot (identity docs are named inconsistently
+ * across the KYC vault and per-product checklists).
+ */
+const DOC_ALIAS_GROUPS: string[][] = [
+  ["selfie", "selfieholdingnrc", "selfiewithnrc", "nrcselfie", "selfienrc"],
+  ["nrcfront", "nrcfrontside", "nationalidfront", "idfront", "nrccopyfront"],
+  ["nrcback", "nrcbackside", "nationalidback", "idback", "nrccopyback"],
+];
+
+/** Return all normalized keys equivalent to the given normalized key (incl. itself). */
+export function equivalentDocKeys(normalizedKey: string): string[] {
+  for (const group of DOC_ALIAS_GROUPS) {
+    if (group.includes(normalizedKey)) return group;
+  }
+  return [normalizedKey];
+}
