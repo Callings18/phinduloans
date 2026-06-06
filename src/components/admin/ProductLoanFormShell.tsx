@@ -717,10 +717,15 @@ export default function ProductLoanFormShell({
   );
 
   // Combined list of blocking issues shown to the admin and used to gate submit.
-  const blockingErrors = useMemo(
-    () => (locationError ? [...validationErrors, locationError] : validationErrors),
-    [validationErrors, locationError],
-  );
+  const blockingErrors = useMemo(() => {
+    const errs = locationError ? [...validationErrors, locationError] : [...validationErrors];
+    if (!isEditMode && outstandingLoan) {
+      errs.push(
+        `This borrower already has an outstanding loan (${formatLoanStatus(outstandingLoan.status)}). They must fully repay it before a new loan can be issued.`,
+      );
+    }
+    return errs;
+  }, [validationErrors, locationError, isEditMode, outstandingLoan]);
 
 
 
