@@ -435,6 +435,40 @@ export default function ProductLoanFormShell({
     };
   }, [borrowerId]);
 
+  // Detect whether the selected borrower still has an outstanding (unpaid) loan.
+  // We ignore the loan currently being edited so editing an active loan isn't self-blocked.
+  useEffect(() => {
+    if (!borrowerId) {
+      setOutstandingLoan(null);
+      setCheckingOutstanding(false);
+      return;
+    }
+    let cancelled = false;
+    setCheckingOutstanding(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, status, created_at")
+        .eq("user_id", borrowerId)
+        .in("status", OUTSTANDING_LOAN_STATUSES)
+        .order("created_at", { ascending: false });
+      if (cancelled) return;
+      if (error) {
+        console.error("[ProductLoanFormShell] outstanding-loan check failed:", error);
+        setOutstandingLoan(null);
+        setCheckingOutstanding(false);
+        return;
+      }
+      const blocking = (data ?? []).find((l) => l.id !== editLoanId) ?? null;
+      setOutstandingLoan(blocking ? { id: blocking.id, status: blocking.status as string } : null);
+      setCheckingOutstanding(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [borrowerId, editLoanId]);
+
+
   const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ["product-by-code", productCode],
     queryFn: () => resolveProduct(productCode),
