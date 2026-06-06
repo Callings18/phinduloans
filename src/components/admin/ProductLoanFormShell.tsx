@@ -2000,19 +2000,40 @@ export default function ProductLoanFormShell({
                 </div>
                 <CardDescription className="text-xs">
                   Upload each required document. Photos can be captured directly from camera or selected from files.
+                  {hasCompletedLoan && (
+                    <span className="block mt-1 text-primary">
+                      This borrower has a completed loan — you can reuse their previous documents instead of re-uploading.
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="px-4 pb-4">
+                {reusableAvailableCount > 0 && (
+                  <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      <span className="font-medium text-primary">{reusableAvailableCount}</span> document
+                      {reusableAvailableCount === 1 ? "" : "s"} from a previous loan can be reused.
+                    </p>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={reuseAllAvailable}>
+                      <RotateCcw className="h-3 w-3 mr-1" /> Reuse all
+                    </Button>
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-3">
                   {rules.checklist.map((item) => {
                     const hasFile = !!docFiles[item];
-                    const hasVault = !!vaultDocs[item];
-                    const covered = hasFile || hasVault;
+                    const reused = reusedDocs[item];
+                    const available = !hasFile && !reused ? historicalDocForSlot(item) : undefined;
+                    const covered = hasFile || !!reused;
                     return (
                       <div
                         key={item}
                         className={`border rounded-lg p-3 transition-colors ${
-                          covered ? "border-green-600/40 bg-green-600/5" : "border-border"
+                          covered
+                            ? "border-green-600/40 bg-green-600/5"
+                            : available
+                              ? "border-primary/40 bg-primary/5"
+                              : "border-border"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -2033,29 +2054,74 @@ export default function ProductLoanFormShell({
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
-                        ) : hasVault ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[10px] border-green-600/30 text-green-600">
-                              ✓ From vault: {vaultDocs[item].file_name}
-                            </Badge>
-                            <input
-                              ref={(el) => { fileInputRefs.current[item] = el; }}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const f = e.target.files?.[0] || null;
-                                handleFileSelect(item, f);
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 text-[10px]"
-                              onClick={() => fileInputRefs.current[item]?.click()}
-                            >
-                              Replace
-                            </Button>
+                        ) : reused ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] border-green-600/30 text-green-600">
+                                ✓ Reused: {reused.file_name || "previous document"}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-muted-foreground flex-1">
+                                {reused.source === "previous_loan" ? "From previous loan" : "From document vault"}
+                              </span>
+                              <input
+                                ref={(el) => { fileInputRefs.current[item] = el; }}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleFileSelect(item, e.target.files?.[0] || null)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-[10px]"
+                                onClick={() => fileInputRefs.current[item]?.click()}
+                              >
+                                Upload new
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={() => undoReuse(item)}
+                                title="Don't reuse"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ) : available ? (
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              Found from {available.source === "previous_loan" ? "previous loan" : "document vault"}:{" "}
+                              {available.file_name || "document"}
+                            </p>
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-[10px] flex-1"
+                                onClick={() => confirmReuse(item)}
+                              >
+                                <RotateCcw className="h-3 w-3 mr-1" /> Reuse this
+                              </Button>
+                              <input
+                                ref={(el) => { fileInputRefs.current[item] = el; }}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleFileSelect(item, e.target.files?.[0] || null)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px]"
+                                onClick={() => fileInputRefs.current[item]?.click()}
+                              >
+                                <Upload className="h-3 w-3 mr-1" /> Upload new
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <div className="flex gap-1.5">
@@ -2104,7 +2170,7 @@ export default function ProductLoanFormShell({
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
-                    {rules.checklist.filter((item) => docFiles[item] || vaultDocs[item]).length} / {rules.checklist.length} documents attached
+                    {rules.checklist.filter((item) => docFiles[item] || reusedDocs[item]).length} / {rules.checklist.length} documents attached
                   </p>
                   {allDocsProvided && (
                     <Badge variant="outline" className="border-green-600/40 text-green-600 text-xs">
