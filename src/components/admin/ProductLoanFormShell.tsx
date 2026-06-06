@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -31,6 +31,17 @@ import CollateralBorrowersSection, {
   makeBlankBorrower,
   validateCollateralBorrowers,
 } from "@/components/loans/CollateralBorrowersSection";
+import { normalizeDocKey, equivalentDocKeys } from "@/constants/borrowerKycDocs";
+
+/** A document available for reuse from the borrower's history (vault or a completed loan). */
+type HistoricalDoc = {
+  key: string;
+  file_url: string;
+  file_name: string | null;
+  uploaded_at: string | null;
+  source: "vault" | "previous_loan";
+  label: string;
+};
 
 type Borrower = {
   id: string;
@@ -146,7 +157,12 @@ export default function ProductLoanFormShell({
   const [docUploading, setDocUploading] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
-  const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
+  // Historical documents available for reuse (vault + last completed loan), keyed by normalized doc key.
+  const [historicalDocs, setHistoricalDocs] = useState<Record<string, HistoricalDoc>>({});
+  // Documents the officer has explicitly confirmed to reuse, keyed by checklist label.
+  const [reusedDocs, setReusedDocs] = useState<Record<string, HistoricalDoc>>({});
+  // Whether this borrower has at least one completed/paid-off loan (gates reuse).
+  const [hasCompletedLoan, setHasCompletedLoan] = useState(false);
 
   // --- Collateral multi-borrower (COLLATERAL product only) ---
   const [primaryBorrowerEntry, setPrimaryBorrowerEntry] = useState<CollateralBorrowerEntry>(() =>
@@ -299,24 +315,97 @@ export default function ProductLoanFormShell({
   };
 
 
-  // Pre-populate docs from borrower's permanent vault
+  // Build historical documents for reuse: vault + the borrower's last completed loan.
+  // Only offered once the borrower has a completed/paid-off loan (eligibility gate).
   useEffect(() => {
-    if (!borrowerId) { setVaultDocs({}); return; }
+    if (!borrowerId) {
+      setHistoricalDocs({});
+      setReusedDocs({});
+      setHasCompletedLoan(false);
+      return;
+    }
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      // 1. Borrower's permanent vault docs.
+      const { data: vault } = await supabase
         .from("borrower_document_vault")
-        .select("doc_type, doc_label, file_url, file_name")
+        .select("doc_type, doc_label, file_url, file_name, uploaded_at")
         .eq("borrower_id", borrowerId)
         .order("uploaded_at", { ascending: false });
-      if (!data) return;
-      const map: Record<string, { file_url: string; file_name: string }> = {};
-      data.forEach((d) => {
-        // Map vault doc_type to checklist label
-        const label = d.doc_label || d.doc_type;
-        if (!map[label]) map[label] = { file_url: d.file_url, file_name: d.file_name };
-      });
-      setVaultDocs(map);
+
+      // 2. Borrower's per-loan documents (used to detect completed loans + their docs).
+      const { data: appDocs } = await supabase
+        .from("application_documents")
+        .select("doc_type, doc_label, file_url, file_name, uploaded_at, application_id")
+        .eq("borrower_id", borrowerId)
+        .order("uploaded_at", { ascending: false });
+
+      // 3. Which of those applications are completed/paid-off?
+      const appIds = Array.from(
+        new Set((appDocs ?? []).map((d) => d.application_id).filter(Boolean) as string[]),
+      );
+      let completedIds = new Set<string>();
+      if (appIds.length) {
+        const { data: loans } = await supabase
+          .from("loan_applications")
+          .select("id, status")
+          .in("id", appIds);
+        completedIds = new Set(
+          (loans ?? []).filter((l) => l.status === "completed").map((l) => l.id as string),
+        );
+      }
+      const hasCompleted = completedIds.size > 0;
+
+      if (cancelled) return;
+
+      if (!hasCompleted) {
+        // First-time (or no completed loan yet) — do not offer reuse.
+        setHistoricalDocs({});
+        setReusedDocs({});
+        setHasCompletedLoan(false);
+        return;
+      }
+
+      const completedDocs = (appDocs ?? []).filter(
+        (d) => d.application_id && completedIds.has(d.application_id) && d.file_url,
+      );
+
+      const combined: HistoricalDoc[] = [
+        ...completedDocs.map((d) => ({
+          key: normalizeDocKey(d.doc_label || d.doc_type || ""),
+          file_url: d.file_url as string,
+          file_name: d.file_name,
+          uploaded_at: d.uploaded_at,
+          source: "previous_loan" as const,
+          label: d.doc_label || d.doc_type || "",
+        })),
+        ...((vault ?? [])
+          .filter((d) => d.file_url)
+          .map((d) => ({
+            key: normalizeDocKey(d.doc_label || d.doc_type || ""),
+            file_url: d.file_url as string,
+            file_name: d.file_name,
+            uploaded_at: d.uploaded_at,
+            source: "vault" as const,
+            label: d.doc_label || d.doc_type || "",
+          }))),
+      ];
+
+      // Newest upload wins per normalized key.
+      combined.sort((a, b) => (b.uploaded_at || "").localeCompare(a.uploaded_at || ""));
+      const map: Record<string, HistoricalDoc> = {};
+      for (const d of combined) {
+        if (!d.key) continue;
+        if (!map[d.key]) map[d.key] = d;
+      }
+
+      setHistoricalDocs(map);
+      setReusedDocs({});
+      setHasCompletedLoan(true);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [borrowerId]);
 
   const { data: product, isLoading: productLoading } = useQuery({
@@ -671,7 +760,69 @@ export default function ProductLoanFormShell({
 
   const handleFileSelect = (docLabel: string, file: File | null) => {
     setDocFiles((prev) => ({ ...prev, [docLabel]: file }));
+    // A freshly uploaded file supersedes any reused historical doc for this slot.
+    if (file) {
+      setReusedDocs((prev) => {
+        if (!prev[docLabel]) return prev;
+        const next = { ...prev };
+        delete next[docLabel];
+        return next;
+      });
+    }
   };
+
+  // Resolve a historical document available for a checklist slot (alias-aware).
+  const historicalDocForSlot = useCallback(
+    (item: string): HistoricalDoc | undefined => {
+      for (const key of equivalentDocKeys(normalizeDocKey(item))) {
+        if (historicalDocs[key]) return historicalDocs[key];
+      }
+      return undefined;
+    },
+    [historicalDocs],
+  );
+
+  const confirmReuse = (item: string) => {
+    const h = historicalDocForSlot(item);
+    if (!h) return;
+    setReusedDocs((prev) => ({ ...prev, [item]: h }));
+    setDocFiles((prev) => {
+      if (!prev[item]) return prev;
+      const next = { ...prev };
+      delete next[item];
+      return next;
+    });
+  };
+
+  const undoReuse = (item: string) => {
+    setReusedDocs((prev) => {
+      if (!prev[item]) return prev;
+      const next = { ...prev };
+      delete next[item];
+      return next;
+    });
+  };
+
+  const reuseAllAvailable = () => {
+    setReusedDocs((prev) => {
+      const next = { ...prev };
+      for (const item of rules.checklist) {
+        if (docFiles[item] || next[item]) continue;
+        const h = historicalDocForSlot(item);
+        if (h) next[item] = h;
+      }
+      return next;
+    });
+  };
+
+  // How many slots have a historical doc available for reuse (and aren't yet covered)?
+  const reusableAvailableCount = useMemo(
+    () =>
+      rules.checklist.filter(
+        (item) => !docFiles[item] && !reusedDocs[item] && !!historicalDocForSlot(item),
+      ).length,
+    [rules.checklist, docFiles, reusedDocs, historicalDocForSlot],
+  );
 
   const uploadDocuments = async (loanId: string, borrowerId: string): Promise<Record<string, string>> => {
     const uploaded: Record<string, string> = {};
@@ -729,8 +880,8 @@ export default function ProductLoanFormShell({
       if (vaultErr) console.warn(`[uploadDocuments] vault insert (non-blocking) for "${label}":`, vaultErr);
     }
 
-    // Link any vault docs that weren't re-uploaded (reused from previous loans)
-    for (const [label, vDoc] of Object.entries(vaultDocs)) {
+    // Link any historical docs the officer explicitly confirmed for reuse (and didn't re-upload).
+    for (const [label, hDoc] of Object.entries(reusedDocs)) {
       if (uploaded[label]) continue;
       const sanitizedLabel = label.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
       const { error: linkErr } = await supabase.from("application_documents").insert({
@@ -738,19 +889,19 @@ export default function ProductLoanFormShell({
         borrower_id: borrowerId,
         doc_type: sanitizedLabel,
         doc_label: label,
-        file_url: vDoc.file_url,
-        file_name: vDoc.file_name || `${sanitizedLabel}.bin`,
+        file_url: hDoc.file_url,
+        file_name: hDoc.file_name || `${sanitizedLabel}.bin`,
         mime_type: "application/octet-stream",
         file_size: 0,
         uploaded_by: adminUid ?? "admin",
         status: "uploaded",
       });
       if (linkErr) {
-        console.error(`[uploadDocuments] Vault-link insert failed for "${label}":`, linkErr);
+        console.error(`[uploadDocuments] Reuse-link insert failed for "${label}":`, linkErr);
         failures.push(`${label} (reused): ${linkErr.message}`);
         continue;
       }
-      uploaded[label] = vDoc.file_url;
+      uploaded[label] = hDoc.file_url;
     }
 
     if (failures.length > 0) {
@@ -763,7 +914,7 @@ export default function ProductLoanFormShell({
     return uploaded;
   };
 
-  const allDocsProvided = rules.checklist.every((item) => docFiles[item] || vaultDocs[item]);
+  const allDocsProvided = rules.checklist.every((item) => docFiles[item] || reusedDocs[item]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -1320,15 +1471,17 @@ export default function ProductLoanFormShell({
                         <span><span className="text-muted-foreground">Gender:</span> {selectedBorrower.gender || "—"}</span>
                         <span><span className="text-muted-foreground">Marital:</span> {selectedBorrower.marital_status || "—"}</span>
                         <span><span className="text-muted-foreground">Employer:</span> {selectedBorrower.employer_name || "—"}</span>
-                        <span className="ml-auto inline-flex items-center gap-1">
-                          <FileText className="h-3 w-3 text-primary" />
-                          <span className="text-primary font-medium">{Object.keys(vaultDocs).length}</span>
-                          <span className="text-muted-foreground">vault docs linked</span>
-                        </span>
+                        {hasCompletedLoan && (
+                          <span className="ml-auto inline-flex items-center gap-1">
+                            <FileText className="h-3 w-3 text-primary" />
+                            <span className="text-primary font-medium">{Object.keys(historicalDocs).length}</span>
+                            <span className="text-muted-foreground">previous docs available</span>
+                          </span>
+                        )}
                       </div>
-                      {Object.keys(vaultDocs).length > 0 && (
+                      {hasCompletedLoan && Object.keys(historicalDocs).length > 0 && (
                         <p className="mt-1 text-[10px] text-muted-foreground">
-                          Existing KYC docs from this borrower will be auto-attached. See the Documents tab to review or replace.
+                          This borrower has a completed loan. You can reuse their previous documents in the Documents tab instead of re-uploading.
                         </p>
                       )}
                     </div>
@@ -1847,19 +2000,40 @@ export default function ProductLoanFormShell({
                 </div>
                 <CardDescription className="text-xs">
                   Upload each required document. Photos can be captured directly from camera or selected from files.
+                  {hasCompletedLoan && (
+                    <span className="block mt-1 text-primary">
+                      This borrower has a completed loan — you can reuse their previous documents instead of re-uploading.
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="px-4 pb-4">
+                {reusableAvailableCount > 0 && (
+                  <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      <span className="font-medium text-primary">{reusableAvailableCount}</span> document
+                      {reusableAvailableCount === 1 ? "" : "s"} from a previous loan can be reused.
+                    </p>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={reuseAllAvailable}>
+                      <RotateCcw className="h-3 w-3 mr-1" /> Reuse all
+                    </Button>
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-3">
                   {rules.checklist.map((item) => {
                     const hasFile = !!docFiles[item];
-                    const hasVault = !!vaultDocs[item];
-                    const covered = hasFile || hasVault;
+                    const reused = reusedDocs[item];
+                    const available = !hasFile && !reused ? historicalDocForSlot(item) : undefined;
+                    const covered = hasFile || !!reused;
                     return (
                       <div
                         key={item}
                         className={`border rounded-lg p-3 transition-colors ${
-                          covered ? "border-green-600/40 bg-green-600/5" : "border-border"
+                          covered
+                            ? "border-green-600/40 bg-green-600/5"
+                            : available
+                              ? "border-primary/40 bg-primary/5"
+                              : "border-border"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -1880,29 +2054,74 @@ export default function ProductLoanFormShell({
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
-                        ) : hasVault ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[10px] border-green-600/30 text-green-600">
-                              ✓ From vault: {vaultDocs[item].file_name}
-                            </Badge>
-                            <input
-                              ref={(el) => { fileInputRefs.current[item] = el; }}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const f = e.target.files?.[0] || null;
-                                handleFileSelect(item, f);
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 text-[10px]"
-                              onClick={() => fileInputRefs.current[item]?.click()}
-                            >
-                              Replace
-                            </Button>
+                        ) : reused ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] border-green-600/30 text-green-600">
+                                ✓ Reused: {reused.file_name || "previous document"}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-muted-foreground flex-1">
+                                {reused.source === "previous_loan" ? "From previous loan" : "From document vault"}
+                              </span>
+                              <input
+                                ref={(el) => { fileInputRefs.current[item] = el; }}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleFileSelect(item, e.target.files?.[0] || null)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-[10px]"
+                                onClick={() => fileInputRefs.current[item]?.click()}
+                              >
+                                Upload new
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={() => undoReuse(item)}
+                                title="Don't reuse"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ) : available ? (
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              Found from {available.source === "previous_loan" ? "previous loan" : "document vault"}:{" "}
+                              {available.file_name || "document"}
+                            </p>
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-[10px] flex-1"
+                                onClick={() => confirmReuse(item)}
+                              >
+                                <RotateCcw className="h-3 w-3 mr-1" /> Reuse this
+                              </Button>
+                              <input
+                                ref={(el) => { fileInputRefs.current[item] = el; }}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleFileSelect(item, e.target.files?.[0] || null)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px]"
+                                onClick={() => fileInputRefs.current[item]?.click()}
+                              >
+                                <Upload className="h-3 w-3 mr-1" /> Upload new
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <div className="flex gap-1.5">
@@ -1951,7 +2170,7 @@ export default function ProductLoanFormShell({
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
-                    {rules.checklist.filter((item) => docFiles[item] || vaultDocs[item]).length} / {rules.checklist.length} documents attached
+                    {rules.checklist.filter((item) => docFiles[item] || reusedDocs[item]).length} / {rules.checklist.length} documents attached
                   </p>
                   {allDocsProvided && (
                     <Badge variant="outline" className="border-green-600/40 text-green-600 text-xs">
