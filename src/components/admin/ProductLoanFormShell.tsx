@@ -163,6 +163,10 @@ export default function ProductLoanFormShell({
   const [reusedDocs, setReusedDocs] = useState<Record<string, HistoricalDoc>>({});
   // Whether this borrower has at least one completed/paid-off loan (gates reuse).
   const [hasCompletedLoan, setHasCompletedLoan] = useState(false);
+  // Any outstanding/unpaid loan the borrower currently has (blocks issuing a new loan).
+  const [outstandingLoan, setOutstandingLoan] = useState<{ id: string; status: string } | null>(null);
+  const [checkingOutstanding, setCheckingOutstanding] = useState(false);
+
 
   // --- Collateral multi-borrower (COLLATERAL product only) ---
   const [primaryBorrowerEntry, setPrimaryBorrowerEntry] = useState<CollateralBorrowerEntry>(() =>
