@@ -315,24 +315,97 @@ export default function ProductLoanFormShell({
   };
 
 
-  // Pre-populate docs from borrower's permanent vault
+  // Build historical documents for reuse: vault + the borrower's last completed loan.
+  // Only offered once the borrower has a completed/paid-off loan (eligibility gate).
   useEffect(() => {
-    if (!borrowerId) { setVaultDocs({}); return; }
+    if (!borrowerId) {
+      setHistoricalDocs({});
+      setReusedDocs({});
+      setHasCompletedLoan(false);
+      return;
+    }
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      // 1. Borrower's permanent vault docs.
+      const { data: vault } = await supabase
         .from("borrower_document_vault")
-        .select("doc_type, doc_label, file_url, file_name")
+        .select("doc_type, doc_label, file_url, file_name, uploaded_at")
         .eq("borrower_id", borrowerId)
         .order("uploaded_at", { ascending: false });
-      if (!data) return;
-      const map: Record<string, { file_url: string; file_name: string }> = {};
-      data.forEach((d) => {
-        // Map vault doc_type to checklist label
-        const label = d.doc_label || d.doc_type;
-        if (!map[label]) map[label] = { file_url: d.file_url, file_name: d.file_name };
-      });
-      setVaultDocs(map);
+
+      // 2. Borrower's per-loan documents (used to detect completed loans + their docs).
+      const { data: appDocs } = await supabase
+        .from("application_documents")
+        .select("doc_type, doc_label, file_url, file_name, uploaded_at, application_id")
+        .eq("borrower_id", borrowerId)
+        .order("uploaded_at", { ascending: false });
+
+      // 3. Which of those applications are completed/paid-off?
+      const appIds = Array.from(
+        new Set((appDocs ?? []).map((d) => d.application_id).filter(Boolean) as string[]),
+      );
+      let completedIds = new Set<string>();
+      if (appIds.length) {
+        const { data: loans } = await supabase
+          .from("loan_applications")
+          .select("id, status")
+          .in("id", appIds);
+        completedIds = new Set(
+          (loans ?? []).filter((l) => l.status === "completed").map((l) => l.id as string),
+        );
+      }
+      const hasCompleted = completedIds.size > 0;
+
+      if (cancelled) return;
+
+      if (!hasCompleted) {
+        // First-time (or no completed loan yet) — do not offer reuse.
+        setHistoricalDocs({});
+        setReusedDocs({});
+        setHasCompletedLoan(false);
+        return;
+      }
+
+      const completedDocs = (appDocs ?? []).filter(
+        (d) => d.application_id && completedIds.has(d.application_id) && d.file_url,
+      );
+
+      const combined: HistoricalDoc[] = [
+        ...completedDocs.map((d) => ({
+          key: normalizeDocKey(d.doc_label || d.doc_type || ""),
+          file_url: d.file_url as string,
+          file_name: d.file_name,
+          uploaded_at: d.uploaded_at,
+          source: "previous_loan" as const,
+          label: d.doc_label || d.doc_type || "",
+        })),
+        ...((vault ?? [])
+          .filter((d) => d.file_url)
+          .map((d) => ({
+            key: normalizeDocKey(d.doc_label || d.doc_type || ""),
+            file_url: d.file_url as string,
+            file_name: d.file_name,
+            uploaded_at: d.uploaded_at,
+            source: "vault" as const,
+            label: d.doc_label || d.doc_type || "",
+          }))),
+      ];
+
+      // Newest upload wins per normalized key.
+      combined.sort((a, b) => (b.uploaded_at || "").localeCompare(a.uploaded_at || ""));
+      const map: Record<string, HistoricalDoc> = {};
+      for (const d of combined) {
+        if (!d.key) continue;
+        if (!map[d.key]) map[d.key] = d;
+      }
+
+      setHistoricalDocs(map);
+      setReusedDocs({});
+      setHasCompletedLoan(true);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [borrowerId]);
 
   const { data: product, isLoading: productLoading } = useQuery({
