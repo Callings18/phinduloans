@@ -157,7 +157,12 @@ export default function ProductLoanFormShell({
   const [docUploading, setDocUploading] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
-  const [vaultDocs, setVaultDocs] = useState<Record<string, { file_url: string; file_name: string }>>({});
+  // Historical documents available for reuse (vault + last completed loan), keyed by normalized doc key.
+  const [historicalDocs, setHistoricalDocs] = useState<Record<string, HistoricalDoc>>({});
+  // Documents the officer has explicitly confirmed to reuse, keyed by checklist label.
+  const [reusedDocs, setReusedDocs] = useState<Record<string, HistoricalDoc>>({});
+  // Whether this borrower has at least one completed/paid-off loan (gates reuse).
+  const [hasCompletedLoan, setHasCompletedLoan] = useState(false);
 
   // --- Collateral multi-borrower (COLLATERAL product only) ---
   const [primaryBorrowerEntry, setPrimaryBorrowerEntry] = useState<CollateralBorrowerEntry>(() =>
