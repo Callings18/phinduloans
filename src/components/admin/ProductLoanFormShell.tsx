@@ -818,8 +818,8 @@ export default function ProductLoanFormShell({
       if (vaultErr) console.warn(`[uploadDocuments] vault insert (non-blocking) for "${label}":`, vaultErr);
     }
 
-    // Link any vault docs that weren't re-uploaded (reused from previous loans)
-    for (const [label, vDoc] of Object.entries(vaultDocs)) {
+    // Link any historical docs the officer explicitly confirmed for reuse (and didn't re-upload).
+    for (const [label, hDoc] of Object.entries(reusedDocs)) {
       if (uploaded[label]) continue;
       const sanitizedLabel = label.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
       const { error: linkErr } = await supabase.from("application_documents").insert({
@@ -827,19 +827,19 @@ export default function ProductLoanFormShell({
         borrower_id: borrowerId,
         doc_type: sanitizedLabel,
         doc_label: label,
-        file_url: vDoc.file_url,
-        file_name: vDoc.file_name || `${sanitizedLabel}.bin`,
+        file_url: hDoc.file_url,
+        file_name: hDoc.file_name || `${sanitizedLabel}.bin`,
         mime_type: "application/octet-stream",
         file_size: 0,
         uploaded_by: adminUid ?? "admin",
         status: "uploaded",
       });
       if (linkErr) {
-        console.error(`[uploadDocuments] Vault-link insert failed for "${label}":`, linkErr);
+        console.error(`[uploadDocuments] Reuse-link insert failed for "${label}":`, linkErr);
         failures.push(`${label} (reused): ${linkErr.message}`);
         continue;
       }
-      uploaded[label] = vDoc.file_url;
+      uploaded[label] = hDoc.file_url;
     }
 
     if (failures.length > 0) {
