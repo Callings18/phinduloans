@@ -46,24 +46,24 @@ type HistoricalDoc = {
 /**
  * Loan statuses that mean the borrower still owes / has an open commitment.
  * A borrower with any loan in one of these states cannot be issued a new loan
- * until it is cleared (completed) or cancelled/rejected/written off.
+ * until it is cleared (completed) or cancelled/rejected/failed.
  */
 const OUTSTANDING_LOAN_STATUSES = [
   "pending",
-  "submitted",
   "under_review",
+  "contract_signing",
+  "awaiting_disbursement",
+  "pmic_pending",
   "approved",
   "disbursed",
   "active",
-  "overdue",
-  "in_arrears",
   "defaulted",
-  "restructured",
-];
+] as const;
 
 /** Human-friendly label for an outstanding loan status. */
 const formatLoanStatus = (status: string) =>
   status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
 
 
 type Borrower = {
