@@ -914,7 +914,7 @@ export default function ProductLoanFormShell({
     return uploaded;
   };
 
-  const allDocsProvided = rules.checklist.every((item) => docFiles[item] || vaultDocs[item]);
+  const allDocsProvided = rules.checklist.every((item) => docFiles[item] || reusedDocs[item]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
