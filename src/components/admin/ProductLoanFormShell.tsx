@@ -760,7 +760,69 @@ export default function ProductLoanFormShell({
 
   const handleFileSelect = (docLabel: string, file: File | null) => {
     setDocFiles((prev) => ({ ...prev, [docLabel]: file }));
+    // A freshly uploaded file supersedes any reused historical doc for this slot.
+    if (file) {
+      setReusedDocs((prev) => {
+        if (!prev[docLabel]) return prev;
+        const next = { ...prev };
+        delete next[docLabel];
+        return next;
+      });
+    }
   };
+
+  // Resolve a historical document available for a checklist slot (alias-aware).
+  const historicalDocForSlot = useCallback(
+    (item: string): HistoricalDoc | undefined => {
+      for (const key of equivalentDocKeys(normalizeDocKey(item))) {
+        if (historicalDocs[key]) return historicalDocs[key];
+      }
+      return undefined;
+    },
+    [historicalDocs],
+  );
+
+  const confirmReuse = (item: string) => {
+    const h = historicalDocForSlot(item);
+    if (!h) return;
+    setReusedDocs((prev) => ({ ...prev, [item]: h }));
+    setDocFiles((prev) => {
+      if (!prev[item]) return prev;
+      const next = { ...prev };
+      delete next[item];
+      return next;
+    });
+  };
+
+  const undoReuse = (item: string) => {
+    setReusedDocs((prev) => {
+      if (!prev[item]) return prev;
+      const next = { ...prev };
+      delete next[item];
+      return next;
+    });
+  };
+
+  const reuseAllAvailable = () => {
+    setReusedDocs((prev) => {
+      const next = { ...prev };
+      for (const item of rules.checklist) {
+        if (docFiles[item] || next[item]) continue;
+        const h = historicalDocForSlot(item);
+        if (h) next[item] = h;
+      }
+      return next;
+    });
+  };
+
+  // How many slots have a historical doc available for reuse (and aren't yet covered)?
+  const reusableAvailableCount = useMemo(
+    () =>
+      rules.checklist.filter(
+        (item) => !docFiles[item] && !reusedDocs[item] && !!historicalDocForSlot(item),
+      ).length,
+    [rules.checklist, docFiles, reusedDocs, historicalDocForSlot],
+  );
 
   const uploadDocuments = async (loanId: string, borrowerId: string): Promise<Record<string, string>> => {
     const uploaded: Record<string, string> = {};
