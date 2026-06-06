@@ -1575,6 +1575,26 @@ export default function ProductLoanFormShell({
                     </div>
                   )}
 
+                  {selectedBorrower && !isEditMode && outstandingLoan && (
+                    <div className="md:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-destructive">Borrower has an outstanding loan</p>
+                        <p className="text-muted-foreground mt-0.5">
+                          {selectedBorrower.full_name || "This borrower"} still has a loan that is{" "}
+                          <strong>{formatLoanStatus(outstandingLoan.status)}</strong>. A new loan cannot be issued until
+                          the current one is fully repaid.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedBorrower && !isEditMode && checkingOutstanding && !outstandingLoan && (
+                    <div className="md:col-span-2 text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Checking borrower's loan history…
+                    </div>
+                  )}
+
+
                   <div className="space-y-1.5">
                     <Label className="text-xs">Contact Number *</Label>
                     <Input className="h-9" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="0971234567" />
