@@ -43,6 +43,29 @@ type HistoricalDoc = {
   label: string;
 };
 
+/**
+ * Loan statuses that mean the borrower still owes / has an open commitment.
+ * A borrower with any loan in one of these states cannot be issued a new loan
+ * until it is cleared (completed) or cancelled/rejected/failed.
+ */
+const OUTSTANDING_LOAN_STATUSES = [
+  "pending",
+  "under_review",
+  "contract_signing",
+  "awaiting_disbursement",
+  "pmic_pending",
+  "approved",
+  "disbursed",
+  "active",
+  "defaulted",
+] as const;
+
+/** Human-friendly label for an outstanding loan status. */
+const formatLoanStatus = (status: string) =>
+  status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+
+
 type Borrower = {
   id: string;
   full_name: string | null;
@@ -163,6 +186,10 @@ export default function ProductLoanFormShell({
   const [reusedDocs, setReusedDocs] = useState<Record<string, HistoricalDoc>>({});
   // Whether this borrower has at least one completed/paid-off loan (gates reuse).
   const [hasCompletedLoan, setHasCompletedLoan] = useState(false);
+  // Any outstanding/unpaid loan the borrower currently has (blocks issuing a new loan).
+  const [outstandingLoan, setOutstandingLoan] = useState<{ id: string; status: string } | null>(null);
+  const [checkingOutstanding, setCheckingOutstanding] = useState(false);
+
 
   // --- Collateral multi-borrower (COLLATERAL product only) ---
   const [primaryBorrowerEntry, setPrimaryBorrowerEntry] = useState<CollateralBorrowerEntry>(() =>
@@ -407,6 +434,40 @@ export default function ProductLoanFormShell({
       cancelled = true;
     };
   }, [borrowerId]);
+
+  // Detect whether the selected borrower still has an outstanding (unpaid) loan.
+  // We ignore the loan currently being edited so editing an active loan isn't self-blocked.
+  useEffect(() => {
+    if (!borrowerId) {
+      setOutstandingLoan(null);
+      setCheckingOutstanding(false);
+      return;
+    }
+    let cancelled = false;
+    setCheckingOutstanding(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, status, created_at")
+        .eq("user_id", borrowerId)
+        .in("status", OUTSTANDING_LOAN_STATUSES)
+        .order("created_at", { ascending: false });
+      if (cancelled) return;
+      if (error) {
+        console.error("[ProductLoanFormShell] outstanding-loan check failed:", error);
+        setOutstandingLoan(null);
+        setCheckingOutstanding(false);
+        return;
+      }
+      const blocking = (data ?? []).find((l) => l.id !== editLoanId) ?? null;
+      setOutstandingLoan(blocking ? { id: blocking.id, status: blocking.status as string } : null);
+      setCheckingOutstanding(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [borrowerId, editLoanId]);
+
 
   const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ["product-by-code", productCode],
@@ -656,10 +717,15 @@ export default function ProductLoanFormShell({
   );
 
   // Combined list of blocking issues shown to the admin and used to gate submit.
-  const blockingErrors = useMemo(
-    () => (locationError ? [...validationErrors, locationError] : validationErrors),
-    [validationErrors, locationError],
-  );
+  const blockingErrors = useMemo(() => {
+    const errs = locationError ? [...validationErrors, locationError] : [...validationErrors];
+    if (!isEditMode && outstandingLoan) {
+      errs.push(
+        `This borrower already has an outstanding loan (${formatLoanStatus(outstandingLoan.status)}). They must fully repay it before a new loan can be issued.`,
+      );
+    }
+    return errs;
+  }, [validationErrors, locationError, isEditMode, outstandingLoan]);
 
 
 
@@ -973,6 +1039,28 @@ export default function ProductLoanFormShell({
         // Stale marker — clear and fall through to a fresh insert.
         setPendingLoanId(null);
       }
+
+      // HARD GUARD: re-check at submit time that the borrower has no outstanding loan.
+      // This is the authoritative check (the UI banner can be stale if data changed).
+      {
+        const { data: openLoans, error: openErr } = await supabase
+          .from("loan_applications")
+          .select("id, status")
+          .eq("user_id", selectedBorrower.id)
+          .in("status", OUTSTANDING_LOAN_STATUSES);
+        if (openErr) {
+          throw new Error(`Could not verify the borrower's loan status: ${openErr.message}`);
+        }
+        const blocking = (openLoans ?? []).find((l) => l.id !== editLoanId);
+        if (blocking) {
+          throw new Error(
+            `${selectedBorrower.full_name || "This borrower"} already has an outstanding loan (${formatLoanStatus(
+              blocking.status as string,
+            )}). They must fully repay it before a new loan can be issued.`,
+          );
+        }
+      }
+
 
       let totalRepayment = 0;
       let installmentAmount = 0;
@@ -1486,6 +1574,26 @@ export default function ProductLoanFormShell({
                       )}
                     </div>
                   )}
+
+                  {selectedBorrower && !isEditMode && outstandingLoan && (
+                    <div className="md:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-destructive">Borrower has an outstanding loan</p>
+                        <p className="text-muted-foreground mt-0.5">
+                          {selectedBorrower.full_name || "This borrower"} still has a loan that is{" "}
+                          <strong>{formatLoanStatus(outstandingLoan.status)}</strong>. A new loan cannot be issued until
+                          the current one is fully repaid.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedBorrower && !isEditMode && checkingOutstanding && !outstandingLoan && (
+                    <div className="md:col-span-2 text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Checking borrower's loan history…
+                    </div>
+                  )}
+
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">Contact Number *</Label>
