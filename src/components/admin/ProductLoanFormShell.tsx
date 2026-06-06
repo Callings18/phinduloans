@@ -31,6 +31,17 @@ import CollateralBorrowersSection, {
   makeBlankBorrower,
   validateCollateralBorrowers,
 } from "@/components/loans/CollateralBorrowersSection";
+import { normalizeDocKey, equivalentDocKeys } from "@/constants/borrowerKycDocs";
+
+/** A document available for reuse from the borrower's history (vault or a completed loan). */
+type HistoricalDoc = {
+  key: string;
+  file_url: string;
+  file_name: string | null;
+  uploaded_at: string | null;
+  source: "vault" | "previous_loan";
+  label: string;
+};
 
 type Borrower = {
   id: string;
