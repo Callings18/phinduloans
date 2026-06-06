@@ -1040,6 +1040,28 @@ export default function ProductLoanFormShell({
         setPendingLoanId(null);
       }
 
+      // HARD GUARD: re-check at submit time that the borrower has no outstanding loan.
+      // This is the authoritative check (the UI banner can be stale if data changed).
+      {
+        const { data: openLoans, error: openErr } = await supabase
+          .from("loan_applications")
+          .select("id, status")
+          .eq("user_id", selectedBorrower.id)
+          .in("status", OUTSTANDING_LOAN_STATUSES);
+        if (openErr) {
+          throw new Error(`Could not verify the borrower's loan status: ${openErr.message}`);
+        }
+        const blocking = (openLoans ?? []).find((l) => l.id !== editLoanId);
+        if (blocking) {
+          throw new Error(
+            `${selectedBorrower.full_name || "This borrower"} already has an outstanding loan (${formatLoanStatus(
+              blocking.status as string,
+            )}). They must fully repay it before a new loan can be issued.`,
+          );
+        }
+      }
+
+
       let totalRepayment = 0;
       let installmentAmount = 0;
 
