@@ -1,62 +1,30 @@
-# Reuse historical documents for repeat borrowers
+# Fix: replaced loan still shows as overdue
 
-Make the loan creation form (all houses) offer a returning borrower's existing documents for reuse, so officers only upload what genuinely changed. Marketeers benefit most, but per your choice this applies to **all loan houses**.
+## What's happening
 
-## Behavior (what the officer sees)
+Cynthia has three loan cycles. The one you replaced (K9,689, dated 25 Apr) is correctly marked **completed**, and her new loan (K8,980.15) is **active**. The problem is the *completed* loan still has one leftover installment row (status `partial`, due 25 May, K12,595.70) that was never closed when the loan was completed.
 
-When a borrower is selected for a new loan:
+The Loans page builds its "overdue" list purely from installment rows and **ignores the parent loan's status**. So:
 
-- If the borrower has a **previous completed/paid-off loan**, each required document slot that we can satisfy from history shows a **"Reuse previous document?"** state with the source file name and a **Reuse** button + an **Upload new** button.
-- Nothing is silently auto-attached anymore. The officer **confirms reuse per slot** (or uploads a fresh file). A "Reuse all" shortcut confirms every available slot at once.
-- Slots with no history behave exactly as today (Upload / Camera).
-- If the borrower has **no completed loan yet**, reuse is not offered (first-time flow unchanged).
+- The new loan shows under **Active** (correct)
+- The old completed loan gets flagged **"1 late · K12,595.7 · 14 days late"** (wrong)
 
-```text
-┌ NRC Front ────────────────────────────────┐
-│ Found from previous loan: nrc_front.jpg    │
-│  [ Reuse this ]   [ Upload new ]           │
-└────────────────────────────────────────────┘
-```
+That's why she appears in both Active and Late, and why the header reads "1 overdue".
 
-After a slot is reused it shows a green "Reused from previous loan ✓" badge with an option to undo / replace.
+I confirmed in the database that this is the **only** loan affected by the leftover row.
 
-## Where documents are pulled from (vault + last loan)
+## The fix (two parts)
 
-For the selected borrower, build one merged map of available historical docs, preferring the most recent:
+### 1. Data cleanup (one-off)
+Close the orphaned installment on the completed loan so the stale "overdue" record disappears. This targets any loan already in a terminal state (`completed`, `rejected`, `defaulted`) that still has open installment rows (`pending`, `overdue`, `partial`) and marks those rows `cancelled` — exactly what the loan-closure trigger is supposed to do. Only Cynthia's one row matches today.
 
-1. **Document vault** (`borrower_document_vault`) — current source.
-2. **Last completed loan's documents** (`application_documents` for that borrower whose `application_id` belongs to a `loan_applications` row with `status = 'completed'`), newest first.
+### 2. UI guard (prevents recurrence)
+Update the overdue calculation on the house Loans page so it **only counts installments belonging to loans that are still active/disbursed**. Completed, rejected, defaulted and other terminal loans can never be flagged overdue again, even if a stray row survives. This keeps the overdue count, the late-bucket KPI cards, the late quick-filters, and the per-row "X late" badge all consistent with the loan's real status.
 
-Merge both, dedupe per slot, newest `uploaded_at` wins.
+## Technical details
 
-## Alias-aware slot matching
+- **Migration**: `UPDATE public.loan_repayments SET status = 'cancelled' WHERE status IN ('pending','overdue','partial') AND loan_id IN (SELECT id FROM loan_applications WHERE status IN ('completed','rejected','defaulted'))`. The existing `cancel_repayments_on_loan_closure` trigger already covers `partial` going forward, so no trigger change is needed.
 
-Replace the brittle exact-label match with a normalizer so vault/last-loan docs reliably land in the right checklist slot:
+- **`src/pages/admin/houses/HouseLoansPage.tsx`** — in the `overdueByLoan` useMemo (lines ~117-140), build a set of active loan IDs from `loans` (status `active` or `disbursed`) and skip any repayment whose `loan_id` is not in that set. Everything downstream (`overdueCount`, `lateBuckets`, `onTrackCount`, badges, sort) already reads from this map, so this single change fixes all of them.
 
-- Normalize both the checklist label and the stored `doc_type`/`doc_label` (lowercase, strip non-alphanumerics) before matching — mirrors the `sanitizedLabel` already used on upload.
-- Honor identity aliases from `src/constants/borrowerKycDocs.ts` (e.g. `selfie` ⇄ `selfie_holding_nrc`) so the selfie slot fills from any accepted variant.
-
-## Eligibility gate
-
-Only surface reuse when the borrower has at least one `loan_applications` row with `status = 'completed'`. (DB confirmed `completed` is the paid-off status.) Otherwise the form stays in first-time mode.
-
-## Submit logic
-
-Keep the existing `uploadDocuments` flow, but only link a historical doc for slots the officer **explicitly confirmed for reuse** (tracked in a `reusedDocs` map) instead of every vault doc. Re-uploaded files still take priority and replace the slot.
-
-## Technical changes
-
-- `src/components/admin/ProductLoanFormShell.tsx`
-  - Add a `historicalDocs` fetch (vault + last completed loan) and a `hasCompletedLoan` flag, replacing the current vault-only effect (lines ~302–320).
-  - Add alias-aware slot resolution helper (reuse logic from `borrowerKycDocs.ts`).
-  - Add `reusedDocs` state; render per-slot Reuse / Upload-new UI + "Reuse all" in the Documents tab (lines ~1853–1950).
-  - Update `allDocsProvided`, the attached-count, and the borrower summary chip to count confirmed reuse instead of raw vault count.
-  - Update `uploadDocuments` (lines ~732–754) to link only confirmed `reusedDocs`.
-- `src/constants/borrowerKycDocs.ts` — small exported helper for normalized/alias slot matching if not already covered (no schema change).
-
-No database migrations required — all tables and columns already exist.
-
-## Out of scope
-
-- No change to how first-time documents are collected or to KYC verification rules.
-- No backend/edge-function changes.
+No changes to the reloan/completion logic itself are required — the trigger is already correct; this addresses the stale data plus a defensive display guard.
