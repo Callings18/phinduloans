@@ -1034,7 +1034,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("loan_id", loan.id);
 
       const liveReps = (allReps || []).filter(r => !r.is_reversed);
-      const reloanSnapshot = calculateReloanSnapshot(loan, liveReps as Repayment[]);
+      const reloanSnapshot = calculateLoanBalanceSnapshot(loan, liveReps as Repayment[]);
       const totalAllPaid = reloanSnapshot.totalPaid;
       const interestStillDue = reloanSnapshot.interestCarriedForward;
       const carryForwardPrincipal = reloanSnapshot.reloanCarryForwardPrincipal;
@@ -1863,7 +1863,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const partialPaymentsOnPending = unpaidRepayments
     .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
   const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
-  const reloanSnapshot = calculateReloanSnapshot(loan, repayments || []);
+  const reloanSnapshot = calculateLoanBalanceSnapshot(loan, repayments || []);
   const totalPenalties = reloanSnapshot.totalPenalties;
   const totalOutstanding = unpaidRepayments.reduce(
     (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
