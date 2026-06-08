@@ -38,23 +38,51 @@ export async function createRepaymentScheduleForLoan(
   // Find existing rows that must NOT be overwritten (paid/partial keep their installment_number).
   const { data: keepRows, error: keepErr } = await supabase
     .from("loan_repayments")
-    .select("installment_number, status")
+    .select("id, installment_number, status, amount, original_amount, principal_paid, penalty_amount, penalty_paid")
     .eq("loan_id", loan.id)
     .in("status", ["paid", "partial", "pending", "overdue"]);
   if (keepErr) throw keepErr;
 
+  const normalizedRows = [...(keepRows || [])];
+  if (regenerate) {
+    for (const row of normalizedRows) {
+      if ((row as any).status !== "partial") continue;
+      const paid = Number((row as any).principal_paid || 0);
+      const unpaidPenalty = Math.max(0, Number((row as any).penalty_amount || 0) - Number((row as any).penalty_paid || 0));
+      if (unpaidPenalty > 0.01) {
+        throw new Error("Cannot regenerate schedule while a partial installment has unpaid penalties. Clear penalties first.");
+      }
+      if (paid <= 0.01) continue;
+      const { error: normalizeErr } = await supabase
+        .from("loan_repayments")
+        .update({
+          status: "paid",
+          amount: paid,
+          original_amount: paid,
+          principal_paid: paid,
+          paid_date: format(new Date(), "yyyy-MM-dd"),
+        })
+        .eq("id", (row as any).id);
+      if (normalizeErr) throw normalizeErr;
+      (row as any).status = "paid";
+      (row as any).amount = paid;
+      (row as any).original_amount = paid;
+      (row as any).principal_paid = paid;
+    }
+  }
+
   const lockedNumbers = new Set<number>(
-    (keepRows || [])
+    normalizedRows
       .filter((r: any) => r.status === "paid" || r.status === "partial")
       .map((r: any) => Number(r.installment_number))
   );
-  const activeRemaining = (keepRows || []).filter(
+  const activeRemaining = normalizedRows.filter(
     (r: any) => r.status === "pending" || r.status === "overdue"
   ).length;
 
   if (!regenerate) {
     // Original guard: if any active/historical rows already exist, just ensure loan is active and return.
-    if ((keepRows?.length ?? 0) > 0) {
+    if ((normalizedRows?.length ?? 0) > 0) {
       const { error: ensureActiveError } = await supabase
         .from("loan_applications")
         .update({ status: "active" })
@@ -130,6 +158,25 @@ export async function createRepaymentScheduleForLoan(
     numInstallments = loan.loan_term_months;
     paymentAmount =
       loan.monthly_payment ?? loan.total_repayment / loan.loan_term_months;
+  }
+
+  if (regenerate) {
+    const alreadyPaidTotal = normalizedRows.reduce((sum, row: any) => {
+      if (row.status !== "paid" && row.status !== "partial") return sum;
+      const explicitPaid = Number(row.principal_paid || 0);
+      return sum + (explicitPaid > 0 ? explicitPaid : Number(row.original_amount ?? row.amount ?? 0));
+    }, 0);
+    const remainingTotal = Math.max(0, loan.total_repayment - alreadyPaidTotal);
+    const remainingInstallments = Array.from({ length: numInstallments }, (_, index) => index + 1)
+      .filter((installmentNumber) => !lockedNumbers.has(installmentNumber)).length;
+
+    if (remainingInstallments <= 0) {
+      if (remainingTotal > 0.01) {
+        throw new Error("Cannot regenerate schedule: no open installment slots remain for the unpaid balance.");
+      }
+    } else {
+      paymentAmount = remainingTotal / remainingInstallments;
+    }
   }
 
   const repaymentRecords: Array<{

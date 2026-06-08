@@ -102,6 +102,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { getCanonicalStatusLabel } from "@/constants/loanStatusLabels";
 import { createRepaymentScheduleForLoan } from "@/utils/createRepaymentSchedule";
 import { calculateLoan } from "@/utils/loanCalculations";
+import { calculateLoanBalanceSnapshot } from "@/utils/loanBalance";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
@@ -206,47 +207,6 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const RELOAN_OPEN_STATUSES = new Set(["pending", "overdue", "partial"]);
-
-const money = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
-
-const repaymentPaidAmount = (repayment: Partial<Repayment>) => {
-  const explicitPaid = Number(repayment.principal_paid || 0);
-  if (explicitPaid > 0) return explicitPaid;
-  if (repayment.status === "paid") {
-    return Number(repayment.original_amount ?? repayment.amount ?? 0);
-  }
-  return 0;
-};
-
-const repaymentPenaltyOutstanding = (repayment: Partial<Repayment>) => {
-  if (!RELOAN_OPEN_STATUSES.has(repayment.status || "")) return 0;
-  return Math.max(0, Number(repayment.penalty_amount || 0) - Number(repayment.penalty_paid || 0));
-};
-
-const calculateReloanSnapshot = (loan: Loan, repayments: Repayment[] = []) => {
-  const liveRepayments = repayments.filter((repayment) => !repayment.is_reversed);
-  const principalAmount = Number(loan.loan_amount || 0);
-  const totalRepayment = Number(loan.total_repayment || principalAmount);
-  const totalInterestDue = Math.max(0, totalRepayment - principalAmount);
-  const totalPaid = money(liveRepayments.reduce((sum, repayment) => sum + repaymentPaidAmount(repayment), 0));
-  const totalPenalties = money(liveRepayments.reduce((sum, repayment) => sum + repaymentPenaltyOutstanding(repayment), 0));
-
-  // Business rule: old-loan interest is not carried into a reloan principal.
-  // Payments first satisfy the booked interest; any excess reduces principal.
-  const principalPaidAfterInterest = Math.max(0, totalPaid - totalInterestDue);
-  const reloanCarryForwardPrincipal = money(Math.max(0, principalAmount - principalPaidAfterInterest));
-
-  return {
-    totalInterestDue: money(totalInterestDue),
-    totalPaid,
-    totalPenalties,
-    interestPaidSoFar: money(Math.min(totalInterestDue, totalPaid)),
-    interestCarriedForward: 0,
-    reloanCarryForwardPrincipal,
-  };
-};
 
 interface EarlySettlement {
   outstanding_principal: number;
@@ -1074,7 +1034,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("loan_id", loan.id);
 
       const liveReps = (allReps || []).filter(r => !r.is_reversed);
-      const reloanSnapshot = calculateReloanSnapshot(loan, liveReps as Repayment[]);
+      const reloanSnapshot = calculateLoanBalanceSnapshot(loan, liveReps as Repayment[]);
       const totalAllPaid = reloanSnapshot.totalPaid;
       const interestStillDue = reloanSnapshot.interestCarriedForward;
       const carryForwardPrincipal = reloanSnapshot.reloanCarryForwardPrincipal;
@@ -1398,6 +1358,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(`Cannot top-up: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first (Admin → Repayments).`);
       }
 
+      const { data: allRowsForBalance, error: allRowsErr } = await supabase
+        .from("loan_repayments")
+        .select("amount, original_amount, principal_paid, penalty_amount, penalty_paid, status, is_reversed")
+        .eq("loan_id", loan.id);
+      if (allRowsErr) throw allRowsErr;
+      const balanceSnapshot = calculateLoanBalanceSnapshot(loan, allRowsForBalance || []);
+      const outstandingPrincipal = balanceSnapshot.reloanCarryForwardPrincipal;
+      if (outstandingPrincipal <= 0.01) {
+        throw new Error("This loan is already fully paid. Use Reloan instead of Top-up.");
+      }
+
       // Fetch product for fee & interest calculations
       let processingFeePercent = 0;
       let interestRate = loan.interest_rate || 15;
@@ -1441,8 +1412,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (netDisbursement <= 0) throw new Error("Top-up amount is too small to cover fees");
 
-      // New principal & recalculate using unified calculation
-      const newPrincipal = loan.loan_amount + additionalAmount;
+      // New principal is the unpaid principal plus fresh cash. Amounts already paid
+      // are preserved in the lifecycle total and never re-priced as new interest.
+      const newPrincipal = outstandingPrincipal + additionalAmount;
       const loanCalc = calculateLoan(newPrincipal, loan.loan_term_months, {
         product_name: (loanProduct as any)?.name || null,
         interest_rate: interestRate,
@@ -1450,7 +1422,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         interest_type: interestType as any,
       }, termUnit as any);
 
-      const newTotal = loanCalc.totalRepayment;
+      const newTotal = balanceSnapshot.totalPaid + loanCalc.totalRepayment;
       const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan application
@@ -1460,7 +1432,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           loan_amount: newPrincipal,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Total repayment: K${newTotal.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: unpaid principal K${outstandingPrincipal.toLocaleString()} + new cash K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Lifecycle total repayment: K${newTotal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
         })
         .eq("id", loan.id);
       if (loanErr) throw loanErr;
@@ -1576,7 +1548,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
-      const principal = loan.loan_amount;
+      const { data: allRowsForBalance, error: allRowsErr } = await supabase
+        .from("loan_repayments")
+        .select("amount, original_amount, principal_paid, penalty_amount, penalty_paid, status, is_reversed")
+        .eq("loan_id", loan.id);
+      if (allRowsErr) throw allRowsErr;
+      const balanceSnapshot = calculateLoanBalanceSnapshot(loan, allRowsForBalance || []);
+      if (balanceSnapshot.totalPenalties > 0.01) {
+        throw new Error(`Cannot restructure: K${balanceSnapshot.totalPenalties.toLocaleString()} in penalties must be cleared first.`);
+      }
+      const principal = balanceSnapshot.reloanCarryForwardPrincipal;
+      if (principal <= 0.01) {
+        throw new Error("This loan is already fully paid. Use Reloan instead of Restructure.");
+      }
 
       // Fetch product for proper interest_period/type
       let interestPeriod = 'monthly';
@@ -1603,18 +1587,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         interest_type: interestType as any,
       }, termUnit as any);
 
-      const newTotal = loanCalc.totalRepayment;
+      const newTotal = balanceSnapshot.totalPaid + loanCalc.totalRepayment;
       const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan
       const { error: loanError } = await supabase
         .from("loan_applications")
         .update({
+          loan_amount: principal,
           loan_term_months: newTerm,
           interest_rate: newRate,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nNew terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Total: K${newTotal.toLocaleString()}`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nUnpaid principal basis: K${principal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. New terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Lifecycle total: K${newTotal.toLocaleString()}`,
         })
         .eq("id", loan.id);
 
@@ -1903,7 +1888,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const partialPaymentsOnPending = unpaidRepayments
     .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
   const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
-  const reloanSnapshot = calculateReloanSnapshot(loan, repayments || []);
+  const reloanSnapshot = calculateLoanBalanceSnapshot(loan, repayments || []);
   const totalPenalties = reloanSnapshot.totalPenalties;
   const totalOutstanding = unpaidRepayments.reduce(
     (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
