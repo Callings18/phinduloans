@@ -113,10 +113,22 @@ export default function HouseLoansPage() {
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
+  // Only loans that are still running can be overdue. Completed/rejected/
+  // defaulted loans (e.g. a loan that was replaced/reloaned) must never be
+  // flagged late even if a stray installment row survives.
+  const activeLoanIds = useMemo(() => {
+    const set = new Set<string>();
+    (loans ?? []).forEach((l: any) => {
+      if (["active", "disbursed"].includes(l.status)) set.add(l.id);
+    });
+    return set;
+  }, [loans]);
+
   // Overdue map: loan_id -> { count, amount, oldestDueDate, daysLate }
   const overdueByLoan = useMemo(() => {
     const map: Record<string, { count: number; amount: number; oldestDueDate: string | null; daysLate: number }> = {};
     (repayments ?? []).forEach((r: any) => {
+      if (!activeLoanIds.has(r.loan_id)) return;
       if (r.status === "paid" || r.status === "cancelled") return;
       if (!r.due_date || r.due_date >= todayStr) return;
       const entry = map[r.loan_id] ?? { count: 0, amount: 0, oldestDueDate: null, daysLate: 0 };
@@ -137,7 +149,7 @@ export default function HouseLoansPage() {
         : 0;
     });
     return map;
-  }, [repayments, todayStr]);
+  }, [repayments, todayStr, activeLoanIds]);
 
   // Date range derived from preset
   const dateRange = useMemo<{ from: string | null; to: string | null }>(() => {
