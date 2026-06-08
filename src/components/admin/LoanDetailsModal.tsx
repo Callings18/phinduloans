@@ -1548,7 +1548,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       const newTerm = Number(newTermMonths) || loan.loan_term_months;
       const newRate = Number(newInterestRate) || loan.interest_rate;
-      const principal = loan.loan_amount;
+      const { data: allRowsForBalance, error: allRowsErr } = await supabase
+        .from("loan_repayments")
+        .select("amount, original_amount, principal_paid, penalty_amount, penalty_paid, status, is_reversed")
+        .eq("loan_id", loan.id);
+      if (allRowsErr) throw allRowsErr;
+      const balanceSnapshot = calculateLoanBalanceSnapshot(loan, allRowsForBalance || []);
+      if (balanceSnapshot.totalPenalties > 0.01) {
+        throw new Error(`Cannot restructure: K${balanceSnapshot.totalPenalties.toLocaleString()} in penalties must be cleared first.`);
+      }
+      const principal = balanceSnapshot.reloanCarryForwardPrincipal;
+      if (principal <= 0.01) {
+        throw new Error("This loan is already fully paid. Use Reloan instead of Restructure.");
+      }
 
       // Fetch product for proper interest_period/type
       let interestPeriod = 'monthly';
@@ -1575,18 +1587,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         interest_type: interestType as any,
       }, termUnit as any);
 
-      const newTotal = loanCalc.totalRepayment;
+      const newTotal = balanceSnapshot.totalPaid + loanCalc.totalRepayment;
       const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan
       const { error: loanError } = await supabase
         .from("loan_applications")
         .update({
+          loan_amount: principal,
           loan_term_months: newTerm,
           interest_rate: newRate,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nNew terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Total: K${newTotal.toLocaleString()}`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nUnpaid principal basis: K${principal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. New terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Lifecycle total: K${newTotal.toLocaleString()}`,
         })
         .eq("id", loan.id);
 
