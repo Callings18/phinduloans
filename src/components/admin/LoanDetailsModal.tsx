@@ -615,6 +615,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
@@ -1339,6 +1340,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       return { newLoan, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement };
     },
     onSuccess: ({ newLoan, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement }) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
