@@ -1890,24 +1890,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const partialPaymentsOnPending = unpaidRepayments
     .reduce((sum, r) => sum + Number(r.principal_paid || 0), 0);
   const totalPaidIncludingPartial = totalPaid + partialPaymentsOnPending;
-  const totalPenalties = unpaidRepayments.reduce(
-    (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
-    0
-  );
+  const reloanSnapshot = calculateReloanSnapshot(loan, repayments || []);
+  const totalPenalties = reloanSnapshot.totalPenalties;
   const totalOutstanding = unpaidRepayments.reduce(
     (sum, r) => sum + Math.max(Number(r.original_amount || r.amount || 0) - Number(r.principal_paid || 0), 0),
     0
   );
-  const totalInterestDue = Math.max(0, Number(loan.total_repayment || 0) - Number(loan.loan_amount || 0));
-  // Reloan eligibility: borrower must clear penalties and interest first.
-  // Only the remaining principal carries forward into the new loan.
-  const interestPaidSoFar = Math.min(totalInterestDue, totalPaidIncludingPartial);
-  const reloanInterestOutstanding = Math.max(0, totalInterestDue - interestPaidSoFar);
-  const principalPaidAfterInterest = Math.max(0, totalPaidIncludingPartial - totalInterestDue);
-  const reloanCarryForwardPrincipal = Math.max(
-    0,
-    Number(loan.loan_amount || 0) - principalPaidAfterInterest,
-  );
+  const totalInterestDue = reloanSnapshot.totalInterestDue;
+  // Reloan eligibility: unpaid penalties must be cleared; old interest is not
+  // rolled forward. Only the remaining principal becomes the new principal.
+  const interestPaidSoFar = reloanSnapshot.interestPaidSoFar;
+  const reloanInterestOutstanding = reloanSnapshot.interestCarriedForward;
+  const reloanCarryForwardPrincipal = reloanSnapshot.reloanCarryForwardPrincipal;
   const reloanTopUpNumeric = Math.max(0, Number(reloanTopUpAmount || 0));
   const reloanProjectedPrincipal = reloanCarryForwardPrincipal + reloanTopUpNumeric;
   const progressPercentage = loan.total_repayment > 0 ? (totalPaidIncludingPartial / loan.total_repayment) * 100 : 0;
