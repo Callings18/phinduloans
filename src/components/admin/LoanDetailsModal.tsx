@@ -1062,36 +1062,18 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         .eq("loan_id", loan.id);
 
       const liveReps = (allReps || []).filter(r => !r.is_reversed);
-      const pendingReps = liveReps.filter(r => ["pending", "overdue", "partial"].includes(r.status));
-      const totalAllPaid = liveReps.reduce((sum, r) => {
-        const fallbackPaid = r.status === "paid" ? Number(r.original_amount || r.amount || 0) : 0;
-        return sum + Number((r.principal_paid ?? fallbackPaid) || 0);
-      }, 0);
-      // Reloan carry-forward rule for Salary Advance style products:
-      // penalties and interest must be cleared first; only the remaining principal
-      // may become the new reloan principal. Example: K8,505 total on K6,300
-      // principal with K2,700 paid => interest K2,205 cleared, K495 reduces
-      // principal, so reloan principal is K5,805.
-      const principalAmount = Number(loan.loan_amount || 0);
-      const totalAmountDue = Number(loan.total_repayment || principalAmount);
-      const totalInterestDueForReloan = Math.max(0, totalAmountDue - principalAmount);
-      const interestStillDue = Math.max(0, totalInterestDueForReloan - totalAllPaid);
-      const principalPaidAfterInterest = Math.max(0, totalAllPaid - totalInterestDueForReloan);
-      const carryForwardPrincipal = Math.max(0, principalAmount - principalPaidAfterInterest);
-
-      // Check for unpaid penalties only (ignore penalties already settled)
-      const totalUnpaidPenalties = pendingReps.reduce(
-        (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
-        0
-      );
+      const reloanSnapshot = calculateReloanSnapshot(loan, liveReps as Repayment[]);
+      const totalAllPaid = reloanSnapshot.totalPaid;
+      const interestStillDue = reloanSnapshot.interestCarriedForward;
+      const carryForwardPrincipal = reloanSnapshot.reloanCarryForwardPrincipal;
+      const totalUnpaidPenalties = reloanSnapshot.totalPenalties;
 
       // Block if penalties are still outstanding (must be cleared via repayment first)
       if (totalUnpaidPenalties > 0.01) {
         throw new Error(`Cannot reloan: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first.`);
       }
-      if (interestStillDue > 0.01) {
-        throw new Error(`Cannot reloan: K${interestStillDue.toLocaleString()} in interest must be cleared first.`);
-      }
+      // Prior-cycle interest is never rolled into a reloan principal. Only
+      // unpaid penalties block the action; remaining principal carries forward.
 
       const isFreshReloan = carryForwardPrincipal <= 0.01;
       const freshPrincipalNum = Number(reloanFreshPrincipal || 0);
