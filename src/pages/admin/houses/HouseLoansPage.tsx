@@ -149,7 +149,7 @@ export default function HouseLoansPage() {
         : 0;
     });
     return map;
-  }, [repayments, todayStr]);
+  }, [repayments, todayStr, activeLoanIds]);
 
   // Date range derived from preset
   const dateRange = useMemo<{ from: string | null; to: string | null }>(() => {
