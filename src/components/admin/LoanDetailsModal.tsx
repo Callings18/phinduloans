@@ -207,6 +207,47 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+const RELOAN_OPEN_STATUSES = new Set(["pending", "overdue", "partial"]);
+
+const money = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
+
+const repaymentPaidAmount = (repayment: Partial<Repayment>) => {
+  const explicitPaid = Number(repayment.principal_paid || 0);
+  if (explicitPaid > 0) return explicitPaid;
+  if (repayment.status === "paid") {
+    return Number(repayment.original_amount ?? repayment.amount ?? 0);
+  }
+  return 0;
+};
+
+const repaymentPenaltyOutstanding = (repayment: Partial<Repayment>) => {
+  if (!RELOAN_OPEN_STATUSES.has(repayment.status || "")) return 0;
+  return Math.max(0, Number(repayment.penalty_amount || 0) - Number(repayment.penalty_paid || 0));
+};
+
+const calculateReloanSnapshot = (loan: Loan, repayments: Repayment[] = []) => {
+  const liveRepayments = repayments.filter((repayment) => !repayment.is_reversed);
+  const principalAmount = Number(loan.loan_amount || 0);
+  const totalRepayment = Number(loan.total_repayment || principalAmount);
+  const totalInterestDue = Math.max(0, totalRepayment - principalAmount);
+  const totalPaid = money(liveRepayments.reduce((sum, repayment) => sum + repaymentPaidAmount(repayment), 0));
+  const totalPenalties = money(liveRepayments.reduce((sum, repayment) => sum + repaymentPenaltyOutstanding(repayment), 0));
+
+  // Business rule: old-loan interest is not carried into a reloan principal.
+  // Payments first satisfy the booked interest; any excess reduces principal.
+  const principalPaidAfterInterest = Math.max(0, totalPaid - totalInterestDue);
+  const reloanCarryForwardPrincipal = money(Math.max(0, principalAmount - principalPaidAfterInterest));
+
+  return {
+    totalInterestDue: money(totalInterestDue),
+    totalPaid,
+    totalPenalties,
+    interestPaidSoFar: money(Math.min(totalInterestDue, totalPaid)),
+    interestCarriedForward: 0,
+    reloanCarryForwardPrincipal,
+  };
+};
+
 interface EarlySettlement {
   outstanding_principal: number;
   outstanding_interest: number;
