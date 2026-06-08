@@ -374,8 +374,19 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         { event: '*', schema: 'public', table: 'loan_repayments', filter: `loan_id=eq.${loan.id}` },
         () => {
           queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan.id] });
+          queryClient.invalidateQueries({ queryKey: ["loan-disbursement", loan.id] });
+          queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
           queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
           queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'loan_applications', filter: `id=eq.${loan.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
         }
       )
       .subscribe();
