@@ -1358,6 +1358,17 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(`Cannot top-up: K${totalUnpaidPenalties.toLocaleString()} in penalties must be cleared first (Admin → Repayments).`);
       }
 
+      const { data: allRowsForBalance, error: allRowsErr } = await supabase
+        .from("loan_repayments")
+        .select("amount, original_amount, principal_paid, penalty_amount, penalty_paid, status, is_reversed")
+        .eq("loan_id", loan.id);
+      if (allRowsErr) throw allRowsErr;
+      const balanceSnapshot = calculateLoanBalanceSnapshot(loan, allRowsForBalance || []);
+      const outstandingPrincipal = balanceSnapshot.reloanCarryForwardPrincipal;
+      if (outstandingPrincipal <= 0.01) {
+        throw new Error("This loan is already fully paid. Use Reloan instead of Top-up.");
+      }
+
       // Fetch product for fee & interest calculations
       let processingFeePercent = 0;
       let interestRate = loan.interest_rate || 15;
@@ -1401,8 +1412,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (netDisbursement <= 0) throw new Error("Top-up amount is too small to cover fees");
 
-      // New principal & recalculate using unified calculation
-      const newPrincipal = loan.loan_amount + additionalAmount;
+      // New principal is the unpaid principal plus fresh cash. Amounts already paid
+      // are preserved in the lifecycle total and never re-priced as new interest.
+      const newPrincipal = outstandingPrincipal + additionalAmount;
       const loanCalc = calculateLoan(newPrincipal, loan.loan_term_months, {
         product_name: (loanProduct as any)?.name || null,
         interest_rate: interestRate,
@@ -1410,7 +1422,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         interest_type: interestType as any,
       }, termUnit as any);
 
-      const newTotal = loanCalc.totalRepayment;
+      const newTotal = balanceSnapshot.totalPaid + loanCalc.totalRepayment;
       const newMonthly = loanCalc.monthlyPayment;
 
       // Update loan application
@@ -1420,7 +1432,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           loan_amount: newPrincipal,
           total_repayment: newTotal,
           monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Total repayment: K${newTotal.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
+          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: unpaid principal K${outstandingPrincipal.toLocaleString()} + new cash K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Lifecycle total repayment: K${newTotal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
         })
         .eq("id", loan.id);
       if (loanErr) throw loanErr;
