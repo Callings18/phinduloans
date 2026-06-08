@@ -160,6 +160,25 @@ export async function createRepaymentScheduleForLoan(
       loan.monthly_payment ?? loan.total_repayment / loan.loan_term_months;
   }
 
+  if (regenerate) {
+    const alreadyPaidTotal = normalizedRows.reduce((sum, row: any) => {
+      if (row.status !== "paid" && row.status !== "partial") return sum;
+      const explicitPaid = Number(row.principal_paid || 0);
+      return sum + (explicitPaid > 0 ? explicitPaid : Number(row.original_amount ?? row.amount ?? 0));
+    }, 0);
+    const remainingTotal = Math.max(0, loan.total_repayment - alreadyPaidTotal);
+    const remainingInstallments = Array.from({ length: numInstallments }, (_, index) => index + 1)
+      .filter((installmentNumber) => !lockedNumbers.has(installmentNumber)).length;
+
+    if (remainingInstallments <= 0) {
+      if (remainingTotal > 0.01) {
+        throw new Error("Cannot regenerate schedule: no open installment slots remain for the unpaid balance.");
+      }
+    } else {
+      paymentAmount = remainingTotal / remainingInstallments;
+    }
+  }
+
   const repaymentRecords: Array<{
     loan_id: string;
     user_id: string;
