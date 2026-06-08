@@ -220,6 +220,9 @@ const AdminLoans = () => {
 
   const loans = loansResult?.data ?? [];
   const totalCount = loansResult?.count ?? 0;
+  const selectedLoanLive = selectedLoan
+    ? loans.find((loan) => loan.id === selectedLoan.id) ?? selectedLoan
+    : null;
 
   // Fetch next due dates for active loans
   const { data: loanDueDates } = useQuery({
@@ -1085,7 +1088,7 @@ const AdminLoans = () => {
 
       {/* Loan Details Modal */}
       <LoanDetailsModal
-        loan={selectedLoan}
+        loan={selectedLoanLive}
         open={isDetailsOpen}
         onOpenChange={(open) => {
           setIsDetailsOpen(open);
