@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Loader2, 
   MessageSquare, 
-  Mail, 
   Phone, 
   CheckCircle, 
   AlertCircle,
@@ -45,14 +44,8 @@ import { format } from "date-fns";
 
 interface BrevoSettings {
   brevo_api_key: string;
-  brevo_smtp_host: string;
-  brevo_smtp_port: number;
-  brevo_smtp_username: string;
-  brevo_smtp_password: string;
   brevo_sender_name: string;
-  brevo_sender_email: string;
   brevo_sender_phone: string;
-  brevo_email_enabled: boolean;
   brevo_sms_enabled: boolean;
   brevo_whatsapp_enabled: boolean;
   // Notification event toggles
@@ -89,14 +82,8 @@ interface NotificationLog {
 
 const defaultSettings: BrevoSettings = {
   brevo_api_key: "",
-  brevo_smtp_host: "smtp-relay.brevo.com",
-  brevo_smtp_port: 587,
-  brevo_smtp_username: "",
-  brevo_smtp_password: "",
   brevo_sender_name: "Phindu Finance",
-  brevo_sender_email: "",
   brevo_sender_phone: "",
-  brevo_email_enabled: false,
   brevo_sms_enabled: false,
   brevo_whatsapp_enabled: false,
   notify_on_signup: true,
@@ -114,10 +101,10 @@ export const BrevoSettings = () => {
   const queryClient = useQueryClient();
   const [settings, setSettings] = useState<BrevoSettings>(defaultSettings);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  
   const [testingChannel, setTestingChannel] = useState<string | null>(null);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
-  const [testType, setTestType] = useState<'email' | 'sms' | 'whatsapp'>('email');
+  const [testType, setTestType] = useState<'sms' | 'whatsapp'>('sms');
   const [testRecipient, setTestRecipient] = useState("");
   const [editingTemplate, setEditingTemplate] = useState<WhatsAppTemplate | null>(null);
 
@@ -255,7 +242,7 @@ export const BrevoSettings = () => {
     if (!testRecipient) {
       toast({
         title: "Recipient Required",
-        description: "Please enter a recipient email or phone number.",
+        description: "Please enter a recipient phone number.",
         variant: "destructive",
       });
       return;
@@ -269,9 +256,8 @@ export const BrevoSettings = () => {
         message: `Test ${testType} notification from Phindu Finance via Brevo. Sent at ${new Date().toLocaleString()}`,
       };
 
-      if (testType === 'email') {
-        payload.subject = "Test Email - Phindu Finance";
-      }
+
+
 
       const { data, error } = await supabase.functions.invoke("brevo-notification", {
         body: payload,
@@ -311,8 +297,6 @@ export const BrevoSettings = () => {
 
   const getTypeBadge = (type: string) => {
     switch (type) {
-      case 'email':
-        return <Badge variant="outline" className="gap-1"><Mail className="h-3 w-3" /> Email</Badge>;
       case 'sms':
         return <Badge variant="outline" className="gap-1"><Phone className="h-3 w-3" /> SMS</Badge>;
       case 'whatsapp':
@@ -336,7 +320,7 @@ export const BrevoSettings = () => {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Brevo Notifications</h2>
           <p className="text-muted-foreground">
-            Configure Brevo for Email, SMS, and WhatsApp notifications
+            Configure Brevo for SMS and WhatsApp notifications
           </p>
         </div>
         <div className="flex gap-2">
@@ -352,14 +336,10 @@ export const BrevoSettings = () => {
       </div>
 
       <Tabs defaultValue="api" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="api">
             <Settings className="h-4 w-4 mr-2" />
             API
-          </TabsTrigger>
-          <TabsTrigger value="smtp">
-            <Mail className="h-4 w-4 mr-2" />
-            SMTP
           </TabsTrigger>
           <TabsTrigger value="channels">
             <Send className="h-4 w-4 mr-2" />
@@ -428,15 +408,6 @@ export const BrevoSettings = () => {
                     onChange={(e) => setSettings({ ...settings, brevo_sender_name: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Sender Email</Label>
-                  <Input
-                    type="email"
-                    placeholder="noreply@phindu.com"
-                    value={settings.brevo_sender_email}
-                    onChange={(e) => setSettings({ ...settings, brevo_sender_email: e.target.value })}
-                  />
-                </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Sender Phone (for SMS/WhatsApp)</Label>
                   <Input
@@ -453,68 +424,6 @@ export const BrevoSettings = () => {
           </Card>
         </TabsContent>
 
-        {/* SMTP Configuration */}
-        <TabsContent value="smtp">
-          <Card>
-            <CardHeader>
-              <CardTitle>SMTP Configuration</CardTitle>
-              <CardDescription>
-                Configure SMTP settings for sending emails via Brevo
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>SMTP Host</Label>
-                  <Input
-                    placeholder="smtp-relay.brevo.com"
-                    value={settings.brevo_smtp_host}
-                    onChange={(e) => setSettings({ ...settings, brevo_smtp_host: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>SMTP Port</Label>
-                  <Input
-                    type="number"
-                    placeholder="587"
-                    value={settings.brevo_smtp_port}
-                    onChange={(e) => setSettings({ ...settings, brevo_smtp_port: parseInt(e.target.value) || 587 })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>SMTP Username</Label>
-                  <Input
-                    placeholder="Your Brevo login email"
-                    value={settings.brevo_smtp_username}
-                    onChange={(e) => setSettings({ ...settings, brevo_smtp_username: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>SMTP Password</Label>
-                  <div className="relative">
-                    <Input
-                      type={showSmtpPassword ? "text" : "password"}
-                      placeholder="SMTP key from Brevo"
-                      value={settings.brevo_smtp_password}
-                      onChange={(e) => setSettings({ ...settings, brevo_smtp_password: e.target.value })}
-                      className="pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowSmtpPassword(!showSmtpPassword)}
-                    >
-                      {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Channel Toggles */}
         <TabsContent value="channels">
           <Card>
@@ -525,23 +434,7 @@ export const BrevoSettings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Mail className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Email Notifications</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Send transactional emails via Brevo SMTP or API
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.brevo_email_enabled}
-                  onCheckedChange={(checked) => setSettings({ ...settings, brevo_email_enabled: checked })}
-                />
-              </div>
+
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="flex items-center gap-4">
@@ -755,13 +648,7 @@ export const BrevoSettings = () => {
             <div className="space-y-2">
               <Label>Notification Type</Label>
               <div className="flex gap-2">
-                <Button
-                  variant={testType === 'email' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => { setTestType('email'); setTestRecipient(''); }}
-                >
-                  <Mail className="h-4 w-4 mr-1" /> Email
-                </Button>
+
                 <Button
                   variant={testType === 'sms' ? 'default' : 'outline'}
                   size="sm"
@@ -779,9 +666,9 @@ export const BrevoSettings = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{testType === 'email' ? 'Email Address' : 'Phone Number'}</Label>
+              <Label>Phone Number</Label>
               <Input
-                placeholder={testType === 'email' ? 'test@example.com' : '+260977123456'}
+                placeholder="+260977123456"
                 value={testRecipient}
                 onChange={(e) => setTestRecipient(e.target.value)}
               />
