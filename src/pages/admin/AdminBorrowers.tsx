@@ -63,7 +63,7 @@ import { HelpCircle } from "lucide-react";
 
 interface BorrowerForm {
   full_name: string;
-  email: string;
+  
   phone: string;
   nrc_number: string;
   address: string;
