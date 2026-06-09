@@ -41,7 +41,7 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Mail,
+  
   MapPin,
   IdCard,
   Ban,
