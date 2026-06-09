@@ -1095,7 +1095,7 @@ const AdminBorrowers = () => {
               </div>
               {selectedBorrower?.full_name || 'Borrower Details'}
             </DialogTitle>
-            <DialogDescription>{selectedBorrower?.email}</DialogDescription>
+            <DialogDescription>{selectedBorrower?.phone}</DialogDescription>
           </DialogHeader>
 
           {selectedBorrower && (
