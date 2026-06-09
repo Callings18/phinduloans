@@ -560,8 +560,8 @@ const AdminBorrowers = () => {
   });
 
   const handleCreate = () => {
-    if (!formData.full_name?.trim() || !formData.email?.trim()) {
-      toast({ title: "Please fill in required fields (Name and Email)", variant: "destructive" });
+    if (!formData.full_name?.trim() || !formData.phone?.trim()) {
+      toast({ title: "Please fill in required fields (Name and Phone)", variant: "destructive" });
       return;
     }
     createMutation.mutate(formData);
