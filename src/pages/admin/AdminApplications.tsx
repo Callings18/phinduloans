@@ -71,7 +71,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
+import { generateLoanContract, downloadLoanContract, shareContractViaWhatsApp, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
 import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
 import ApplicationDocumentsTab from "@/components/admin/ApplicationDocumentsTab";
 import GuidedTour from "@/components/common/GuidedTour";
