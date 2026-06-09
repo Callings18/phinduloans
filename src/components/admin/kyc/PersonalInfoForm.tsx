@@ -100,9 +100,8 @@ export default function PersonalInfoForm({ borrowerId, profile }: PersonalInfoFo
               <Input value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Borrower's full name" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Email</Label>
-              <Input value={profile?.email || ""} disabled className="bg-secondary/50" />
-              <p className="text-[10px] text-muted-foreground">Email cannot be changed</p>
+              <Label className="text-xs">Phone Number *</Label>
+              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 9XX XXX XXX" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Phone Number *</Label>
