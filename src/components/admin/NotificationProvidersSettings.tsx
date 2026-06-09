@@ -563,39 +563,6 @@ export const NotificationProvidersSettings = () => {
 
               <Separator />
 
-              {/* SendGrid Section */}
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2 text-primary">
-                  <Mail className="h-4 w-4" />
-                  SendGrid (Email)
-                </h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sendgrid_key">API Key</Label>
-                    <Input
-                      id="sendgrid_key"
-                      type="password"
-                      placeholder="SG.xxxxxxxxxxxxxxxx"
-                      value={settings.sendgrid_api_key || ""}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_api_key: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sendgrid_from">From Email</Label>
-                    <Input
-                      id="sendgrid_from"
-                      type="email"
-                      placeholder="noreply@yourcompany.com"
-                      value={settings.sendgrid_from_email || ""}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_from_email: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
               {/* Admin Notification Recipients */}
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2 text-primary">
@@ -606,7 +573,7 @@ export const NotificationProvidersSettings = () => {
                   Configure where admin notifications (e.g., contract signed alerts) are sent.
                 </p>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="admin_phone">Admin Phone (SMS)</Label>
                     <Input
@@ -625,18 +592,9 @@ export const NotificationProvidersSettings = () => {
                       onChange={(e) => setSettings({ ...settings, admin_whatsapp: e.target.value })}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="admin_email">Admin Email</Label>
-                    <Input
-                      id="admin_email"
-                      type="email"
-                      placeholder="admin@yourcompany.com"
-                      value={settings.admin_email || ""}
-                      onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })}
-                    />
-                  </div>
                 </div>
               </div>
+
 
               <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
                 <h4 className="font-medium mb-2 flex items-center gap-2 text-warning">
