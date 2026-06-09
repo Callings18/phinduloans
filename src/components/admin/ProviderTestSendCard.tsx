@@ -1,5 +1,5 @@
 /**
- * ProviderTestSendCard — one-click "Test send" for SMS / Email / WhatsApp.
+ * ProviderTestSendCard — one-click "Test send" for SMS / WhatsApp.
  * Sits in Settings → Notifications so the client can verify provider
  * credentials at a glance without writing test code or finding hidden buttons.
  */

@@ -30,7 +30,7 @@ import {
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 import { BrevoSettings } from "@/components/admin/BrevoSettings";
 import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonitor";
-import NotificationSettingsPanel from "@/components/admin/NotificationSettingsPanel";
+
 import { NotificationProvidersSettings } from "@/components/admin/NotificationProvidersSettings";
 import ProviderTestSendCard from "@/components/admin/ProviderTestSendCard";
 import CalendarSettings from "@/components/admin/CalendarSettings";
@@ -65,7 +65,7 @@ const AdminSettings = () => {
   const [companyInfo, setCompanyInfo] = useState({
     name: "Phindu Loans",
     address: "Lusaka, Zambia",
-    support_email: "info@phindu.com",
+    
     support_phone: "+260 967 713 001",
     tax_id: ""
   });
@@ -79,21 +79,18 @@ const AdminSettings = () => {
   });
 
   const [notificationConfig, setNotificationConfig] = useState({
-    email_on_approval: true,
     sms_on_approval: false,
-    email_on_disbursement: true,
     sms_on_disbursement: false,
     reminder_days_before: 3,
     sms_provider: "africastalking",
     whatsapp_provider: "twilio",
-    email_provider: "gmail",
     africastalking_api_key: "",
     africastalking_username: "",
     twilio_sid: "",
     twilio_token: "",
     twilio_whatsapp_number: "",
     tumeny_api_key: "",
-    gmail_app_password: "",
+    
     // ExciteSMS credentials
     excitesms_api_url: "https://gateway.excitesms.com/api/v3",
     excitesms_api_token: "",
@@ -276,7 +273,7 @@ const AdminSettings = () => {
               <BellRing size={16} /> Notifications
             </TabsTrigger>
             <TabsTrigger value="twilio" className="gap-2">
-              <Phone size={16} /> Twilio/SendGrid
+              <Phone size={16} /> Twilio
             </TabsTrigger>
             <TabsTrigger value="brevo" className="gap-2">
               <BellRing size={16} /> Brevo
@@ -346,7 +343,7 @@ const AdminSettings = () => {
             <Card className="glass border-border/50">
               <CardHeader>
                 <CardTitle>Company Profile</CardTitle>
-                <CardDescription>Details used for reports, emails, and invoices</CardDescription>
+                <CardDescription>Details used for reports and invoices</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,13 +360,6 @@ const AdminSettings = () => {
                       value={companyInfo.tax_id}
                       onChange={(e) => setCompanyInfo({ ...companyInfo, tax_id: e.target.value })}
                       placeholder="Enter registration number"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Support Email</Label>
-                    <Input
-                      value={companyInfo.support_email}
-                      onChange={(e) => setCompanyInfo({ ...companyInfo, support_email: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
@@ -547,24 +537,10 @@ const AdminSettings = () => {
                   <h4 className="font-semibold">Event Triggers</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
-                      <Label>Email on Loan Approval</Label>
-                      <Switch
-                        checked={notificationConfig.email_on_approval}
-                        onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, email_on_approval: v })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
                       <Label>SMS on Loan Approval</Label>
                       <Switch
                         checked={notificationConfig.sms_on_approval}
                         onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, sms_on_approval: v })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
-                      <Label>Email on Disbursement</Label>
-                      <Switch
-                        checked={notificationConfig.email_on_disbursement}
-                        onCheckedChange={(v) => setNotificationConfig({ ...notificationConfig, email_on_disbursement: v })}
                       />
                     </div>
                     <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
@@ -593,7 +569,7 @@ const AdminSettings = () => {
 
                 <div className="pt-4 border-t border-border/50 space-y-4">
                   <h4 className="font-semibold">Provider Settings</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>SMS Provider</Label>
                       <Select
@@ -626,22 +602,8 @@ const AdminSettings = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Email Provider</Label>
-                      <Select
-                        value={notificationConfig.email_provider}
-                        onValueChange={(v) => setNotificationConfig({ ...notificationConfig, email_provider: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="gmail">Gmail (SMTP)</SelectItem>
-                          <SelectItem value="none">Disabled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
+
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     {/* Africa's Talking Credentials */}
@@ -735,38 +697,13 @@ const AdminSettings = () => {
                         </div>
                       </div>
                     )}
-
-                    {/* Gmail Credentials */}
-                    {notificationConfig.email_provider === 'gmail' && (
-                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
-                        <Label className="text-sm font-bold uppercase opacity-70">Gmail SMTP Settings</Label>
-                        <div className="space-y-2">
-                          <Label>Gmail Address</Label>
-                          <Input
-                            placeholder="your-email@gmail.com"
-                            value={companyInfo.support_email}
-                            disabled
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>App Password</Label>
-                          <Input
-                            type="password"
-                            placeholder="xxxx xxxx xxxx xxxx"
-                            value={notificationConfig.gmail_app_password}
-                            onChange={(e) => setNotificationConfig({ ...notificationConfig, gmail_app_password: e.target.value })}
-                          />
-                          <p className="text-[10px] text-muted-foreground">Requires 2FA enabled in Google Account</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Twilio/SendGrid Notification Settings */}
+          {/* Twilio Notification Settings */}
           <TabsContent value="twilio" className="space-y-6">
             <NotificationProvidersSettings />
             <ProviderTestSendCard />

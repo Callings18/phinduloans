@@ -30,7 +30,7 @@ import {
   Receipt,
   History,
   FileSignature,
-  Mail,
+  
   Package,
   Banknote,
   LayoutDashboard,
@@ -298,15 +298,15 @@ const guideSections: GuideSection[] = [
     subsections: [
       {
         title: "Notification Channels",
-        content: `The system supports 3 channels:\n\n• **SMS** – Via ExciteSMS (primary provider) for text messages.\n• **Email** – Via SendGrid for rich HTML emails with branding.\n• **WhatsApp** – Via Brevo/Twilio for WhatsApp Business messages.\n\nAll channels can be enabled/disabled independently in **Settings → Notifications**.`,
+        content: `The system supports 2 channels:\n\n• **SMS** – Via ExciteSMS (primary provider) for text messages.\n• **WhatsApp** – Via Brevo/Twilio for WhatsApp Business messages.\n\nAll channels can be enabled/disabled independently in **Settings → Notifications**.`,
       },
       {
         title: "Automated Notification Events",
-        content: `The following events trigger automatic notifications:\n\n| Event | Trigger | Channels |\n|---|---|---|\n| **Welcome** | New user signup | SMS, Email, WhatsApp |\n| **Application Submitted** | Borrower submits loan form | SMS, Email |\n| **Under Review** | Admin starts reviewing | SMS, Email |\n| **KYC Verification** | Identity verified/failed | SMS, Email |\n| **Document Request** | Admin requests more docs | SMS, Email |\n| **Loan Approved** | Final approval granted | SMS, Email, WhatsApp |\n| **Loan Rejected** | Application denied | SMS, Email |\n| **Contract Sent** | Contract generated & sent | SMS, Email, WhatsApp |\n| **Disbursement** | Funds released | SMS, Email, WhatsApp |\n| **Payment Reminder** | 3 days before due date | SMS, Email |\n| **Payment Received** | Full payment recorded | SMS, Email |\n| **Partial Payment** | Incomplete payment | SMS, Email |\n| **Overdue Notice** | Payment past due date | SMS, Email, WhatsApp |\n| **Collection Escalation** | Escalation level increased | SMS, Email |\n| **Court Case** | Legal action initiated | SMS, Email |\n| **Loan Completed** | All payments done | SMS, Email, WhatsApp |\n| **Loan Restructured** | Terms modified | SMS, Email |\n| **Statement Available** | Monthly statement ready | Email |\n| **Promotion** | Marketing message | SMS, Email |`,
+        content: `The following events trigger automatic notifications:\n\n| Event | Trigger | Channels |\n|---|---|---|\n| **Welcome** | New user signup | SMS, WhatsApp |\n| **Application Submitted** | Borrower submits loan form | SMS |\n| **Under Review** | Admin starts reviewing | SMS |\n| **KYC Verification** | Identity verified/failed | SMS |\n| **Document Request** | Admin requests more docs | SMS |\n| **Loan Approved** | Final approval granted | SMS, WhatsApp |\n| **Loan Rejected** | Application denied | SMS |\n| **Contract Sent** | Contract generated & sent | SMS, WhatsApp |\n| **Disbursement** | Funds released | SMS, WhatsApp |\n| **Payment Reminder** | 3 days before due date | SMS |\n| **Payment Received** | Full payment recorded | SMS |\n| **Partial Payment** | Incomplete payment | SMS |\n| **Overdue Notice** | Payment past due date | SMS, WhatsApp |\n| **Collection Escalation** | Escalation level increased | SMS |\n| **Court Case** | Legal action initiated | SMS |\n| **Loan Completed** | All payments done | SMS, WhatsApp |\n| **Loan Restructured** | Terms modified | SMS |\n| **Statement Available** | Monthly statement ready | SMS |\n| **Promotion** | Marketing message | SMS |`,
       },
       {
         title: "Notification Settings",
-        content: `Configure under **Administration → Settings → Notifications**:\n\n1. **Provider Credentials** – API keys for each SMS/Email/WhatsApp provider.\n2. **Channel Toggle** – Enable/disable each channel globally.\n3. **Event Toggle** – Enable/disable notifications per event type.\n4. **Admin Notifications** – Real-time popup notifications with sound on the admin dashboard for critical events (new applications, payments, overdue alerts).\n\n**Tip:** Start with SMS only, then add Email and WhatsApp once configured and tested.`,
+        content: `Configure under **Administration → Settings → Notifications**:\n\n1. **Provider Credentials** – API keys for each SMS/WhatsApp provider.\n2. **Channel Toggle** – Enable/disable each channel globally.\n3. **Event Toggle** – Enable/disable notifications per event type.\n4. **Admin Notifications** – Real-time popup notifications with sound on the admin dashboard for critical events (new applications, payments, overdue alerts).\n\n**Tip:** Start with SMS only, then add WhatsApp once configured and tested.`,
       },
     ],
   },
@@ -318,27 +318,15 @@ const guideSections: GuideSection[] = [
     subsections: [
       {
         title: "General Settings",
-        content: `Under **Administration → Settings**:\n\n• **Company Info** – Name, logo, address, phone, email.\n• **Currency** – Default is ZMW (Zambian Kwacha).\n• **Business Hours** – Used for reminder scheduling.\n• **Interest Calculation** – Method and default rates.`,
+        content: `Under **Administration → Settings**:\n\n• **Company Info** – Name, logo, address, phone.\n• **Currency** – Default is ZMW (Zambian Kwacha).\n• **Business Hours** – Used for reminder scheduling.\n• **Interest Calculation** – Method and default rates.`,
       },
       {
         title: "Integration Settings",
-        content: `Configure third-party integrations:\n\n• **ExciteSMS** – API key and sender ID for SMS delivery.\n• **SendGrid** – API key and from-email for transactional emails.\n• **Brevo** – WhatsApp Business API credentials.\n• **CRB** – Credit Reference Bureau API for credit checks.\n• **PMIC** – Payroll deduction integration settings.\n\nAll API keys are stored securely and never exposed in the frontend.`,
+        content: `Configure third-party integrations:\n\n• **ExciteSMS** – API key and sender ID for SMS delivery.\n• **Brevo** – WhatsApp Business API credentials.\n• **CRB** – Credit Reference Bureau API for credit checks.\n• **PMIC** – Payroll deduction integration settings.\n\nAll API keys are stored securely and never exposed in the frontend.`,
       },
       {
         title: "Staff Management",
         content: `Under **Administration → Staff**:\n\n1. Click **Add Staff** → Enter name, email, phone.\n2. The system creates a secure login via the backend.\n3. A temporary password is generated and displayed once.\n4. Assign a role (Loan Officer, Finance Officer, etc.).\n5. The new staff member can log in and change their password.\n\n**Important:** Only Super Admins can create and manage staff accounts.`,
-      },
-    ],
-  },
-  {
-    id: "email-log",
-    icon: Mail,
-    title: "Email & Communication Log",
-    description: "Tracking all outbound communications.",
-    subsections: [
-      {
-        title: "Email Log",
-        content: `View all sent emails under **Administration → Email Log**:\n\n• Track delivery status: Sent, Failed, Pending.\n• Filter by recipient, subject, or date.\n• View email content and any error messages.\n• Retry failed emails if needed.\n\nAll SMS and WhatsApp messages are also logged in the notification logs table for complete audit trail.`,
       },
     ],
   },

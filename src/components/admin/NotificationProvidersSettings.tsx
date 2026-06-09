@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, 
   MessageSquare, 
-  Mail, 
   Phone, 
   CheckCircle2,
   AlertCircle,
@@ -35,7 +34,6 @@ interface NotificationProviderSettings {
   // Channel enablement
   sms_enabled: boolean;
   whatsapp_enabled: boolean;
-  email_enabled: boolean;
   
   // SMS Provider Selection
   sms_provider: 'twilio' | 'excitesms';
@@ -45,8 +43,6 @@ interface NotificationProviderSettings {
   twilio_auth_token?: string;
   twilio_phone_number?: string;
   twilio_whatsapp_number?: string;
-  sendgrid_api_key?: string;
-  sendgrid_from_email?: string;
   
   // ExciteSMS Credentials
   excitesms_api_url?: string;
@@ -55,7 +51,6 @@ interface NotificationProviderSettings {
   
   // Admin notification recipients
   admin_phone?: string;
-  admin_email?: string;
   admin_whatsapp?: string;
   
   // Notification Event Triggers - Account & Application
@@ -90,7 +85,6 @@ const defaultSettings: NotificationProviderSettings = {
   // Channels
   sms_enabled: true,
   whatsapp_enabled: true,
-  email_enabled: true,
   
   // SMS Provider Selection
   sms_provider: 'twilio',
@@ -100,8 +94,6 @@ const defaultSettings: NotificationProviderSettings = {
   twilio_auth_token: "",
   twilio_phone_number: "",
   twilio_whatsapp_number: "",
-  sendgrid_api_key: "",
-  sendgrid_from_email: "",
   
   // ExciteSMS Credentials (empty - will fallback to env secrets if not set)
   excitesms_api_url: "https://gateway.excitesms.com/api/v3",
@@ -110,7 +102,6 @@ const defaultSettings: NotificationProviderSettings = {
   
   // Admin notification recipients
   admin_phone: "",
-  admin_email: "",
   admin_whatsapp: "",
   
   // Events - Account & Application
@@ -193,7 +184,7 @@ export const NotificationProvidersSettings = () => {
   const [settings, setSettings] = useState<NotificationProviderSettings>(defaultSettings);
   const [testingChannel, setTestingChannel] = useState<string | null>(null);
   const [testPhone, setTestPhone] = useState("");
-  const [testEmail, setTestEmail] = useState("");
+  
 
   // Fetch existing settings
   const { data: savedSettings, isLoading } = useQuery({
@@ -265,13 +256,13 @@ export const NotificationProvidersSettings = () => {
     saveSettings.mutate(settings);
   };
 
-  const testChannel = async (channel: 'sms' | 'whatsapp' | 'email') => {
-    const recipient = channel === 'email' ? testEmail : testPhone;
+  const testChannel = async (channel: 'sms' | 'whatsapp') => {
+    const recipient = testPhone;
     
     if (!recipient) {
       toast({
         title: "Missing Recipient",
-        description: `Please enter a ${channel === 'email' ? 'email address' : 'phone number'} to test`,
+        description: `Please enter a phone number to test`,
         variant: "destructive",
       });
       return;
@@ -279,7 +270,7 @@ export const NotificationProvidersSettings = () => {
 
     // Determine which provider will be used for the test
     const smsProviderName = settings.sms_provider === 'excitesms' ? 'ExciteSMS' : 'Twilio';
-    const providerName = channel === 'email' ? 'SendGrid' : (channel === 'sms' ? smsProviderName : 'Twilio WhatsApp');
+    const providerName = channel === 'sms' ? smsProviderName : 'Twilio WhatsApp';
 
     setTestingChannel(channel);
     try {
@@ -288,7 +279,6 @@ export const NotificationProvidersSettings = () => {
           type: channel,
           to: recipient,
           message: `Test ${channel.toUpperCase()} from Phindu Finance via ${providerName}. Time: ${new Date().toLocaleString()}`,
-          subject: channel === 'email' ? "Test Email from Phindu Finance" : undefined,
         },
       });
       
@@ -328,7 +318,7 @@ export const NotificationProvidersSettings = () => {
             Notification System
           </CardTitle>
           <CardDescription>
-            SMS via Twilio or ExciteSMS, WhatsApp via Twilio, Email via SendGrid. Configure providers in the Credentials tab.
+            SMS via Twilio or ExciteSMS, WhatsApp via Twilio. Configure providers in the Credentials tab.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -341,13 +331,10 @@ export const NotificationProvidersSettings = () => {
               <MessageSquare className="h-3 w-3" />
               WhatsApp {settings.whatsapp_enabled ? "Enabled" : "Disabled"}
             </Badge>
-            <Badge variant={settings.email_enabled ? "default" : "secondary"} className="gap-1">
-              <Mail className="h-3 w-3" />
-              Email {settings.email_enabled ? "Enabled" : "Disabled"}
-            </Badge>
           </div>
         </CardContent>
       </Card>
+
 
       <Tabs defaultValue="channels" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
@@ -445,23 +432,6 @@ export const NotificationProvidersSettings = () => {
                 />
               </div>
 
-              {/* Email */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-blue-500/10">
-                    <Mail className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Email Notifications</h4>
-                    <p className="text-sm text-muted-foreground">Send emails via SendGrid (Twilio)</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.email_enabled}
-                  onCheckedChange={(checked) => setSettings({ ...settings, email_enabled: checked })}
-                />
-              </div>
-
               <Separator />
               
               <div className="p-4 rounded-lg bg-muted/50">
@@ -470,7 +440,7 @@ export const NotificationProvidersSettings = () => {
                   Credentials Management
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  You can configure Twilio and SendGrid credentials in the "Credentials" tab. 
+                  You can configure Twilio and ExciteSMS credentials in the "Credentials" tab. 
                   Settings are saved to the database and take effect immediately.
                 </p>
               </div>
@@ -484,10 +454,10 @@ export const NotificationProvidersSettings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                Twilio & SendGrid Credentials
+                Twilio & ExciteSMS Credentials
               </CardTitle>
               <CardDescription>
-                Configure your Twilio and SendGrid API credentials. Changes take effect immediately after saving.
+                Configure your Twilio and ExciteSMS API credentials. Changes take effect immediately after saving.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -592,39 +562,6 @@ export const NotificationProvidersSettings = () => {
 
               <Separator />
 
-              {/* SendGrid Section */}
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center gap-2 text-primary">
-                  <Mail className="h-4 w-4" />
-                  SendGrid (Email)
-                </h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sendgrid_key">API Key</Label>
-                    <Input
-                      id="sendgrid_key"
-                      type="password"
-                      placeholder="SG.xxxxxxxxxxxxxxxx"
-                      value={settings.sendgrid_api_key || ""}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_api_key: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sendgrid_from">From Email</Label>
-                    <Input
-                      id="sendgrid_from"
-                      type="email"
-                      placeholder="noreply@yourcompany.com"
-                      value={settings.sendgrid_from_email || ""}
-                      onChange={(e) => setSettings({ ...settings, sendgrid_from_email: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
               {/* Admin Notification Recipients */}
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2 text-primary">
@@ -635,7 +572,7 @@ export const NotificationProvidersSettings = () => {
                   Configure where admin notifications (e.g., contract signed alerts) are sent.
                 </p>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="admin_phone">Admin Phone (SMS)</Label>
                     <Input
@@ -654,18 +591,9 @@ export const NotificationProvidersSettings = () => {
                       onChange={(e) => setSettings({ ...settings, admin_whatsapp: e.target.value })}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="admin_email">Admin Email</Label>
-                    <Input
-                      id="admin_email"
-                      type="email"
-                      placeholder="admin@yourcompany.com"
-                      value={settings.admin_email || ""}
-                      onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })}
-                    />
-                  </div>
                 </div>
               </div>
+
 
               <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
                 <h4 className="font-medium mb-2 flex items-center gap-2 text-warning">
@@ -769,32 +697,6 @@ export const NotificationProvidersSettings = () => {
                       <MessageSquare className="h-4 w-4" />
                     )}
                     <span className="ml-2">WhatsApp</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Test Email */}
-              <div className="space-y-3">
-                <Label>Test Email Address</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    placeholder="test@example.com"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => testChannel('email')}
-                    disabled={testingChannel === 'email' || !settings.email_enabled}
-                  >
-                    {testingChannel === 'email' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Mail className="h-4 w-4" />
-                    )}
-                    <span className="ml-2">Email</span>
                   </Button>
                 </div>
               </div>
