@@ -14,6 +14,7 @@ interface VerifyOTPRequest {
   email?: string;
   password?: string;
   fullName?: string;
+  nrcNumber?: string;
 }
 
 function formatPhoneNumber(phone: string): string {
