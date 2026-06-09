@@ -30,7 +30,7 @@ import {
 import { IntegrationsSettings } from "@/components/admin/IntegrationsSettings";
 import { BrevoSettings } from "@/components/admin/BrevoSettings";
 import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonitor";
-import NotificationSettingsPanel from "@/components/admin/NotificationSettingsPanel";
+
 import { NotificationProvidersSettings } from "@/components/admin/NotificationProvidersSettings";
 import ProviderTestSendCard from "@/components/admin/ProviderTestSendCard";
 import CalendarSettings from "@/components/admin/CalendarSettings";
