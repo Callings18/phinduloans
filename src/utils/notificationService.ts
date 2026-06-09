@@ -159,14 +159,18 @@ class NotificationService {
       }
     }
 
+    // Email is no longer supported - SMS/WhatsApp only
+    if (params.type === 'email') {
+      if (import.meta.env.DEV) console.log("[Notification Service] Email channel disabled - skipping");
+      return { success: false, message: "Email channel disabled" };
+    }
+
     // Check if channel is enabled
     let enabled = true;
     if (params.type === 'sms' && settings) {
       enabled = settings.sms_enabled !== false;
     } else if (params.type === 'whatsapp' && settings) {
       enabled = settings.whatsapp_enabled !== false;
-    } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled !== false;
     }
 
     if (!enabled) {
