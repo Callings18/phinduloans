@@ -319,7 +319,7 @@ export const NotificationProvidersSettings = () => {
             Notification System
           </CardTitle>
           <CardDescription>
-            SMS via Twilio or ExciteSMS, WhatsApp via Twilio, Email via SendGrid. Configure providers in the Credentials tab.
+            SMS via Twilio or ExciteSMS, WhatsApp via Twilio. Configure providers in the Credentials tab.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -332,13 +332,10 @@ export const NotificationProvidersSettings = () => {
               <MessageSquare className="h-3 w-3" />
               WhatsApp {settings.whatsapp_enabled ? "Enabled" : "Disabled"}
             </Badge>
-            <Badge variant={settings.email_enabled ? "default" : "secondary"} className="gap-1">
-              <Mail className="h-3 w-3" />
-              Email {settings.email_enabled ? "Enabled" : "Disabled"}
-            </Badge>
           </div>
         </CardContent>
       </Card>
+
 
       <Tabs defaultValue="channels" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
