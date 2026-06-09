@@ -700,33 +700,6 @@ export const NotificationProvidersSettings = () => {
                     <span className="ml-2">WhatsApp</span>
                   </Button>
                 </div>
-              </div>
-
-              {/* Test Email */}
-              <div className="space-y-3">
-                <Label>Test Email Address</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    placeholder="test@example.com"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => testChannel('email')}
-                    disabled={testingChannel === 'email' || !settings.email_enabled}
-                  >
-                    {testingChannel === 'email' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Mail className="h-4 w-4" />
-                    )}
-                    <span className="ml-2">Email</span>
-                  </Button>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
