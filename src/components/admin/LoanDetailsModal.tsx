@@ -2433,13 +2433,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                         }}>
                         <Smartphone size={14} className="mr-1" /> SMS
                       </Button>
-                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.email}
-                        onClick={async () => {
-                          const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
-                          await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
-                        }}>
-                        <Mail size={14} className="mr-1" /> Email
-                      </Button>
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
                         onClick={async () => {
                           const { sendWhatsAppDirect } = await import('@/utils/sendDirectNotification');
