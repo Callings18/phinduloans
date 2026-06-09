@@ -30,7 +30,7 @@ import {
   Receipt,
   History,
   FileSignature,
-  Mail,
+  
   Package,
   Banknote,
   LayoutDashboard,
