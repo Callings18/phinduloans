@@ -73,15 +73,24 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
   };
 
   const handleSendOTP = async () => {
+    const newErrors: Record<string, string> = {};
     try {
       phoneSchema.parse(phone);
-      setErrors({});
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        setErrors({ phone: error.errors[0].message });
-        return;
+      if (error instanceof z.ZodError) newErrors.phone = error.errors[0].message;
+    }
+    if (purpose === "signup") {
+      try {
+        nrcSchema.parse(nrcNumber);
+      } catch (error) {
+        if (error instanceof z.ZodError) newErrors.nrc = error.errors[0].message;
       }
     }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    setErrors({});
 
     setIsLoading(true);
     try {
