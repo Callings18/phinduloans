@@ -116,7 +116,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: FileSignature, label: "Contract templates", path: "/admin/contract-templates", perm: { module: "loans", action: "view" } },
       { icon: UserCog, label: "Staff", path: "/admin/staff", perm: { module: "settings", action: "manage" } },
       { icon: Shield, label: "Roles & permissions", path: "/admin/roles-permissions", adminOnly: true },
-      { icon: Mail, label: "Email log", path: "/admin/email-log", adminOnly: true },
+      
       { icon: BookOpen, label: "User guide", path: "/admin/user-guide" },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
     ],
