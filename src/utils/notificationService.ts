@@ -220,7 +220,7 @@ class NotificationService {
     }
   }
 
-  // Multi-channel send (SMS + Email + WhatsApp)
+  // Multi-channel send (SMS + WhatsApp only - email is no longer supported)
   async sendMultiChannel(params: Omit<SendNotificationParams, 'type' | 'to'> & { phone?: string; email?: string }) {
     const results = {
       sms: null as any,
@@ -247,17 +247,6 @@ class NotificationService {
           type: 'whatsapp',
           to: params.phone,
         }).then(r => { results.whatsapp = r; })
-      );
-    }
-
-    if (params.email && params.subject) {
-      promises.push(
-        this.send({
-          ...params,
-          type: 'email',
-          to: params.email,
-          subject: params.subject,
-        }).then(r => { results.email = r; })
       );
     }
 
