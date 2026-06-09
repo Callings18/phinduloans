@@ -704,7 +704,7 @@ const AdminSettings = () => {
             </Card>
           </TabsContent>
 
-          {/* Twilio/SendGrid Notification Settings */}
+          {/* Twilio Notification Settings */}
           <TabsContent value="twilio" className="space-y-6">
             <NotificationProvidersSettings />
             <ProviderTestSendCard />
