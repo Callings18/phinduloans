@@ -16,7 +16,6 @@ interface PersonalInfoFormProps {
     nrc_number?: string | null;
     address?: string | null;
     city?: string | null;
-    email?: string | null;
   } | null;
 }
 
