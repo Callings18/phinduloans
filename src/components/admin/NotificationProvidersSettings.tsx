@@ -454,10 +454,10 @@ export const NotificationProvidersSettings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                Twilio & SendGrid Credentials
+                Twilio & ExciteSMS Credentials
               </CardTitle>
               <CardDescription>
-                Configure your Twilio and SendGrid API credentials. Changes take effect immediately after saving.
+                Configure your Twilio and ExciteSMS API credentials. Changes take effect immediately after saving.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
