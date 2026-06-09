@@ -506,12 +506,6 @@ export default function GuarantorTab({ loanId }: Props) {
                             <Phone size={12} className="text-muted-foreground" />
                             {guarantor.phone}
                           </div>
-                          {guarantor.email && (
-                            <div className="flex items-center gap-1">
-                              <Mail size={12} className="text-muted-foreground" />
-                              {guarantor.email}
-                            </div>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
