@@ -412,7 +412,7 @@ const AdminBorrowers = () => {
           user_id: userId,
           loan_product_id: targetProductId,
           full_name: item.full_name,
-          email: safeEmail,
+          
           phone: "",
           nrc_number: "N/A",
           address: "",
