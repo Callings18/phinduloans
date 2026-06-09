@@ -60,33 +60,6 @@ export async function sendDirectNotification(params: SendDirectNotificationParam
 }
 
 /**
- * Send an email via SendGrid (through edge function)
- */
-export async function sendEmailDirect(
-  to: string, 
-  subject: string, 
-  message: string, 
-  htmlContent?: string
-) {
-  const result = await sendDirectNotification({
-    type: 'email',
-    to,
-    subject,
-    message,
-    htmlContent,
-    title: subject,
-  });
-  
-  if (result.success) {
-    toast.success(`Email sent to ${to}`);
-  } else {
-    toast.error(`Failed to send email: ${result.error}`);
-  }
-  
-  return result;
-}
-
-/**
  * Send an SMS via Twilio (through edge function)
  */
 export async function sendSMSDirect(to: string, message: string, title?: string) {
