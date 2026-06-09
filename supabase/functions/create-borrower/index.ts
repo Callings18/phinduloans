@@ -259,9 +259,7 @@ Deno.serve(async (req) => {
 
     if (createdNew && normalizedPhone) {
       try {
-        const smsBody = profileEmail
-          ? `Welcome to Phindu Loans! Your account has been created. Login email: ${profileEmail} | Temp password: ${tempPassword} | Or login with phone OTP. https://phindu.com`
-          : `Welcome to Phindu Loans! Your account has been created. Login with your phone number using OTP at https://phindu.com`;
+        const smsBody = `Welcome to Phindu Loans! Your account has been created. Login with your phone number using OTP at https://phindu.com`;
         await supabaseAdmin.functions.invoke("excite-sms", {
           body: { to: normalizedPhone, message: smsBody, userId, title: "Account credentials" },
         });
