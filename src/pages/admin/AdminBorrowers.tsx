@@ -91,7 +91,7 @@ interface MarketeerBorrowerSeed {
 
 const emptyForm: BorrowerForm = {
   full_name: "",
-  email: "",
+  
   phone: "",
   nrc_number: "",
   address: "",
@@ -142,7 +142,7 @@ const AdminBorrowers = () => {
     },
     {
       target: ".tour-borrowers-search",
-      content: "Instantly find a borrower by their name, email, or NRC number.",
+      content: "Instantly find a borrower by their name, phone, or NRC number.",
       placement: "bottom",
     },
     {
@@ -579,7 +579,7 @@ const AdminBorrowers = () => {
     setSelectedBorrower(borrower);
     setFormData({
       full_name: borrower.full_name || "",
-      email: borrower.email || "",
+      
       phone: borrower.phone || "",
       nrc_number: borrower.nrc_number || "",
       address: borrower.address || "",
@@ -596,7 +596,7 @@ const AdminBorrowers = () => {
   const filteredBorrowers = borrowers?.filter((borrower) => {
     const matchesSearch =
       borrower.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      borrower.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      
       borrower.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -758,7 +758,7 @@ const AdminBorrowers = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
               <Input
-                placeholder="Search by name, email, phone, or NRC..."
+                placeholder="Search by name, phone, or NRC..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
