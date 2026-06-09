@@ -217,7 +217,29 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
           {errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
           <p className="text-xs text-muted-foreground">We'll send a verification code via SMS</p>
         </div>
-        <Button onClick={handleSendOTP} variant="hero" className="w-full h-12 text-base" disabled={isLoading || !phone}>
+        {purpose === "signup" && (
+          <div className="space-y-2">
+            <Label htmlFor="nrc" className="text-sm font-medium">NRC Number</Label>
+            <div className="relative">
+              <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+              <Input
+                id="nrc"
+                inputMode="numeric"
+                placeholder="123456/78/9"
+                value={nrcNumber}
+                onChange={(e) => setNrcNumber(e.target.value)}
+                className="pl-11"
+              />
+            </div>
+            {errors.nrc && <p className="text-sm text-destructive">{errors.nrc}</p>}
+          </div>
+        )}
+        <Button
+          onClick={handleSendOTP}
+          variant="hero"
+          className="w-full h-12 text-base"
+          disabled={isLoading || !phone || (purpose === "signup" && !nrcNumber)}
+        >
           {isLoading ? (
             <div className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
