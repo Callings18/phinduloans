@@ -5,7 +5,7 @@ import { logAudit } from '@/utils/auditLog';
 interface LoanData {
   id: string;
   full_name: string;
-  email: string;
+  email?: string;
   phone: string;
   nrc_number: string;
   address?: string;
@@ -286,7 +286,7 @@ const replacePlaceholders = async (content: string, loan: LoanData): Promise<str
     '{{borrower_address}}': `${loan.address || 'N/A'}, ${loan.city || ''}`.trim().replace(/,$/, ''),
     '{{borrower_nrc}}': loan.nrc_number,
     '{{borrower_phone}}': loan.phone,
-    '{{borrower_email}}': loan.email,
+    '{{borrower_email}}': '',
     '{{loan_amount}}': loan.loan_amount.toLocaleString(),
     '{{loan_term}}': loan.loan_term_months.toString(),
     '{{interest_rate}}': loan.interest_rate.toString(),
@@ -569,7 +569,6 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
       `BORROWER: ${loan.full_name}`,
       `NRC Number: ${loan.nrc_number}`,
       `Phone: ${loan.phone}`,
-      `Email: ${loan.email}`,
       `Address: ${loan.address || 'N/A'}, ${loan.city || ''}`,
     ]);
   }

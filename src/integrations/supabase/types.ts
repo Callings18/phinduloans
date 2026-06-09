@@ -1675,7 +1675,7 @@ export type Database = {
           document_verified_at: string | null
           document_verified_by: string | null
           early_settlement_fee: number | null
-          email: string
+          email: string | null
           employer_id: string | null
           employer_letter_url: string | null
           employer_name: string | null
@@ -1757,7 +1757,7 @@ export type Database = {
           document_verified_at?: string | null
           document_verified_by?: string | null
           early_settlement_fee?: number | null
-          email: string
+          email?: string | null
           employer_id?: string | null
           employer_letter_url?: string | null
           employer_name?: string | null
@@ -1839,7 +1839,7 @@ export type Database = {
           document_verified_at?: string | null
           document_verified_by?: string | null
           early_settlement_fee?: number | null
-          email?: string
+          email?: string | null
           employer_id?: string | null
           employer_letter_url?: string | null
           employer_name?: string | null
@@ -4110,7 +4110,6 @@ export type Database = {
           active_ptp_amount: number | null
           active_ptp_date: string | null
           assigned_collector_id: string | null
-          borrower_email: string | null
           borrower_name: string | null
           borrower_phone: string | null
           collection_priority: string | null
