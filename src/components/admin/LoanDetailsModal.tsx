@@ -48,7 +48,7 @@ import {
 import {
   User,
   Phone,
-  Mail,
+  
   MapPin,
   Briefcase,
   DollarSign,
