@@ -318,27 +318,15 @@ const guideSections: GuideSection[] = [
     subsections: [
       {
         title: "General Settings",
-        content: `Under **Administration → Settings**:\n\n• **Company Info** – Name, logo, address, phone, email.\n• **Currency** – Default is ZMW (Zambian Kwacha).\n• **Business Hours** – Used for reminder scheduling.\n• **Interest Calculation** – Method and default rates.`,
+        content: `Under **Administration → Settings**:\n\n• **Company Info** – Name, logo, address, phone.\n• **Currency** – Default is ZMW (Zambian Kwacha).\n• **Business Hours** – Used for reminder scheduling.\n• **Interest Calculation** – Method and default rates.`,
       },
       {
         title: "Integration Settings",
-        content: `Configure third-party integrations:\n\n• **ExciteSMS** – API key and sender ID for SMS delivery.\n• **SendGrid** – API key and from-email for transactional emails.\n• **Brevo** – WhatsApp Business API credentials.\n• **CRB** – Credit Reference Bureau API for credit checks.\n• **PMIC** – Payroll deduction integration settings.\n\nAll API keys are stored securely and never exposed in the frontend.`,
+        content: `Configure third-party integrations:\n\n• **ExciteSMS** – API key and sender ID for SMS delivery.\n• **Brevo** – WhatsApp Business API credentials.\n• **CRB** – Credit Reference Bureau API for credit checks.\n• **PMIC** – Payroll deduction integration settings.\n\nAll API keys are stored securely and never exposed in the frontend.`,
       },
       {
         title: "Staff Management",
         content: `Under **Administration → Staff**:\n\n1. Click **Add Staff** → Enter name, email, phone.\n2. The system creates a secure login via the backend.\n3. A temporary password is generated and displayed once.\n4. Assign a role (Loan Officer, Finance Officer, etc.).\n5. The new staff member can log in and change their password.\n\n**Important:** Only Super Admins can create and manage staff accounts.`,
-      },
-    ],
-  },
-  {
-    id: "email-log",
-    icon: Mail,
-    title: "Email & Communication Log",
-    description: "Tracking all outbound communications.",
-    subsections: [
-      {
-        title: "Email Log",
-        content: `View all sent emails under **Administration → Email Log**:\n\n• Track delivery status: Sent, Failed, Pending.\n• Filter by recipient, subject, or date.\n• View email content and any error messages.\n• Retry failed emails if needed.\n\nAll SMS and WhatsApp messages are also logged in the notification logs table for complete audit trail.`,
       },
     ],
   },
