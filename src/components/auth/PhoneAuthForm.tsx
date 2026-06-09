@@ -33,6 +33,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
   const [mode, setMode] = useState<AuthMode>(purpose === "signup" ? "name_input" : "phone_input");
   const [phone, setPhone] = useState("");
   const [fullName, setFullName] = useState("");
+  const [nrcNumber, setNrcNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
