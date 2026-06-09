@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, 
   MessageSquare, 
-  Mail, 
   Phone, 
   CheckCircle2,
   AlertCircle,
