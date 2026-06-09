@@ -124,7 +124,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("full_name, phone, nrc_number, address, city, email, employer_name, job_title, employment_type, years_in_employment, net_income")
+        .select("full_name, phone, nrc_number, address, city, employer_name, job_title, employment_type, years_in_employment, net_income")
         .eq("id", borrowerId)
         .maybeSingle();
       if (error) throw error;
