@@ -257,13 +257,13 @@ export const NotificationProvidersSettings = () => {
     saveSettings.mutate(settings);
   };
 
-  const testChannel = async (channel: 'sms' | 'whatsapp' | 'email') => {
-    const recipient = channel === 'email' ? testEmail : testPhone;
+  const testChannel = async (channel: 'sms' | 'whatsapp') => {
+    const recipient = testPhone;
     
     if (!recipient) {
       toast({
         title: "Missing Recipient",
-        description: `Please enter a ${channel === 'email' ? 'email address' : 'phone number'} to test`,
+        description: `Please enter a phone number to test`,
         variant: "destructive",
       });
       return;
@@ -271,7 +271,7 @@ export const NotificationProvidersSettings = () => {
 
     // Determine which provider will be used for the test
     const smsProviderName = settings.sms_provider === 'excitesms' ? 'ExciteSMS' : 'Twilio';
-    const providerName = channel === 'email' ? 'SendGrid' : (channel === 'sms' ? smsProviderName : 'Twilio WhatsApp');
+    const providerName = channel === 'sms' ? smsProviderName : 'Twilio WhatsApp';
 
     setTestingChannel(channel);
     try {
@@ -280,7 +280,6 @@ export const NotificationProvidersSettings = () => {
           type: channel,
           to: recipient,
           message: `Test ${channel.toUpperCase()} from Phindu Finance via ${providerName}. Time: ${new Date().toLocaleString()}`,
-          subject: channel === 'email' ? "Test Email from Phindu Finance" : undefined,
         },
       });
       
