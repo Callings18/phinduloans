@@ -86,7 +86,6 @@ const defaultSettings: NotificationProviderSettings = {
   // Channels
   sms_enabled: true,
   whatsapp_enabled: true,
-  email_enabled: true,
   
   // SMS Provider Selection
   sms_provider: 'twilio',
@@ -96,8 +95,6 @@ const defaultSettings: NotificationProviderSettings = {
   twilio_auth_token: "",
   twilio_phone_number: "",
   twilio_whatsapp_number: "",
-  sendgrid_api_key: "",
-  sendgrid_from_email: "",
   
   // ExciteSMS Credentials (empty - will fallback to env secrets if not set)
   excitesms_api_url: "https://gateway.excitesms.com/api/v3",
@@ -106,7 +103,6 @@ const defaultSettings: NotificationProviderSettings = {
   
   // Admin notification recipients
   admin_phone: "",
-  admin_email: "",
   admin_whatsapp: "",
   
   // Events - Account & Application
