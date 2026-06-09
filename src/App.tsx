@@ -537,16 +537,6 @@ function App() {
                         </ErrorBoundary>
                       }
                     />
-                    <Route
-                      path="email-log"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminEmailLog />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
                     <Route path="user-guide" element={<ErrorBoundary><AdminUserGuide /></ErrorBoundary>} />
                     <Route
                       path="roles-permissions"
