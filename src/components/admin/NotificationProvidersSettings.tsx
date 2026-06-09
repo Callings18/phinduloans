@@ -700,6 +700,7 @@ export const NotificationProvidersSettings = () => {
                     <span className="ml-2">WhatsApp</span>
                   </Button>
                 </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
