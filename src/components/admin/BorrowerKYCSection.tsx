@@ -436,7 +436,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="text-destructive">Reject Document{rejectDocLabel ? `: ${rejectDocLabel}` : ""}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The borrower will be notified via email and SMS.</p>
+            <p className="text-sm text-muted-foreground">The borrower will be notified via SMS.</p>
             <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." rows={3} />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setRejectDocId(null); setRejectDocLabel(""); setRejectReason(""); }}>Cancel</Button>
