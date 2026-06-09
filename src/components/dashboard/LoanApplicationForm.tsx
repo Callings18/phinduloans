@@ -996,7 +996,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
               <div><span className="text-muted-foreground">Name:</span> <span className="font-medium ml-1">{profile?.full_name}</span></div>
               <div><span className="text-muted-foreground">Phone:</span> <span className="font-medium ml-1">{profile?.phone}</span></div>
               <div><span className="text-muted-foreground">NRC:</span> <span className="font-medium ml-1">{profile?.nrc_number}</span></div>
-              <div><span className="text-muted-foreground">Email:</span> <span className="font-medium ml-1">{profile?.email}</span></div>
+              
             </CardContent>
           </Card>
 
