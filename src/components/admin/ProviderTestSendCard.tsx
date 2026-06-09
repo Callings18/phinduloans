@@ -40,7 +40,7 @@ const ProviderTestSendCard = () => {
     if (!recipient) {
       toast({
         title: "Recipient required",
-        description: `Enter a ${channel === "email" ? "valid email" : "phone number"} to test.`,
+        description: `Enter a phone number to test.`,
         variant: "destructive",
       });
       return;
@@ -54,7 +54,6 @@ const ProviderTestSendCard = () => {
           recipient,
           title: "Phindu test send",
           message: `This is a Phindu test ${channel.toUpperCase()} sent at ${new Date().toLocaleString()}. If you received this, the provider is configured correctly.`,
-          subject: channel === "email" ? "Phindu test send" : undefined,
         },
       });
       if (error) throw error;
