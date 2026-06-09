@@ -29,7 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   User,
   Phone,
-  Mail,
+  
   Briefcase,
   CheckCircle,
   XCircle,
@@ -64,7 +64,7 @@ interface Guarantor {
   full_name: string;
   relationship: string;
   phone: string;
-  email: string | null;
+  
   nrc_number: string | null;
   address: string | null;
   city: string | null;
@@ -114,7 +114,6 @@ export default function GuarantorTab({ loanId }: Props) {
     full_name: "",
     relationship: "",
     phone: "",
-    email: "",
     nrc_number: "",
     address: "",
     city: "",
@@ -149,7 +148,6 @@ export default function GuarantorTab({ loanId }: Props) {
         full_name: formData.full_name,
         relationship: formData.relationship,
         phone: formData.phone,
-        email: formData.email || null,
         nrc_number: formData.nrc_number || null,
         address: formData.address || null,
         city: formData.city || null,
@@ -182,7 +180,7 @@ export default function GuarantorTab({ loanId }: Props) {
           full_name: formData.full_name,
           relationship: formData.relationship,
           phone: formData.phone,
-          email: formData.email || null,
+          
           nrc_number: formData.nrc_number || null,
           address: formData.address || null,
           city: formData.city || null,
@@ -264,7 +262,7 @@ export default function GuarantorTab({ loanId }: Props) {
       full_name: "",
       relationship: "",
       phone: "",
-      email: "",
+      
       nrc_number: "",
       address: "",
       city: "",
@@ -281,7 +279,7 @@ export default function GuarantorTab({ loanId }: Props) {
       full_name: guarantor.full_name,
       relationship: guarantor.relationship,
       phone: guarantor.phone,
-      email: guarantor.email || "",
+      
       nrc_number: guarantor.nrc_number || "",
       address: guarantor.address || "",
       city: guarantor.city || "",
