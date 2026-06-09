@@ -344,15 +344,6 @@ export default function GuarantorTab({ loanId }: Props) {
             placeholder="+260 967 713 001"
           />
         </div>
-        <div className="space-y-2">
-          <Label>Email</Label>
-          <Input
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            placeholder="guarantor@email.com"
-          />
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
