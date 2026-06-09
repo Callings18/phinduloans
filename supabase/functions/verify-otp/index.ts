@@ -48,7 +48,7 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { phone, code, purpose = 'signup', email, password, fullName } = await req.json() as VerifyOTPRequest;
+    const { phone, code, purpose = 'signup', email, password, fullName, nrcNumber } = await req.json() as VerifyOTPRequest;
 
     if (!phone || !code) {
       return new Response(
