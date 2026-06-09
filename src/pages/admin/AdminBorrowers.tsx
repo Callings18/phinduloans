@@ -1109,10 +1109,6 @@ const AdminBorrowers = () => {
                     <p className="text-foreground font-medium">{selectedBorrower.full_name || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Email</p>
-                    <p className="text-foreground font-medium">{selectedBorrower.email}</p>
-                  </div>
-                  <div>
                     <p className="text-muted-foreground">Phone</p>
                     <p className="text-foreground font-medium">{selectedBorrower.phone || 'N/A'}</p>
                   </div>
