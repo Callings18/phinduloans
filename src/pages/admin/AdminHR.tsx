@@ -566,9 +566,9 @@ function AddEditEmployeeForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Unlinked</SelectItem>
-            {profiles?.map((p: { id: string; full_name: string | null; email: string }) => (
+            {profiles?.map((p: { id: string; full_name: string | null }) => (
               <SelectItem key={p.id} value={p.id}>
-                {p.full_name || p.email}
+                {p.full_name || p.id}
               </SelectItem>
             ))}
           </SelectContent>
