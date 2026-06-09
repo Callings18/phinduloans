@@ -124,7 +124,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("full_name, phone, nrc_number, address, city, email, employer_name, job_title, employment_type, years_in_employment, net_income")
+        .select("full_name, phone, nrc_number, address, city, employer_name, job_title, employment_type, years_in_employment, net_income")
         .eq("id", borrowerId)
         .maybeSingle();
       if (error) throw error;
@@ -210,17 +210,9 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
       if (error) throw error;
 
       try {
-        const { data: profileData } = await supabase.from("profiles").select("email, phone, full_name").eq("id", borrowerId).maybeSingle();
+        const { data: profileData } = await supabase.from("profiles").select("phone, full_name").eq("id", borrowerId).maybeSingle();
         if (profileData) {
           const name = profileData.full_name || "Customer";
-          if (profileData.email) {
-            await supabase.from("notification_logs").insert({
-              user_id: borrowerId, type: "email", recipient: profileData.email, title: "KYC Document Rejected",
-              subject: `Action Required: Re-upload ${docLabel}`,
-              message: `Dear ${name}, your KYC document "${docLabel}" has been rejected. Reason: ${reason}. Please re-upload. — Phindu Finance`,
-              status: "pending",
-            });
-          }
           if (profileData.phone) {
             await supabase.from("notification_logs").insert({
               user_id: borrowerId, type: "sms", recipient: profileData.phone, title: "KYC Document Rejected",
@@ -444,7 +436,7 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="text-destructive">Reject Document{rejectDocLabel ? `: ${rejectDocLabel}` : ""}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">The borrower will be notified via email and SMS.</p>
+            <p className="text-sm text-muted-foreground">The borrower will be notified via SMS.</p>
             <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." rows={3} />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setRejectDocId(null); setRejectDocLabel(""); setRejectReason(""); }}>Cancel</Button>

@@ -41,7 +41,7 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Mail,
+  
   MapPin,
   IdCard,
   Ban,
@@ -63,7 +63,7 @@ import { HelpCircle } from "lucide-react";
 
 interface BorrowerForm {
   full_name: string;
-  email: string;
+  
   phone: string;
   nrc_number: string;
   address: string;
@@ -91,7 +91,7 @@ interface MarketeerBorrowerSeed {
 
 const emptyForm: BorrowerForm = {
   full_name: "",
-  email: "",
+  
   phone: "",
   nrc_number: "",
   address: "",
@@ -142,7 +142,7 @@ const AdminBorrowers = () => {
     },
     {
       target: ".tour-borrowers-search",
-      content: "Instantly find a borrower by their name, email, or NRC number.",
+      content: "Instantly find a borrower by their name, phone, or NRC number.",
       placement: "bottom",
     },
     {
@@ -311,7 +311,6 @@ const AdminBorrowers = () => {
 
       const response = await supabase.functions.invoke('create-borrower', {
         body: {
-          email: data.email,
           full_name: data.full_name,
           phone: data.phone || null,
           nrc_number: data.nrc_number || null,
@@ -342,7 +341,7 @@ const AdminBorrowers = () => {
           user_id: created.user_id,
           loan_product_id: selectedLoanProductId,
           full_name: data.full_name,
-          email: data.email,
+          
           phone: data.phone || "",
           nrc_number: data.nrc_number || "N/A",
           address: data.address || "",
@@ -393,11 +392,9 @@ const AdminBorrowers = () => {
 
       let createdCount = 0;
       for (const item of MARKETEER_BORROWERS) {
-        const safeEmail = `${item.full_name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")}@marketeers.local`;
         const targetProductCode = (loanProducts.find((p: any) => p.id === targetProductId) as any)?.product_code ?? null;
         const { data: response, error: responseError } = await supabase.functions.invoke("create-borrower", {
           body: {
-            email: safeEmail,
             full_name: item.full_name,
             phone: null,
             nrc_number: null,
@@ -415,7 +412,7 @@ const AdminBorrowers = () => {
           user_id: userId,
           loan_product_id: targetProductId,
           full_name: item.full_name,
-          email: safeEmail,
+          
           phone: "",
           nrc_number: "N/A",
           address: "",
@@ -563,8 +560,8 @@ const AdminBorrowers = () => {
   });
 
   const handleCreate = () => {
-    if (!formData.full_name?.trim() || !formData.email?.trim()) {
-      toast({ title: "Please fill in required fields (Name and Email)", variant: "destructive" });
+    if (!formData.full_name?.trim() || !formData.phone?.trim()) {
+      toast({ title: "Please fill in required fields (Name and Phone)", variant: "destructive" });
       return;
     }
     createMutation.mutate(formData);
@@ -582,7 +579,7 @@ const AdminBorrowers = () => {
     setSelectedBorrower(borrower);
     setFormData({
       full_name: borrower.full_name || "",
-      email: borrower.email || "",
+      
       phone: borrower.phone || "",
       nrc_number: borrower.nrc_number || "",
       address: borrower.address || "",
@@ -599,7 +596,7 @@ const AdminBorrowers = () => {
   const filteredBorrowers = borrowers?.filter((borrower) => {
     const matchesSearch =
       borrower.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      borrower.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      
       borrower.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       borrower.nrc_number?.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -761,7 +758,7 @@ const AdminBorrowers = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
               <Input
-                placeholder="Search by name, email, phone, or NRC..."
+                placeholder="Search by name, phone, or NRC..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -976,15 +973,6 @@ const AdminBorrowers = () => {
               </header>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label>City</Label>
                   <Select
                     value={formData.city}
@@ -1042,16 +1030,6 @@ const AdminBorrowers = () => {
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 placeholder="John Doe"
               />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={formData.email}
-                disabled
-                className="opacity-50"
-              />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
             </div>
             <div className="space-y-2">
               <Label>Phone</Label>
@@ -1117,7 +1095,7 @@ const AdminBorrowers = () => {
               </div>
               {selectedBorrower?.full_name || 'Borrower Details'}
             </DialogTitle>
-            <DialogDescription>{selectedBorrower?.email}</DialogDescription>
+            <DialogDescription>{selectedBorrower?.phone}</DialogDescription>
           </DialogHeader>
 
           {selectedBorrower && (
@@ -1129,10 +1107,6 @@ const AdminBorrowers = () => {
                   <div>
                     <p className="text-muted-foreground">Full Name</p>
                     <p className="text-foreground font-medium">{selectedBorrower.full_name || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Email</p>
-                    <p className="text-foreground font-medium">{selectedBorrower.email}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Phone</p>
@@ -1154,14 +1128,6 @@ const AdminBorrowers = () => {
                     <p className="text-muted-foreground">Joined</p>
                     <p className="text-foreground font-medium">
                       {new Date(selectedBorrower.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Email verified</p>
-                    <p className="text-foreground font-medium">
-                      {(selectedBorrower as { email_verified_at?: string | null }).email_verified_at
-                        ? `Yes (${new Date((selectedBorrower as { email_verified_at: string }).email_verified_at).toLocaleDateString()})`
-                        : "No"}
                     </p>
                   </div>
                   <div>

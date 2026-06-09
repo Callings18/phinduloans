@@ -51,7 +51,7 @@ const AdminHR = () => {
     queryKey: ["admin-hr-employees"],
     queryFn: async () => {
       const { data, error } = await (supabase.from as any)("employees")
-        .select("id, user_id, employee_number, first_name, last_name, department, position, branch, commission_percentage, is_active, employment_start_date, email, phone")
+        .select("id, user_id, employee_number, first_name, last_name, department, position, branch, commission_percentage, is_active, employment_start_date, phone")
         .order("last_name");
       if (error) throw error;
       return (data ?? []) as any[];
@@ -352,7 +352,7 @@ function AddEditEmployeeForm({
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
-    email: "",
+    
     phone: "",
     employee_number: "",
     nrc_number: "",
@@ -386,7 +386,7 @@ function AddEditEmployeeForm({
     setForm({
       first_name: editData.first_name ?? "",
       last_name: editData.last_name ?? "",
-      email: editData.email ?? "",
+      
       phone: editData.phone ?? "",
       employee_number: editData.employee_number ?? "",
       nrc_number: editData.nrc_number ?? "",
@@ -410,7 +410,7 @@ function AddEditEmployeeForm({
       if (rolesErr) throw rolesErr;
       if (!roles?.length) return [];
       const ids = roles.map((r: { user_id: string }) => r.user_id);
-      const { data: p, error: pErr } = await supabase.from("profiles").select("id, full_name, email").in("id", ids);
+      const { data: p, error: pErr } = await supabase.from("profiles").select("id, full_name").in("id", ids);
       if (pErr) throw pErr;
       return p ?? [];
     },
@@ -423,7 +423,7 @@ function AddEditEmployeeForm({
         full_name: fullName,
         first_name: form.first_name,
         last_name: form.last_name,
-        email: form.email,
+        
         phone: form.phone,
         employee_number: form.employee_number,
         nrc_number: form.nrc_number,
@@ -481,10 +481,6 @@ function AddEditEmployeeForm({
         </div>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <Label>Email</Label>
-          <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        </div>
         <div className="space-y-2">
           <Label>Phone</Label>
           <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -570,9 +566,9 @@ function AddEditEmployeeForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Unlinked</SelectItem>
-            {profiles?.map((p: { id: string; full_name: string | null; email: string }) => (
+            {profiles?.map((p: { id: string; full_name: string | null }) => (
               <SelectItem key={p.id} value={p.id}>
-                {p.full_name || p.email}
+                {p.full_name || p.id}
               </SelectItem>
             ))}
           </SelectContent>
