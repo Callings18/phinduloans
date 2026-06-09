@@ -200,17 +200,6 @@ class NotificationService {
         throw new Error(data?.error || "Failed to send notification");
       }
 
-      if (params.type === "email") {
-        await supabase.from("notification_logs").insert({
-          user_id: params.userId ?? null,
-          type: "email",
-          recipient: params.to,
-          subject: params.subject ?? null,
-          title: params.subject ?? "Email Notification",
-          message: params.message ?? null,
-          status: "sent",
-        });
-      }
       return { success: true, data };
     } catch (error: any) {
       await supabase.from("notification_logs").insert({
