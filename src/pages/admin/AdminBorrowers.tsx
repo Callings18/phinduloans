@@ -1032,16 +1032,6 @@ const AdminBorrowers = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={formData.email}
-                disabled
-                className="opacity-50"
-              />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-            </div>
-            <div className="space-y-2">
               <Label>Phone</Label>
               <Input
                 value={formData.phone}
