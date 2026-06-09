@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { OTPInput } from "./OTPInput";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Phone, ArrowRight, Loader2, ArrowLeft, User } from "lucide-react";
+import { Phone, ArrowRight, Loader2, ArrowLeft, User, CreditCard } from "lucide-react";
 import { z } from "zod";
 
 const phoneSchema = z.string()
@@ -13,6 +13,11 @@ const phoneSchema = z.string()
   .regex(/^[\d\s+()-]+$/, "Invalid phone number format");
 
 const fullNameSchema = z.string().trim().min(2, "Full name is required");
+
+// Zambian NRC format: 6 digits / 2 digits / 1 digit (e.g. 123456/78/9)
+const nrcSchema = z.string()
+  .trim()
+  .regex(/^\d{6}\/\d{2}\/\d$/, "NRC must be in the format 123456/78/9");
 
 type AuthMode = "phone_input" | "name_input" | "otp_verify";
 type AuthPurpose = "signup" | "login";
@@ -28,6 +33,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
   const [mode, setMode] = useState<AuthMode>(purpose === "signup" ? "name_input" : "phone_input");
   const [phone, setPhone] = useState("");
   const [fullName, setFullName] = useState("");
+  const [nrcNumber, setNrcNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -67,15 +73,24 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
   };
 
   const handleSendOTP = async () => {
+    const newErrors: Record<string, string> = {};
     try {
       phoneSchema.parse(phone);
-      setErrors({});
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        setErrors({ phone: error.errors[0].message });
-        return;
+      if (error instanceof z.ZodError) newErrors.phone = error.errors[0].message;
+    }
+    if (purpose === "signup") {
+      try {
+        nrcSchema.parse(nrcNumber);
+      } catch (error) {
+        if (error instanceof z.ZodError) newErrors.nrc = error.errors[0].message;
       }
     }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    setErrors({});
 
     setIsLoading(true);
     try {
@@ -110,6 +125,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
       const body: Record<string, unknown> = { phone, code: otp, purpose };
       if (purpose === "signup") {
         body.fullName = fullName;
+        body.nrcNumber = nrcNumber;
       }
 
       const { data, error } = await supabase.functions.invoke("verify-otp", { body });
@@ -201,7 +217,29 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
           {errors.phone && <p className="text-sm text-destructive">{errors.phone}</p>}
           <p className="text-xs text-muted-foreground">We'll send a verification code via SMS</p>
         </div>
-        <Button onClick={handleSendOTP} variant="hero" className="w-full h-12 text-base" disabled={isLoading || !phone}>
+        {purpose === "signup" && (
+          <div className="space-y-2">
+            <Label htmlFor="nrc" className="text-sm font-medium">NRC Number</Label>
+            <div className="relative">
+              <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+              <Input
+                id="nrc"
+                inputMode="numeric"
+                placeholder="123456/78/9"
+                value={nrcNumber}
+                onChange={(e) => setNrcNumber(e.target.value)}
+                className="pl-11"
+              />
+            </div>
+            {errors.nrc && <p className="text-sm text-destructive">{errors.nrc}</p>}
+          </div>
+        )}
+        <Button
+          onClick={handleSendOTP}
+          variant="hero"
+          className="w-full h-12 text-base"
+          disabled={isLoading || !phone || (purpose === "signup" && !nrcNumber)}
+        >
           {isLoading ? (
             <div className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />

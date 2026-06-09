@@ -14,6 +14,7 @@ interface VerifyOTPRequest {
   email?: string;
   password?: string;
   fullName?: string;
+  nrcNumber?: string;
 }
 
 function formatPhoneNumber(phone: string): string {
@@ -47,7 +48,7 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { phone, code, purpose = 'signup', email, password, fullName } = await req.json() as VerifyOTPRequest;
+    const { phone, code, purpose = 'signup', email, password, fullName, nrcNumber } = await req.json() as VerifyOTPRequest;
 
     if (!phone || !code) {
       return new Response(
@@ -162,12 +163,13 @@ serve(async (req) => {
 
         userId = newUser.user.id;
 
-        // Hide synthetic email in profile; store only phone + name
+        // Hide synthetic email in profile; store only phone + name + NRC
         await supabase
           .from("profiles")
           .update({
             phone: formattedPhone,
             full_name: fullName || null,
+            nrc_number: nrcNumber || null,
             email: syntheticEmail.endsWith("@phone.phindu.local") ? null : syntheticEmail,
           })
           .eq("id", userId);
