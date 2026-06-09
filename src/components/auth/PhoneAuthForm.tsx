@@ -125,6 +125,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
       const body: Record<string, unknown> = { phone, code: otp, purpose };
       if (purpose === "signup") {
         body.fullName = fullName;
+        body.nrcNumber = nrcNumber;
       }
 
       const { data, error } = await supabase.functions.invoke("verify-otp", { body });
