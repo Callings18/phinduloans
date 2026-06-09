@@ -1273,6 +1273,7 @@ export type Database = {
           created_at: string | null
           date_of_birth: string | null
           department: string | null
+          email: string | null
           employee_number: string | null
           employment_start_date: string | null
           employment_type: string | null
@@ -1308,6 +1309,7 @@ export type Database = {
           created_at?: string | null
           date_of_birth?: string | null
           department?: string | null
+          email?: string | null
           employee_number?: string | null
           employment_start_date?: string | null
           employment_type?: string | null
@@ -1343,6 +1345,7 @@ export type Database = {
           created_at?: string | null
           date_of_birth?: string | null
           department?: string | null
+          email?: string | null
           employee_number?: string | null
           employment_start_date?: string | null
           employment_type?: string | null
@@ -1374,6 +1377,7 @@ export type Database = {
           address: string | null
           contact_person: string | null
           created_at: string
+          email: string | null
           id: string
           industry: string | null
           is_verified: boolean | null
@@ -1385,6 +1389,7 @@ export type Database = {
           address?: string | null
           contact_person?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           industry?: string | null
           is_verified?: boolean | null
@@ -1396,6 +1401,7 @@ export type Database = {
           address?: string | null
           contact_person?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           industry?: string | null
           is_verified?: boolean | null
@@ -1669,6 +1675,7 @@ export type Database = {
           document_verified_at: string | null
           document_verified_by: string | null
           early_settlement_fee: number | null
+          email: string | null
           employer_id: string | null
           employer_letter_url: string | null
           employer_name: string | null
@@ -1750,6 +1757,7 @@ export type Database = {
           document_verified_at?: string | null
           document_verified_by?: string | null
           early_settlement_fee?: number | null
+          email?: string | null
           employer_id?: string | null
           employer_letter_url?: string | null
           employer_name?: string | null
@@ -1831,6 +1839,7 @@ export type Database = {
           document_verified_at?: string | null
           document_verified_by?: string | null
           early_settlement_fee?: number | null
+          email?: string | null
           employer_id?: string | null
           employer_letter_url?: string | null
           employer_name?: string | null
@@ -2124,6 +2133,7 @@ export type Database = {
           consent_date: string | null
           consent_signed: boolean | null
           created_at: string
+          email: string | null
           employer_name: string | null
           employment_status: string | null
           full_name: string
@@ -2147,6 +2157,7 @@ export type Database = {
           consent_date?: string | null
           consent_signed?: boolean | null
           created_at?: string
+          email?: string | null
           employer_name?: string | null
           employment_status?: string | null
           full_name: string
@@ -2170,6 +2181,7 @@ export type Database = {
           consent_date?: string | null
           consent_signed?: boolean | null
           created_at?: string
+          email?: string | null
           employer_name?: string | null
           employment_status?: string | null
           full_name?: string
