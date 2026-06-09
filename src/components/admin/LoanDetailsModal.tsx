@@ -48,7 +48,7 @@ import {
 import {
   User,
   Phone,
-  Mail,
+  
   MapPin,
   Briefcase,
   DollarSign,
@@ -93,7 +93,7 @@ import GuarantorTab from "./GuarantorTab";
 import ApprovalWorkflowTab from "./ApprovalWorkflowTab";
 import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
+import { downloadLoanContract, shareContractViaWhatsApp, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
 import { logAudit } from "@/utils/auditLog";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
@@ -1974,30 +1974,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     await sendWhatsAppDirect(loan.phone, message, 'Loan Repayment Schedule');
   };
 
-  const handleEmailSchedule = async () => {
-    handleDownloadSchedule();
-
-    // Send via Email directly via SendGrid
-    const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
-    
-    const subject = `Loan Repayment Schedule - LOAN-${loan.id.substring(0, 8).toUpperCase()}`;
-    const message = 
-      `Dear ${loan.full_name},\n\n` +
-      `Please find attached your Loan Repayment Schedule from ${settings?.companyInfo?.name || 'PHINDU Finance'}.\n\n` +
-      `Loan Details:\n` +
-      `- Reference: LOAN-${loan.id.substring(0, 8).toUpperCase()}\n` +
-      `- Principal: K${loan.loan_amount.toLocaleString()}\n` +
-      `- Interest Rate: ${loan.interest_rate}%\n` +
-      `- ${installmentCadenceWord} Payment: K${(loan.monthly_payment || 0).toLocaleString()}\n` +
-      `- Term: ${loan.loan_term_months} months\n` +
-      `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
-      `Please contact us if you have any questions.\n\n` +
-      `Best regards,\n` +
-      `${settings?.companyInfo?.name || 'PHINDU Finance'}`;
-
-    await sendEmailDirect(loan.email, subject, message);
-  };
-
   const handleDownloadContract = async () => {
     await downloadLoanContract(loan as any);
     toast.success('Contract downloaded');
@@ -2007,9 +1983,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     await shareContractViaWhatsApp(loan as any);
   };
 
-  const handleContractEmail = async () => {
-    await emailContract(loan as any);
-  };
+
 
   // SMS via unified notification service
   const handleContractSMS = async () => {
@@ -2432,13 +2406,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           await sendSMSDirect(loan.phone, customMessage, messageTemplate || 'Custom Message');
                         }}>
                         <Smartphone size={14} className="mr-1" /> SMS
-                      </Button>
-                      <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.email}
-                        onClick={async () => {
-                          const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
-                          await sendEmailDirect(loan.email, messageTemplate ? messageTemplate.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Loan Update', customMessage);
-                        }}>
-                        <Mail size={14} className="mr-1" /> Email
                       </Button>
                       <Button size="sm" variant="outline" disabled={!customMessage.trim() || !loan.phone}
                         onClick={async () => {

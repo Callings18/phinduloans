@@ -45,7 +45,7 @@ import AdminCourtCases from "./pages/admin/AdminCourtCases";
 import AdminHR from "./pages/admin/AdminHR";
 import AdminPayroll from "./pages/admin/AdminPayroll";
 import AdminPayrollTaxConfig from "./pages/admin/AdminPayrollTaxConfig";
-import AdminEmailLog from "./pages/admin/AdminEmailLog";
+
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
@@ -533,16 +533,6 @@ function App() {
                             ]}
                           >
                             <AdminPayrollTaxConfig />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="email-log"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminEmailLog />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

@@ -4,7 +4,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type NotificationType = 'sms' | 'email' | 'whatsapp';
+export type NotificationType = 'sms' | 'whatsapp';
 
 interface SendDirectNotificationParams {
   type: NotificationType;
@@ -57,33 +57,6 @@ export async function sendDirectNotification(params: SendDirectNotificationParam
     console.error("[Direct Notification] Error:", error);
     return { success: false, error: error.message };
   }
-}
-
-/**
- * Send an email via SendGrid (through edge function)
- */
-export async function sendEmailDirect(
-  to: string, 
-  subject: string, 
-  message: string, 
-  htmlContent?: string
-) {
-  const result = await sendDirectNotification({
-    type: 'email',
-    to,
-    subject,
-    message,
-    htmlContent,
-    title: subject,
-  });
-  
-  if (result.success) {
-    toast.success(`Email sent to ${to}`);
-  } else {
-    toast.error(`Failed to send email: ${result.error}`);
-  }
-  
-  return result;
 }
 
 /**

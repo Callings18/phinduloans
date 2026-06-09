@@ -159,14 +159,18 @@ class NotificationService {
       }
     }
 
+    // Email is no longer supported - SMS/WhatsApp only
+    if (params.type === 'email') {
+      if (import.meta.env.DEV) console.log("[Notification Service] Email channel disabled - skipping");
+      return { success: false, message: "Email channel disabled" };
+    }
+
     // Check if channel is enabled
     let enabled = true;
     if (params.type === 'sms' && settings) {
       enabled = settings.sms_enabled !== false;
     } else if (params.type === 'whatsapp' && settings) {
       enabled = settings.whatsapp_enabled !== false;
-    } else if (params.type === 'email' && settings) {
-      enabled = settings.email_enabled !== false;
     }
 
     if (!enabled) {
@@ -196,17 +200,6 @@ class NotificationService {
         throw new Error(data?.error || "Failed to send notification");
       }
 
-      if (params.type === "email") {
-        await supabase.from("notification_logs").insert({
-          user_id: params.userId ?? null,
-          type: "email",
-          recipient: params.to,
-          subject: params.subject ?? null,
-          title: params.subject ?? "Email Notification",
-          message: params.message ?? null,
-          status: "sent",
-        });
-      }
       return { success: true, data };
     } catch (error: any) {
       await supabase.from("notification_logs").insert({
@@ -227,7 +220,7 @@ class NotificationService {
     }
   }
 
-  // Multi-channel send (SMS + Email + WhatsApp)
+  // Multi-channel send (SMS + WhatsApp only - email is no longer supported)
   async sendMultiChannel(params: Omit<SendNotificationParams, 'type' | 'to'> & { phone?: string; email?: string }) {
     const results = {
       sms: null as any,
@@ -254,17 +247,6 @@ class NotificationService {
           type: 'whatsapp',
           to: params.phone,
         }).then(r => { results.whatsapp = r; })
-      );
-    }
-
-    if (params.email && params.subject) {
-      promises.push(
-        this.send({
-          ...params,
-          type: 'email',
-          to: params.email,
-          subject: params.subject,
-        }).then(r => { results.email = r; })
       );
     }
 
