@@ -104,10 +104,6 @@ export default function PersonalInfoForm({ borrowerId, profile }: PersonalInfoFo
               <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 9XX XXX XXX" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Phone Number *</Label>
-              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+260 9XX XXX XXX" />
-            </div>
-            <div className="space-y-1">
               <Label className="text-xs">NRC Number *</Label>
               <Input value={form.nrc_number} onChange={(e) => setForm(f => ({ ...f, nrc_number: e.target.value }))} placeholder="XXXXXX/XX/X" />
             </div>
