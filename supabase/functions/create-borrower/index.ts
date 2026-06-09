@@ -77,8 +77,8 @@ Deno.serve(async (req) => {
     const { full_name, nrc_number, address, city, product_code, gender, marital_status } = body;
     let { email, phone } = body;
 
-    if (!full_name || (!email && !phone)) {
-      return new Response(JSON.stringify({ error: "Full name and either email or phone are required" }), {
+    if (!full_name) {
+      return new Response(JSON.stringify({ error: "Full name is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -87,9 +87,20 @@ Deno.serve(async (req) => {
     const normalizedPhone = normalizePhoneForAuth(phone);
     phone = normalizedPhone;
 
-    const syntheticEmail = !email && normalizedPhone ? `${normalizedPhone}@phone.phindu.local` : null;
+    // Email is no longer collected. We still need a unique auth identifier, so we
+    // synthesize one from the phone number, or fall back to a name-based slug.
+    const nameSlug = String(full_name)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/^\.+|\.+$/g, "") || "borrower";
+    const syntheticEmail = !email
+      ? (normalizedPhone
+        ? `${normalizedPhone}@phone.phindu.local`
+        : `${nameSlug}.${Date.now()}@borrower.phindu.local`)
+      : null;
     const authEmail = email || syntheticEmail!;
     const profileEmail = email || null;
+
 
     let userId: string;
     let createdNew = false;
