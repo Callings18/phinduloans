@@ -35,7 +35,6 @@ interface NotificationProviderSettings {
   // Channel enablement
   sms_enabled: boolean;
   whatsapp_enabled: boolean;
-  email_enabled: boolean;
   
   // SMS Provider Selection
   sms_provider: 'twilio' | 'excitesms';
@@ -45,8 +44,6 @@ interface NotificationProviderSettings {
   twilio_auth_token?: string;
   twilio_phone_number?: string;
   twilio_whatsapp_number?: string;
-  sendgrid_api_key?: string;
-  sendgrid_from_email?: string;
   
   // ExciteSMS Credentials
   excitesms_api_url?: string;
@@ -55,7 +52,6 @@ interface NotificationProviderSettings {
   
   // Admin notification recipients
   admin_phone?: string;
-  admin_email?: string;
   admin_whatsapp?: string;
   
   // Notification Event Triggers - Account & Application
