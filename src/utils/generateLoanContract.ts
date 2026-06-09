@@ -976,41 +976,8 @@ export const shareContractViaWhatsApp = async (loan: LoanData) => {
   return result;
 };
 
-// Send contract via Email using SendGrid (through edge function)
-export const emailContract = async (loan: LoanData) => {
-  const { sendEmailDirect } = await import('@/utils/sendDirectNotification');
-  const { toast } = await import('sonner');
-  
-  const subject = `Loan Agreement Contract - PCS-${loan.id.slice(0, 8).toUpperCase()}`;
-  const cadenceCtx = await resolveCadence(loan);
-  const message = 
-    `Dear ${loan.full_name},\n\n` +
-    `Please find your Loan Agreement Contract from Phindu Credit Solutions.\n\n` +
-    `Loan Details:\n` +
-    `- Contract No: PCS-${loan.id.slice(0, 8).toUpperCase()}\n` +
-    `- Loan Amount: K${loan.loan_amount.toLocaleString()}\n` +
-    `- Interest: ${cadenceCtx.interestLabel}\n` +
-    `- ${cadenceCtx.installmentLabel}: K${cadenceCtx.installmentAmount.toLocaleString()}\n` +
-    `- Term: ${cadenceCtx.termLabel}\n` +
-    `- Total Repayment: K${loan.total_repayment.toLocaleString()}\n\n` +
-    `Please review, sign, and return the contract at your earliest convenience.\n\n` +
-    `If you have any questions, please don't hesitate to contact us.\n\n` +
-    `Best regards,\n` +
-    `Phindu Credit Solutions Limited\n` +
-    `info@phinducredit.co.zm`;
-  
-  // Download contract locally for admin reference
-  await downloadLoanContract(loan);
-  
-  // Send email via SendGrid
-  const result = await sendEmailDirect(
-    loan.email,
-    subject,
-    message
-  );
-  
-  return result;
-};
+
+
 
 // Send contract via SMS
 export const smsContract = async (loan: LoanData, companyName?: string) => {
