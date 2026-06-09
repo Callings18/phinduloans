@@ -124,12 +124,6 @@ export default function PersonalInfoForm({ borrowerId, profile }: PersonalInfoFo
                 <p className="text-sm text-foreground">{profile.full_name}</p>
               </div>
             )}
-            {profile?.email && (
-              <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-                <p className="text-xs font-semibold text-muted-foreground mb-1">Email</p>
-                <p className="text-sm text-foreground">{profile.email}</p>
-              </div>
-            )}
             {profile?.phone && (
               <div className="p-3 rounded-lg bg-background/50 border border-border/30">
                 <p className="text-xs font-semibold text-muted-foreground mb-1">Phone</p>
