@@ -1135,14 +1135,6 @@ const AdminBorrowers = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Email verified</p>
-                    <p className="text-foreground font-medium">
-                      {(selectedBorrower as { email_verified_at?: string | null }).email_verified_at
-                        ? `Yes (${new Date((selectedBorrower as { email_verified_at: string }).email_verified_at).toLocaleDateString()})`
-                        : "No"}
-                    </p>
-                  </div>
-                  <div>
                     <p className="text-muted-foreground">Phone verified</p>
                     <p className="text-foreground font-medium">
                       {(selectedBorrower as { phone_verified_at?: string | null }).phone_verified_at
