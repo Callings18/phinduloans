@@ -311,7 +311,6 @@ const AdminBorrowers = () => {
 
       const response = await supabase.functions.invoke('create-borrower', {
         body: {
-          email: data.email,
           full_name: data.full_name,
           phone: data.phone || null,
           nrc_number: data.nrc_number || null,
