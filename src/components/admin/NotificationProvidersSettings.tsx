@@ -433,23 +433,6 @@ export const NotificationProvidersSettings = () => {
                 />
               </div>
 
-              {/* Email */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-blue-500/10">
-                    <Mail className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Email Notifications</h4>
-                    <p className="text-sm text-muted-foreground">Send emails via SendGrid (Twilio)</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={settings.email_enabled}
-                  onCheckedChange={(checked) => setSettings({ ...settings, email_enabled: checked })}
-                />
-              </div>
-
               <Separator />
               
               <div className="p-4 rounded-lg bg-muted/50">
@@ -458,7 +441,7 @@ export const NotificationProvidersSettings = () => {
                   Credentials Management
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  You can configure Twilio and SendGrid credentials in the "Credentials" tab. 
+                  You can configure Twilio and ExciteSMS credentials in the "Credentials" tab. 
                   Settings are saved to the database and take effect immediately.
                 </p>
               </div>
