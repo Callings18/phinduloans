@@ -245,7 +245,7 @@ const BorrowerPicker = ({
                           matched?.id === opt.id ? "opacity-100 text-primary" : "opacity-0",
                         )}
                       />
-                      <span className="font-medium text-sm">{opt.full_name || opt.email || "Unnamed"}</span>
+                      <span className="font-medium text-sm">{opt.full_name || opt.phone || "Unnamed"}</span>
                     </div>
                     <div className="ml-5 text-[11px] text-muted-foreground">
                       {opt.nrc_number || "no NRC"} · {opt.phone || "no phone"}
