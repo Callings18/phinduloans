@@ -93,7 +93,7 @@ import GuarantorTab from "./GuarantorTab";
 import ApprovalWorkflowTab from "./ApprovalWorkflowTab";
 import WriteOffTab from "./WriteOffTab";
 import { downloadLoanSchedule } from "@/utils/generateLoanSchedule";
-import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
+import { downloadLoanContract, shareContractViaWhatsApp, smsContract, uploadContractAndSaveUrl } from "@/utils/generateLoanContract";
 import { logAudit } from "@/utils/auditLog";
 import { downloadRepaymentReceipt } from "@/utils/generateRepaymentReceipt";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
