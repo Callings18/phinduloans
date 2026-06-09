@@ -392,11 +392,9 @@ const AdminBorrowers = () => {
 
       let createdCount = 0;
       for (const item of MARKETEER_BORROWERS) {
-        const safeEmail = `${item.full_name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "")}@marketeers.local`;
         const targetProductCode = (loanProducts.find((p: any) => p.id === targetProductId) as any)?.product_code ?? null;
         const { data: response, error: responseError } = await supabase.functions.invoke("create-borrower", {
           body: {
-            email: safeEmail,
             full_name: item.full_name,
             phone: null,
             nrc_number: null,
