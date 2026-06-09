@@ -973,15 +973,6 @@ const AdminBorrowers = () => {
               </header>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label>City</Label>
                   <Select
                     value={formData.city}
