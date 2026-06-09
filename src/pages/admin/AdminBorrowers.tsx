@@ -341,7 +341,7 @@ const AdminBorrowers = () => {
           user_id: created.user_id,
           loan_product_id: selectedLoanProductId,
           full_name: data.full_name,
-          email: data.email,
+          
           phone: data.phone || "",
           nrc_number: data.nrc_number || "N/A",
           address: data.address || "",
