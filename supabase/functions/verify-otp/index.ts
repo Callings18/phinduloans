@@ -163,12 +163,13 @@ serve(async (req) => {
 
         userId = newUser.user.id;
 
-        // Hide synthetic email in profile; store only phone + name
+        // Hide synthetic email in profile; store only phone + name + NRC
         await supabase
           .from("profiles")
           .update({
             phone: formattedPhone,
             full_name: fullName || null,
+            nrc_number: nrcNumber || null,
             email: syntheticEmail.endsWith("@phone.phindu.local") ? null : syntheticEmail,
           })
           .eq("id", userId);
