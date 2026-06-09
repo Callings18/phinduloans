@@ -19,7 +19,7 @@ import {
   ScrollText,
   Scale,
   Ban,
-  Mail,
+  
   Briefcase,
   Coins,
   Receipt,
