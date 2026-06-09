@@ -363,7 +363,6 @@ const AdminSettings = () => {
                     />
                   </div>
                   <div className="space-y-2">
-
                     <Label>Support Phone</Label>
                     <Input
                       value={companyInfo.support_phone}
