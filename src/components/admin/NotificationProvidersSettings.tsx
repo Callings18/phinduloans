@@ -184,7 +184,7 @@ export const NotificationProvidersSettings = () => {
   const [settings, setSettings] = useState<NotificationProviderSettings>(defaultSettings);
   const [testingChannel, setTestingChannel] = useState<string | null>(null);
   const [testPhone, setTestPhone] = useState("");
-  const [testEmail, setTestEmail] = useState("");
+  
 
   // Fetch existing settings
   const { data: savedSettings, isLoading } = useQuery({
