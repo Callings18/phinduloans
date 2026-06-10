@@ -510,9 +510,9 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                 <Loader2 className="h-8 w-8 animate-spin opacity-70" />
                 <p className="text-sm">Loading payments…</p>
               </div>
-            ) : upcomingPayments && upcomingPayments.length > 0 ? (
+            ) : filteredUpcomingPayments && filteredUpcomingPayments.length > 0 ? (
               <div className="space-y-3">
-                {upcomingPayments.slice(0, 8).map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
+                {filteredUpcomingPayments.slice(0, 8).map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
                   const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
                   const urgencyClass =
                     daysUntil === 0
@@ -553,16 +553,16 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                     </div>
                   );
                 })}
-                {upcomingPayments.length > 8 && (
+                {filteredUpcomingPayments.length > 8 && (
                   <p className="pt-1 text-center text-xs text-muted-foreground">
-                    +{upcomingPayments.length - 8} more due in the next 7 days — see Repayments
+                    +{filteredUpcomingPayments.length - 8} more due in the next 7 days — see Repayments
                   </p>
                 )}
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-                <p>No upcoming payments</p>
+                <p>{upcomingProductId ? "No upcoming payments for this loan house" : "No upcoming payments"}</p>
               </div>
             )}
           </CardContent>
