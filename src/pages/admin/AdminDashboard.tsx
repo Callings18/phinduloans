@@ -7,6 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import AdminLayout from "@/components/admin/AdminLayout";
 import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
 import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
@@ -31,11 +36,13 @@ import {
   Wrench,
   FlaskConical,
   Loader2,
+  CalendarDays,
+  X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
-import { format, differenceInDays, startOfDay } from "date-fns";
+import { format, differenceInDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { useAdminDashboardStats, useAdminUpcomingPayments } from "@/hooks/useAdminDashboardStats";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
@@ -140,6 +147,11 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
   // Independent loan-house filter for the Upcoming Payments widget.
   const [upcomingProductId, setUpcomingProductId] = useState<string | null>(null);
+  // Date-range filter for narrowing to a specific upcoming payday window.
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+  // Toggle to show only the next (earliest) installment per borrower.
+  const [nextOnly, setNextOnly] = useState(false);
 
   const { data: upcomingProductOptions } = useQuery({
     queryKey: ["active-loan-products-upcoming"],
@@ -156,16 +168,44 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
   });
 
   const filteredUpcomingPayments = useMemo(() => {
-    const rows = (upcomingPayments || []) as Array<{
+    let rows = (upcomingPayments || []) as Array<{
       id: string;
       due_date: string;
       amount: number;
       loan_id: string;
       loan?: { full_name?: string | null; loan_product_id?: string | null } | null;
     }>;
-    if (!upcomingProductId) return rows;
-    return rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
-  }, [upcomingPayments, upcomingProductId]);
+
+    if (upcomingProductId) {
+      rows = rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
+    }
+
+    // Date-range filter (inclusive) on the installment due date.
+    if (dateFrom || dateTo) {
+      const start = dateFrom ? startOfDay(dateFrom) : startOfDay(new Date(0));
+      const end = dateTo ? endOfDay(dateTo) : endOfDay(new Date(8640000000000000));
+      rows = rows.filter((r) =>
+        isWithinInterval(startOfDay(new Date(r.due_date)), { start, end })
+      );
+    }
+
+    // Keep only the earliest upcoming installment per loan when toggled on.
+    if (nextOnly) {
+      const earliest = new Map<string, (typeof rows)[number]>();
+      for (const r of rows) {
+        const existing = earliest.get(r.loan_id);
+        if (!existing || new Date(r.due_date) < new Date(existing.due_date)) {
+          earliest.set(r.loan_id, r);
+        }
+      }
+      rows = Array.from(earliest.values()).sort(
+        (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      );
+    }
+
+    return rows;
+  }, [upcomingPayments, upcomingProductId, dateFrom, dateTo, nextOnly]);
+
 
 
   return (
@@ -470,37 +510,118 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                  <Calendar size={18} className="shrink-0 text-primary" />
-                  Upcoming Payments
-                </CardTitle>
-                <CardDescription>Live — payments due in the next 7 days, filterable by loan house</CardDescription>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                    <Calendar size={18} className="shrink-0 text-primary" />
+                    Upcoming Payments
+                  </CardTitle>
+                  <CardDescription>Live — filter by loan house, payday window, or next installment</CardDescription>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Select
+                    value={upcomingProductId ?? "all"}
+                    onValueChange={(v) => setUpcomingProductId(v === "all" ? null : v)}
+                  >
+                    <SelectTrigger className="h-9 w-full sm:w-[200px]" aria-label="Filter upcoming payments by loan house">
+                      <SelectValue placeholder="All loan houses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All loan houses</SelectItem>
+                      {(upcomingProductOptions || []).map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
+                    <Link to="/admin/repayments">
+                      View All
+                      <ArrowUpRight size={14} className="ml-1" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Select
-                  value={upcomingProductId ?? "all"}
-                  onValueChange={(v) => setUpcomingProductId(v === "all" ? null : v)}
-                >
-                  <SelectTrigger className="h-9 w-full sm:w-[200px]" aria-label="Filter upcoming payments by loan house">
-                    <SelectValue placeholder="All loan houses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All loan houses</SelectItem>
-                    {(upcomingProductOptions || []).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
-                  <Link to="/admin/repayments">
-                    View All
-                    <ArrowUpRight size={14} className="ml-1" />
-                  </Link>
-                </Button>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "h-9 w-full justify-start text-left font-normal sm:w-auto",
+                        !dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarDays size={14} className="mr-2" />
+                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "From date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={setDateFrom}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "h-9 w-full justify-start text-left font-normal sm:w-auto",
+                        !dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarDays size={14} className="mr-2" />
+                      {dateTo ? format(dateTo, "MMM d, yyyy") : "To date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={setDateTo}
+                      disabled={dateFrom ? { before: dateFrom } : undefined}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                {(dateFrom || dateTo) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-muted-foreground"
+                    onClick={() => {
+                      setDateFrom(undefined);
+                      setDateTo(undefined);
+                    }}
+                  >
+                    <X size={14} className="mr-1" />
+                    Clear dates
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-2 sm:ml-auto">
+                  <Switch
+                    id="next-installment-only"
+                    checked={nextOnly}
+                    onCheckedChange={setNextOnly}
+                  />
+                  <Label htmlFor="next-installment-only" className="cursor-pointer text-sm text-muted-foreground">
+                    Next installment only
+                  </Label>
+                </div>
               </div>
             </div>
           </CardHeader>

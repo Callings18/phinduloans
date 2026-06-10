@@ -10,10 +10,10 @@ export function useAdminDashboardStats(loanProductId: string | null | undefined)
   });
 }
 
-export function useAdminUpcomingPayments(loanProductId: string | null | undefined) {
+export function useAdminUpcomingPayments(loanProductId: string | null | undefined, daysAhead = 90) {
   const id = loanProductId || null;
   return useQuery({
-    queryKey: ["upcoming-payments", id],
-    queryFn: () => fetchAdminUpcomingPayments(supabase, { loanProductId: id }),
+    queryKey: ["upcoming-payments", id, daysAhead],
+    queryFn: () => fetchAdminUpcomingPayments(supabase, { loanProductId: id, daysAhead }),
   });
 }
