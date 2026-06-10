@@ -510,37 +510,118 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                  <Calendar size={18} className="shrink-0 text-primary" />
-                  Upcoming Payments
-                </CardTitle>
-                <CardDescription>Live — payments due in the next 7 days, filterable by loan house</CardDescription>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                    <Calendar size={18} className="shrink-0 text-primary" />
+                    Upcoming Payments
+                  </CardTitle>
+                  <CardDescription>Live — filter by loan house, payday window, or next installment</CardDescription>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Select
+                    value={upcomingProductId ?? "all"}
+                    onValueChange={(v) => setUpcomingProductId(v === "all" ? null : v)}
+                  >
+                    <SelectTrigger className="h-9 w-full sm:w-[200px]" aria-label="Filter upcoming payments by loan house">
+                      <SelectValue placeholder="All loan houses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All loan houses</SelectItem>
+                      {(upcomingProductOptions || []).map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
+                    <Link to="/admin/repayments">
+                      View All
+                      <ArrowUpRight size={14} className="ml-1" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Select
-                  value={upcomingProductId ?? "all"}
-                  onValueChange={(v) => setUpcomingProductId(v === "all" ? null : v)}
-                >
-                  <SelectTrigger className="h-9 w-full sm:w-[200px]" aria-label="Filter upcoming payments by loan house">
-                    <SelectValue placeholder="All loan houses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All loan houses</SelectItem>
-                    {(upcomingProductOptions || []).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
-                  <Link to="/admin/repayments">
-                    View All
-                    <ArrowUpRight size={14} className="ml-1" />
-                  </Link>
-                </Button>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "h-9 w-full justify-start text-left font-normal sm:w-auto",
+                        !dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarDays size={14} className="mr-2" />
+                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "From date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={setDateFrom}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "h-9 w-full justify-start text-left font-normal sm:w-auto",
+                        !dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarDays size={14} className="mr-2" />
+                      {dateTo ? format(dateTo, "MMM d, yyyy") : "To date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={setDateTo}
+                      disabled={dateFrom ? { before: dateFrom } : undefined}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                {(dateFrom || dateTo) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-muted-foreground"
+                    onClick={() => {
+                      setDateFrom(undefined);
+                      setDateTo(undefined);
+                    }}
+                  >
+                    <X size={14} className="mr-1" />
+                    Clear dates
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-2 sm:ml-auto">
+                  <Switch
+                    id="next-installment-only"
+                    checked={nextOnly}
+                    onCheckedChange={setNextOnly}
+                  />
+                  <Label htmlFor="next-installment-only" className="cursor-pointer text-sm text-muted-foreground">
+                    Next installment only
+                  </Label>
+                </div>
               </div>
             </div>
           </CardHeader>
