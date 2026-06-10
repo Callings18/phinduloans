@@ -31,8 +31,8 @@ const createClearancePDF = (loan: LoanData, completionDate: Date): jsPDF => {
     doc.text(text, x, y);
   };
 
-  // Header - Brand magenta (RGB 244, 36, 140)
-  doc.setFillColor(244, 36, 140);
+  // Header - Brand magenta (RGB 194, 24, 91)
+  doc.setFillColor(194, 24, 91);
   doc.rect(0, 0, pageWidth, 50, 'F');
   
   doc.setTextColor(255, 255, 255);

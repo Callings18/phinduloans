@@ -31,8 +31,8 @@ interface LoanScheduleData {
 }
 
 const BRAND = {
-  primary: [244, 36, 140] as [number, number, number],
-  primaryDark: [244, 36, 140] as [number, number, number],
+  primary: [194, 24, 91] as [number, number, number],
+  primaryDark: [194, 24, 91] as [number, number, number],
   soft: [248, 238, 243] as [number, number, number],
   ink: [36, 16, 24] as [number, number, number],
   muted: [99, 88, 94] as [number, number, number],
