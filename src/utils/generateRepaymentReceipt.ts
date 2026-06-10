@@ -61,7 +61,6 @@ export const generateRepaymentReceipt = (data: RepaymentReceiptData): jsPDF => {
   doc.text(`Name: ${data.borrowerName}`, 20, 85);
   doc.text(`Phone: ${data.borrowerPhone}`, 20, 92);
   doc.text(`Loan Reference: ${data.loanReference}`, pageWidth / 2, 85);
-  doc.text(`Email: ${data.borrowerEmail}`, pageWidth / 2, 92);
 
   // Payment Details Section
   doc.setFont('helvetica', 'bold');
