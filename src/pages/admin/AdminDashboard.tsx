@@ -1,4 +1,12 @@
 import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import AdminLayout from "@/components/admin/AdminLayout";
 import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
 import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
@@ -129,6 +137,36 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     qp.set("id", loanId);
     navigate(`/admin/loans?${qp.toString()}`);
   };
+
+  // Independent loan-house filter for the Upcoming Payments widget.
+  const [upcomingProductId, setUpcomingProductId] = useState<string | null>(null);
+
+  const { data: upcomingProductOptions } = useQuery({
+    queryKey: ["active-loan-products-upcoming"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("id, name, product_code")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return (data || []) as { id: string; name: string; product_code: string | null }[];
+    },
+  });
+
+  const filteredUpcomingPayments = useMemo(() => {
+    const rows = (upcomingPayments || []) as Array<{
+      id: string;
+      due_date: string;
+      amount: number;
+      loan_id: string;
+      loan?: { full_name?: string | null; loan_product_id?: string | null } | null;
+    }>;
+    if (!upcomingProductId) return rows;
+    return rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
+  }, [upcomingPayments, upcomingProductId]);
+
 
   return (
     <AdminLayout>
@@ -438,14 +476,32 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                   <Calendar size={18} className="shrink-0 text-primary" />
                   Upcoming Payments
                 </CardTitle>
-                <CardDescription>Live — all payments due in the next 7 days, across every loan type</CardDescription>
+                <CardDescription>Live — payments due in the next 7 days, filterable by loan house</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
-                <Link to="/admin/repayments">
-                  View All
-                  <ArrowUpRight size={14} className="ml-1" />
-                </Link>
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Select
+                  value={upcomingProductId ?? "all"}
+                  onValueChange={(v) => setUpcomingProductId(v === "all" ? null : v)}
+                >
+                  <SelectTrigger className="h-9 w-full sm:w-[200px]" aria-label="Filter upcoming payments by loan house">
+                    <SelectValue placeholder="All loan houses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All loan houses</SelectItem>
+                    {(upcomingProductOptions || []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
+                  <Link to="/admin/repayments">
+                    View All
+                    <ArrowUpRight size={14} className="ml-1" />
+                  </Link>
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -458,9 +514,9 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                 <Loader2 className="h-8 w-8 animate-spin opacity-70" />
                 <p className="text-sm">Loading payments…</p>
               </div>
-            ) : upcomingPayments && upcomingPayments.length > 0 ? (
+            ) : filteredUpcomingPayments && filteredUpcomingPayments.length > 0 ? (
               <div className="space-y-3">
-                {upcomingPayments.slice(0, 8).map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
+                {filteredUpcomingPayments.slice(0, 8).map((payment: { id: string; due_date: string; amount: number; loan_id: string; loan?: { full_name?: string | null } | null }) => {
                   const daysUntil = differenceInDays(startOfDay(new Date(payment.due_date)), startOfDay(new Date()));
                   const urgencyClass =
                     daysUntil === 0
@@ -501,16 +557,16 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                     </div>
                   );
                 })}
-                {upcomingPayments.length > 8 && (
+                {filteredUpcomingPayments.length > 8 && (
                   <p className="pt-1 text-center text-xs text-muted-foreground">
-                    +{upcomingPayments.length - 8} more due in the next 7 days — see Repayments
+                    +{filteredUpcomingPayments.length - 8} more due in the next 7 days — see Repayments
                   </p>
                 )}
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-                <p>No upcoming payments</p>
+                <p>{upcomingProductId ? "No upcoming payments for this loan house" : "No upcoming payments"}</p>
               </div>
             )}
           </CardContent>

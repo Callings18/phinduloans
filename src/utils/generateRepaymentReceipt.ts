@@ -29,7 +29,7 @@ export const generateRepaymentReceipt = (data: RepaymentReceiptData): jsPDF => {
   const companyPhone = data.companyPhone || '+260 967 713 001';
 
   // Header
-  doc.setFillColor(107, 26, 58);
+  doc.setFillColor(244, 36, 140);
   doc.rect(0, 0, pageWidth, 45, 'F');
 
   doc.setTextColor(255, 255, 255);
@@ -61,7 +61,6 @@ export const generateRepaymentReceipt = (data: RepaymentReceiptData): jsPDF => {
   doc.text(`Name: ${data.borrowerName}`, 20, 85);
   doc.text(`Phone: ${data.borrowerPhone}`, 20, 92);
   doc.text(`Loan Reference: ${data.loanReference}`, pageWidth / 2, 85);
-  doc.text(`Email: ${data.borrowerEmail}`, pageWidth / 2, 92);
 
   // Payment Details Section
   doc.setFont('helvetica', 'bold');
@@ -85,7 +84,7 @@ export const generateRepaymentReceipt = (data: RepaymentReceiptData): jsPDF => {
   doc.text(`${data.installmentNumber} of ${data.totalInstallments}`, col1X + 45, detailsY + 10);
 
   // Amount Box
-  doc.setFillColor(107, 26, 58);
+  doc.setFillColor(244, 36, 140);
   doc.rect(15, detailsY + 25, pageWidth - 30, 30, 'F');
 
   doc.setTextColor(255, 255, 255);
@@ -129,7 +128,7 @@ export const generateRepaymentReceipt = (data: RepaymentReceiptData): jsPDF => {
 
   // Footer
   doc.setFontSize(9);
-  doc.setTextColor(107, 26, 58);
+  doc.setTextColor(244, 36, 140);
   doc.text('Thank you for your payment!', pageWidth / 2, 270, { align: 'center' });
   doc.text(`${companyName} | ${companyAddress} | ${companyPhone}`, pageWidth / 2, 277, { align: 'center' });
   doc.text(`Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm')}`, pageWidth / 2, 284, { align: 'center' });

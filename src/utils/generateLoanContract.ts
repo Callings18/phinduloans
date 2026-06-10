@@ -356,8 +356,8 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
-  doc.setFillColor(107, 26, 58);
+  // Header - Brand magenta (RGB 244, 36, 140)
+  doc.setFillColor(244, 36, 140);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
   doc.setTextColor(255, 255, 255);
@@ -422,7 +422,7 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
   for (let i = 1; i <= lastPage; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(107, 26, 58);
+    doc.setTextColor(244, 36, 140);
     centerText('Phindu Credit Solutions Limited - Money When You Need It', 285, 8);
     centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', 289, 8);
     doc.setTextColor(0, 0, 0);
@@ -510,8 +510,8 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     yPos += 5;
   };
 
-  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
-  doc.setFillColor(107, 26, 58);
+  // Header - Brand magenta (RGB 244, 36, 140)
+  doc.setFillColor(244, 36, 140);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
   doc.setTextColor(255, 255, 255);
@@ -734,7 +734,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
   for (let i = 1; i <= lastPage; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(107, 26, 58);
+    doc.setTextColor(244, 36, 140);
     centerText('Phindu Credit Solutions Limited - Money When You Need It', 285, 8);
     centerText('Contact: info@phinducredit.co.zm | www.phinducredit.co.zm', 289, 8);
     doc.setTextColor(0, 0, 0);
