@@ -157,7 +157,11 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
   const filteredUpcomingPayments = useMemo(() => {
     const rows = (upcomingPayments || []) as Array<{
-      loan?: { loan_product_id?: string | null } | null;
+      id: string;
+      due_date: string;
+      amount: number;
+      loan_id: string;
+      loan?: { full_name?: string | null; loan_product_id?: string | null } | null;
     }>;
     if (!upcomingProductId) return rows;
     return rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
