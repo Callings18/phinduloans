@@ -7,6 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import AdminLayout from "@/components/admin/AdminLayout";
 import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
 import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
