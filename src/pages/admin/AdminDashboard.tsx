@@ -147,6 +147,11 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
   // Independent loan-house filter for the Upcoming Payments widget.
   const [upcomingProductId, setUpcomingProductId] = useState<string | null>(null);
+  // Date-range filter for narrowing to a specific upcoming payday window.
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+  // Toggle to show only the next (earliest) installment per borrower.
+  const [nextOnly, setNextOnly] = useState(false);
 
   const { data: upcomingProductOptions } = useQuery({
     queryKey: ["active-loan-products-upcoming"],
