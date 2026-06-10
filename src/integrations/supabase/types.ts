@@ -4293,6 +4293,7 @@ export type Database = {
         Returns: boolean
       }
       is_non_working_day: { Args: { d: string }; Returns: boolean }
+      is_staff: { Args: { _user_id: string }; Returns: boolean }
       loan_product_code_for_loan: {
         Args: { p_loan_id: string }
         Returns: string
