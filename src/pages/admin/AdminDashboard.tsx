@@ -472,14 +472,32 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                   <Calendar size={18} className="shrink-0 text-primary" />
                   Upcoming Payments
                 </CardTitle>
-                <CardDescription>Live — all payments due in the next 7 days, across every loan type</CardDescription>
+                <CardDescription>Live — payments due in the next 7 days, filterable by loan house</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
-                <Link to="/admin/repayments">
-                  View All
-                  <ArrowUpRight size={14} className="ml-1" />
-                </Link>
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Select
+                  value={upcomingProductId ?? "all"}
+                  onValueChange={(v) => setUpcomingProductId(v === "all" ? null : v)}
+                >
+                  <SelectTrigger className="h-9 w-full sm:w-[200px]" aria-label="Filter upcoming payments by loan house">
+                    <SelectValue placeholder="All loan houses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All loan houses</SelectItem>
+                    {(upcomingProductOptions || []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="ghost" size="sm" asChild className="shrink-0 self-start text-primary hover:text-primary sm:self-auto">
+                  <Link to="/admin/repayments">
+                    View All
+                    <ArrowUpRight size={14} className="ml-1" />
+                  </Link>
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
