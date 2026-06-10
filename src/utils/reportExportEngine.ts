@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 
-const BRAND_COLOR: [number, number, number] = [200, 50, 120];
+const BRAND_COLOR: [number, number, number] = [244, 36, 140]; // Brand magenta #F4248C
 const formatK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface ReportExportOptions {
