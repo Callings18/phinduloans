@@ -168,16 +168,44 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
   });
 
   const filteredUpcomingPayments = useMemo(() => {
-    const rows = (upcomingPayments || []) as Array<{
+    let rows = (upcomingPayments || []) as Array<{
       id: string;
       due_date: string;
       amount: number;
       loan_id: string;
       loan?: { full_name?: string | null; loan_product_id?: string | null } | null;
     }>;
-    if (!upcomingProductId) return rows;
-    return rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
-  }, [upcomingPayments, upcomingProductId]);
+
+    if (upcomingProductId) {
+      rows = rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
+    }
+
+    // Date-range filter (inclusive) on the installment due date.
+    if (dateFrom || dateTo) {
+      const start = dateFrom ? startOfDay(dateFrom) : startOfDay(new Date(0));
+      const end = dateTo ? endOfDay(dateTo) : endOfDay(new Date(8640000000000000));
+      rows = rows.filter((r) =>
+        isWithinInterval(startOfDay(new Date(r.due_date)), { start, end })
+      );
+    }
+
+    // Keep only the earliest upcoming installment per loan when toggled on.
+    if (nextOnly) {
+      const earliest = new Map<string, (typeof rows)[number]>();
+      for (const r of rows) {
+        const existing = earliest.get(r.loan_id);
+        if (!existing || new Date(r.due_date) < new Date(existing.due_date)) {
+          earliest.set(r.loan_id, r);
+        }
+      }
+      rows = Array.from(earliest.values()).sort(
+        (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      );
+    }
+
+    return rows;
+  }, [upcomingPayments, upcomingProductId, dateFrom, dateTo, nextOnly]);
+
 
 
   return (
