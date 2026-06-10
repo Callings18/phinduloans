@@ -63,7 +63,7 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   let yPos = 20;
 
   // Company Header - App theme color
-  doc.setFillColor(244, 36, 140);
+  doc.setFillColor(194, 24, 91);
   doc.rect(0, 0, pageWidth, 30, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
