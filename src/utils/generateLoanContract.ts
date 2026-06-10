@@ -356,7 +356,7 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  // Header - Brand magenta (RGB 244, 36, 140)
   doc.setFillColor(244, 36, 140);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
@@ -510,7 +510,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     yPos += 5;
   };
 
-  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  // Header - Brand magenta (RGB 244, 36, 140)
   doc.setFillColor(244, 36, 140);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
