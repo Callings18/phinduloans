@@ -138,6 +138,32 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     navigate(`/admin/loans?${qp.toString()}`);
   };
 
+  // Independent loan-house filter for the Upcoming Payments widget.
+  const [upcomingProductId, setUpcomingProductId] = useState<string | null>(null);
+
+  const { data: upcomingProductOptions } = useQuery({
+    queryKey: ["active-loan-products-upcoming"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_products")
+        .select("id, name, product_code")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return (data || []) as { id: string; name: string; product_code: string | null }[];
+    },
+  });
+
+  const filteredUpcomingPayments = useMemo(() => {
+    const rows = (upcomingPayments || []) as Array<{
+      loan?: { loan_product_id?: string | null } | null;
+    }>;
+    if (!upcomingProductId) return rows;
+    return rows.filter((r) => r.loan?.loan_product_id === upcomingProductId);
+  }, [upcomingPayments, upcomingProductId]);
+
+
   return (
     <AdminLayout>
       <div className="space-y-6">
