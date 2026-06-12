@@ -575,6 +575,26 @@ function App() {
                         </ErrorBoundary>
                       }
                     />
+                    <Route
+                      path="ai-agents"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminAIAgents />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="ai-agents/:agentKey"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminAIAgentDetail />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
                   </Route>
                   <Route path="*" element={<NotFound />} />
                 </Routes>
