@@ -98,6 +98,7 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   if (!creds.apiToken) throw new Error("Primary SMS provider is not configured");
 
   const phone = formatPhoneNumber(to).replace("+", "");
+  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, tokenLen=${creds.apiToken.length}, urlHost=${new URL(creds.apiUrl).host}`);
   const response = await fetch(`${creds.apiUrl}/sms/send`, {
     method: "POST",
     headers: {
@@ -119,8 +120,8 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
 
   const deliveryStatus = String(result?.data?.status || result?.status || "").toLowerCase();
   if (!response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(deliveryStatus)) {
-    console.error(`[OTP] Primary provider failed with status ${response.status}/${deliveryStatus || "unknown"}`);
-    throw new Error("Primary SMS delivery failed");
+    console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
+    throw new Error("SMS provider rejected the OTP. Please verify the ExciteSMS token, approved sender ID, and account balance.");
   }
 
   return {
@@ -191,12 +192,11 @@ async function deliverOtpSms(to: string, message: string, settings: SmsSettings,
   const preferredExciteRoute = preferBackup && settings.excitesms.secondary ? settings.excitesms.secondary : settings.excitesms.primary;
   const fallbackExciteRoute = preferredExciteRoute === settings.excitesms.secondary ? settings.excitesms.primary : settings.excitesms.secondary;
 
-  if (preferBackup && hasBackupProvider(settings)) {
+  if (preferBackup && isUsableAfricasTalkingBackup(settings)) {
     try {
       return await sendViaAfricasTalking(to, message, settings);
     } catch (error) {
-      console.error("[OTP] Backup provider failed; retrying with primary provider", error);
-      return await sendViaExciteSms(to, message, preferredExciteRoute);
+      console.error("[OTP] Backup provider failed; retrying ExciteSMS routes", error);
     }
   }
 
@@ -207,7 +207,7 @@ async function deliverOtpSms(to: string, message: string, settings: SmsSettings,
       console.error("[OTP] Preferred ExciteSMS route failed; retrying alternate ExciteSMS route", error);
       return await sendViaExciteSms(to, message, fallbackExciteRoute);
     }
-    if (!hasBackupProvider(settings)) throw error;
+    if (!isUsableAfricasTalkingBackup(settings)) throw error;
     console.error("[OTP] Primary provider failed; retrying with backup provider", error);
     return await sendViaAfricasTalking(to, message, settings);
   }
