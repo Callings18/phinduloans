@@ -211,11 +211,6 @@ export default function FloatingAssistant() {
               onClick: () => {
                 setAgentKey(f.agent_key === "senior_engineer" ? "senior_engineer" : "guardian");
                 setOpen(true);
-                setConvos((c) => {
-                  const key = (f.agent_key === "senior_engineer" ? "senior_engineer" : "guardian") as AgentKey;
-                  // seed an assistant message describing the alert if convo empty
-                  return c;
-                });
               },
             },
           });
