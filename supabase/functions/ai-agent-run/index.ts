@@ -37,20 +37,25 @@ async function collectGuardianData(supabase: ReturnType<typeof createClient>) {
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
 
-  const [activeLoans, allLoans, repayments, recentDisb] = await Promise.all([
-    supabase.from("loan_applications").select("id, loan_amount, outstanding_balance, status, next_payment_date").eq("status", "active"),
+  const win30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+
+  const [activeLoans, allLoans, schedule, recentReps, recentDisb] = await Promise.all([
+    supabase.from("loan_applications").select("id, status").eq("status", "active"),
     supabase.from("loan_applications").select("id, status"),
-    supabase.from("loan_repayments").select("id, amount, status, due_date, paid_date").gte("due_date", new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)),
+    // Outstanding & overdue are derived from the unpaid repayment schedule.
+    supabase.from("loan_repayments").select("amount, status, due_date").neq("status", "paid").eq("is_reversed", false),
+    // Collection rate over the last 30 days of scheduled installments.
+    supabase.from("loan_repayments").select("amount, status, due_date").gte("due_date", win30).lte("due_date", todayIso).eq("is_reversed", false),
     supabase.from("disbursements").select("id, amount, status, created_at").gte("created_at", new Date(Date.now() - 7 * 864e5).toISOString()),
   ]);
 
   const active = activeLoans.data ?? [];
-  const reps = repayments.data ?? [];
-  const overdue = reps.filter((r: any) => r.status !== "paid" && r.due_date < todayIso);
-  const dueToday = reps.filter((r: any) => r.due_date === todayIso && r.status !== "paid");
-  const paidLast30 = reps.filter((r: any) => r.status === "paid");
-  const expectedLast30 = reps.length;
-  const outstanding = active.reduce((s: number, l: any) => s + Number(l.outstanding_balance || 0), 0);
+  const unpaid = schedule.data ?? [];
+  const overdue = unpaid.filter((r: any) => r.due_date < todayIso);
+  const dueToday = unpaid.filter((r: any) => r.due_date === todayIso);
+  const due30 = recentReps.data ?? [];
+  const paid30 = due30.filter((r: any) => r.status === "paid");
+  const outstanding = unpaid.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
   const overdueAmount = overdue.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
 
   return {
@@ -62,7 +67,7 @@ async function collectGuardianData(supabase: ReturnType<typeof createClient>) {
     overdue_count: overdue.length,
     overdue_amount: Math.round(overdueAmount),
     par_ratio: outstanding > 0 ? Number((overdueAmount / outstanding).toFixed(3)) : 0,
-    collection_rate_30d: expectedLast30 > 0 ? Number((paidLast30.length / expectedLast30).toFixed(3)) : null,
+    collection_rate_30d: due30.length > 0 ? Number((paid30.length / due30.length).toFixed(3)) : null,
     disbursements_7d: (recentDisb.data ?? []).length,
     disbursed_amount_7d: Math.round((recentDisb.data ?? []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)),
   };
