@@ -356,7 +356,7 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - Brand magenta (RGB 107, 25, 58)
+  // Header - Brand burgundy (RGB 107, 25, 58)
   doc.setFillColor(107, 25, 58);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
@@ -510,7 +510,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     yPos += 5;
   };
 
-  // Header - Brand magenta (RGB 107, 25, 58)
+  // Header - Brand burgundy (RGB 107, 25, 58)
   doc.setFillColor(107, 25, 58);
   doc.rect(0, 0, pageWidth, 40, 'F');
   

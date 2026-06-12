@@ -27,7 +27,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
 
     // Header - App theme color
     doc.setFontSize(22);
-    doc.setTextColor(107, 25, 58); // Brand magenta (matches loan schedule)
+    doc.setTextColor(107, 25, 58); // Brand burgundy (matches loan schedule)
     doc.text("PHINDU FINANCE", 14, 22);
 
     doc.setFontSize(10);
