@@ -24,6 +24,12 @@ type SmsSendResult = {
   providerResponse: Record<string, unknown>;
 };
 
+type JsonRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): JsonRecord => {
+  return value && typeof value === "object" ? value as JsonRecord : {};
+};
+
 function formatPhoneNumber(phone: string): string {
   const formatted = phone.trim().replace(/\s+/g, "").replace(/[^0-9+]/g, "");
 
@@ -55,7 +61,7 @@ function isUsableTwilioBackup(settings: SmsSettings): boolean {
   return Boolean(accountSid && authToken && phoneNumber);
 }
 
-async function getSmsSettings(supabase: any): Promise<SmsSettings> {
+async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promise<SmsSettings> {
   const { data: providersData } = await supabase
     .from("system_settings")
     .select("value")
