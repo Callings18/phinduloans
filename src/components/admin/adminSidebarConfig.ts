@@ -127,4 +127,10 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: ToggleLeft, label: "Feature flags", path: "/admin/feature-flags", adminOnly: true },
     ],
   },
+  {
+    label: "AI Agents",
+    items: [
+      { icon: Bot, label: "AI Agents", path: "/admin/ai-agents", adminOnly: true, betaKey: "ai_agents_enabled" },
+    ],
+  },
 ];
