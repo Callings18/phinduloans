@@ -8,7 +8,7 @@ import autoTable from "jspdf-autotable";
 import { formatZMW, getMonthName } from "./payrollCalculations";
 import { format } from "date-fns";
 
-const BRAND_COLOR: [number, number, number] = [194, 24, 91]; // Brand magenta #C2185B
+const BRAND_COLOR: [number, number, number] = [107, 25, 58]; // Brand magenta #C2185B
 const DARK_COLOR: [number, number, number] = [30, 30, 30];
 const LIGHT_BG: [number, number, number] = [248, 245, 246];
 const WHITE: [number, number, number] = [255, 255, 255];
