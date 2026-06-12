@@ -128,15 +128,17 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   });
 
   const responseText = await response.text();
-  let result: any;
+  let parsedResult: unknown;
   try {
-    result = JSON.parse(responseText);
+    parsedResult = JSON.parse(responseText);
   } catch {
     console.error(`[OTP] Primary provider returned non-JSON (${response.status})`);
     throw new Error("Primary SMS delivery failed");
   }
+  const result = asRecord(parsedResult);
+  const data = asRecord(result.data);
 
-  const deliveryStatus = String(result?.data?.status || result?.status || "").toLowerCase();
+  const deliveryStatus = String(data.status || result.status || "").toLowerCase();
   if (!response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(deliveryStatus)) {
     console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
     throw new Error("SMS provider rejected the OTP. Please verify the ExciteSMS token, approved sender ID, and account balance.");
@@ -150,13 +152,13 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
       status: result?.status,
       provider_message: result?.message,
       data: {
-        id: result?.data?.id,
-        uid: result?.data?.uid,
-        to: result?.data?.to,
-        from: result?.data?.from,
-        status: result?.data?.status,
-        cost: result?.data?.cost,
-        sms_count: result?.data?.sms_count,
+        id: data.id,
+        uid: data.uid,
+        to: data.to,
+        from: data.from,
+        status: data.status,
+        cost: data.cost,
+        sms_count: data.sms_count,
       },
     },
   };
