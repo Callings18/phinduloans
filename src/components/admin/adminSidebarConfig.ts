@@ -27,6 +27,7 @@ import {
   Percent,
   ToggleLeft,
   FileEdit,
+  Bot,
 } from "lucide-react";
 
 /** Optional permission gate: item visible if can(module, action) or admin fallback handled in sidebar. */
