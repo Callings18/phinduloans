@@ -50,6 +50,8 @@ import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
+import AdminAIAgents from "./pages/admin/AdminAIAgents";
+import AdminAIAgentDetail from "./pages/admin/AdminAIAgentDetail";
 import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
 import HouseLayout from "./components/admin/house/HouseLayout";
 import HouseDashboardPage from "./pages/admin/houses/HouseDashboardPage";
@@ -569,6 +571,26 @@ function App() {
                         <ErrorBoundary>
                           <PermissionRoute adminOnly>
                             <AdminFeatureFlags />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="ai-agents"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminAIAgents />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="ai-agents/:agentKey"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminAIAgentDetail />
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
