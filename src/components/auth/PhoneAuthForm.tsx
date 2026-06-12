@@ -234,11 +234,12 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
                 inputMode="numeric"
                 placeholder="123456/78/9"
                 value={nrcNumber}
-                onChange={(e) => setNrcNumber(e.target.value)}
+                onChange={(e) => setNrcNumber(formatNrc(e.target.value))}
                 className="pl-11"
               />
             </div>
             {errors.nrc && <p className="text-sm text-destructive">{errors.nrc}</p>}
+            <p className="text-xs text-muted-foreground">Just type the digits — slashes are added automatically</p>
           </div>
         )}
         <Button
