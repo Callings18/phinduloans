@@ -599,6 +599,7 @@ function App() {
                   </Route>
                   <Route path="*" element={<NotFound />} />
                 </Routes>
+                <FloatingAssistant />
               </BrowserRouter>
             </TooltipProvider>
           </AuthProvider>
