@@ -115,6 +115,158 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_agent_findings: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          agent_key: string
+          body: string | null
+          category: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          recommendation: string | null
+          run_id: string | null
+          severity: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          agent_key: string
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          recommendation?: string | null
+          run_id?: string | null
+          severity?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          agent_key?: string
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          recommendation?: string | null
+          run_id?: string | null
+          severity?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_findings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agent_runs: {
+        Row: {
+          agent_key: string
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          metadata: Json
+          started_at: string
+          status: string
+          summary: string | null
+          tokens_used: number | null
+          trigger: string
+          triggered_by: string | null
+        }
+        Insert: {
+          agent_key: string
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          metadata?: Json
+          started_at?: string
+          status?: string
+          summary?: string | null
+          tokens_used?: number | null
+          trigger?: string
+          triggered_by?: string | null
+        }
+        Update: {
+          agent_key?: string
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          metadata?: Json
+          started_at?: string
+          status?: string
+          summary?: string | null
+          tokens_used?: number | null
+          trigger?: string
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
+      ai_agents: {
+        Row: {
+          agent_key: string
+          autonomy_level: string
+          category: string
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_enabled: boolean
+          last_run_at: string | null
+          name: string
+          schedule_cron: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_key: string
+          autonomy_level?: string
+          category?: string
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_enabled?: boolean
+          last_run_at?: string | null
+          name: string
+          schedule_cron?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_key?: string
+          autonomy_level?: string
+          category?: string
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_enabled?: boolean
+          last_run_at?: string | null
+          name?: string
+          schedule_cron?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       application_documents: {
         Row: {
           application_id: string
@@ -3936,6 +4088,36 @@ export type Database = {
         }
         Relationships: []
       }
+      system_telemetry: {
+        Row: {
+          context: Json
+          created_at: string
+          event_type: string
+          id: string
+          message: string
+          severity: string
+          source: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          event_type: string
+          id?: string
+          message: string
+          severity?: string
+          source: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string
+          severity?: string
+          source?: string
+        }
+        Relationships: []
+      }
       uat_signoffs: {
         Row: {
           category: string
@@ -4407,6 +4589,7 @@ export type Database = {
         | "collections_officer"
         | "auditor"
         | "support"
+        | "ai_agent"
       employment_type: "employed" | "self_employed" | "contract" | "other"
       loan_borrower_role:
         | "PRIMARY_BORROWER"
@@ -4564,6 +4747,7 @@ export const Constants = {
         "collections_officer",
         "auditor",
         "support",
+        "ai_agent",
       ],
       employment_type: ["employed", "self_employed", "contract", "other"],
       loan_borrower_role: [
