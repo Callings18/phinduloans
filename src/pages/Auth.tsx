@@ -7,6 +7,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { Sparkles, Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 
 const Auth = () => {
@@ -24,6 +26,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [staffLoading, setStaffLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const { user, isLoading, isStaff, signIn } = useAuth();
   const { toast } = useToast();
@@ -60,6 +63,38 @@ const Auth = () => {
     }
     toast({ title: "Welcome back!", description: "Redirecting to admin dashboard." });
     navigate(safeNextPath || "/admin");
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: `${window.location.origin}${safeNextPath || "/dashboard"}`,
+      });
+
+      if (result.error) {
+        toast({
+          title: "Google sign-in failed",
+          description: result.error.message || "Please try again.",
+          variant: "destructive",
+        });
+        setGoogleLoading(false);
+        return;
+      }
+
+      if (result.redirected) return;
+
+      const { data } = await supabase.auth.getUser();
+      toast({ title: "Welcome!", description: "Redirecting to your dashboard." });
+      navigate(safeNextPath || (data.user ? "/dashboard" : "/auth"), { replace: true });
+    } catch (error) {
+      toast({
+        title: "Google sign-in failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+      setGoogleLoading(false);
+    }
   };
 
   if (isLoading) {
@@ -110,6 +145,23 @@ const Auth = () => {
               </TabsList>
 
               <TabsContent value="borrower" className="mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-12 text-base mb-6 gap-2"
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading}
+                >
+                  {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleIcon />}
+                  Continue with Google
+                </Button>
+
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">or</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+
                 <PhoneAuthForm
                   purpose={isLogin ? "login" : "signup"}
                   onSuccess={handlePhoneAuthSuccess}
@@ -194,5 +246,16 @@ const Auth = () => {
     </div>
   );
 };
+
+function GoogleIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8c1.8-4.4 6.1-7.5 11.1-7.5 3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.5-5.2l-6.2-5.2c-2 1.4-4.5 2.4-7.3 2.4-5.3 0-9.7-3.4-11.3-8L6 32.6C9.4 39.4 16.1 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.2 5.2C40.9 36 44 30.5 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+  );
+}
 
 export default Auth;
