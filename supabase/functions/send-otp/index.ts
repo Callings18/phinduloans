@@ -11,8 +11,10 @@ interface OTPRequest {
   purpose?: "signup" | "login" | "verify";
 }
 
+type ExciteSmsRoute = { apiUrl: string; apiToken: string; senderId: string; label: string };
+
 type SmsSettings = {
-  excitesms: { apiUrl: string; apiToken: string; senderId: string };
+  excitesms: { primary: ExciteSmsRoute; secondary?: ExciteSmsRoute };
   africastalking: { apiKey: string; username: string; senderId: string };
 };
 
@@ -55,9 +57,20 @@ async function getSmsSettings(supabase: any): Promise<SmsSettings> {
 
   return {
     excitesms: {
-      apiUrl: rawApiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com").replace(/\/+$/, ""),
-      apiToken: providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
-      senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "PhinduLoans",
+      primary: {
+        apiUrl: rawApiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com").replace(/\/+$/, ""),
+        apiToken: providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "",
+        senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "PhinduLoans",
+        label: "primary",
+      },
+      secondary: config.excitesms_api_token && config.excitesms_api_token !== providers.excitesms_api_token
+        ? {
+            apiUrl: rawApiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com").replace(/\/+$/, ""),
+            apiToken: config.excitesms_api_token,
+            senderId: config.excitesms_sender_id || "ExciteSMS",
+            label: "secondary",
+          }
+        : undefined,
     },
     africastalking: {
       apiKey: providers.africastalking_api_key || config.africastalking_api_key || Deno.env.get("AFRICASTALKING_API_KEY") || "",
@@ -71,8 +84,8 @@ function hasBackupProvider(settings: SmsSettings): boolean {
   return Boolean(settings.africastalking.apiKey && settings.africastalking.username);
 }
 
-async function sendViaExciteSms(to: string, message: string, settings: SmsSettings): Promise<SmsSendResult> {
-  const creds = settings.excitesms;
+async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRoute): Promise<SmsSendResult> {
+  const creds = route;
   if (!creds.apiToken) throw new Error("Primary SMS provider is not configured");
 
   const phone = formatPhoneNumber(to).replace("+", "");
@@ -105,6 +118,7 @@ async function sendViaExciteSms(to: string, message: string, settings: SmsSettin
     provider: "excitesms",
     providerResponse: {
       provider: "excitesms",
+      route: route.label,
       status: result?.status,
       provider_message: result?.message,
       data: {
@@ -165,18 +179,25 @@ async function sendViaAfricasTalking(to: string, message: string, settings: SmsS
 }
 
 async function deliverOtpSms(to: string, message: string, settings: SmsSettings, preferBackup: boolean): Promise<SmsSendResult> {
+  const preferredExciteRoute = preferBackup && settings.excitesms.secondary ? settings.excitesms.secondary : settings.excitesms.primary;
+  const fallbackExciteRoute = preferredExciteRoute === settings.excitesms.secondary ? settings.excitesms.primary : settings.excitesms.secondary;
+
   if (preferBackup && hasBackupProvider(settings)) {
     try {
       return await sendViaAfricasTalking(to, message, settings);
     } catch (error) {
       console.error("[OTP] Backup provider failed; retrying with primary provider", error);
-      return await sendViaExciteSms(to, message, settings);
+      return await sendViaExciteSms(to, message, preferredExciteRoute);
     }
   }
 
   try {
-    return await sendViaExciteSms(to, message, settings);
+    return await sendViaExciteSms(to, message, preferredExciteRoute);
   } catch (error) {
+    if (fallbackExciteRoute) {
+      console.error("[OTP] Preferred ExciteSMS route failed; retrying alternate ExciteSMS route", error);
+      return await sendViaExciteSms(to, message, fallbackExciteRoute);
+    }
     if (!hasBackupProvider(settings)) throw error;
     console.error("[OTP] Primary provider failed; retrying with backup provider", error);
     return await sendViaAfricasTalking(to, message, settings);
