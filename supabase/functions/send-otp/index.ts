@@ -16,11 +16,18 @@ type ExciteSmsRoute = { apiUrl: string; apiToken: string; senderId: string; labe
 type SmsSettings = {
   excitesms: { primary: ExciteSmsRoute; secondary?: ExciteSmsRoute };
   africastalking: { apiKey: string; username: string; senderId: string };
+  twilio: { accountSid: string; authToken: string; phoneNumber: string };
 };
 
 type SmsSendResult = {
-  provider: "excitesms" | "africastalking";
+  provider: "excitesms" | "africastalking" | "twilio";
   providerResponse: Record<string, unknown>;
+};
+
+type JsonRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): JsonRecord => {
+  return value && typeof value === "object" ? value as JsonRecord : {};
 };
 
 function formatPhoneNumber(phone: string): string {
@@ -49,7 +56,12 @@ function isUsableAfricasTalkingBackup(settings: SmsSettings): boolean {
   return Boolean(apiKey && username && !username.includes("@"));
 }
 
-async function getSmsSettings(supabase: any): Promise<SmsSettings> {
+function isUsableTwilioBackup(settings: SmsSettings): boolean {
+  const { accountSid, authToken, phoneNumber } = settings.twilio;
+  return Boolean(accountSid && authToken && phoneNumber);
+}
+
+async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promise<SmsSettings> {
   const { data: providersData } = await supabase
     .from("system_settings")
     .select("value")
@@ -91,6 +103,11 @@ async function getSmsSettings(supabase: any): Promise<SmsSettings> {
       username: providers.africastalking_username || config.africastalking_username || Deno.env.get("AFRICASTALKING_USERNAME") || "",
       senderId: providers.africastalking_sender_id || config.africastalking_sender_id || Deno.env.get("AFRICASTALKING_SENDER_ID") || "PHINDU",
     },
+    twilio: {
+      accountSid: (providers.twilio_account_sid || config.twilio_sid || Deno.env.get("TWILIO_ACCOUNT_SID") || "").trim(),
+      authToken: (providers.twilio_auth_token || config.twilio_token || Deno.env.get("TWILIO_AUTH_TOKEN") || "").trim(),
+      phoneNumber: (providers.twilio_phone_number || config.twilio_phone_number || Deno.env.get("TWILIO_PHONE_NUMBER") || "").trim(),
+    },
   };
 }
 
@@ -111,15 +128,17 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   });
 
   const responseText = await response.text();
-  let result: any;
+  let parsedResult: unknown;
   try {
-    result = JSON.parse(responseText);
+    parsedResult = JSON.parse(responseText);
   } catch {
     console.error(`[OTP] Primary provider returned non-JSON (${response.status})`);
     throw new Error("Primary SMS delivery failed");
   }
+  const result = asRecord(parsedResult);
+  const data = asRecord(result.data);
 
-  const deliveryStatus = String(result?.data?.status || result?.status || "").toLowerCase();
+  const deliveryStatus = String(data.status || result.status || "").toLowerCase();
   if (!response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(deliveryStatus)) {
     console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
     throw new Error("SMS provider rejected the OTP. Please verify the ExciteSMS token, approved sender ID, and account balance.");
@@ -133,13 +152,13 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
       status: result?.status,
       provider_message: result?.message,
       data: {
-        id: result?.data?.id,
-        uid: result?.data?.uid,
-        to: result?.data?.to,
-        from: result?.data?.from,
-        status: result?.data?.status,
-        cost: result?.data?.cost,
-        sms_count: result?.data?.sms_count,
+        id: data.id,
+        uid: data.uid,
+        to: data.to,
+        from: data.from,
+        status: data.status,
+        cost: data.cost,
+        sms_count: data.sms_count,
       },
     },
   };
@@ -189,9 +208,57 @@ async function sendViaAfricasTalking(to: string, message: string, settings: SmsS
   };
 }
 
+async function sendViaTwilio(to: string, message: string, settings: SmsSettings): Promise<SmsSendResult> {
+  const creds = settings.twilio;
+  if (!creds.accountSid || !creds.authToken || !creds.phoneNumber) throw new Error("Backup SMS provider is not configured");
+
+  const formData = new URLSearchParams();
+  formData.append("To", formatPhoneNumber(to));
+  formData.append("From", creds.phoneNumber);
+  formData.append("Body", message);
+
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${btoa(`${creds.accountSid}:${creds.authToken}`)}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData.toString(),
+  });
+
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.error_code || result?.code) {
+    console.error(`[OTP] Twilio backup failed with status ${response.status}; message=${String(result?.message || "none").slice(0, 160)}`);
+    throw new Error("Backup SMS delivery failed");
+  }
+
+  return {
+    provider: "twilio",
+    providerResponse: {
+      provider: "twilio",
+      status: result?.status,
+      data: {
+        sid: result?.sid,
+        to: result?.to,
+        from: result?.from,
+        status: result?.status,
+        error_code: result?.error_code,
+      },
+    },
+  };
+}
+
 async function deliverOtpSms(to: string, message: string, settings: SmsSettings, preferBackup: boolean): Promise<SmsSendResult> {
   const preferredExciteRoute = preferBackup && settings.excitesms.secondary ? settings.excitesms.secondary : settings.excitesms.primary;
   const fallbackExciteRoute = preferredExciteRoute === settings.excitesms.secondary ? settings.excitesms.primary : settings.excitesms.secondary;
+
+  if (preferBackup && isUsableTwilioBackup(settings)) {
+    try {
+      return await sendViaTwilio(to, message, settings);
+    } catch (error) {
+      console.error("[OTP] Twilio backup failed; retrying remaining SMS routes", error);
+    }
+  }
 
   if (preferBackup && isUsableAfricasTalkingBackup(settings)) {
     try {
@@ -208,9 +275,15 @@ async function deliverOtpSms(to: string, message: string, settings: SmsSettings,
       console.error("[OTP] Preferred ExciteSMS route failed; retrying alternate ExciteSMS route", error);
       return await sendViaExciteSms(to, message, fallbackExciteRoute);
     }
-    if (!isUsableAfricasTalkingBackup(settings)) throw error;
-    console.error("[OTP] Primary provider failed; retrying with backup provider", error);
-    return await sendViaAfricasTalking(to, message, settings);
+    if (isUsableTwilioBackup(settings)) {
+      console.error("[OTP] ExciteSMS routes failed; retrying with Twilio backup", error);
+      return await sendViaTwilio(to, message, settings);
+    }
+    if (isUsableAfricasTalkingBackup(settings)) {
+      console.error("[OTP] ExciteSMS routes failed; retrying with Africa's Talking backup", error);
+      return await sendViaAfricasTalking(to, message, settings);
+    }
+    throw error;
   }
 }
 
