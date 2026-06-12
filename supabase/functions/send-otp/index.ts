@@ -66,7 +66,8 @@ async function getSmsSettings(supabase: any): Promise<SmsSettings> {
   const config = configData?.value || {};
   const rawApiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
   const primaryApiToken = providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "";
-  const secondaryApiToken = providers.excitesms_secondary_api_token || Deno.env.get("EXCITESMS_SECONDARY_API_TOKEN") || "";
+  const configBackupToken = providers.excitesms_api_token && config.excitesms_api_token !== providers.excitesms_api_token ? config.excitesms_api_token : "";
+  const secondaryApiToken = providers.excitesms_secondary_api_token || configBackupToken || Deno.env.get("EXCITESMS_SECONDARY_API_TOKEN") || "";
 
   return {
     excitesms: {
