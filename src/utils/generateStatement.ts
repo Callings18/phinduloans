@@ -27,7 +27,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
 
     // Header - App theme color
     doc.setFontSize(22);
-    doc.setTextColor(194, 24, 91); // Brand magenta (matches loan schedule)
+    doc.setTextColor(107, 25, 58); // Brand burgundy (matches loan schedule)
     doc.text("PHINDU FINANCE", 14, 22);
 
     doc.setFontSize(10);
@@ -103,7 +103,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
             head: [["#", "Date", "Method", "Amount", "Status"]],
             body: tableData,
             theme: "striped",
-            headStyles: { fillColor: [194, 24, 91], textColor: [255, 255, 255] },
+            headStyles: { fillColor: [107, 25, 58], textColor: [255, 255, 255] },
             margin: { left: 14, right: 14 }
         });
     }
