@@ -14,6 +14,13 @@ const phoneSchema = z.string()
 
 const fullNameSchema = z.string().trim().min(2, "Full name is required");
 
+// Auto-format raw digits into Zambian NRC mask: 123456/78/9
+const formatNrc = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 9);
+  const parts = [digits.slice(0, 6), digits.slice(6, 8), digits.slice(8, 9)].filter(Boolean);
+  return parts.join("/");
+};
+
 // Zambian NRC format: 6 digits / 2 digits / 1 digit (e.g. 123456/78/9)
 const nrcSchema = z.string()
   .trim()
@@ -227,11 +234,12 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
                 inputMode="numeric"
                 placeholder="123456/78/9"
                 value={nrcNumber}
-                onChange={(e) => setNrcNumber(e.target.value)}
+                onChange={(e) => setNrcNumber(formatNrc(e.target.value))}
                 className="pl-11"
               />
             </div>
             {errors.nrc && <p className="text-sm text-destructive">{errors.nrc}</p>}
+            <p className="text-xs text-muted-foreground">Just type the digits — slashes are added automatically</p>
           </div>
         )}
         <Button
