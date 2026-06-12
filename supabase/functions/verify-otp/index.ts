@@ -60,18 +60,25 @@ serve(async (req) => {
     const formattedPhone = formatPhoneNumber(phone);
     console.log(`[Verify OTP] Request for ${formattedPhone}, purpose: ${purpose}`);
 
-    // Get the latest OTP for this phone
-    const { data: otpRecord, error: fetchError } = await supabase
+    await supabase
+      .from("otp_codes")
+      .delete()
+      .eq("phone", formattedPhone)
+      .eq("purpose", purpose)
+      .is("verified_at", null)
+      .lt("expires_at", new Date().toISOString());
+
+    // Accept any active code for this phone so delayed SMS delivery does not trap borrowers.
+    const { data: otpRecords, error: fetchError } = await supabase
       .from("otp_codes")
       .select("*")
       .eq("phone", formattedPhone)
       .eq("purpose", purpose)
       .is("verified_at", null)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(5);
 
-    if (fetchError || !otpRecord) {
+    if (fetchError || !otpRecords?.length) {
       console.log("[Verify OTP] No OTP found for phone");
       return new Response(
         JSON.stringify({ success: false, error: "No pending OTP found. Please request a new code." }),
@@ -79,17 +86,22 @@ serve(async (req) => {
       );
     }
 
-    // Check if OTP has expired
-    if (new Date(otpRecord.expires_at) < new Date()) {
-      console.log("[Verify OTP] OTP expired");
-      await supabase.from("otp_codes").delete().eq("id", otpRecord.id);
+    const otpRecord = otpRecords.find((record: any) => record.code === code);
+
+    if (!otpRecord) {
+      const newestRecord = otpRecords[0];
+      await supabase
+        .from("otp_codes")
+        .update({ attempts: newestRecord.attempts + 1 })
+        .eq("id", newestRecord.id);
+
+      console.log("[Verify OTP] Invalid code");
       return new Response(
-        JSON.stringify({ success: false, error: "OTP expired. Please request a new code." }),
+        JSON.stringify({ success: false, error: "Invalid OTP." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Check max attempts
     if (otpRecord.attempts >= otpRecord.max_attempts) {
       console.log("[Verify OTP] Max attempts exceeded");
       await supabase.from("otp_codes").delete().eq("id", otpRecord.id);
@@ -99,25 +111,10 @@ serve(async (req) => {
       );
     }
 
-    // Increment attempts
+    // Increment attempts on the matched code and mark it verified.
     await supabase
       .from("otp_codes")
-      .update({ attempts: otpRecord.attempts + 1 })
-      .eq("id", otpRecord.id);
-
-    // Verify the code
-    if (otpRecord.code !== code) {
-      console.log("[Verify OTP] Invalid code");
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid OTP." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Mark OTP as verified
-    await supabase
-      .from("otp_codes")
-      .update({ verified_at: new Date().toISOString() })
+      .update({ attempts: otpRecord.attempts + 1, verified_at: new Date().toISOString() })
       .eq("id", otpRecord.id);
 
     console.log(`[Verify OTP] OTP verified for ${formattedPhone}`);
