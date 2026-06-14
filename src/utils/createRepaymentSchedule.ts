@@ -218,19 +218,21 @@ export async function createRepaymentScheduleForLoan(
   const hasExplicitStartDate =
     Boolean(loan.repayment_start_date) && !Number.isNaN(new Date(loan.repayment_start_date as string).getTime());
 
-  // For Marketeer we always anchor installment #1 on startDate (which is
-  // already the day-after-disbursement, business-day adjusted).
-  const anchorOnStart = hasExplicitStartDate || isMarketeer;
+  // Anchor installment #1 directly on the start date ONLY for cadences where
+  // repayment_start_date represents the actual first due date the admin entered
+  // (daily / weekly schedules) or for Marketeer (already day-after-disbursement).
+  // For monthly/bullet loans, repayment_start_date is the DISBURSEMENT date
+  // (e.g. on reloans) — installment #1 must land one period AFTER it, never on
+  // the disbursement day itself (which would make a fresh reloan instantly overdue).
+  const anchorOnStart = (hasExplicitStartDate && (isDaily || isWeekly)) || isMarketeer;
   for (let i = 1; i <= numInstallments; i++) {
     if (lockedNumbers.has(i)) continue; // skip slots already taken by paid/partial rows
     let dueDate: Date;
     const offset = anchorOnStart ? i - 1 : i;
     if (isBullet) {
-      // Payday Soft is a fixed 30-day single payment; other bullet products
-      // honour their entered term (loan_term_months interpreted as days).
-      dueDate = isPaydaySoft || !hasExplicitStartDate
-        ? addDays(startDate, isPaydaySoft ? 30 : Number(loan.loan_term_months || 30))
-        : new Date(startDate);
+      // Bullet loans (Payday Soft or any explicit-bullet product) are always a
+      // single payment due one term AFTER the start/disbursement date.
+      dueDate = addDays(startDate, isPaydaySoft ? 30 : Number(loan.loan_term_months || 30));
     } else if (isDaily) {
       dueDate = new Date(startDate);
       dueDate.setDate(dueDate.getDate() + offset);
