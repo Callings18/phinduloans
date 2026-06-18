@@ -10,6 +10,7 @@ import { useHouseBorrowers, useHouseLoans } from "@/hooks/useHouseData";
 import { format } from "date-fns";
 import { ArrowLeft, User, Phone, IdCard, MapPin, CreditCard, Eye, Mail } from "lucide-react";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
+import { PhinduCRBCard } from "@/components/admin/PhinduCRBCard";
 
 export default function HouseBorrowerDetailPage() {
   const { productCode = "", borrowerId = "" } = useParams<{ productCode: string; borrowerId: string }>();
