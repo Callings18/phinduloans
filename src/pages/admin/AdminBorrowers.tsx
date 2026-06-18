@@ -1145,6 +1145,9 @@ const AdminBorrowers = () => {
               {/* KYC / Identity Documents */}
               <BorrowerKYCSection borrowerId={selectedBorrower.id} />
 
+              {/* Phindu CRB — credit performance */}
+              <PhinduCRBCard userId={selectedBorrower.id} />
+
               {/* Loan History */}
               <div className="space-y-4">
                 <h4 className="font-semibold text-foreground">Loan History ({borrowerLoans?.length || 0})</h4>
