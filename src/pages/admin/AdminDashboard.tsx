@@ -16,6 +16,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import DisbursementTrendsChart from "@/components/admin/DisbursementTrendsChart";
 import RepaymentPerformanceChart from "@/components/admin/RepaymentPerformanceChart";
 import ProductMixChart from "@/components/admin/ProductMixChart";
+import DashboardLoanPortfolio from "@/components/admin/DashboardLoanPortfolio";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
