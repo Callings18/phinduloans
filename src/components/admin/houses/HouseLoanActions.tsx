@@ -382,7 +382,7 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
             <DialogTrigger asChild>
               <Button size="sm" variant="outline"><Sparkles className="h-3.5 w-3.5 mr-1" /> Top-up</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Top-up loan</DialogTitle>
                 <DialogDescription>Increase principal and disburse extra funds from an account.</DialogDescription>
@@ -425,7 +425,7 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
             <DialogTrigger asChild>
               <Button size="sm" variant="outline"><RotateCcw className="h-3.5 w-3.5 mr-1" /> Re-loan</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create re-loan</DialogTitle>
                 <DialogDescription>Open a new loan for this completed borrower. It will start as pending for review.</DialogDescription>
