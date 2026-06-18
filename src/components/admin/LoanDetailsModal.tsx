@@ -106,6 +106,7 @@ import { calculateLoanBalanceSnapshot } from "@/utils/loanBalance";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
+import { PhinduCRBCard } from "./PhinduCRBCard";
 import LoanDocumentsCard from "./LoanDocumentsCard";
 import EditPendingLoanDialog from "./EditPendingLoanDialog";
 import { FolderOpen } from "lucide-react";
