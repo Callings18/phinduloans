@@ -23,6 +23,7 @@ import {
 } from "@/services/repositories/houseWorkflowRepository";
 import { useAuth } from "@/hooks/useAuth";
 import { calculateLoan } from "@/utils/loanCalculations";
+import { PhinduCRBCard } from "@/components/admin/PhinduCRBCard";
 import { format } from "date-fns";
 import { AlertTriangle, Calculator, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Undo2, History } from "lucide-react";
 
