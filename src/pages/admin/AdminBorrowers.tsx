@@ -56,6 +56,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import GuidedTour from "@/components/common/GuidedTour";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
+import { PhinduCRBCard } from "@/components/admin/PhinduCRBCard";
 import PaginationControls from "@/components/common/PaginationControls";
 import QueryStateView from "@/components/common/QueryStateView";
 import { Step } from "react-joyride";
