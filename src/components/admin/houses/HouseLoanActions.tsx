@@ -388,6 +388,12 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
                 <DialogDescription>Increase principal and disburse extra funds from an account.</DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
+                <PhinduCRBCard
+                  userId={loan?.user_id}
+                  requestedAmount={Number(loan?.loan_amount || 0) + Number(topupAmt || 0)}
+                  excludeLoanId={loanId}
+                  compact
+                />
                 <div className="space-y-1"><Label>Additional principal (ZMW)</Label><Input type="number" value={topupAmt} onChange={(e) => setTopupAmt(Number(e.target.value))} /></div>
                 <div className="space-y-1"><Label>New total term ({loan?.term_unit || "months"})</Label><Input type="number" value={topupTerm} onChange={(e) => setTopupTerm(Number(e.target.value))} /></div>
                 <div className="space-y-1">
