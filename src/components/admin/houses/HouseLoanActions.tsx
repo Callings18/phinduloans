@@ -431,6 +431,12 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
                 <DialogDescription>Open a new loan for this completed borrower. It will start as pending for review.</DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
+                <PhinduCRBCard
+                  userId={loan?.user_id}
+                  requestedAmount={Number(reloanAmt || 0)}
+                  excludeLoanId={loanId}
+                  compact
+                />
                 <div className="space-y-1"><Label>New principal (ZMW)</Label><Input type="number" value={reloanAmt} onChange={(e) => setReloanAmt(Number(e.target.value))} /></div>
                 <div className="space-y-1"><Label>New term ({loan?.term_unit || product?.term_unit || "months"})</Label><Input type="number" value={reloanTerm} onChange={(e) => setReloanTerm(Number(e.target.value))} /></div>
                 <div className="space-y-1"><Label>Reason</Label><Textarea value={reloanReason} onChange={(e) => setReloanReason(e.target.value)} /></div>
