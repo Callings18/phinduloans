@@ -104,6 +104,9 @@ export default function HouseBorrowerDetailPage() {
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-green-600">K{totalPaid.toLocaleString()}</p><p className="text-xs text-muted-foreground">Total Paid</p></CardContent></Card>
       </div>
 
+      {/* Phindu CRB — credit performance */}
+      <PhinduCRBCard userId={borrowerId} />
+
       {/* Loans */}
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><CreditCard size={16} /> Loan History</CardTitle></CardHeader>
