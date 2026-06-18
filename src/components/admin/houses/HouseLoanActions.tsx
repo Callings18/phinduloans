@@ -23,6 +23,7 @@ import {
 } from "@/services/repositories/houseWorkflowRepository";
 import { useAuth } from "@/hooks/useAuth";
 import { calculateLoan } from "@/utils/loanCalculations";
+import { PhinduCRBCard } from "@/components/admin/PhinduCRBCard";
 import { format } from "date-fns";
 import { AlertTriangle, Calculator, RefreshCw, RotateCcw, ShieldAlert, Sparkles, Undo2, History } from "lucide-react";
 
@@ -381,12 +382,18 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
             <DialogTrigger asChild>
               <Button size="sm" variant="outline"><Sparkles className="h-3.5 w-3.5 mr-1" /> Top-up</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Top-up loan</DialogTitle>
                 <DialogDescription>Increase principal and disburse extra funds from an account.</DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
+                <PhinduCRBCard
+                  userId={loan?.user_id}
+                  requestedAmount={Number(loan?.loan_amount || 0) + Number(topupAmt || 0)}
+                  excludeLoanId={loanId}
+                  compact
+                />
                 <div className="space-y-1"><Label>Additional principal (ZMW)</Label><Input type="number" value={topupAmt} onChange={(e) => setTopupAmt(Number(e.target.value))} /></div>
                 <div className="space-y-1"><Label>New total term ({loan?.term_unit || "months"})</Label><Input type="number" value={topupTerm} onChange={(e) => setTopupTerm(Number(e.target.value))} /></div>
                 <div className="space-y-1">
@@ -418,12 +425,18 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
             <DialogTrigger asChild>
               <Button size="sm" variant="outline"><RotateCcw className="h-3.5 w-3.5 mr-1" /> Re-loan</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create re-loan</DialogTitle>
                 <DialogDescription>Open a new loan for this completed borrower. It will start as pending for review.</DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
+                <PhinduCRBCard
+                  userId={loan?.user_id}
+                  requestedAmount={Number(reloanAmt || 0)}
+                  excludeLoanId={loanId}
+                  compact
+                />
                 <div className="space-y-1"><Label>New principal (ZMW)</Label><Input type="number" value={reloanAmt} onChange={(e) => setReloanAmt(Number(e.target.value))} /></div>
                 <div className="space-y-1"><Label>New term ({loan?.term_unit || product?.term_unit || "months"})</Label><Input type="number" value={reloanTerm} onChange={(e) => setReloanTerm(Number(e.target.value))} /></div>
                 <div className="space-y-1"><Label>Reason</Label><Textarea value={reloanReason} onChange={(e) => setReloanReason(e.target.value)} /></div>

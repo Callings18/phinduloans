@@ -106,6 +106,7 @@ import { calculateLoanBalanceSnapshot } from "@/utils/loanBalance";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import LoanHistoryTimeline from "./LoanHistoryTimeline";
 import LoanChain from "./LoanChain";
+import { PhinduCRBCard } from "./PhinduCRBCard";
 import LoanDocumentsCard from "./LoanDocumentsCard";
 import EditPendingLoanDialog from "./EditPendingLoanDialog";
 import { FolderOpen } from "lucide-react";
@@ -2105,6 +2106,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <div className="flex-1 overflow-y-auto pt-4">
               {/* Overview Tab */}
               <TabsContent value="overview" className="m-0 space-y-4">
+                {/* Phindu CRB — credit performance */}
+                <PhinduCRBCard
+                  userId={loan.user_id}
+                  requestedAmount={Number(loan.loan_amount) || null}
+                  excludeLoanId={loan.id}
+                />
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Card className="bg-muted/30">

@@ -10,6 +10,7 @@ import { useHouseBorrowers, useHouseLoans } from "@/hooks/useHouseData";
 import { format } from "date-fns";
 import { ArrowLeft, User, Phone, IdCard, MapPin, CreditCard, Eye, Mail } from "lucide-react";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
+import { PhinduCRBCard } from "@/components/admin/PhinduCRBCard";
 
 export default function HouseBorrowerDetailPage() {
   const { productCode = "", borrowerId = "" } = useParams<{ productCode: string; borrowerId: string }>();
@@ -102,6 +103,9 @@ export default function HouseBorrowerDetailPage() {
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-primary">K{totalBorrowed.toLocaleString()}</p><p className="text-xs text-muted-foreground">Total Borrowed</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-green-600">K{totalPaid.toLocaleString()}</p><p className="text-xs text-muted-foreground">Total Paid</p></CardContent></Card>
       </div>
+
+      {/* Phindu CRB — credit performance */}
+      <PhinduCRBCard userId={borrowerId} />
 
       {/* Loans */}
       <Card>
