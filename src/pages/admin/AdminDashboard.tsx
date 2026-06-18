@@ -693,6 +693,8 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
           </CardContent>
         </Card>
 
+        <DashboardLoanPortfolio loanProductId={loanProductId} />
+
         <Card className="border-border/50 bg-card/80">
           <CardHeader className="pb-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
