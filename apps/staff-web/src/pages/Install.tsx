@@ -1,7 +1,7 @@
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
 import { Download, Smartphone, ShieldCheck, Zap, WifiOff } from "lucide-react";
-import { APK_URL, downloadApk, isAndroidDevice, isIOSDevice } from "@/utils/appDownload";
+import { APK_URL, downloadApk, isAndroidDevice, isIOSDevice } from "@phinduloans/shared/utils/appDownload";
 import { Link } from "react-router-dom";
 
 const Install = () => {

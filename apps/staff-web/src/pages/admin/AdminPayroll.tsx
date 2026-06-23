@@ -45,10 +45,10 @@ import {
   getMonthName,
   type PayrollCalculation,
   type TaxConfig,
-} from "@/utils/payrollCalculations";
+} from "@phinduloans/shared/utils/payrollCalculations";
 import PayslipDetailModal from "@/components/admin/PayslipDetailModal";
 import { generatePayslipPDF, generateAllPayslipsPDF } from "@/utils/payslipPdfGenerator";
-import { downloadPayrollRunCsv } from "@/utils/payrollRunCsvExport";
+import { downloadPayrollRunCsv } from "@phinduloans/shared/utils/payrollRunCsvExport";
 import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
 import { Link } from "react-router-dom";
 
