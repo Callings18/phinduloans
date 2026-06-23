@@ -1,0 +1,158 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
+import { Badge } from "@phinduloans/shared/components/ui/badge";
+import { Button } from "@phinduloans/shared/components/ui/button";
+import { Link, useSearchParams } from "react-router-dom";
+import { ShieldCheck, Clock, AlertTriangle, CheckCircle, XCircle, Upload } from "lucide-react";
+import { differenceInHours } from "date-fns";
+import {
+  BORROWER_VAULT_KYC_DOC_TYPES,
+  mapLatestVaultRowByDocType,
+  vaultDocForSlot,
+} from "@phinduloans/shared/constants/borrowerKycDocs";
+import { borrowerDashboardProfileHref } from "@/utils/borrowerDashboardLinks";
+
+const KYC_DOC_TYPES = BORROWER_VAULT_KYC_DOC_TYPES.map(({ type, label }) => ({ type, label }));
+
+interface KYCStatusWidgetProps {
+  userId: string;
+  /** When set (e.g. borrower dashboard), opens in-dashboard KYC panel instead of navigating to /profile. */
+  onOpenDocuments?: () => void;
+}
+
+export default function KYCStatusWidget({ userId, onOpenDocuments }: KYCStatusWidgetProps) {
+  const [searchParams] = useSearchParams();
+  const profileDocumentsHref = (() => {
+    const v = searchParams.get("view");
+    if (v) {
+      const qs = new URLSearchParams();
+      qs.set("tab", "documents");
+      qs.set("view", v);
+      return `/profile?${qs.toString()}`;
+    }
+    return borrowerDashboardProfileHref({ openKycWorkspace: true });
+  })();
+
+  const { data: vaultDocs = [] } = useQuery({
+    queryKey: ["borrower-kyc-vault", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("borrower_document_vault")
+        .select("doc_type, is_verified, verified_at, notes, uploaded_at")
+        .eq("borrower_id", userId)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!userId,
+  });
+
+  const docsByType = mapLatestVaultRowByDocType(vaultDocs);
+
+  const verifiedCount = KYC_DOC_TYPES.filter((t) => vaultDocForSlot(docsByType, t.type)?.is_verified).length;
+  const allVerified = verifiedCount === KYC_DOC_TYPES.length;
+  const uploadedCount = KYC_DOC_TYPES.filter((t) => !!vaultDocForSlot(docsByType, t.type)).length;
+  const pendingDocs = KYC_DOC_TYPES.map((t) => vaultDocForSlot(docsByType, t.type)).filter(
+    (doc) => doc && !doc.is_verified && !(doc.verified_at && doc.notes?.startsWith("Rejected:")),
+  );
+  const oldestPendingHours = pendingDocs.reduce((max, doc) => {
+    if (!doc?.uploaded_at) return max;
+    return Math.max(max, differenceInHours(new Date(), new Date(doc.uploaded_at)));
+  }, 0);
+  const slaState =
+    oldestPendingHours >= 72 ? "urgent" : oldestPendingHours >= 48 ? "waiting" : pendingDocs.length > 0 ? "pending" : "none";
+
+  if (allVerified) {
+    return (
+      <Card className="glass border-emerald-500/30 bg-emerald-500/5">
+        <CardContent className="p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+            <ShieldCheck className="text-emerald-400" size={20} />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Identity Verified ✅</p>
+            <p className="text-xs text-muted-foreground">Your KYC documents have been approved. You won't need to re-upload them.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={slaState === "urgent" ? "glass border-destructive/40 bg-destructive/10" : "glass border-yellow-500/30 bg-yellow-500/5"}>
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Clock className={slaState === "urgent" ? "text-destructive" : "text-yellow-400"} size={16} />
+          KYC Status
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
+        <div className="space-y-2">
+          {KYC_DOC_TYPES.map((t) => {
+            const doc = vaultDocForSlot(docsByType, t.type);
+            const isRejected = doc && !doc.is_verified && doc.verified_at && doc.notes?.startsWith("Rejected:");
+
+            return (
+              <div key={t.type} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{t.label}</span>
+                {!doc ? (
+                  <Badge variant="outline" className="text-xs gap-1">
+                    <Upload size={10} /> Not Uploaded
+                  </Badge>
+                ) : doc.is_verified ? (
+                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border text-xs gap-1">
+                    <CheckCircle size={10} /> Verified
+                  </Badge>
+                ) : isRejected ? (
+                  <Badge variant="destructive" className="text-xs gap-1">
+                    <XCircle size={10} /> Rejected
+                  </Badge>
+                ) : (
+                  <Badge
+                    className={
+                      slaState === "urgent"
+                        ? "bg-destructive/20 text-destructive border-destructive/30 border text-xs gap-1"
+                        : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border text-xs gap-1"
+                    }
+                  >
+                    <Clock size={10} /> {slaState === "urgent" ? "Urgent Review" : "Pending Review"}
+                  </Badge>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {uploadedCount < KYC_DOC_TYPES.length && (
+          onOpenDocuments ? (
+            <Button variant="outline" size="sm" className="mt-3 w-full" type="button" onClick={() => onOpenDocuments()}>
+              <Upload size={14} className="mr-2" />
+              Upload Missing Documents
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
+              <Link to={profileDocumentsHref}>
+                <Upload size={14} className="mr-2" />
+                Upload Missing Documents
+              </Link>
+            </Button>
+          )
+        )}
+        {uploadedCount > 0 && uploadedCount === KYC_DOC_TYPES.length && verifiedCount < KYC_DOC_TYPES.length && (
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-muted-foreground text-center">
+              <AlertTriangle size={12} className="inline mr-1" />
+              Documents submitted — awaiting admin review
+              {oldestPendingHours > 0 ? ` (${oldestPendingHours}h)` : ""}
+            </p>
+            {onOpenDocuments && (
+              <Button variant="outline" size="sm" className="w-full" type="button" onClick={() => onOpenDocuments()}>
+                Open KYC workspace
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

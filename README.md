@@ -22,18 +22,40 @@ cd phinduloans
 npm install
 ```
 
+## Monorepo layout
+
+| Package | Purpose |
+|---------|---------|
+| `apps/staff-web` | Public marketing site + staff admin portal (browser) |
+| `apps/borrower-mobile` | Borrower mobile app (Capacitor APK / iOS) |
+| `packages/shared` | Shared UI, hooks, utils, Supabase client, business logic |
+| `apps/api-next` | Optional Next.js API (unchanged) |
+| `backend` | NestJS API (unchanged) |
+
 ### Run
 
 ```sh
-npm run dev
+npm install
+npm run dev:staff      # Staff web on http://localhost:8080
+npm run dev:borrower   # Borrower app on http://localhost:8081
 ```
 
-### Quality Checks
+Legacy `npm run dev` starts the staff web app.
+
+### Build
 
 ```sh
-npm run typecheck
-npm run lint
+npm run build:staff
+npm run build:borrower
+npm run build          # both apps
+```
+
+### Capacitor (borrower mobile)
+
+```sh
+cd apps/borrower-mobile
 npm run build
+npm run cap:sync
 ```
 
 ### E2E Smoke

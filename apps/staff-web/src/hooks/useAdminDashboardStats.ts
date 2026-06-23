@@ -1,0 +1,19 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { fetchAdminDashboardStats, fetchAdminUpcomingPayments } from "@/lib/adminDashboardStats";
+
+export function useAdminDashboardStats(loanProductId: string | null | undefined) {
+  const id = loanProductId || null;
+  return useQuery({
+    queryKey: ["admin-stats", id],
+    queryFn: () => fetchAdminDashboardStats(supabase, { loanProductId: id }),
+  });
+}
+
+export function useAdminUpcomingPayments(loanProductId: string | null | undefined, daysAhead = 90) {
+  const id = loanProductId || null;
+  return useQuery({
+    queryKey: ["upcoming-payments", id, daysAhead],
+    queryFn: () => fetchAdminUpcomingPayments(supabase, { loanProductId: id, daysAhead }),
+  });
+}

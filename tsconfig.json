@@ -5,20 +5,15 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@phinduloans/shared/*": ["./packages/shared/src/*"]
     },
     "skipLibCheck": true,
     "strictNullChecks": false
   },
   "files": [],
   "references": [
-    {
-      "path": "./tsconfig.app.json"
-    },
-    {
-      "path": "./tsconfig.node.json"
-    }
+    { "path": "./apps/staff-web" },
+    { "path": "./apps/borrower-mobile" },
+    { "path": "./packages/shared" }
   ]
 }
