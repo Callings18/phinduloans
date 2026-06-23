@@ -4,7 +4,7 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type NotificationType = 'sms' | 'whatsapp';
+export type NotificationType = 'sms' | 'whatsapp' | 'email';
 
 interface SendDirectNotificationParams {
   type: NotificationType;
@@ -102,5 +102,32 @@ export async function sendWhatsAppDirect(
     toast.error(`Failed to send WhatsApp: ${result.error}`);
   }
   
+  return result;
+}
+
+/**
+ * Send an email directly (through edge function)
+ */
+export async function sendEmailDirect(
+  to: string,
+  subject: string,
+  message: string,
+  htmlContent?: string,
+) {
+  const result = await sendDirectNotification({
+    type: 'email',
+    to,
+    subject,
+    title: subject,
+    message,
+    htmlContent,
+  });
+
+  if (result.success) {
+    toast.success(`Email sent to ${to}`);
+  } else {
+    toast.error(`Failed to send email: ${result.error}`);
+  }
+
   return result;
 }

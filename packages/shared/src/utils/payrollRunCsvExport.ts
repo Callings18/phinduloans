@@ -1,4 +1,4 @@
-import { getMonthName } from "@/utils/payrollCalculations";
+import { getMonthName } from "@phinduloans/shared/utils/payrollCalculations";
 
 function csvCell(v: string | number): string {
   const s = String(v);

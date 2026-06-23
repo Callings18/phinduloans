@@ -51,7 +51,7 @@ import {
   fetchBorrowerPaymentClaims,
   submitPaymentClaim,
 } from "@phinduloans/shared/services/repositories/workflowRepository";
-import { validateBorrowerReceiptFile } from "@/utils/borrowerUploadValidation";
+import { validateBorrowerReceiptFile } from "@phinduloans/shared/utils/borrowerUploadValidation";
 import { repaymentRemainingKwacha } from "@phinduloans/shared/utils/repaymentRemaining";
 import { borrowerIdentityKycSatisfiedFromVault } from "@phinduloans/shared/constants/borrowerKycDocs";
 import {

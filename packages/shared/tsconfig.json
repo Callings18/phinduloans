@@ -10,7 +10,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@phinduloans/shared/*": ["./src/*"]
     }
   },
   "include": ["src"]

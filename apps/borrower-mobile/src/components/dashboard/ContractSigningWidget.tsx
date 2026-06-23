@@ -12,7 +12,7 @@ import { FileText, CheckCircle, Download, PenTool, Loader2, AlertTriangle, Clock
 import { toast } from "sonner";
 import { format } from "date-fns";
 import SignaturePad from "@phinduloans/shared/components/common/SignaturePad";
-import { validateBorrowerContractUploadFile } from "@/utils/borrowerUploadValidation";
+import { validateBorrowerContractUploadFile } from "@phinduloans/shared/utils/borrowerUploadValidation";
 import { downloadLoanContract, generateSignedContractPDF } from "@phinduloans/shared/utils/generateLoanContract";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { Input } from "@phinduloans/shared/components/ui/input";

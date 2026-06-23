@@ -5,7 +5,7 @@
  * mutated here.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 
 export interface AIAgent {
   id: string;

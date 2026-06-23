@@ -8,7 +8,7 @@ import {
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Separator } from "@phinduloans/shared/components/ui/separator";
 import { Download } from "lucide-react";
-import { formatZMW, getMonthName } from "@/utils/payrollCalculations";
+import { formatZMW, getMonthName } from "@phinduloans/shared/utils/payrollCalculations";
 import { generatePayslipPDF } from "@/utils/payslipPdfGenerator";
 
 interface PayslipDetailModalProps {

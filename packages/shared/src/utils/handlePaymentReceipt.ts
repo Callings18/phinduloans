@@ -1,5 +1,27 @@
 import { downloadRepaymentReceipt } from "@phinduloans/shared/utils/generateRepaymentReceipt";
-import type { PaymentReceiptData } from "@phinduloans/shared/services/repositories/houseWorkflowRepository";
+
+/**
+ * Shape of the receipt payload returned by the record_loan_payment RPC.
+ * Defined locally here so the shared helper has no dependency on app-level repositories.
+ */
+export interface PaymentReceiptData {
+  success: boolean;
+  error?: string;
+  receipt_no?: string;
+  borrower_name?: string;
+  borrower_phone?: string;
+  borrower_email?: string;
+  loan_id?: string;
+  loan_amount?: number;
+  repayment_amount?: number;
+  payment_method?: string;
+  paid_date?: string;
+  installment_number?: number;
+  total_installments?: number;
+  total_paid?: number;
+  outstanding_balance?: number;
+  loan_completed?: boolean;
+}
 
 interface CompanyInfo {
   name?: string;

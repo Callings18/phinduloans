@@ -35,7 +35,7 @@ import { Users, Building2, FileText, Calendar, Plus, Pencil, Loader2 } from "luc
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
-import { getMonthName } from "@/utils/payrollCalculations";
+import { getMonthName } from "@phinduloans/shared/utils/payrollCalculations";
 import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
 
 const AdminHR = () => {
