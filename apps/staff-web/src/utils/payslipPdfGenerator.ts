@@ -5,7 +5,7 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatZMW, getMonthName } from "./payrollCalculations";
+import { formatZMW, getMonthName } from '@phinduloans/shared/utils/payrollCalculations';
 import { format } from "date-fns";
 
 const BRAND_COLOR: [number, number, number] = [107, 25, 58]; // Brand burgundy #6B193A
