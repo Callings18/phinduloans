@@ -3,13 +3,13 @@
  */
 import { useParams, Link } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
+import { Badge } from "@phinduloans/shared/components/ui/badge";
+import { Button } from "@phinduloans/shared/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@phinduloans/shared/components/ui/tabs";
 import { Loader2, Play, ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import {
   useAIAgents,
   useAgentRuns,

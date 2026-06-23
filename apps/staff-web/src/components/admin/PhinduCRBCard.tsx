@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
+import { Badge } from "@phinduloans/shared/components/ui/badge";
+import { Progress } from "@phinduloans/shared/components/ui/progress";
+import { Skeleton } from "@phinduloans/shared/components/ui/skeleton";
 import {
   Gauge,
   CheckCircle2,
@@ -17,7 +17,7 @@ import {
   ratingLabel,
   type PhinduRating,
   type PhinduResult,
-} from "@/utils/phinduCreditCheck";
+} from "@phinduloans/shared/utils/phinduCreditCheck";
 
 interface PhinduCRBCardProps {
   userId: string | null | undefined;

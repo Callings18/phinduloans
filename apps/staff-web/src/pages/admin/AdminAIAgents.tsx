@@ -5,14 +5,14 @@
  */
 import { Link } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
+import { Switch } from "@phinduloans/shared/components/ui/switch";
+import { Badge } from "@phinduloans/shared/components/ui/badge";
+import { Button } from "@phinduloans/shared/components/ui/button";
 import { Loader2, ShieldCheck, Play, AlertTriangle, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useToast } from "@/hooks/use-toast";
-import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useToast } from "@phinduloans/shared/hooks/use-toast";
+import { useFeatureFlag } from "@phinduloans/shared/hooks/useFeatureFlags";
 import {
   useAIAgents,
   useToggleAgent,

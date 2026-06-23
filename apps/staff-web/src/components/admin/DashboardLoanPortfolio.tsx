@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
+import { Badge } from "@phinduloans/shared/components/ui/badge";
+import { Button } from "@phinduloans/shared/components/ui/button";
 import { format } from "date-fns";
 import { Activity, CheckCircle, ArrowUpRight, Loader2, User } from "lucide-react";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
