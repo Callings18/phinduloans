@@ -4,7 +4,7 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type NotificationType = 'sms' | 'whatsapp';
+export type NotificationType = 'sms' | 'whatsapp' | 'email';
 
 interface SendDirectNotificationParams {
   type: NotificationType;
