@@ -355,6 +355,7 @@ const AdminRepayments = () => {
     setSelectedClaimId(null);
     setSelectedRepayment(repayment);
     setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
+    setDepositSlip(null);
     setIsRecordPaymentOpen(true);
   };
 
