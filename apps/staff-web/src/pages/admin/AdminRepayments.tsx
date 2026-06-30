@@ -123,6 +123,8 @@ const AdminRepayments = () => {
   const [splitPayments, setSplitPayments] = useState<Array<{ method: string; amount: string; reference: string; destination_account_id: string }>>([
     { method: "mobile_money", amount: "", reference: "", destination_account_id: "" },
   ]);
+  // Optional deposit slip / proof of payment attached when recording a payment.
+  const [depositSlip, setDepositSlip] = useState<File | null>(null);
 
   const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
@@ -253,6 +255,40 @@ const AdminRepayments = () => {
         });
       }
 
+      // Optional: attach the deposit slip / proof of payment to the loan.
+      // Done after the payment is recorded so a failed upload never blocks the
+      // financial transaction — the payment is the source of truth.
+      if (depositSlip) {
+        try {
+          const ext = depositSlip.name.split(".").pop() || "file";
+          const filePath = `${repayment.user_id}/${repayment.loan_id}/deposit_slip_${Date.now()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("loan-documents")
+            .upload(filePath, depositSlip, { cacheControl: "3600", upsert: false });
+          if (uploadError) throw uploadError;
+
+          const uploadedBy = (await supabase.auth.getUser()).data.user?.id ?? null;
+          const { error: insertError } = await supabase.from("application_documents").insert({
+            application_id: repayment.loan_id,
+            borrower_id: repayment.user_id,
+            doc_type: "deposit_slip",
+            doc_label: "Deposit Slip / Proof of Payment",
+            file_name: depositSlip.name,
+            file_url: filePath,
+            file_size: depositSlip.size,
+            mime_type: depositSlip.type,
+            uploaded_by: uploadedBy,
+            status: "uploaded",
+          });
+          if (insertError) throw insertError;
+        } catch (slipErr: any) {
+          // Surface a non-blocking warning; the payment itself succeeded.
+          toast.warning(
+            `Payment recorded, but the deposit slip could not be saved: ${slipErr?.message || "upload failed"}`,
+          );
+        }
+      }
+
       return { repayment, paidAmount, isFullPayment: paidAmount >= amountDue };
     },
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
@@ -307,6 +343,7 @@ const AdminRepayments = () => {
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);
         setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
+      setDepositSlip(null);
       setSelectedClaimId(null);
     },
     onError: (error: any) => {
@@ -318,6 +355,7 @@ const AdminRepayments = () => {
     setSelectedClaimId(null);
     setSelectedRepayment(repayment);
     setPaymentData({ payment_method: "mobile_money", transaction_reference: "", amount: "", penalty_amount: "", destination_account_id: "" });
+    setDepositSlip(null);
     setIsRecordPaymentOpen(true);
   };
 
@@ -1171,6 +1209,45 @@ const AdminRepayments = () => {
                         onChange={(e) => setPaymentData({ ...paymentData, transaction_reference: e.target.value })}
                         placeholder="Enter reference number"
                       />
+                    </div>
+
+                    {/* Deposit slip / proof of payment */}
+                    <div className="space-y-2">
+                      <Label>Deposit Slip / Proof of Payment (Optional)</Label>
+                      {depositSlip ? (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-secondary/30 p-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText size={16} className="shrink-0 text-primary" />
+                            <span className="truncate text-sm">{depositSlip.name}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDepositSlip(null)}
+                          >
+                            <XCircle size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border/60 bg-secondary/20 p-3 text-sm text-muted-foreground transition-colors hover:bg-secondary/40">
+                          <Plus size={16} />
+                          <span>Attach bank deposit slip or mobile money screenshot</span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) setDepositSlip(file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Saved to the borrower's loan documents as proof of this payment.
+                      </p>
                     </div>
                   </>
                 ) : (
