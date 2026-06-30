@@ -123,6 +123,8 @@ const AdminRepayments = () => {
   const [splitPayments, setSplitPayments] = useState<Array<{ method: string; amount: string; reference: string; destination_account_id: string }>>([
     { method: "mobile_money", amount: "", reference: "", destination_account_id: "" },
   ]);
+  // Optional deposit slip / proof of payment attached when recording a payment.
+  const [depositSlip, setDepositSlip] = useState<File | null>(null);
 
   const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
