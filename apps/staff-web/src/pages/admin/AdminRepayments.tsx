@@ -1210,6 +1210,45 @@ const AdminRepayments = () => {
                         placeholder="Enter reference number"
                       />
                     </div>
+
+                    {/* Deposit slip / proof of payment */}
+                    <div className="space-y-2">
+                      <Label>Deposit Slip / Proof of Payment (Optional)</Label>
+                      {depositSlip ? (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-secondary/30 p-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText size={16} className="shrink-0 text-primary" />
+                            <span className="truncate text-sm">{depositSlip.name}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDepositSlip(null)}
+                          >
+                            <XCircle size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border/60 bg-secondary/20 p-3 text-sm text-muted-foreground transition-colors hover:bg-secondary/40">
+                          <Plus size={16} />
+                          <span>Attach bank deposit slip or mobile money screenshot</span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) setDepositSlip(file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Saved to the borrower's loan documents as proof of this payment.
+                      </p>
+                    </div>
                   </>
                 ) : (
                   <>
