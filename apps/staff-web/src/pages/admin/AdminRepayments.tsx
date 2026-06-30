@@ -255,6 +255,40 @@ const AdminRepayments = () => {
         });
       }
 
+      // Optional: attach the deposit slip / proof of payment to the loan.
+      // Done after the payment is recorded so a failed upload never blocks the
+      // financial transaction — the payment is the source of truth.
+      if (depositSlip) {
+        try {
+          const ext = depositSlip.name.split(".").pop() || "file";
+          const filePath = `${repayment.user_id}/${repayment.loan_id}/deposit_slip_${Date.now()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("loan-documents")
+            .upload(filePath, depositSlip, { cacheControl: "3600", upsert: false });
+          if (uploadError) throw uploadError;
+
+          const uploadedBy = (await supabase.auth.getUser()).data.user?.id ?? null;
+          const { error: insertError } = await supabase.from("application_documents").insert({
+            application_id: repayment.loan_id,
+            borrower_id: repayment.user_id,
+            doc_type: "deposit_slip",
+            doc_label: "Deposit Slip / Proof of Payment",
+            file_name: depositSlip.name,
+            file_url: filePath,
+            file_size: depositSlip.size,
+            mime_type: depositSlip.type,
+            uploaded_by: uploadedBy,
+            status: "uploaded",
+          });
+          if (insertError) throw insertError;
+        } catch (slipErr: any) {
+          // Surface a non-blocking warning; the payment itself succeeded.
+          toast.warning(
+            `Payment recorded, but the deposit slip could not be saved: ${slipErr?.message || "upload failed"}`,
+          );
+        }
+      }
+
       return { repayment, paidAmount, isFullPayment: paidAmount >= amountDue };
     },
     onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
