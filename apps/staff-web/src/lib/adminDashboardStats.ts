@@ -108,7 +108,23 @@ export async function fetchAdminUpcomingPayments(
   const horizon = new Date(today);
   horizon.setDate(horizon.getDate() + daysAhead);
 
-  const { data, error } = await supabase
+  // When a specific loan house is selected, resolve its loan ids first and
+  // filter the repayments query server-side. Filtering client-side after a
+  // capped fetch would silently drop that house's payments whenever they fall
+  // outside the first `limit` rows ordered across every house.
+  let loanIdFilter: string[] | null = null;
+  if (loanProductId) {
+    const { data: houseLoans, error: houseLoansError } = await supabase
+      .from("loan_applications")
+      .select("id")
+      .eq("loan_product_id", loanProductId);
+    if (houseLoansError) throw houseLoansError;
+    loanIdFilter = (houseLoans ?? []).map((l: { id: string }) => l.id);
+    // No loans for this house means there is nothing upcoming to show.
+    if (loanIdFilter.length === 0) return [];
+  }
+
+  let query = supabase
     .from("loan_repayments")
     .select(`*, loan:loan_applications(id, full_name, phone, loan_amount, loan_product_id)`)
     .eq("status", "pending")
@@ -117,13 +133,12 @@ export async function fetchAdminUpcomingPayments(
     .order("due_date", { ascending: true })
     .limit(limit);
 
-  if (error) throw error;
-  let rows = data || [];
-  if (loanProductId) {
-    rows = rows.filter(
-      (r: { loan?: { loan_product_id?: string | null } | null }) =>
-        r.loan?.loan_product_id === loanProductId
-    );
+  if (loanIdFilter) {
+    query = query.in("loan_id", loanIdFilter);
   }
-  return rows;
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+  return data || [];
 }
