@@ -18,7 +18,9 @@ type RepaymentSummaryRow = {
   due_date: string;
   status: string;
   principal_paid: number | null;
+  penalty_paid: number | null;
   paid_date: string | null;
+  updated_at: string | null;
 };
 
 export default function HouseDashboardPage() {
