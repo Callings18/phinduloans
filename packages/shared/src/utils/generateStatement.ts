@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { PDF_THEME } from "@phinduloans/shared/utils/pdfTheme";
 
 interface Repayment {
     id: string;
@@ -27,7 +28,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
 
     // Header - App theme color
     doc.setFontSize(22);
-    doc.setTextColor(107, 25, 58); // Brand burgundy (matches loan schedule)
+    doc.setTextColor(...PDF_THEME.header);
     doc.text("PHINDU FINANCE", 14, 22);
 
     doc.setFontSize(10);
@@ -54,7 +55,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
     doc.text(data.full_name, 14, 57);
 
     // Loan Summary Card (Simulated)
-    doc.setFillColor(248, 249, 250);
+    doc.setFillColor(...PDF_THEME.softBg);
     doc.rect(14, 65, pageWidth - 28, 35, "F");
 
     doc.setFontSize(9);
@@ -103,7 +104,7 @@ export const generateAccountStatement = (data: LoanStatementData) => {
             head: [["#", "Date", "Method", "Amount", "Status"]],
             body: tableData,
             theme: "striped",
-            headStyles: { fillColor: [107, 25, 58], textColor: [255, 255, 255] },
+            headStyles: { fillColor: PDF_THEME.header, textColor: PDF_THEME.white },
             margin: { left: 14, right: 14 }
         });
     }

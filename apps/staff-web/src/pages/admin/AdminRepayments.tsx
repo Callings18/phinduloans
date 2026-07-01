@@ -59,6 +59,8 @@ import {
   TableRow,
 } from "@phinduloans/shared/components/ui/table";
 import { downloadRepaymentReceipt } from "@phinduloans/shared/utils/generateRepaymentReceipt";
+import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
+import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import BulkActions, { defaultRepaymentActions } from "@/components/common/BulkActions";
 import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
@@ -241,7 +243,7 @@ const AdminRepayments = () => {
         p_penalty_amount: penaltyAmount,
       });
       if (rpcError) throw rpcError;
-      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+      const rpcResult = rpcData as PaymentReceiptData | null;
       if (!rpcResult?.success) {
         throw new Error(rpcResult?.error || "Failed to record payment");
       }
@@ -289,9 +291,9 @@ const AdminRepayments = () => {
         }
       }
 
-      return { repayment, paidAmount, isFullPayment: paidAmount >= amountDue };
+      return { repayment, paidAmount, isFullPayment: paidAmount >= amountDue, receipt: rpcResult };
     },
-    onSuccess: async ({ repayment, paidAmount, isFullPayment }) => {
+    onSuccess: async ({ repayment, paidAmount, isFullPayment, receipt }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
       queryClient.invalidateQueries({ queryKey: ["admin-payment-claims"] });
       queryClient.invalidateQueries({ queryKey: ["active-accounts"] });
@@ -306,6 +308,11 @@ const AdminRepayments = () => {
       } else {
         toast.success(`Partial payment of K${paidAmount.toLocaleString()} recorded and deposited`);
       }
+
+      downloadReceiptFromRpc(receipt, {
+        loanReferenceFallback: repayment.loan_id,
+        company: settings?.companyInfo,
+      });
 
       // Send SMS confirmation
       if (repayment?.loan_applications) {

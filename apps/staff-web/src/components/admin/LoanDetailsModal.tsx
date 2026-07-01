@@ -96,6 +96,8 @@ import { downloadLoanSchedule } from "@phinduloans/shared/utils/generateLoanSche
 import { downloadLoanContract, shareContractViaWhatsApp, emailContract, smsContract, uploadContractAndSaveUrl } from "@phinduloans/shared/utils/generateLoanContract";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { downloadRepaymentReceipt } from "@phinduloans/shared/utils/generateRepaymentReceipt";
+import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
+import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -564,14 +566,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(`Payment failed: ${raw || "Unknown server error"}. Details logged to console.`);
       }
 
-      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+      const rpcResult = rpcData as PaymentReceiptData | null;
       if (!rpcResult?.success) {
         console.error("[recordPayment] RPC returned success=false", { rpcArgs, rpcResult });
         throw new Error(rpcResult?.error || "The server could not record this payment. Details logged to console.");
       }
 
       console.info("[recordPayment] Success", { rpcResult });
-      return { paidAmount, isPartial: paidAmount < totalRemaining - 0.01, isOverpayment: false };
+      return { paidAmount, isPartial: paidAmount < totalRemaining - 0.01, isOverpayment: false, receipt: rpcResult };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -587,6 +589,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       } else {
         toast.success("Payment recorded successfully");
       }
+
+      downloadReceiptFromRpc(result.receipt, {
+        loanReferenceFallback: loan?.id?.slice(0, 8),
+        company: settings?.companyInfo,
+      });
 
       setIsRecordPaymentOpen(false);
       setSelectedRepayment(null);

@@ -2,8 +2,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
+import { PDF_THEME } from "@phinduloans/shared/utils/pdfTheme";
 
-const BRAND_COLOR: [number, number, number] = [107, 25, 58]; // Brand burgundy #6B193A
 const formatK = (v: number) => `K${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface ReportExportOptions {
@@ -20,7 +20,7 @@ export function exportReportPDF(opts: ReportExportOptions) {
   const doc = new jsPDF({ orientation: "landscape" });
 
   // Header
-  doc.setFillColor(...BRAND_COLOR);
+  doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, doc.internal.pageSize.width, 28, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
@@ -51,13 +51,13 @@ export function exportReportPDF(opts: ReportExportOptions) {
     startY,
     theme: "grid",
     headStyles: {
-      fillColor: BRAND_COLOR,
+      fillColor: PDF_THEME.header,
       textColor: [255, 255, 255],
       fontStyle: "bold",
       fontSize: 8,
     },
     bodyStyles: { fontSize: 7, textColor: [40, 40, 40] },
-    alternateRowStyles: { fillColor: [248, 248, 252] },
+    alternateRowStyles: { fillColor: PDF_THEME.stripe },
     margin: { left: 14, right: 14 },
   });
 

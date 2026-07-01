@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
+import { PDF_THEME } from '@phinduloans/shared/utils/pdfTheme';
 
 interface LoanData {
   id: string;
@@ -31,8 +32,8 @@ const createClearancePDF = (loan: LoanData, completionDate: Date): jsPDF => {
     doc.text(text, x, y);
   };
 
-  // Header - Brand burgundy (RGB 107, 25, 58)
-  doc.setFillColor(107, 25, 58);
+  // Header
+  doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageWidth, 50, 'F');
   
   doc.setTextColor(255, 255, 255);
@@ -72,7 +73,7 @@ const createClearancePDF = (loan: LoanData, completionDate: Date): jsPDF => {
   yPos += lines.length * 6 + 15;
 
   // Borrower Details Box
-  doc.setFillColor(248, 250, 252); // slate-50
+  doc.setFillColor(...PDF_THEME.softBg);
   doc.setDrawColor(226, 232, 240); // slate-200
   doc.roundedRect(margin, yPos, pageWidth - margin * 2, 70, 3, 3, 'FD');
   yPos += 10;
@@ -103,7 +104,7 @@ const createClearancePDF = (loan: LoanData, completionDate: Date): jsPDF => {
   yPos += 25;
 
   // Loan Details Box
-  doc.setFillColor(248, 250, 252);
+  doc.setFillColor(...PDF_THEME.softBg);
   doc.roundedRect(margin, yPos, pageWidth - margin * 2, 55, 3, 3, 'FD');
   yPos += 10;
 

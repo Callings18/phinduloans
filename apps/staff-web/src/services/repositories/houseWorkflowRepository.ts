@@ -1,5 +1,6 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { callRpc } from "@phinduloans/shared/utils/rpcResult";
+import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 
 type HouseReviewStage = "loan_officer" | "finance" | "manager";
 
@@ -19,24 +20,7 @@ export interface RecordPaymentParams {
   penaltyAmount?: number;
 }
 
-export interface PaymentReceiptData {
-  success: boolean;
-  error?: string;
-  receipt_no?: string;
-  borrower_name?: string;
-  borrower_phone?: string;
-  borrower_email?: string;
-  loan_id?: string;
-  loan_amount?: number;
-  repayment_amount?: number;
-  payment_method?: string;
-  paid_date?: string;
-  installment_number?: number;
-  total_installments?: number;
-  total_paid?: number;
-  outstanding_balance?: number;
-  loan_completed?: boolean;
-}
+export type { PaymentReceiptData };
 
 export interface CompleteDisbursementParams {
   disbursementId: string;

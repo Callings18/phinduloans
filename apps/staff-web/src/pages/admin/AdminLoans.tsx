@@ -7,6 +7,9 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
 import { downloadLoanSchedule } from "@phinduloans/shared/utils/generateLoanSchedule";
+import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
+import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
+import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
@@ -179,6 +182,7 @@ const AdminLoans = () => {
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { data: settings } = useSystemSettings();
   const { can } = usePermissions();
   const { selectedProductId, setSelectedProductId } = useLoanProductFilter();
 
@@ -471,6 +475,7 @@ const AdminLoans = () => {
       if (!destAccount) throw new Error("Destination account not found");
       let remaining = paidAmount;
       let processedInstallments = 0;
+      let lastReceipt: PaymentReceiptData | null = null;
       const paidDate = new Date().toISOString().split("T")[0];
       const txBase = quickPaymentData.transaction_reference || `PAY-${Date.now()}`;
 
@@ -498,10 +503,11 @@ const AdminLoans = () => {
           p_paid_date: paidDate,
         });
         if (rpcError) throw rpcError;
-        const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+        const rpcResult = rpcData as PaymentReceiptData | null;
         if (!rpcResult?.success) {
           throw new Error(rpcResult?.error || "Failed to record repayment");
         }
+        lastReceipt = rpcResult;
 
         remaining -= allocation;
         processedInstallments += 1;
@@ -515,6 +521,8 @@ const AdminLoans = () => {
         paidAmount: paidAmount - remaining,
         isFullPayment: remaining <= 0 && paidAmount <= amountDue,
         overpayment: Math.max(remaining, 0),
+        receipt: lastReceipt,
+        loanId: quickPaymentLoan.id,
       };
     },
     onSuccess: (result) => {
@@ -531,6 +539,10 @@ const AdminLoans = () => {
       if (result.overpayment > 0) {
         toast.warning(`K${result.overpayment.toLocaleString()} could not be allocated because no more open installments were available.`);
       }
+      downloadReceiptFromRpc(result.receipt, {
+        loanReferenceFallback: result.loanId?.slice(0, 8),
+        company: settings?.companyInfo,
+      });
       setIsQuickPaymentOpen(false);
       setQuickPaymentLoan(null);
       setNextRepayment(null);

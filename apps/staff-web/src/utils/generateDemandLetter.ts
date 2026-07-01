@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
+import { PDF_THEME } from "@phinduloans/shared/utils/pdfTheme";
 
 interface DemandLetterData {
   borrowerName: string;
@@ -63,7 +64,7 @@ export const generateDemandLetter = (data: DemandLetterData): jsPDF => {
   let yPos = 20;
 
   // Company Header - App theme color
-  doc.setFillColor(107, 25, 58);
+  doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageWidth, 30, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);

@@ -7,11 +7,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatZMW, getMonthName } from '@phinduloans/shared/utils/payrollCalculations';
 import { format } from "date-fns";
+import { PDF_THEME } from "@phinduloans/shared/utils/pdfTheme";
 
-const BRAND_COLOR: [number, number, number] = [107, 25, 58]; // Brand burgundy #6B193A
-const DARK_COLOR: [number, number, number] = [30, 30, 30];
-const LIGHT_BG: [number, number, number] = [248, 245, 246];
-const WHITE: [number, number, number] = [255, 255, 255];
+const DARK_COLOR: [number, number, number] = PDF_THEME.ink;
+const LIGHT_BG: [number, number, number] = PDF_THEME.softBg;
+const WHITE: [number, number, number] = PDF_THEME.white;
 
 function drawPayslipPage(doc: jsPDF, record: any, run: any) {
   const emp = record.employees || {};
@@ -21,7 +21,7 @@ function drawPayslipPage(doc: jsPDF, record: any, run: any) {
   let y = 12;
 
   // ── Header Band ──────────────────────────────────────────
-  doc.setFillColor(...BRAND_COLOR);
+  doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageW, 36, "F");
 
   doc.setTextColor(...WHITE);
@@ -84,7 +84,7 @@ function drawPayslipPage(doc: jsPDF, record: any, run: any) {
     foot: [["GROSS PAY", formatZMW(Number(record.gross_pay || 0))]],
     margin: { left: 14, right: pageW / 2 + 2 },
     styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: BRAND_COLOR, textColor: WHITE, fontStyle: "bold" },
+    headStyles: { fillColor: PDF_THEME.header, textColor: WHITE, fontStyle: "bold" },
     footStyles: { fillColor: LIGHT_BG, textColor: DARK_COLOR, fontStyle: "bold" },
     theme: "grid",
     tableWidth: pageW / 2 - 16,
@@ -106,7 +106,7 @@ function drawPayslipPage(doc: jsPDF, record: any, run: any) {
     foot: [["TOTAL", formatZMW(Number(record.total_deductions || 0)), formatZMW(Number(record.nhima_employer || 0) + Number(record.napsa_employer || 0))]],
     margin: { left: pageW / 2 + 2, right: 14 },
     styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [139, 30, 30], textColor: WHITE, fontStyle: "bold" },
+    headStyles: { fillColor: PDF_THEME.accent, textColor: WHITE, fontStyle: "bold" },
     footStyles: { fillColor: LIGHT_BG, textColor: DARK_COLOR, fontStyle: "bold" },
     theme: "grid",
     tableWidth: pageW / 2 - 16,
@@ -120,7 +120,7 @@ function drawPayslipPage(doc: jsPDF, record: any, run: any) {
   y = afterTables + 8;
 
   // ── Net Pay Banner ───────────────────────────────────────
-  doc.setFillColor(...BRAND_COLOR);
+  doc.setFillColor(...PDF_THEME.header);
   doc.roundedRect(14, y, pageW - 28, 16, 2, 2, "F");
   doc.setTextColor(...WHITE);
   doc.setFontSize(13);
@@ -192,7 +192,7 @@ export function generateAllPayslipsPDF(records: any[], run: any) {
   const pageW = doc.internal.pageSize.width;
 
   // ── Page 1: Summary ──────────────────────────────────────
-  doc.setFillColor(...BRAND_COLOR);
+  doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageW, 30, "F");
   doc.setTextColor(...WHITE);
   doc.setFontSize(16);
@@ -227,7 +227,7 @@ export function generateAllPayslipsPDF(records: any[], run: any) {
       formatZMW(Number(run.total_net || 0)),
     ]],
     styles: { fontSize: 7, cellPadding: 2 },
-    headStyles: { fillColor: BRAND_COLOR, textColor: WHITE, fontStyle: "bold" },
+    headStyles: { fillColor: PDF_THEME.header, textColor: WHITE, fontStyle: "bold" },
     footStyles: { fillColor: LIGHT_BG, textColor: DARK_COLOR, fontStyle: "bold" },
     theme: "grid",
   });

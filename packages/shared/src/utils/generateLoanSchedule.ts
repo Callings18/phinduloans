@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
+import { PDF_THEME } from '@phinduloans/shared/utils/pdfTheme';
 
 interface LoanScheduleData {
   borrowerName: string;
@@ -30,14 +31,6 @@ interface LoanScheduleData {
   companyPhone?: string;
 }
 
-const BRAND = {
-  primary: [107, 25, 58] as [number, number, number],
-  primaryDark: [107, 25, 58] as [number, number, number],
-  soft: [248, 238, 243] as [number, number, number],
-  ink: [36, 16, 24] as [number, number, number],
-  muted: [99, 88, 94] as [number, number, number],
-};
-
 export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -47,7 +40,7 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   const companyPhone = data.companyPhone || '+260 967 713 001';
   const outstandingBalance = Number(data.outstandingBalance || 0);
 
-  doc.setFillColor(...BRAND.primaryDark);
+  doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageWidth, 40, 'F');
 
   doc.setTextColor(255, 255, 255);
@@ -59,11 +52,11 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   doc.setFont('helvetica', 'normal');
   doc.text('LOAN REPAYMENT SCHEDULE', pageWidth / 2, 32, { align: 'center' });
 
-  doc.setTextColor(...BRAND.ink);
+  doc.setTextColor(...PDF_THEME.ink);
   doc.setFontSize(10);
   doc.text(`Generated: ${format(new Date(), 'MMMM dd, yyyy')}`, pageWidth - 15, 50, { align: 'right' });
 
-  doc.setFillColor(...BRAND.soft);
+  doc.setFillColor(...PDF_THEME.softBg);
   doc.rect(15, 55, pageWidth - 30, 45, 'F');
 
   doc.setFontSize(11);
@@ -88,7 +81,7 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   doc.text(`Email: ${data.borrowerEmail || '-'}`, col1, y);
   doc.text(`Interest Rate: ${data.interestRate}% (${data.interestPeriod})`, col2, y);
 
-  doc.setFillColor(...BRAND.primary);
+  doc.setFillColor(...PDF_THEME.header);
   const boxWidth = (pageWidth - 30) / 3;
   doc.rect(15, 105, boxWidth, 25, 'F');
   doc.rect(15 + boxWidth, 105, boxWidth, 25, 'F');
@@ -109,16 +102,16 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
   doc.text(`K${data.totalRepayment.toLocaleString()}`, 15 + 2 * boxWidth + boxWidth / 2, 124, { align: 'center' });
 
   if (outstandingBalance > 0) {
-    doc.setFillColor(...BRAND.soft);
+    doc.setFillColor(...PDF_THEME.softBg);
     doc.rect(15, 136, pageWidth - 30, 12, 'F');
     doc.setFontSize(10);
-    doc.setTextColor(...BRAND.ink);
+    doc.setTextColor(...PDF_THEME.ink);
     doc.setFont('helvetica', 'bold');
     doc.text('OUTSTANDING BALANCE', 20, 144);
     doc.text(`K${outstandingBalance.toLocaleString()}`, pageWidth - 20, 144, { align: 'right' });
   }
 
-  doc.setTextColor(...BRAND.ink);
+  doc.setTextColor(...PDF_THEME.ink);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.text('REPAYMENT SCHEDULE', 20, outstandingBalance > 0 ? 160 : 145);
@@ -137,12 +130,12 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
     body: tableData,
     theme: 'striped',
     headStyles: {
-      fillColor: BRAND.primary,
+      fillColor: PDF_THEME.header,
       textColor: [255, 255, 255],
       fontStyle: 'bold',
     },
     alternateRowStyles: {
-      fillColor: [245, 245, 245],
+      fillColor: PDF_THEME.stripe,
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 15 },
@@ -155,7 +148,7 @@ export const generateLoanSchedule = (data: LoanScheduleData): jsPDF => {
 
   const finalY = ((doc as any).lastAutoTable?.finalY ?? 130) + 15;
   doc.setFontSize(8);
-  doc.setTextColor(...BRAND.muted);
+  doc.setTextColor(...PDF_THEME.muted);
   doc.text('This is a computer-generated document and does not require a signature.', pageWidth / 2, finalY, { align: 'center' });
   doc.text(`${companyName} | ${companyAddress} | ${companyPhone}`, pageWidth / 2, finalY + 7, { align: 'center' });
 
