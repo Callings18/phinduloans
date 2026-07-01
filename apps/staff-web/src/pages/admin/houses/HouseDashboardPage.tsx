@@ -66,27 +66,40 @@ export default function HouseDashboardPage() {
 
       const { data: repayments, error: repaymentsError } = await supabase
         .from("loan_repayments")
-        .select("amount, due_date, status, principal_paid, paid_date")
+        .select("amount, due_date, status, principal_paid, penalty_paid, paid_date, updated_at")
         .in("loan_id", loanIds);
       if (repaymentsError) throw repaymentsError;
 
       const today = format(new Date(), "yyyy-MM-dd");
       const monthStart = format(new Date(), "yyyy-MM-01");
       const reps = (repayments ?? []) as RepaymentSummaryRow[];
-      
+
+      // Remaining amount still owed on an installment (accounts for partials).
+      const remaining = (r: RepaymentSummaryRow) =>
+        Math.max(Number(r.amount || 0) - Number(r.principal_paid || 0), 0);
+      // Money actually received on a row (principal + penalty paid).
+      const collected = (r: RepaymentSummaryRow) =>
+        Number(r.principal_paid || 0) + Number(r.penalty_paid || 0);
+
       return {
         dueToday: reps
           .filter((r) => r.due_date === today && r.status !== "paid" && r.status !== "cancelled")
-          .reduce((s, r) => s + Number(r.amount || 0), 0),
+          .reduce((s, r) => s + remaining(r), 0),
         overdue: reps
           .filter((r) => r.status !== "paid" && r.status !== "cancelled" && isPast(new Date(r.due_date)) && r.due_date !== today)
-          .reduce((s, r) => s + Number(r.amount || 0), 0),
+          .reduce((s, r) => s + remaining(r), 0),
+        // Count every payment received this month, including partial payments
+        // (which stay in "partial" status and never set paid_date).
         collectedThisMonth: reps
-          .filter((r) => r.status === "paid" && r.paid_date && r.paid_date >= monthStart)
-          .reduce((s, r) => s + Number(r.principal_paid || r.amount || 0), 0),
+          .filter((r) => {
+            if (collected(r) <= 0) return false;
+            const when = r.paid_date || (r.updated_at ? r.updated_at.slice(0, 10) : null);
+            return when != null && when >= monthStart;
+          })
+          .reduce((s, r) => s + collected(r), 0),
         totalOutstanding: reps
           .filter((r) => r.status !== "paid" && r.status !== "cancelled")
-          .reduce((s, r) => s + Number(r.amount || 0), 0),
+          .reduce((s, r) => s + remaining(r), 0),
       };
     },
   });
