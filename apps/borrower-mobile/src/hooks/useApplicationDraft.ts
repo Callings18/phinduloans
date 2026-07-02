@@ -50,7 +50,7 @@ export const useApplicationDraft = (): UseDraftReturn => {
     const [hasDraft, setHasDraft] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Check for existing draft on mount
     useEffect(() => {
