@@ -1,5 +1,5 @@
 // App root component
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";
 import PermissionRoute from "./components/admin/PermissionRoute";
@@ -31,7 +31,6 @@ import AdminLoans from "./pages/admin/AdminLoans";
 import AdminBorrowers from "./pages/admin/AdminBorrowers";
 import AdminRepayments from "./pages/admin/AdminRepayments";
 import AdminDisbursements from "./pages/admin/AdminDisbursements";
-import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminLoanProducts from "./pages/admin/AdminLoanProducts";
 import AdminEmployers from "./pages/admin/AdminEmployers";
@@ -42,38 +41,55 @@ import AdminWriteOffs from "./pages/admin/AdminWriteOffs";
 import AdminBulkRepayments from "./pages/admin/AdminBulkRepayments";
 import AdminContractTemplates from "./pages/admin/AdminContractTemplates";
 import AdminPMIC from "./pages/admin/AdminPMIC";
-import AdminAccounts from "./pages/admin/AdminAccounts";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminCourtCases from "./pages/admin/AdminCourtCases";
-import AdminHR from "./pages/admin/AdminHR";
-import AdminPayroll from "./pages/admin/AdminPayroll";
-import AdminPayrollTaxConfig from "./pages/admin/AdminPayrollTaxConfig";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
-import AdminAIAgents from "./pages/admin/AdminAIAgents";
-import AdminAIAgentDetail from "./pages/admin/AdminAIAgentDetail";
-import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
-import HouseLayout from "./components/admin/house/HouseLayout";
-import HouseDashboardPage from "./pages/admin/houses/HouseDashboardPage";
-import HouseBorrowersPage from "./pages/admin/houses/HouseBorrowersPage";
-import HouseBorrowerDetailPage from "./pages/admin/houses/HouseBorrowerDetailPage";
-import HouseLoansPage from "./pages/admin/houses/HouseLoansPage";
-import HouseLoanCreatePage from "./pages/admin/houses/HouseLoanCreatePage";
-import HouseLoanEditPage from "./pages/admin/houses/HouseLoanEditPage";
-import HouseLoanDetailPage from "./pages/admin/houses/HouseLoanDetailPage";
-import HouseReviewPage from "./pages/admin/houses/HouseReviewPage";
-import HouseDisbursementsPage from "./pages/admin/houses/HouseDisbursementsPage";
-import HouseCollectionsPage from "./pages/admin/houses/HouseCollectionsPage";
-import HouseReportsPage from "./pages/admin/houses/HouseReportsPage";
-import HouseReconciliationPage from "./pages/admin/houses/HouseReconciliationPage";
 import { borrowerAppPath, getOfficeBaseUrl, isOfficeSiteMode } from "./config/publicUrls";
 
 const queryClient = new QueryClient();
 const officeMode = isOfficeSiteMode();
 const officeAdminUrl = `${getOfficeBaseUrl()}/admin`;
+
+const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
+const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
+const AdminHR = lazy(() => import("./pages/admin/AdminHR"));
+const AdminPayroll = lazy(() => import("./pages/admin/AdminPayroll"));
+const AdminPayrollTaxConfig = lazy(() => import("./pages/admin/AdminPayrollTaxConfig"));
+const AdminAIAgents = lazy(() => import("./pages/admin/AdminAIAgents"));
+const AdminAIAgentDetail = lazy(() => import("./pages/admin/AdminAIAgentDetail"));
+const AdminAIOpsCenter = lazy(() => import("./pages/admin/AdminAIOpsCenter"));
+const AdminHousesIndex = lazy(() => import("./pages/admin/houses/AdminHousesIndex"));
+const HouseLayout = lazy(() => import("./components/admin/house/HouseLayout"));
+const HouseDashboardPage = lazy(() => import("./pages/admin/houses/HouseDashboardPage"));
+const HouseBorrowersPage = lazy(() => import("./pages/admin/houses/HouseBorrowersPage"));
+const HouseBorrowerDetailPage = lazy(() => import("./pages/admin/houses/HouseBorrowerDetailPage"));
+const HouseLoansPage = lazy(() => import("./pages/admin/houses/HouseLoansPage"));
+const HouseLoanCreatePage = lazy(() => import("./pages/admin/houses/HouseLoanCreatePage"));
+const HouseLoanEditPage = lazy(() => import("./pages/admin/houses/HouseLoanEditPage"));
+const HouseLoanDetailPage = lazy(() => import("./pages/admin/houses/HouseLoanDetailPage"));
+const HouseReviewPage = lazy(() => import("./pages/admin/houses/HouseReviewPage"));
+const HouseDisbursementsPage = lazy(() => import("./pages/admin/houses/HouseDisbursementsPage"));
+const HouseCollectionsPage = lazy(() => import("./pages/admin/houses/HouseCollectionsPage"));
+const HouseReportsPage = lazy(() => import("./pages/admin/houses/HouseReportsPage"));
+const HouseReconciliationPage = lazy(() => import("./pages/admin/houses/HouseReconciliationPage"));
+
+function AdminRouteSuspense({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 function App() {
   return (
@@ -176,7 +192,9 @@ function App() {
                               { module: "reports", action: "export" },
                             ]}
                           >
-                            <AdminReports />
+                            <AdminRouteSuspense>
+                              <AdminReports />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -206,7 +224,9 @@ function App() {
                       element={
                         <ErrorBoundary>
                           <PermissionRoute permission={{ module: "loans", action: "view" }}>
-                            <AdminHousesIndex />
+                            <AdminRouteSuspense>
+                              <AdminHousesIndex />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -216,34 +236,36 @@ function App() {
                       element={
                         <ErrorBoundary>
                           <PermissionRoute permission={{ module: "house", action: "dashboard_view" }}>
-                            <HouseLayout />
+                            <AdminRouteSuspense>
+                              <HouseLayout />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
                     >
                       <Route
                         index
-                        element={<PermissionRoute permission={{ module: "house", action: "dashboard_view" }}><HouseDashboardPage /></PermissionRoute>}
+                        element={<PermissionRoute permission={{ module: "house", action: "dashboard_view" }}><AdminRouteSuspense><HouseDashboardPage /></AdminRouteSuspense></PermissionRoute>}
                       />
                       <Route
                         path="borrowers"
-                        element={<PermissionRoute permission={{ module: "house", action: "borrowers_view" }}><HouseBorrowersPage /></PermissionRoute>}
+                        element={<PermissionRoute permission={{ module: "house", action: "borrowers_view" }}><AdminRouteSuspense><HouseBorrowersPage /></AdminRouteSuspense></PermissionRoute>}
                       />
                       <Route
                         path="borrowers/:borrowerId"
-                        element={<PermissionRoute permission={{ module: "house", action: "borrowers_view" }}><HouseBorrowerDetailPage /></PermissionRoute>}
+                        element={<PermissionRoute permission={{ module: "house", action: "borrowers_view" }}><AdminRouteSuspense><HouseBorrowerDetailPage /></AdminRouteSuspense></PermissionRoute>}
                       />
                       <Route
                         path="loans"
-                        element={<PermissionRoute permission={{ module: "house", action: "loans_view" }}><HouseLoansPage /></PermissionRoute>}
+                        element={<PermissionRoute permission={{ module: "house", action: "loans_view" }}><AdminRouteSuspense><HouseLoansPage /></AdminRouteSuspense></PermissionRoute>}
                       />
                       <Route
                         path="loans/create"
-                        element={<PermissionRoute permission={{ module: "house", action: "loans_create" }}><HouseLoanCreatePage /></PermissionRoute>}
+                        element={<PermissionRoute permission={{ module: "house", action: "loans_create" }}><AdminRouteSuspense><HouseLoanCreatePage /></AdminRouteSuspense></PermissionRoute>}
                       />
                       <Route
                         path="loans/:loanId/edit"
-                        element={<PermissionRoute permission={{ module: "house", action: "loans_update" }}><HouseLoanEditPage /></PermissionRoute>}
+                        element={<PermissionRoute permission={{ module: "house", action: "loans_update" }}><AdminRouteSuspense><HouseLoanEditPage /></AdminRouteSuspense></PermissionRoute>}
                       />
                       <Route
                         path="loans/:loanId"
@@ -254,7 +276,9 @@ function App() {
                               { module: "house", action: "loans_update" },
                             ]}
                           >
-                            <HouseLoanDetailPage />
+                            <AdminRouteSuspense>
+                              <HouseLoanDetailPage />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         }
                       />
@@ -268,7 +292,9 @@ function App() {
                               { module: "house", action: "review_manager_approve" },
                             ]}
                           >
-                            <HouseReviewPage />
+                            <AdminRouteSuspense>
+                              <HouseReviewPage />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         }
                       />
@@ -281,7 +307,9 @@ function App() {
                               { module: "house", action: "disbursement_disburse" },
                             ]}
                           >
-                            <HouseDisbursementsPage />
+                            <AdminRouteSuspense>
+                              <HouseDisbursementsPage />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         }
                       />
@@ -294,7 +322,9 @@ function App() {
                               { module: "house", action: "collections_manage" },
                             ]}
                           >
-                            <HouseCollectionsPage />
+                            <AdminRouteSuspense>
+                              <HouseCollectionsPage />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         }
                       />
@@ -307,7 +337,9 @@ function App() {
                               { module: "house", action: "reports_export" },
                             ]}
                           >
-                            <HouseReportsPage />
+                            <AdminRouteSuspense>
+                              <HouseReportsPage />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         }
                       />
@@ -320,7 +352,9 @@ function App() {
                               { module: "house", action: "collections_manage" },
                             ]}
                           >
-                            <HouseReconciliationPage />
+                            <AdminRouteSuspense>
+                              <HouseReconciliationPage />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         }
                       />
@@ -410,7 +444,9 @@ function App() {
                       element={
                         <ErrorBoundary>
                           <PermissionRoute permission={{ module: "disbursement", action: "view" }}>
-                            <AdminAccounts />
+                            <AdminRouteSuspense>
+                              <AdminAccounts />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -445,7 +481,9 @@ function App() {
                               { module: "hr", action: "manage" },
                             ]}
                           >
-                            <AdminHR />
+                            <AdminRouteSuspense>
+                              <AdminHR />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -461,7 +499,9 @@ function App() {
                               { module: "payroll", action: "approve" },
                             ]}
                           >
-                            <AdminPayroll />
+                            <AdminRouteSuspense>
+                              <AdminPayroll />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -477,7 +517,9 @@ function App() {
                               { module: "payroll", action: "approve" },
                             ]}
                           >
-                            <AdminPayrollTaxConfig />
+                            <AdminRouteSuspense>
+                              <AdminPayrollTaxConfig />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -533,7 +575,9 @@ function App() {
                       element={
                         <ErrorBoundary>
                           <PermissionRoute adminOnly>
-                            <AdminAIAgents />
+                            <AdminRouteSuspense>
+                              <AdminAIAgents />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }
@@ -543,7 +587,21 @@ function App() {
                       element={
                         <ErrorBoundary>
                           <PermissionRoute adminOnly>
-                            <AdminAIAgentDetail />
+                            <AdminRouteSuspense>
+                              <AdminAIAgentDetail />
+                            </AdminRouteSuspense>
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="ai-ops"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminRouteSuspense>
+                              <AdminAIOpsCenter />
+                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

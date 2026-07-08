@@ -7,7 +7,11 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["src/**/*.{test,spec}.{ts,tsx}", "tests/integration/**/*.test.ts"],
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "tests/integration/**/*.test.ts",
+      "packages/**/__tests__/**/*.{test,spec}.{ts,tsx}",
+    ],
     testTimeout: 30_000,
   },
   resolve: {

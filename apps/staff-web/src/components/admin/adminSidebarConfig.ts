@@ -28,6 +28,7 @@ import {
   ToggleLeft,
   FileEdit,
   Bot,
+  Activity,
 } from "lucide-react";
 
 /** Optional permission gate: item visible if can(module, action) or admin fallback handled in sidebar. */
@@ -132,6 +133,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
     label: "AI Agents",
     items: [
       { icon: Bot, label: "AI Agents", path: "/admin/ai-agents", adminOnly: true, betaKey: "ai_agents_enabled" },
+      { icon: Activity, label: "AI Ops Center", path: "/admin/ai-ops", adminOnly: true, betaKey: "ai_ops_center" },
     ],
   },
 ];
