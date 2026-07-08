@@ -68,9 +68,12 @@ const Footer = () => {
             <ul className="space-y-2">
               {[
                 { name: "Home", path: "/" },
-                { name: "Apply Now", path: borrowerAppPath("/auth") },
+                { name: "Loan Products", path: "/loan-products" },
+                { name: "Apply Now", path: borrowerAppPath("/auth?mode=signup") },
                 { name: "Calculator", path: "/calculator" },
                 { name: "About Us", path: "/about-us" },
+                { name: "FAQ", path: "/faq" },
+                { name: "Contact", path: "/contact" },
               ].map((link) => (
                 <li key={link.name}>
                   <a
@@ -91,12 +94,14 @@ const Footer = () => {
               <li>Licensed by the Bank of Zambia</li>
               <li>Data Protection — DPA 2021 compliant</li>
               <li>
-                <a
-                  href="mailto:info@phindu.com"
-                  className="hover:text-primary transition-colors"
-                >
-                  Request privacy policy
-                </a>
+                <Link to="/privacy" className="hover:text-primary transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms" className="hover:text-primary transition-colors">
+                  Terms &amp; Conditions
+                </Link>
               </li>
               <li>
                 <a

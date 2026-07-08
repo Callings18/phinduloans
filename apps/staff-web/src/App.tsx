@@ -15,6 +15,11 @@ import { AuthProvider } from "@phinduloans/shared/hooks/useAuth";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Calculator from "./pages/Calculator";
+import Faq from "./pages/Faq";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import LoanProducts from "./pages/LoanProducts";
+import Contact from "./pages/Contact";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Install from "./pages/Install";
@@ -85,6 +90,11 @@ function App() {
                   <Route path="/calculator" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Calculator /></ErrorBoundary>} />
                   <Route path="/about" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><About /></ErrorBoundary>} />
                   <Route path="/about-us" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><About /></ErrorBoundary>} />
+                  <Route path="/faq" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Faq /></ErrorBoundary>} />
+                  <Route path="/privacy" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Privacy /></ErrorBoundary>} />
+                  <Route path="/terms" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Terms /></ErrorBoundary>} />
+                  <Route path="/loan-products" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><LoanProducts /></ErrorBoundary>} />
+                  <Route path="/contact" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Contact /></ErrorBoundary>} />
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/install" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
