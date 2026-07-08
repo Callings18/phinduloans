@@ -11,7 +11,7 @@ export default defineConfig({
     port: 8081,
   },
   plugins: [react()],
-  publicDir: path.resolve(appDir, "../../public"),
+  publicDir: path.resolve(appDir, "./public"),
   resolve: {
     alias: {
       "@": path.resolve(appDir, "./src"),

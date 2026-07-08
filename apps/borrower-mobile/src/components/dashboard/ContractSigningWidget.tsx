@@ -47,7 +47,7 @@ export default function ContractSigningWidget({ userId }: Props) {
   const [signingMethod, setSigningMethod] = useState<"draw" | "upload">("draw");
   const queryClient = useQueryClient();
 
-  // Fetch approved loans awaiting contract signing
+  // Loans awaiting borrower signature
   const { data: loansAwaitingSignature, isLoading } = useQuery({
     queryKey: ["loans-awaiting-signature", userId],
     queryFn: async () => {
@@ -55,7 +55,7 @@ export default function ContractSigningWidget({ userId }: Props) {
         .from("loan_applications")
         .select("*")
         .eq("user_id", userId)
-        .in("status", ["approved", "contract_signing", "disbursed", "active"])
+        .in("status", ["approved", "contract_signing", "awaiting_disbursement"])
         .eq("borrower_signed", false)
         .is("signed_contract_url", null)
         .order("created_at", { ascending: false });
@@ -65,6 +65,32 @@ export default function ContractSigningWidget({ userId }: Props) {
     },
     enabled: !!userId,
   });
+
+  const { data: signedContracts = [] } = useQuery({
+    queryKey: ["borrower-signed-contracts", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("id, full_name, loan_amount, loan_term_months, signed_contract_url, borrower_signed_at, status")
+        .eq("user_id", userId)
+        .eq("borrower_signed", true)
+        .not("signed_contract_url", "is", null)
+        .order("borrower_signed_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!userId,
+  });
+
+  const advanceStatusAfterSign = async (loanId: string, currentStatus: string) => {
+    if (["approved", "contract_signing"].includes(currentStatus)) {
+      await supabase
+        .from("loan_applications")
+        .update({ status: "awaiting_disbursement", updated_at: new Date().toISOString() })
+        .eq("id", loanId);
+    }
+  };
 
   // Sign contract mutation
   const signContractMutation = useMutation({
@@ -118,6 +144,8 @@ export default function ContractSigningWidget({ userId }: Props) {
 
       if (updateError) throw updateError;
 
+      await advanceStatusAfterSign(selectedLoan.id, selectedLoan.status);
+
       await logAudit({
         action: 'CONTRACT_SIGNED_BORROWER',
         entity_type: 'loan_application',
@@ -146,8 +174,9 @@ export default function ContractSigningWidget({ userId }: Props) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loans-awaiting-signature", userId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-signed-contracts", userId] });
       queryClient.invalidateQueries({ queryKey: ["user-loans", userId] });
-      toast.success("Contract signed successfully! The admin has been notified.");
+      toast.success("Contract signed successfully! Your application is now awaiting disbursement.");
       handleCloseDialog();
     },
     onError: (error: Error) => {
@@ -186,6 +215,8 @@ export default function ContractSigningWidget({ userId }: Props) {
 
       if (updateError) throw updateError;
 
+      await advanceStatusAfterSign(selectedLoan.id, selectedLoan.status);
+
       // Notify admin
       await supabase.functions.invoke("send-notification", {
         body: {
@@ -203,8 +234,9 @@ export default function ContractSigningWidget({ userId }: Props) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loans-awaiting-signature", userId] });
+      queryClient.invalidateQueries({ queryKey: ["borrower-signed-contracts", userId] });
       queryClient.invalidateQueries({ queryKey: ["user-loans", userId] });
-      toast.success("Signed contract uploaded successfully! The admin has been notified.");
+      toast.success("Signed contract uploaded! Your application is now awaiting disbursement.");
       handleCloseDialog();
     },
     onError: (error: Error) => {
@@ -261,8 +293,18 @@ export default function ContractSigningWidget({ userId }: Props) {
       interest_rate: loan.interest_rate,
       monthly_payment: loan.monthly_payment,
       total_repayment: loan.total_repayment,
+      contract_url: loan.contract_url,
     } as any);
     toast.success("Contract downloaded");
+  };
+
+  const handleViewSignedContract = async (signedUrl: string) => {
+    const { data, error } = await supabase.storage.from("loan-documents").createSignedUrl(signedUrl, 300);
+    if (error || !data?.signedUrl) {
+      toast.error("Could not open signed contract");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   if (isLoading) {
@@ -275,7 +317,7 @@ export default function ContractSigningWidget({ userId }: Props) {
     );
   }
 
-  if (!loansAwaitingSignature || loansAwaitingSignature.length === 0) {
+  if ((!loansAwaitingSignature || loansAwaitingSignature.length === 0) && signedContracts.length === 0) {
     return (
       <Card className="glass border-border/50">
         <CardHeader className="pb-2">
@@ -297,11 +339,10 @@ export default function ContractSigningWidget({ userId }: Props) {
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <FileText size={18} className="text-muted-foreground" />
-            Loan Contract (Optional)
+            Loan Contract
           </CardTitle>
           <CardDescription>
-            Contracts are usually signed offline via WhatsApp with our team. You can optionally
-            view your contract here, or upload a signed copy if you'd like to keep a digital record.
+            Review, download, and sign your loan contract to proceed with disbursement.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -341,6 +382,28 @@ export default function ContractSigningWidget({ userId }: Props) {
               </div>
             </div>
           ))}
+          {signedContracts.map((loan) => (
+            <div
+              key={loan.id}
+              className="flex items-center justify-between p-3 bg-success/5 rounded-lg border border-success/20"
+            >
+              <div>
+                <p className="font-medium text-sm">Signed contract</p>
+                <p className="text-xs text-muted-foreground">
+                  K{Number(loan.loan_amount).toLocaleString()} •{" "}
+                  {loan.borrower_signed_at ? format(new Date(loan.borrower_signed_at), "MMM d, yyyy") : "Signed"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loan.signed_contract_url && handleViewSignedContract(loan.signed_contract_url)}
+              >
+                <Download size={14} className="mr-1" />
+                View signed
+              </Button>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -350,11 +413,10 @@ export default function ContractSigningWidget({ userId }: Props) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="text-primary" />
-              Loan Contract (Optional)
+              Sign Loan Contract
             </DialogTitle>
             <DialogDescription>
-              You can sign your contract here digitally, or upload a copy you've already signed offline.
-              This step is optional — our team also handles signing via WhatsApp.
+              Download and review your contract, then sign digitally or upload a signed copy.
             </DialogDescription>
           </DialogHeader>
 

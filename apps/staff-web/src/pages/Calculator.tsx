@@ -13,6 +13,7 @@ import { fetchActiveLoanProducts } from "@phinduloans/shared/services/repositori
 import { cn } from "@phinduloans/shared/lib/utils";
 import { calculateLoan, generateRepaymentSchedule, LoanProduct as LoanProductCalc, getInterestPeriodLabel } from "@phinduloans/shared/utils/loanCalculations";
 import LoanComparison from "@phinduloans/shared/components/common/LoanComparison";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 const Calculator = () => {
   const [loanAmount, setLoanAmount] = useState(5000);
@@ -308,10 +309,10 @@ const Calculator = () => {
                   </div>
 
                   <Button variant="hero" size="lg" className="w-full" asChild>
-                    <Link to={selectedProduct ? `/apply?product=${selectedProduct.id}` : "/install"}>
+                    <a href={selectedProduct ? borrowerAppPath(`/apply?product=${selectedProduct.id}`) : borrowerAppPath("/auth")}>
                       Apply for K{loanAmount.toLocaleString()}
                       <ArrowRight size={20} />
-                    </Link>
+                    </a>
                   </Button>
                 </div>
               </div>

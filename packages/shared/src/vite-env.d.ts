@@ -11,4 +11,12 @@ interface ImportMetaEnv {
   readonly VITE_BETA_MODULES?: string;
   /** Optional Sentry DSN for client error reporting (`@sentry/react`). */
   readonly VITE_SENTRY_DSN?: string;
+  /** Borrower PWA origin for cross-domain redirects. */
+  readonly VITE_BORROWER_APP_URL?: string;
+  /** Staff office origin for cross-domain redirects. */
+  readonly VITE_OFFICE_BASE_URL?: string;
+  /** Marketing site origin (defaults to https://phindu.com). */
+  readonly VITE_MARKETING_BASE_URL?: string;
+  /** Staff-web deploy mode: marketing (default) or office. */
+  readonly VITE_SITE_MODE?: string;
 }

@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { calculateLoan, LoanProduct as LoanProductCalc } from "@phinduloans/shared/utils/loanCalculations";
 import { format, addMonths } from "date-fns";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 interface LoanProduct {
   id: string;
@@ -331,10 +332,10 @@ const LoanCalculator = () => {
 
                 {/* Apply Button */}
                 <Button variant="hero" size="lg" className="w-full" asChild>
-                  <Link to={`/auth?mode=signup&redirect=dashboard&apply=true${selectedProduct ? `&product=${selectedProduct.id}` : ''}`}>
+                  <a href={borrowerAppPath(`/auth?mode=signup&apply=true${selectedProduct ? `&product=${selectedProduct.id}` : ""}`)}>
                     Get Started
                     <ArrowRight size={20} />
-                  </Link>
+                  </a>
                 </Button>
               </div>
             )}

@@ -49,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@phinduloans/shared/components/ui/select";
+import { notifyBorrowerDocumentRequest } from "@phinduloans/shared/utils/notifyBorrowerPortal";
 
 interface DocumentChecklistItem {
   id: string;
@@ -112,6 +113,7 @@ export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
         .from("loan_applications")
         .select(`
           user_id,
+          full_name,
           loan_product_id,
           nrc_front_url,
           nrc_back_url,
@@ -282,13 +284,19 @@ export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      const docName = newDocName;
+      const borrowerUserId = (loanApplication as { user_id?: string; full_name?: string } | undefined)?.user_id;
+      const borrowerName = (loanApplication as { full_name?: string } | undefined)?.full_name || "Borrower";
       queryClient.invalidateQueries({ queryKey: ["document-checklist", loanId] });
       toast.success("Document added to checklist");
       setIsAddDocOpen(false);
       setNewDocType("");
       setNewDocName("");
       setNewDocRequired(true);
+      if (borrowerUserId && docName) {
+        await notifyBorrowerDocumentRequest(borrowerUserId, borrowerName, docName, loanId);
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to add document");

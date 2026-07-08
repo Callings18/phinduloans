@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
+import { borrowerAppPath } from "@/config/publicUrls";
 const phinduLogo = "/icons/icon-512.png";
 
 const Footer = () => {
@@ -28,8 +29,8 @@ const Footer = () => {
                 Get the app
               </p>
               <div className="flex flex-wrap gap-2">
-                <Link
-                  to="/install"
+                <a
+                  href={borrowerAppPath("/auth")}
                   aria-label="Download Android APK"
                   className="flex items-center gap-2 bg-foreground text-background rounded-lg px-3 py-2 hover:opacity-90 transition-opacity"
                 >
@@ -43,9 +44,9 @@ const Footer = () => {
                     <p className="text-[9px] opacity-80">Get it on</p>
                     <p className="text-xs font-semibold">Google Play</p>
                   </div>
-                </Link>
-                <Link
-                  to="/install"
+                </a>
+                <a
+                  href={borrowerAppPath("/auth")}
                   aria-label="iOS install instructions"
                   className="flex items-center gap-2 bg-foreground text-background rounded-lg px-3 py-2 hover:opacity-90 transition-opacity"
                 >
@@ -56,7 +57,7 @@ const Footer = () => {
                     <p className="text-[9px] opacity-80">Download on the</p>
                     <p className="text-xs font-semibold">App Store</p>
                   </div>
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -67,17 +68,17 @@ const Footer = () => {
             <ul className="space-y-2">
               {[
                 { name: "Home", path: "/" },
-                { name: "Apply Now", path: "/install" },
+                { name: "Apply Now", path: borrowerAppPath("/auth") },
                 { name: "Calculator", path: "/calculator" },
                 { name: "About Us", path: "/about-us" },
               ].map((link) => (
                 <li key={link.name}>
-                  <Link
-                    to={link.path}
+                  <a
+                    href={link.path}
                     className="text-muted-foreground text-sm hover:text-primary transition-colors"
                   >
                     {link.name}
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>

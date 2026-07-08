@@ -26,10 +26,17 @@ import {
   FileText,
   Activity,
 } from "lucide-react";
-import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import { ApplicationStatusTracker } from "./ApplicationStatusTracker";
 import DocumentChecklist from "./DocumentChecklist";
+import ContractSigningWidget from "./ContractSigningWidget";
 import { borrowerInstallmentLabel, borrowerTermShortLabel } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
+import {
+  borrowerCanSubmitPaymentClaim,
+  borrowerRepaymentPenaltyDue,
+  borrowerRepaymentRemaining,
+  borrowerRepaymentStatusDisplay,
+} from "@phinduloans/shared/utils/borrowerRepaymentDisplay";
 import type { BorrowerDashboardLoan } from "@phinduloans/shared/types/borrowerDashboard";
 import { getCanonicalStatusLabel, getCanonicalStatusBadgeClasses } from "@phinduloans/shared/constants/loanStatusLabels";
 
@@ -70,6 +77,7 @@ interface Props {
   userId: string;
   loans: BorrowerDashboardLoan[];
   repayments: any[];
+  loadError?: boolean;
   loanEvents?: Array<{
     id: string;
     loan_id: string;
@@ -90,6 +98,7 @@ export default function BorrowerLoansTab({
   userId,
   loans,
   repayments,
+  loadError = false,
   loanEvents = [],
   onDownloadStatement,
   onDownloadStatementCsv,
@@ -106,20 +115,21 @@ export default function BorrowerLoansTab({
   const recentEvents = loanEvents.slice(0, 5);
 
   const getRepaymentStatus = (rep: any) => {
-    const today = startOfDay(new Date());
-    const dueDate = startOfDay(new Date(rep.due_date));
-    const isOverdue = ["pending", "overdue"].includes(rep.status) && isAfter(today, dueDate);
-    const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
-    if (rep.status === "paid") return { label: "Paid", color: "bg-success/20 text-success border-success/30", icon: CheckCircle };
-    if (rep.status === "cancelled") return { label: "Cancelled", color: "bg-muted/20 text-muted-foreground border-muted/30", icon: AlertCircle };
-    if (isOverdue || rep.status === "overdue") return { label: `${daysOverdue}d overdue`, color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle };
-    return { label: "Pending", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
+    const display = borrowerRepaymentStatusDisplay(rep);
+    const icon =
+      display.label.startsWith("Paid") ? CheckCircle
+      : display.label.startsWith("Cancelled") ? AlertCircle
+      : display.isOverdue ? AlertTriangle
+      : Clock;
+    return { label: display.label, color: display.color, icon };
   };
 
   const getLoanProgress = (loanId: string) => {
     const lr = repayments.filter((r) => r.loan_id === loanId);
-    const paid = lr.filter((r) => r.status === "paid").length;
-    return lr.length > 0 ? (paid / lr.length) * 100 : 0;
+    if (lr.length === 0) return 0;
+    const totalOriginal = lr.reduce((s, r) => s + Number(r.original_amount || r.amount || 0), 0);
+    const totalPaidPrincipal = lr.reduce((s, r) => s + Number(r.principal_paid || (r.status === "paid" ? r.original_amount || r.amount : 0)), 0);
+    return totalOriginal > 0 ? (totalPaidPrincipal / totalOriginal) * 100 : 0;
   };
 
   const renderLoanCard = (loan: any, showSchedule = true) => {
@@ -205,6 +215,8 @@ export default function BorrowerLoansTab({
                     {loanRepayments.map((rep) => {
                       const status = getRepaymentStatus(rep);
                       const StatusIcon = status.icon;
+                      const remaining = borrowerRepaymentRemaining(rep);
+                      const penaltyDue = borrowerRepaymentPenaltyDue(rep);
                       return (
                         <div key={rep.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary/40 border border-border/40 text-xs">
                           <div className="flex items-center gap-2">
@@ -216,11 +228,13 @@ export default function BorrowerLoansTab({
                               <p className="text-[10px] text-muted-foreground">
                                 {format(new Date(rep.due_date), "MMM dd, yyyy")}
                                 {rep.paid_date && ` • Paid: ${format(new Date(rep.paid_date), "MMM dd")}`}
+                                {remaining > 0 && rep.status !== "paid" && ` • K${remaining.toLocaleString()} left`}
+                                {penaltyDue > 0 && ` · penalty K${penaltyDue.toLocaleString()}`}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {["pending", "overdue"].includes(rep.status) && (
+                            {borrowerCanSubmitPaymentClaim(rep) && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -269,6 +283,15 @@ export default function BorrowerLoansTab({
     <div className="space-y-5">
       <h2 className="text-xl font-bold text-foreground">My Loans</h2>
 
+      {loadError && (
+        <Card className="border-destructive/30">
+          <CardContent className="flex items-center gap-3 p-4 text-sm text-destructive">
+            <AlertCircle size={18} className="shrink-0" />
+            <span>Could not refresh loan data. Showing last known information.</span>
+          </CardContent>
+        </Card>
+      )}
+
       {recentEvents.length > 0 && (
         <Card className="border-border/60 shadow-card">
           <CardContent className="p-4 space-y-2">
@@ -295,6 +318,7 @@ export default function BorrowerLoansTab({
         </TabsList>
 
         <TabsContent value="tracker" className="space-y-3 mt-3">
+          <ContractSigningWidget userId={userId} />
           <ApplicationStatusTracker userId={userId} />
           {loans
             .filter((l) => ["pending", "under_review", "approved", "contract_signing", "awaiting_disbursement"].includes(l.status))

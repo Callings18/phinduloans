@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { cn } from "@phinduloans/shared/lib/utils";
 import { format } from "date-fns";
-import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { getCanonicalStatusLabel } from "@phinduloans/shared/constants/loanStatusLabels";
 import BorrowerLoanMessages from "./BorrowerLoanMessages";
 
@@ -93,10 +92,9 @@ interface ApplicationStatusTrackerProps {
 export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerProps) {
   const [applications, setApplications] = useState<LoanApplication[]>([]);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
-    // Fetch initial applications
     const fetchApplications = async () => {
       const { data, error } = await supabase
         .from("loan_applications")
@@ -106,17 +104,18 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
 
       if (error) {
         console.error("Error fetching applications:", error);
+        setFetchError(true);
       } else {
         setApplications(data || []);
+        setFetchError(false);
       }
       setLoading(false);
     };
 
     fetchApplications();
 
-    // Subscribe to real-time updates
     const channel = supabase
-      .channel("loan-status-updates")
+      .channel(`loan-status-updates-${userId}`)
       .on(
         "postgres_changes",
         {
@@ -132,12 +131,6 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
               app.id === updatedApp.id ? { ...app, ...updatedApp } : app
             )
           );
-          
-          // Show toast notification for status change (canonical label)
-          toast({
-            title: "Application Status Updated",
-            description: `Your loan application status changed to: ${getCanonicalStatusLabel(updatedApp.status)}`,
-          });
         }
       )
       .on(
@@ -158,13 +151,25 @@ export function ApplicationStatusTracker({ userId }: ApplicationStatusTrackerPro
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, toast]);
+  }, [userId]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <Card className="border-destructive/30">
+        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+          <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+          <p className="text-sm font-medium">Could not load application status</p>
+          <p className="text-xs text-muted-foreground mt-1">Refresh the page or try again shortly.</p>
+        </CardContent>
+      </Card>
     );
   }
 

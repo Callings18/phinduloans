@@ -48,6 +48,8 @@ import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
+import AdminAIAgents from "./pages/admin/AdminAIAgents";
+import AdminAIAgentDetail from "./pages/admin/AdminAIAgentDetail";
 import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
 import HouseLayout from "./components/admin/house/HouseLayout";
 import HouseDashboardPage from "./pages/admin/houses/HouseDashboardPage";
@@ -62,8 +64,11 @@ import HouseDisbursementsPage from "./pages/admin/houses/HouseDisbursementsPage"
 import HouseCollectionsPage from "./pages/admin/houses/HouseCollectionsPage";
 import HouseReportsPage from "./pages/admin/houses/HouseReportsPage";
 import HouseReconciliationPage from "./pages/admin/houses/HouseReconciliationPage";
+import { borrowerAppPath, getOfficeBaseUrl, isOfficeSiteMode } from "./config/publicUrls";
 
 const queryClient = new QueryClient();
+const officeMode = isOfficeSiteMode();
+const officeAdminUrl = `${getOfficeBaseUrl()}/admin`;
 
 function App() {
   return (
@@ -76,20 +81,20 @@ function App() {
               <Sonner />
               <BrowserRouter>
                 <Routes>
-                  <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
-                  <Route path="/calculator" element={<ErrorBoundary><Calculator /></ErrorBoundary>} />
-                  <Route path="/about" element={<ErrorBoundary><About /></ErrorBoundary>} />
-                  <Route path="/about-us" element={<ErrorBoundary><About /></ErrorBoundary>} />
+                  <Route path="/" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Index /></ErrorBoundary>} />
+                  <Route path="/calculator" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Calculator /></ErrorBoundary>} />
+                  <Route path="/about" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><About /></ErrorBoundary>} />
+                  <Route path="/about-us" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><About /></ErrorBoundary>} />
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
-                  <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
-                  <Route path="/download" element={<ErrorBoundary><Install /></ErrorBoundary>} />
-                  <Route path="/app" element={<ErrorBoundary><Install /></ErrorBoundary>} />
-                  <Route path="/install" element={<Navigate to="/install" replace />} />
-                  <Route path="/pre-qualify" element={<Navigate to="/install" replace />} />
-                  <Route path="/dashboard" element={<ErrorBoundary><BorrowerDashboardGate /></ErrorBoundary>} />
-                  <Route path="/profile" element={<Navigate to="/install" replace />} />
-                  <Route path="/admin" element={<AdminRoute />}>
+                  <Route path="/install" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
+                  <Route path="/download" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
+                  <Route path="/app" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
+                  <Route path="/pre-qualify" element={<Navigate to={borrowerAppPath("/auth")} replace />} />
+                  <Route path="/dashboard" element={officeMode ? <Navigate to={borrowerAppPath("/dashboard")} replace /> : <ErrorBoundary><BorrowerDashboardGate /></ErrorBoundary>} />
+                  <Route path="/profile" element={<Navigate to={borrowerAppPath("/profile")} replace />} />
+                  {officeMode ? (
+                    <Route path="/admin" element={<AdminRoute />}>
                     <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
                     <Route
                       path="applications"
@@ -513,7 +518,30 @@ function App() {
                         </ErrorBoundary>
                       }
                     />
-                  </Route>
+                    <Route
+                      path="ai-agents"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminAIAgents />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="ai-agents/:agentKey"
+                      element={
+                        <ErrorBoundary>
+                          <PermissionRoute adminOnly>
+                            <AdminAIAgentDetail />
+                          </PermissionRoute>
+                        </ErrorBoundary>
+                      }
+                    />
+                    </Route>
+                  ) : (
+                    <Route path="/admin/*" element={<Navigate to={officeAdminUrl} replace />} />
+                  )}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
                 <FloatingAssistant />

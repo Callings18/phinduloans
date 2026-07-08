@@ -34,7 +34,7 @@ export default function KYCReferences({ userId }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [newRef, setNewRef] = useState<ReferenceForm>({ ...emptyRef });
 
-  const { data: references = [], isLoading } = useQuery({
+  const { data: references = [], isLoading, isError } = useQuery({
     queryKey: ["borrower-references", userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -97,6 +97,18 @@ export default function KYCReferences({ userId }: Props) {
 
   if (isLoading) {
     return <Card className="glass border-border/50"><CardContent className="p-6 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></CardContent></Card>;
+  }
+
+  if (isError) {
+    return (
+      <Card className="glass border-destructive/30">
+        <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+          <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
+          <p className="text-sm font-medium text-destructive">Could not load references</p>
+          <p className="text-xs text-muted-foreground mt-1">Refresh the page or try again shortly.</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

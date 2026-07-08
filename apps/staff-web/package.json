@@ -11,6 +11,7 @@
     "build:dev": "vite build --mode development"
   },
   "dependencies": {
-    "@phinduloans/shared": "*"
+    "@phinduloans/shared": "*",
+    "react-markdown": "^10.1.0"
   }
 }

@@ -8,7 +8,7 @@ import { Label } from "@phinduloans/shared/components/ui/label";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@phinduloans/shared/components/ui/select";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
-import { Users, CheckCircle, Clock, Save, Loader2, Edit2 } from "lucide-react";
+import { Users, CheckCircle, Clock, Save, Loader2, Edit2, AlertCircle } from "lucide-react";
 
 const RELATIONSHIPS = ["Parent", "Sibling", "Spouse", "Child", "Uncle", "Aunt", "Cousin", "Grandparent", "Other"];
 
@@ -31,7 +31,7 @@ export default function KYCNextOfKin({ userId }: Props) {
     nok_district: "",
   });
 
-  const { data: kycInfo, isLoading } = useQuery({
+  const { data: kycInfo, isLoading, isError } = useQuery({
     queryKey: ["borrower-kyc-info", userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -87,6 +87,18 @@ export default function KYCNextOfKin({ userId }: Props) {
 
   if (isLoading) {
     return <Card className="glass border-border/50"><CardContent className="p-6 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></CardContent></Card>;
+  }
+
+  if (isError) {
+    return (
+      <Card className="glass border-destructive/30">
+        <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+          <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+          <p className="text-sm font-medium text-destructive">Could not load next of kin details</p>
+          <p className="text-xs text-muted-foreground mt-1">Refresh the page or try again shortly.</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

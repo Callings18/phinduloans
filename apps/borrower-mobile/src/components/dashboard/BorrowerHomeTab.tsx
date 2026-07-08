@@ -9,8 +9,17 @@ import {
   ShieldAlert,
   Sparkles,
   TrendingUp,
+  FileText,
+  Activity,
+  Clock,
 } from "lucide-react";
-import { format, isAfter, startOfDay } from "date-fns";
+import { format, startOfDay } from "date-fns";
+import {
+  borrowerCanSubmitPaymentClaim,
+  borrowerRepaymentRemaining,
+  borrowerRepaymentStatusDisplay,
+  borrowerRepaymentTotalDue,
+} from "@phinduloans/shared/utils/borrowerRepaymentDisplay";
 import KYCStatusWidget from "./KYCStatusWidget";
 import ContractSigningWidget from "./ContractSigningWidget";
 import PaymentReminder from "./PaymentReminder";
@@ -77,35 +86,28 @@ export default function BorrowerHomeTab({
   const totalBorrowed = activeLoans.reduce((sum, l) => sum + Number(l.loan_amount), 0);
 
   const upcomingRepayments = repayments?.filter(
-    (r) => ["pending", "overdue"].includes(r.status) && new Date(r.due_date) >= startOfDay(new Date())
+    (r) => borrowerCanSubmitPaymentClaim(r) && new Date(r.due_date) >= startOfDay(new Date())
   ) || [];
   const nextPayment = upcomingRepayments.sort(
     (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
   )[0];
 
   const overdueRepayments = repayments?.filter(
-    (r) => ["pending", "overdue"].includes(r.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(r.due_date)))
+    (r) => borrowerRepaymentStatusDisplay(r).isOverdue
   ) || [];
-  const totalOverdue = overdueRepayments.reduce((sum, r) => {
-    const originalAmt = Number(r.original_amount || r.amount);
-    const alreadyPaid = Number(r.principal_paid || 0);
-    return sum + Math.max(0, originalAmt - alreadyPaid);
-  }, 0);
+  const totalOverdue = overdueRepayments.reduce((sum, r) => sum + borrowerRepaymentTotalDue(r), 0);
 
-  // Overall loan progress for active loans
+  // Overall loan progress for active loans (amount-based, includes partial payments)
   const totalPaid = repayments
     ?.filter((r) => activeLoans.some((l) => l.id === r.loan_id))
-    .filter((r) => r.status === "paid")
-    .reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0) || 0;
+    .reduce((sum, r) => sum + Number(r.principal_paid || (r.status === "paid" ? r.original_amount || r.amount : 0)), 0) || 0;
   const totalRepaymentDue = activeLoans.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0);
   const overallProgress = totalRepaymentDue > 0 ? Math.round((totalPaid / totalRepaymentDue) * 100) : 0;
   const fullName = profile?.full_name?.trim() || "Customer";
   const firstName = fullName.split(" ")[0] || "Customer";
   const initials = fullName.slice(0, 1).toUpperCase();
   const walletBalance = Math.max(totalPaid, 0);
-  const nextPaymentAmount = nextPayment
-    ? Math.max(0, Number(nextPayment.original_amount || nextPayment.amount) - Number(nextPayment.principal_paid || 0))
-    : 0;
+  const nextPaymentAmount = nextPayment ? borrowerRepaymentTotalDue(nextPayment) : 0;
   const totalDisbursed = loans
     .filter((loan) => ["disbursed", "active", "completed"].includes(loan.status))
     .reduce((sum, loan) => sum + Number(loan.loan_amount || 0), 0);
@@ -164,6 +166,39 @@ export default function BorrowerHomeTab({
         cta: "Open payments",
         tab: "payments" as BorrowerTab,
         icon: Banknote,
+      };
+    }
+    const inFlightApps = loans.filter((l) =>
+      ["pending", "under_review", "approved", "contract_signing", "awaiting_disbursement"].includes(l.status),
+    );
+    const needsContractSign = inFlightApps.some(
+      (l) => ["approved", "contract_signing"].includes(l.status) && !(l as { borrower_signed?: boolean }).borrower_signed,
+    );
+    if (needsContractSign) {
+      return {
+        title: "Sign your loan contract",
+        description: "Your loan is approved — review and sign the contract to proceed with disbursement.",
+        cta: "Open loans",
+        tab: "loans" as BorrowerTab,
+        icon: FileText,
+      };
+    }
+    if (inFlightApps.some((l) => l.status === "awaiting_disbursement")) {
+      return {
+        title: "Awaiting disbursement",
+        description: "Your contract is signed. Funds will be sent to your payout destination shortly.",
+        cta: "Track application",
+        tab: "loans" as BorrowerTab,
+        icon: Clock,
+      };
+    }
+    if (inFlightApps.length > 0) {
+      return {
+        title: "Application in progress",
+        description: "Your loan application is being reviewed. Check status and respond to any document requests.",
+        cta: "Track application",
+        tab: "loans" as BorrowerTab,
+        icon: Activity,
       };
     }
     if (activeLoans.length > 0) {

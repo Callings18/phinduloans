@@ -21,7 +21,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@phinduloans/shared/utils/loanCalculations";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
-import { LOAN_APPLICATION_IDENTITY_DOC_TYPES } from "@phinduloans/shared/constants/borrowerKycDocs";
+import { LOAN_APPLICATION_IDENTITY_DOC_TYPES, borrowerIdentityKycSatisfiedFromVault } from "@phinduloans/shared/constants/borrowerKycDocs";
+import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
 import { MobileStickyFormFooter } from "@/components/common/ResponsiveDataViews";
 import CollateralBorrowersSection, {
   type CollateralBorrowerEntry,
@@ -173,11 +174,38 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       if (!user) return null;
       const { data } = await supabase
         .from("borrower_document_vault")
-        .select("id, is_verified")
+        .select("doc_type, is_verified")
         .eq("borrower_id", user.id);
-      const total = data?.length || 0;
-      const verified = data?.filter(d => d.is_verified)?.length || 0;
-      return { total, verified, isVerified: verified >= 3 };
+      const isVerified = borrowerIdentityKycSatisfiedFromVault(data ?? []);
+      return { total: data?.length || 0, verified: data?.filter((d) => d.is_verified).length || 0, isVerified };
+    },
+    enabled: !!user,
+  });
+
+  const { data: kycProfile } = useQuery({
+    queryKey: ["kyc-profile-apply", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase
+        .from("borrower_kyc_info")
+        .select("nok_full_name, nok_phone, nok_relationship")
+        .eq("borrower_id", user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: referenceCount = 0 } = useQuery({
+    queryKey: ["reference-count-apply", user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      const { count, error } = await supabase
+        .from("borrower_references")
+        .select("id", { count: "exact", head: true })
+        .eq("borrower_id", user.id);
+      if (error) throw error;
+      return count ?? 0;
     },
     enabled: !!user,
   });
@@ -346,6 +374,9 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     (!isSalaryAdvance || (employerName && monthlySalary))
   );
 
+  const hasNokComplete = !!(kycProfile?.nok_full_name && kycProfile?.nok_phone && kycProfile?.nok_relationship);
+  const hasMinReferences = referenceCount >= 2;
+
   const mandatoryDocs = requiredDocs.filter(d => d.is_mandatory);
   const uploadedMandatoryCount = mandatoryDocs.filter(d => {
     const docKey = d.document_type;
@@ -355,7 +386,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
     return !!documentFiles[docKey];
   }).length;
   const canProceedStep3 = uploadedMandatoryCount >= mandatoryDocs.length;
-  const canSubmit = termsAccepted && crbConsent && hasPayoutDestination;
+  const canSubmit = termsAccepted && crbConsent && hasPayoutDestination && hasNokComplete && hasMinReferences && !hasOpenLoan;
 
   const handleFileChange = (docType: string, file: File | null) => {
     setDocumentFiles(prev => ({ ...prev, [docType]: file }));
@@ -399,6 +430,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       if (!locationAllowed) {
         throw new Error(`This loan product is restricted to: ${selectedProduct.eligible_locations?.join(", ")}`);
       }
+      if (hasOpenLoan) {
+        throw new Error("You already have an active or pending loan application. Please complete that process before applying again.");
+      }
+
+      const submitWarnings: string[] = [];
       if (isPaydaySoft && loanTerm !== 30) {
         throw new Error("Payday Soft term must be exactly 30 days.");
       }
@@ -427,7 +463,6 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       const { data: newApp, error: insertError } = await supabase.from("loan_applications").insert({
         user_id: user.id,
         full_name: profile.full_name || "",
-        email: profile.email || "",
         phone: profile.phone || "",
         nrc_number: profile.nrc_number || "",
         address: profile.address || "",
@@ -497,6 +532,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(borrowerRows);
         if (borrowersErr) {
           console.error("Failed to insert loan_borrowers:", borrowersErr);
+          submitWarnings.push("Co-borrower details could not be saved. Our team will follow up.");
         }
       }
 
@@ -511,6 +547,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         }
       } catch (houseErr) {
         console.warn("House roster enrollment skipped:", houseErr);
+        submitWarnings.push("House roster enrollment was skipped; your application was still submitted.");
       }
 
       // Upload documents
@@ -522,7 +559,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           .from("loan-documents")
           .upload(filePath, file, { cacheControl: "3600", upsert: false });
 
-        if (uploadErr) { console.error(`Upload failed for ${docType}:`, uploadErr); continue; }
+        if (uploadErr) {
+          console.error(`Upload failed for ${docType}:`, uploadErr);
+          submitWarnings.push(`Could not upload ${docType.replace(/_/g, " ")}. Re-upload from My Loans.`);
+          continue;
+        }
 
         const docMeta = requiredDocs.find(d => d.document_type === docType);
         await supabase.from("application_documents").insert({
@@ -558,7 +599,9 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           .from("loan-documents")
           .upload(filePath, file, { cacheControl: "3600", upsert: false });
 
-        if (!uploadErr) {
+        if (uploadErr) {
+          submitWarnings.push(`Collateral image ${i + 1} could not be uploaded.`);
+        } else {
           const colField = i === 0 ? "collateral_image_url" : i === 1 ? "collateral_image_2_url" : "collateral_image_3_url";
           await supabase.from("loan_applications").update({ [colField]: filePath }).eq("id", applicationId);
 
@@ -579,10 +622,21 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       }
 
       toast({ title: "Application Submitted!", description: "Your loan application has been submitted for review." });
+      if (submitWarnings.length > 0) {
+        toast({
+          title: "Application submitted with warnings",
+          description: submitWarnings.join(" "),
+          variant: "destructive",
+        });
+      }
       onClose();
     } catch (error: any) {
       console.error("Submit error:", error);
-      toast({ title: "Submission Failed", description: error.message || "Something went wrong.", variant: "destructive" });
+      toast({
+        title: "Submission Failed",
+        description: mapSupabaseError(error, error?.message || "Something went wrong."),
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -614,10 +668,32 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       )}
 
       {hasOpenLoan && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            You already have an active or pending loan application. Please complete that process before applying again.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!hasNokComplete && (
         <Alert className="border-warning/40 bg-warning/10">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            You already have an existing active/pending loan. You can continue with this application, and final approval will depend on credit policy.
+            Add next of kin details in your{" "}
+            <Button variant="link" className="p-0 h-auto" onClick={() => navigate("/dashboard?tab=profile&kyc=workspace")}>profile</Button>
+            {" "}before submitting.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!hasMinReferences && (
+        <Alert className="border-warning/40 bg-warning/10">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Add at least 2 personal references in your{" "}
+            <Button variant="link" className="p-0 h-auto" onClick={() => navigate("/dashboard?tab=profile&kyc=workspace")}>profile</Button>
+            {" "}before submitting ({referenceCount}/2).
           </AlertDescription>
         </Alert>
       )}
@@ -1241,7 +1317,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             <Button
               variant="hero"
               onClick={handleSubmit}
-              disabled={isSubmitting || !canSubmit || !isProfileComplete}
+              disabled={isSubmitting || !canSubmit || !isProfileComplete || !!hasOpenLoan}
               className="min-w-[min(180px,45vw)]"
             >
               {isSubmitting ? (

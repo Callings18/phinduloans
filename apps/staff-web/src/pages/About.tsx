@@ -4,6 +4,7 @@ import { Button } from "@phinduloans/shared/components/ui/button";
 import { Link } from "react-router-dom";
 import { ArrowRight, Target, Eye, Users, Award } from "lucide-react";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 const About = () => {
   const { data: settings } = useSystemSettings();
@@ -140,10 +141,10 @@ const About = () => {
                 Join thousands of satisfied customers who trust us with their financial needs.
               </p>
               <Button variant="hero" size="lg" asChild>
-                <Link to="/install">
+                <a href={borrowerAppPath("/auth?mode=signup")}>
                   Apply for a Loan
                   <ArrowRight size={20} />
-                </Link>
+                </a>
               </Button>
             </div>
           </div>

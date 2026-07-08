@@ -6,6 +6,7 @@ import { Label } from "@phinduloans/shared/components/ui/label";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { Sparkles, Mail, Lock, Loader2, ArrowRight } from "lucide-react";
+import { borrowerAppPath, officePath, getSiteModeFromHostname } from "@/config/publicUrls";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -19,8 +20,18 @@ const Auth = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (getSiteModeFromHostname() === "marketing") {
+      window.location.replace(officePath("/auth") + window.location.search);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!isLoading && user) {
-      navigate(safeNextPath || (isStaff ? "/admin" : "/install"));
+      if (isStaff) {
+        navigate(safeNextPath || "/admin");
+      } else {
+        window.location.assign(borrowerAppPath("/auth"));
+      }
     }
   }, [user, isLoading, isStaff, navigate, safeNextPath]);
 
@@ -78,7 +89,7 @@ const Auth = () => {
         </form>
         <div className="text-center mt-6 space-y-2">
           <Button variant="ghost" asChild><a href="/">← Back to Home</a></Button>
-          <p className="text-sm text-muted-foreground"><a href="/install" className="text-primary hover:underline">Get the borrower app</a></p>
+          <p className="text-sm text-muted-foreground"><a href={borrowerAppPath("/auth")} className="text-primary hover:underline">Open borrower app</a></p>
         </div>
       </div>
     </div>

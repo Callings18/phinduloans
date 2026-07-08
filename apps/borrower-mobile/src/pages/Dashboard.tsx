@@ -59,6 +59,7 @@ import {
   borrowerSchedulePaymentColumnTitle,
   borrowerTermSummaryLabel,
 } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
+import { officePath } from "@phinduloans/shared/config/siteMode";
 
 import type { BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
 export type { BorrowerTab };
@@ -114,11 +115,13 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!isLoading && !user) navigate('/auth');
-    if (!isLoading && user && isStaff && !searchParams.has('view')) navigate('/admin');
+    if (!isLoading && user && isStaff && !searchParams.has('view')) {
+      window.location.replace(officePath('/admin'));
+    }
   }, [user, isLoading, isStaff, navigate, searchParams]);
 
   // ─── Data Queries ────────────────────────────────────────────
-  const { data: loans = [], isLoading: loansLoading } = useQuery({
+  const { data: loans = [], isLoading: loansLoading, isError: loansError } = useQuery({
     queryKey: ['user-loans', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -187,7 +190,7 @@ const Dashboard = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, queryClient]);
 
-  const { data: repayments = [] } = useQuery({
+  const { data: repayments = [], isError: repaymentsError } = useQuery({
     queryKey: ['user-repayments', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -202,7 +205,7 @@ const Dashboard = () => {
     enabled: !!user?.id,
   });
 
-  const { data: paymentClaims = [] } = useQuery({
+  const { data: paymentClaims = [], isError: paymentClaimsError } = useQuery({
     queryKey: ["user-payment-claims", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -276,9 +279,39 @@ const Dashboard = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "payment_claims", filter: `user_id=eq.${user.id}` },
-        () => {
+        (payload) => {
+          if (payload.eventType === "UPDATE") {
+            const oldStatus = (payload.old as { status?: string })?.status;
+            const newStatus = (payload.new as { status?: string; review_comment?: string })?.status;
+            const reviewComment = (payload.new as { review_comment?: string })?.review_comment;
+            if (oldStatus && newStatus && oldStatus !== newStatus) {
+              if (newStatus === "approved" || newStatus === "verified") {
+                toast.success("Payment claim approved", {
+                  description: "Your payment has been verified and recorded.",
+                  duration: 8000,
+                });
+              } else if (newStatus === "rejected") {
+                toast.error("Payment claim rejected", {
+                  description: reviewComment || "Please check the Payments tab for details.",
+                  duration: 10000,
+                });
+              } else if (newStatus === "needs_more_info") {
+                toast.info("More information needed", {
+                  description: reviewComment || "Please resubmit your payment claim with the requested details.",
+                  duration: 10000,
+                });
+              }
+            }
+          }
           queryClient.invalidateQueries({ queryKey: ["user-payment-claims", user.id] });
           queryClient.invalidateQueries({ queryKey: ["borrower-loan-events", user.id] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_repayments", filter: `user_id=eq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["user-repayments", user.id] });
         }
       )
       .on(
@@ -623,11 +656,11 @@ const Dashboard = () => {
               <NotificationCenter />
               {isStaff && (
                 <Button size="sm" variant="outline" className="h-9 shrink-0 px-2 text-xs sm:px-3" asChild>
-                  <Link to="/admin" className="inline-flex items-center gap-1 sm:gap-1.5">
+                  <a href={officePath('/admin')} className="inline-flex items-center gap-1 sm:gap-1.5">
                     <Eye size={14} className="shrink-0" />
                     <span className="hidden sm:inline">Admin Panel</span>
                     <span className="sm:hidden">Admin</span>
-                  </Link>
+                  </a>
                 </Button>
               )}
               <div className="ml-1 hidden items-center gap-2 border-l border-border pl-2 sm:flex">
@@ -667,6 +700,11 @@ const Dashboard = () => {
         {/* Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6">
           <div className="mx-auto max-w-6xl">
+            {(loansError || repaymentsError || paymentClaimsError) && !showApplicationForm && (
+              <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Could not load your loan data. Some sections may be outdated — pull to refresh or reload the page.
+              </div>
+            )}
             {showApplicationForm ? (
               <LoanApplicationForm
                 initialProductId={applyProductId}
@@ -706,6 +744,7 @@ const Dashboard = () => {
                     onSubmitPayment={handleSubmitPayment}
                     isGenerating={isGenerating}
                     onApply={() => handleStartApplication()}
+                    loadError={loansError || repaymentsError}
                   />
                 )}
                 {activeTab === "payments" && (
@@ -714,6 +753,7 @@ const Dashboard = () => {
                     loans={loans}
                     paymentClaims={paymentClaims}
                     onSubmitPayment={handleSubmitPayment}
+                    loadError={repaymentsError || paymentClaimsError}
                   />
                 )}
                 {activeTab === "profile" && (

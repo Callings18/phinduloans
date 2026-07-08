@@ -32,12 +32,12 @@ export default function WalletWidget() {
   const [showBalance, setShowBalance] = useState(true);
 
   // Calculate wallet totals from disbursements + repayments
-  const { data: walletData, isLoading } = useQuery<WalletData>({
+  const { data: walletData, isLoading, isError } = useQuery<WalletData>({
     queryKey: ["user-wallet-summary", user?.id],
     queryFn: async () => {
       const { data: repayments, error: repError } = await supabase
         .from("loan_repayments")
-        .select("amount, status")
+        .select("amount, status, principal_paid, original_amount, penalty_amount, penalty_paid")
         .eq("user_id", user?.id);
 
       if (repError) throw repError;
@@ -57,8 +57,19 @@ export default function WalletWidget() {
 
       if (loanError) throw loanError;
 
-      const totalPaid = repayments?.filter(r => r.status === "paid").reduce((sum, r) => sum + Number(r.amount), 0) || 0;
-      const totalPending = repayments?.filter(r => r.status === "pending").reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+      const totalPaid = repayments?.reduce((sum, r) => {
+        const principal = Number(r.principal_paid || (r.status === "paid" ? r.original_amount || r.amount : 0));
+        const penalty = Number(r.penalty_paid || 0);
+        return sum + principal + penalty;
+      }, 0) || 0;
+      const totalPending = repayments
+        ?.filter((r) => ["pending", "overdue", "partial"].includes(r.status || ""))
+        .reduce((sum, r) => {
+          const base = Number(r.original_amount ?? r.amount ?? 0);
+          const paid = Number(r.principal_paid ?? 0);
+          const penaltyDue = Math.max(0, Number(r.penalty_amount ?? 0) - Number(r.penalty_paid ?? 0));
+          return sum + Math.max(0, base - paid) + penaltyDue;
+        }, 0) || 0;
       const totalReceived = disbursements?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
       const totalOwed = loans?.reduce((sum, l) => sum + Number(l.total_repayment || 0), 0) || 0;
       const expectedDisbursed = loans
@@ -127,6 +138,16 @@ export default function WalletWidget() {
     },
     enabled: !!user?.id,
   });
+
+  if (isError) {
+    return (
+      <Card className="glass border-destructive/30">
+        <CardContent className="p-6 text-center text-sm text-destructive">
+          Could not load loan summary. Please try again later.
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading) {
     return (

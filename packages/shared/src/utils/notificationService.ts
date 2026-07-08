@@ -555,7 +555,7 @@ class NotificationService {
   }
 
   async sendPromotion(userId: string, borrowerName: string, offer: string, phone: string, email?: string) {
-    const message = `Hi ${borrowerName}!\n\nWe have a special offer for you:\n\n${offer}\n\nApply now at phindu.com\n\n- Phindu Finance`;
+    const message = `Hi ${borrowerName}!\n\nWe have a special offer for you:\n\n${offer}\n\nApply now at app.phindu.com\n\n- Phindu Finance`;
     const subject = "Special Offer Just for You!";
 
     return this.sendMultiChannel({

@@ -9,6 +9,9 @@ import "@fontsource/outfit/700.css";
 import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "@phinduloans/shared/index.css";
+import { ensureCorrectHost } from "@phinduloans/shared/config/siteMode";
+
+ensureCorrectHost("borrower");
 
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({

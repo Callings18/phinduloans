@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
+import { notifyBorrowerVisibleNote } from "@phinduloans/shared/utils/notifyBorrowerPortal";
 
 interface ApprovalWorkflowTabProps {
   loan: {
@@ -249,11 +250,16 @@ export default function ApprovalWorkflowTab({ loan }: ApprovalWorkflowTabProps) 
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      const sentNote = noteText.trim();
+      const notifyBorrower = visibleToBorrower;
       queryClient.invalidateQueries({ queryKey: ["loan-notes", loan.id] });
       setNoteText("");
       setVisibleToBorrower(false);
       toast.success("Note added");
+      if (notifyBorrower && sentNote) {
+        await notifyBorrowerVisibleNote(loan.user_id, loan.full_name, sentNote, loan.id);
+      }
     },
     onError: (err: any) => toast.error(err.message || "Failed to add note"),
   });

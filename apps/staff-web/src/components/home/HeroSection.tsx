@@ -16,6 +16,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import type { LucideIcon } from "lucide-react";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 type Stat = { value: string; label: string; icon: LucideIcon };
 
@@ -120,10 +121,10 @@ const HeroSection = () => {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 animate-slide-up" style={{ animationDelay: "0.2s" }}>
             <Button variant="hero" size="lg" asChild>
-              <Link to="/auth?mode=signup&redirect=dashboard">
+              <a href={borrowerAppPath("/auth?mode=signup")}>
                 Get Started
                 <ArrowRight size={20} />
-              </Link>
+              </a>
             </Button>
             <Button variant="glass" size="lg" asChild>
               <Link to="/calculator">

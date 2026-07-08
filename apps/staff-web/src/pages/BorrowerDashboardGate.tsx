@@ -4,6 +4,7 @@ import { Button } from "@phinduloans/shared/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
 import { Smartphone } from "lucide-react";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 export default function BorrowerDashboardGate() {
   const { user, isLoading, isStaff } = useAuth();
@@ -26,7 +27,7 @@ export default function BorrowerDashboardGate() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button asChild variant="hero" className="w-full"><Link to="/install">Download the app</Link></Button>
+          <Button asChild variant="hero" className="w-full"><a href={borrowerAppPath("/auth")}>Open borrower app</a></Button>
           <Button asChild variant="outline" className="w-full"><Link to="/">Back to home</Link></Button>
         </CardContent>
       </Card>

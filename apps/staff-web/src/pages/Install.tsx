@@ -3,6 +3,7 @@ import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
 import { Download, Smartphone, ShieldCheck, Zap, WifiOff } from "lucide-react";
 import { APK_URL, downloadApk, isAndroidDevice, isIOSDevice } from "@phinduloans/shared/utils/appDownload";
 import { Link } from "react-router-dom";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 const Install = () => {
   const onAndroid = isAndroidDevice();
@@ -83,7 +84,7 @@ const Install = () => {
                 Apple does not allow APK installs. Install Phindu as a home-screen app from Safari instead.
               </p>
               <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside bg-muted/50 rounded-lg p-4">
-                <li>Open <strong>phindu.com</strong> in <strong>Safari</strong></li>
+                <li>Open <strong>app.phindu.com</strong> in <strong>Safari</strong></li>
                 <li>Tap the <strong>Share</strong> button at the bottom</li>
                 <li>Choose <strong>Add to Home Screen</strong></li>
                 <li>Tap <strong>Add</strong> — the app icon appears on your home screen</li>
@@ -145,6 +146,10 @@ const Install = () => {
         </div>
 
         <div className="text-center">
+          <a href={borrowerAppPath("/auth")} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            Open borrower app
+          </a>
+          <span className="mx-3 text-muted-foreground">•</span>
           <Link to="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
             ← Back to home
           </Link>

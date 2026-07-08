@@ -11,7 +11,7 @@ import {
   Download,
 } from "lucide-react";
 import { downloadRepaymentReceipt } from "@phinduloans/shared/utils/generateRepaymentReceipt";
-import { format, isAfter, differenceInDays, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import {
   Table,
   TableBody,
@@ -25,6 +25,13 @@ import {
   isPaymentClaimPendingStatus,
 } from "@phinduloans/shared/constants/paymentClaims";
 import { borrowerInstallmentLabel } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
+import {
+  borrowerCanSubmitPaymentClaim,
+  borrowerRepaymentPenaltyDue,
+  borrowerRepaymentRemaining,
+  borrowerRepaymentStatusDisplay,
+  borrowerRepaymentTotalDue,
+} from "@phinduloans/shared/utils/borrowerRepaymentDisplay";
 import type { BorrowerDashboardLoan } from "@phinduloans/shared/types/borrowerDashboard";
 
 interface Props {
@@ -32,38 +39,37 @@ interface Props {
   loans: BorrowerDashboardLoan[];
   paymentClaims: any[];
   onSubmitPayment: (rep: any) => void;
+  loadError?: boolean;
 }
 
-export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, onSubmitPayment }: Props) {
+export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, onSubmitPayment, loadError = false }: Props) {
   const getRepaymentStatus = (rep: any) => {
-    const today = startOfDay(new Date());
-    const dueDate = startOfDay(new Date(rep.due_date));
-    const isOverdue = ["pending", "overdue"].includes(rep.status) && isAfter(today, dueDate);
-    const daysOverdue = isOverdue ? differenceInDays(today, dueDate) : 0;
-    if (rep.status === "paid") return { label: "Paid", color: "bg-success/20 text-success border-success/30", icon: CheckCircle };
-    if (rep.status === "cancelled") return { label: "Cancelled", color: "bg-muted/20 text-muted-foreground border-muted/30", icon: AlertCircle };
-    if (isOverdue || rep.status === "overdue") return { label: `${daysOverdue}d overdue`, color: "bg-destructive/20 text-destructive border-destructive/30", icon: AlertTriangle };
-    return { label: "Pending", color: "bg-warning/20 text-warning border-warning/30", icon: Clock };
+    const display = borrowerRepaymentStatusDisplay(rep);
+    const icon =
+      display.label.startsWith("Paid") ? CheckCircle
+      : display.label.startsWith("Cancelled") ? AlertCircle
+      : display.isOverdue ? AlertTriangle
+      : Clock;
+    return { label: display.label, color: display.color, icon };
   };
 
   const sorted = [...repayments].sort((a, b) => {
-    const order = { overdue: 0, pending: 1, paid: 2, cancelled: 3 };
-    const aStatus = ["pending", "overdue"].includes(a.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(a.due_date))) ? "overdue" : a.status;
-    const bStatus = ["pending", "overdue"].includes(b.status) && isAfter(startOfDay(new Date()), startOfDay(new Date(b.due_date))) ? "overdue" : b.status;
-    const orderDiff = (order[aStatus as keyof typeof order] ?? 4) - (order[bStatus as keyof typeof order] ?? 4);
+    const order = { overdue: 0, partial: 1, pending: 2, paid: 3, cancelled: 4 };
+    const aDisplay = borrowerRepaymentStatusDisplay(a);
+    const bDisplay = borrowerRepaymentStatusDisplay(b);
+    const aKey = aDisplay.isOverdue ? "overdue" : (a.status === "partial" ? "partial" : a.status);
+    const bKey = bDisplay.isOverdue ? "overdue" : (b.status === "partial" ? "partial" : b.status);
+    const orderDiff = (order[aKey as keyof typeof order] ?? 5) - (order[bKey as keyof typeof order] ?? 5);
     if (orderDiff !== 0) return orderDiff;
     return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
   });
 
-  const pendingCount = repayments.filter((r) => ["pending", "overdue"].includes(r.status)).length;
+  const pendingCount = repayments.filter((r) => borrowerCanSubmitPaymentClaim(r)).length;
   const paidCount = repayments.filter((r) => r.status === "paid").length;
-  const totalPaid = repayments.filter((r) => r.status === "paid").reduce((sum, r) => sum + Number(r.principal_paid || r.original_amount || r.amount), 0);
+  const totalPaid = repayments.reduce((sum, r) => sum + Number(r.principal_paid || (r.status === "paid" ? r.original_amount || r.amount : 0)), 0);
   const overdueAmount = repayments
-    .filter((r) => {
-      const dueDate = startOfDay(new Date(r.due_date));
-      return ["pending", "overdue"].includes(r.status) && isAfter(startOfDay(new Date()), dueDate);
-    })
-    .reduce((sum, r) => sum + Math.max(0, Number(r.original_amount || r.amount) - Number(r.principal_paid || 0)), 0);
+    .filter((r) => borrowerRepaymentStatusDisplay(r).isOverdue)
+    .reduce((sum, r) => sum + borrowerRepaymentTotalDue(r), 0);
 
   const getLoanRef = (loanId: string) => {
     const loan = loans.find((l) => l.id === loanId);
@@ -137,6 +143,15 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-foreground">Payments</h2>
 
+      {loadError && (
+        <Card className="border-destructive/30">
+          <CardContent className="flex items-center gap-3 p-4 text-sm text-destructive">
+            <AlertCircle size={18} className="shrink-0" />
+            <span>Could not load payment schedule or claim history. Please reload the page.</span>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-border/60 shadow-card">
@@ -179,7 +194,8 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
             {sorted.map((rep) => {
               const status = getRepaymentStatus(rep);
               const StatusIcon = status.icon;
-              const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+              const remaining = borrowerRepaymentRemaining(rep);
+              const penaltyDue = borrowerRepaymentPenaltyDue(rep);
               const claim = claimsByRepaymentId.get(rep.id);
               const claimStatus = getClaimStatus(claim);
               const loanRow = loans.find((l) => l.id === rep.loan_id);
@@ -202,6 +218,12 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Due {format(new Date(rep.due_date), "MMM dd, yyyy")}
                         </p>
+                        {remaining > 0 && rep.status !== "paid" && (
+                          <p className="text-xs text-warning mt-0.5">
+                            Remaining: K{remaining.toLocaleString()}
+                            {penaltyDue > 0 && ` + K${penaltyDue.toLocaleString()} penalty`}
+                          </p>
+                        )}
                       </div>
                       <Badge className={`${status.color} border text-[10px]`}>
                         <StatusIcon size={10} className="mr-1" />
@@ -209,14 +231,19 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                       </Badge>
                     </div>
                     {claimStatus && (
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge className={`${claimStatus.color} border text-[10px]`}>
-                          {claimStatus.label}
-                        </Badge>
-                        <span className="text-[10px] text-muted-foreground truncate">Ref: {claim.reference}</span>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge className={`${claimStatus.color} border text-[10px]`}>
+                            {claimStatus.label}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground truncate">Ref: {claim.reference}</span>
+                        </div>
+                        {claim?.review_comment && (
+                          <p className="text-[10px] text-muted-foreground">{claim.review_comment}</p>
+                        )}
                       </div>
                     )}
-                    {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
+                    {borrowerCanSubmitPaymentClaim(rep) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -264,14 +291,23 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                 {sorted.map((rep) => {
                   const status = getRepaymentStatus(rep);
                   const StatusIcon = status.icon;
-                  const remaining = Math.max(0, Number(rep.original_amount || rep.amount) - Number(rep.principal_paid || 0));
+                  const remaining = borrowerRepaymentRemaining(rep);
+                  const penaltyDue = borrowerRepaymentPenaltyDue(rep);
                   const claim = claimsByRepaymentId.get(rep.id);
                   const claimStatus = getClaimStatus(claim);
                   const loanRow = loans.find((l) => l.id === rep.loan_id);
                   return (
                     <TableRow key={rep.id}>
                       <TableCell className="font-medium text-muted-foreground">{rep.installment_number}</TableCell>
-                      <TableCell className="font-semibold">K{Number(rep.original_amount || rep.amount).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <div className="font-semibold">K{Number(rep.original_amount || rep.amount).toLocaleString()}</div>
+                        {remaining > 0 && rep.status !== "paid" && (
+                          <div className="text-[10px] text-warning">
+                            K{remaining.toLocaleString()} left
+                            {penaltyDue > 0 && ` · penalty K${penaltyDue.toLocaleString()}`}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         <div>{getLoanRef(rep.loan_id)}</div>
                         {loanRow && (
@@ -299,13 +335,18 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                                 Ref: {claim.reference}
                               </p>
                             )}
+                            {claim?.review_comment && (
+                              <p className="text-[10px] text-muted-foreground max-w-[12rem]" title={claim.review_comment}>
+                                {claim.review_comment}
+                              </p>
+                            )}
                           </div>
                         ) : (
                           "—"
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {["pending", "overdue"].includes(rep.status) && remaining > 0 && (
+                        {borrowerCanSubmitPaymentClaim(rep) && (
                           <Button
                             variant="outline"
                             size="sm"

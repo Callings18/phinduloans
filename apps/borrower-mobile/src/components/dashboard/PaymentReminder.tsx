@@ -43,15 +43,17 @@ const PaymentReminder = ({ repayments, className }: PaymentReminderProps) => {
         return null;
     }
 
-    // Filter pending repayments
-    const pendingRepayments = repayments.filter(r => r.status === 'pending');
+    // Filter actionable repayments (pending, partial, overdue with balance due)
+    const actionableRepayments = repayments.filter((r) =>
+      ["pending", "overdue", "partial"].includes(r.status) &&
+      Number(r.amount) > 0
+    );
 
-    // Categorize payments
-    const overduePayments = pendingRepayments.filter(r =>
+    const overduePayments = actionableRepayments.filter((r) =>
         isAfter(today, new Date(r.due_date))
     );
 
-    const dueSoon = pendingRepayments.filter(r => {
+    const dueSoon = actionableRepayments.filter((r) => {
         const dueDate = new Date(r.due_date);
         const daysUntil = differenceInDays(dueDate, today);
         return daysUntil >= 0 && daysUntil <= 7;
@@ -238,7 +240,7 @@ const PaymentReminder = ({ repayments, className }: PaymentReminderProps) => {
                         {/* Action Button */}
                         <div className="pt-2 flex gap-2">
                             <Button variant="hero" className="flex-1" asChild>
-                                <Link to="/dashboard?tab=active">
+                                <Link to="/dashboard?tab=payments">
                                     <CreditCard size={16} className="mr-2" />
                                     View Payment Details
                                 </Link>

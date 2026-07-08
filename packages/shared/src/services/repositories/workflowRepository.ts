@@ -99,7 +99,7 @@ export async function submitPaymentClaim(
 export async function fetchBorrowerPaymentClaims(userId: string) {
   const { data, error } = await supabase
     .from("payment_claims")
-    .select("id, repayment_id, amount, reference, status, created_at, verified_at")
+    .select("id, repayment_id, amount, reference, status, created_at, verified_at, review_comment, decision_reason_code")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;

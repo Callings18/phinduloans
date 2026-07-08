@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { ArrowRight, Phone } from "lucide-react";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 const CTASection = () => {
   return (
@@ -22,10 +23,10 @@ const CTASection = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button variant="hero" size="lg" asChild>
-              <Link to="/auth?mode=signup&redirect=dashboard">
+              <a href={borrowerAppPath("/auth?mode=signup")}>
                 Get Started
                 <ArrowRight size={20} />
-              </Link>
+              </a>
             </Button>
             <Button variant="glass" size="lg" asChild>
               <a href="tel:+260967713001">

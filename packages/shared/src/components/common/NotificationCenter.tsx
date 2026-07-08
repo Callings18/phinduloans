@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import {
@@ -56,6 +57,7 @@ const getNotificationIcon = (type: Notification["type"]) => {
 
 const NotificationCenter: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
@@ -63,7 +65,7 @@ const NotificationCenter: React.FC = () => {
     const [showPushPrompt, setShowPushPrompt] = useState(false);
 
     // Fetch notifications from in-app inbox
-    const { data: notifications = [], isLoading } = useQuery({
+    const { data: notifications = [], isLoading, isError } = useQuery({
         queryKey: ["notifications", user?.id],
         queryFn: async () => {
             if (!user?.id) return [];
@@ -250,6 +252,21 @@ const NotificationCenter: React.FC = () => {
 
     const unreadCount = notifications.filter((n) => !n.is_read).length;
 
+    const handleNotificationOpen = (notification: Notification) => {
+        if (!notification.is_read) {
+            markAsReadMutation.mutate(notification.id);
+        }
+        if (notification.action_url) {
+            setIsOpen(false);
+            const url = notification.action_url;
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                window.location.assign(url);
+            } else {
+                navigate(url);
+            }
+        }
+    };
+
     if (!user) return null;
 
     return (
@@ -330,6 +347,12 @@ const NotificationCenter: React.FC = () => {
                         <div className="flex items-center justify-center py-8">
                             <Loader2 size={24} className="animate-spin text-muted-foreground" />
                         </div>
+                    ) : isError ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-destructive px-4 text-center">
+                            <AlertTriangle size={28} className="mb-2 opacity-80" />
+                            <p className="text-sm font-medium">Could not load notifications</p>
+                            <p className="text-xs text-muted-foreground mt-1">Pull to refresh or try again shortly.</p>
+                        </div>
                     ) : notifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                             <Bell size={32} className="mb-2 opacity-50" />
@@ -339,9 +362,19 @@ const NotificationCenter: React.FC = () => {
                         notifications.map((notification) => (
                             <div
                                 key={notification.id}
+                                role={notification.action_url ? "button" : undefined}
+                                tabIndex={notification.action_url ? 0 : undefined}
+                                onClick={() => notification.action_url && handleNotificationOpen(notification)}
+                                onKeyDown={(e) => {
+                                    if (notification.action_url && (e.key === "Enter" || e.key === " ")) {
+                                        e.preventDefault();
+                                        handleNotificationOpen(notification);
+                                    }
+                                }}
                                 className={cn(
                                     "flex gap-3 px-3 py-3 border-b border-border/30 hover:bg-secondary/50 transition-colors",
-                                    !notification.is_read && "bg-primary/5"
+                                    !notification.is_read && "bg-primary/5",
+                                    notification.action_url && "cursor-pointer"
                                 )}
                             >
                                 <div className="shrink-0 mt-0.5">
@@ -362,7 +395,10 @@ const NotificationCenter: React.FC = () => {
                                             variant="ghost"
                                             size="icon"
                                             className="h-6 w-6"
-                                            onClick={() => markAsReadMutation.mutate(notification.id)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                markAsReadMutation.mutate(notification.id);
+                                            }}
                                         >
                                             <Check size={12} />
                                         </Button>
@@ -371,7 +407,10 @@ const NotificationCenter: React.FC = () => {
                                         variant="ghost"
                                         size="icon"
                                         className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                        onClick={() => deleteNotificationMutation.mutate(notification.id)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteNotificationMutation.mutate(notification.id);
+                                        }}
                                     >
                                         <Trash2 size={12} />
                                     </Button>
