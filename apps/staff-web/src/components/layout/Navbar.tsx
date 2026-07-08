@@ -10,7 +10,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@phinduloans/shared/components/ui/dropdown-menu";
-import PhinduAI from "../common/PhinduAI";
 const phinduLogo = "/icons/icon-512.png";
 import ThemeToggle from "@phinduloans/shared/components/common/ThemeToggle";
 import NotificationCenter from "@phinduloans/shared/components/common/NotificationCenter";
@@ -237,7 +236,6 @@ const Navbar = () => {
           )}
         </div>
       </nav>
-      <PhinduAI />
     </>
   );
 };

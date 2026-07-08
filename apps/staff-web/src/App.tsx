@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";
 import PermissionRoute from "./components/admin/PermissionRoute";
 import ErrorBoundary from "@phinduloans/shared/components/common/ErrorBoundary";
-import FloatingAssistant from "./components/assistant/FloatingAssistant";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@phinduloans/shared/components/ui/toaster";
 import { Toaster as Sonner } from "@phinduloans/shared/components/ui/sonner";
@@ -59,9 +58,6 @@ const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
 const AdminHR = lazy(() => import("./pages/admin/AdminHR"));
 const AdminPayroll = lazy(() => import("./pages/admin/AdminPayroll"));
 const AdminPayrollTaxConfig = lazy(() => import("./pages/admin/AdminPayrollTaxConfig"));
-const AdminAIAgents = lazy(() => import("./pages/admin/AdminAIAgents"));
-const AdminAIAgentDetail = lazy(() => import("./pages/admin/AdminAIAgentDetail"));
-const AdminAIOpsCenter = lazy(() => import("./pages/admin/AdminAIOpsCenter"));
 const AdminHousesIndex = lazy(() => import("./pages/admin/houses/AdminHousesIndex"));
 const HouseLayout = lazy(() => import("./components/admin/house/HouseLayout"));
 const HouseDashboardPage = lazy(() => import("./pages/admin/houses/HouseDashboardPage"));
@@ -570,49 +566,12 @@ function App() {
                         </ErrorBoundary>
                       }
                     />
-                    <Route
-                      path="ai-agents"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminRouteSuspense>
-                              <AdminAIAgents />
-                            </AdminRouteSuspense>
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="ai-agents/:agentKey"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminRouteSuspense>
-                              <AdminAIAgentDetail />
-                            </AdminRouteSuspense>
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="ai-ops"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminRouteSuspense>
-                              <AdminAIOpsCenter />
-                            </AdminRouteSuspense>
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
                     </Route>
                   ) : (
                     <Route path="/admin/*" element={<Navigate to={officeAdminUrl} replace />} />
                   )}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-                <FloatingAssistant />
               </BrowserRouter>
             </TooltipProvider>
           </AuthProvider>

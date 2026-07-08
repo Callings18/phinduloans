@@ -1,5 +1,7 @@
 # Phase 6 AI Operations Center v1
 
+> **Archived:** AI Ops Center and all other AI UI were removed from the app per client request. Supabase tables and edge functions remain in the backend but are no longer surfaced in staff-web.
+
 ## Delivered in v1
 - Added read-only admin page at `/admin/ai-ops`:
   - File: `apps/staff-web/src/pages/admin/AdminAIOpsCenter.tsx`
