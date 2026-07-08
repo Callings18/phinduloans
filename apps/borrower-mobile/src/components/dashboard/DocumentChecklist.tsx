@@ -181,35 +181,20 @@ export default function DocumentChecklist({ loanId, userId }: DocumentChecklistP
         .upload(fileName, file, { upsert: true });
       if (uploadError) throw uploadError;
 
-      if (doc.applicationDocId) {
-        const { error: updateError } = await supabase
-          .from("application_documents")
-          .update({
-            file_url: fileName,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type,
-            status: "submitted",
-            notes: null,
-            uploaded_at: new Date().toISOString(),
-          })
-          .eq("id", doc.applicationDocId);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase.from("application_documents").insert({
-          application_id: loanId,
-          borrower_id: userId,
-          doc_type: doc.docType,
-          doc_label: doc.label,
-          file_name: file.name,
-          file_url: fileName,
-          file_size: file.size,
-          mime_type: file.type,
-          is_required: doc.isRequired,
-          status: "submitted",
-        });
-        if (insertError) throw insertError;
-      }
+      // Borrowers can INSERT but not UPDATE application_documents (RLS) — always insert a new row on re-upload.
+      const { error: insertError } = await supabase.from("application_documents").insert({
+        application_id: loanId,
+        borrower_id: userId,
+        doc_type: doc.docType,
+        doc_label: doc.label,
+        file_name: file.name,
+        file_url: fileName,
+        file_size: file.size,
+        mime_type: file.type,
+        is_required: doc.isRequired,
+        status: "pending_review",
+      });
+      if (insertError) throw insertError;
 
       if (doc.checklistId) {
         await supabase

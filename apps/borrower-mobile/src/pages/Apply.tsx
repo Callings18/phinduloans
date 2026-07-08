@@ -5,7 +5,7 @@ import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 /**
  * /apply now redirects:
  * - Authenticated → /dashboard
- * - Unauthenticated → /auth?redirect=dashboard
+ * - Unauthenticated → /auth?next=/dashboard
  */
 const Apply = () => {
   const { user, isLoading } = useAuth();
@@ -16,7 +16,7 @@ const Apply = () => {
     if (user) {
       navigate("/dashboard", { replace: true });
     } else {
-      navigate("/auth?redirect=dashboard", { replace: true });
+      navigate("/auth?next=/dashboard", { replace: true });
     }
   }, [user, isLoading, navigate]);
 

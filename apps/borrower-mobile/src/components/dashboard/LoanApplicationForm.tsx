@@ -453,6 +453,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         productSpecificData.employer_name = employerName;
         productSpecificData.employer_contact = employerContact;
         productSpecificData.monthly_salary = Number(monthlySalary) || 0;
+        productSpecificData.civil_servant_confirmed = isCivilServantConfirmed;
+      }
+      if (isMarketeer) {
+        productSpecificData.local_authority_compliance = hasLocalAuthorityCompliance;
+        productSpecificData.business_months = businessMonths;
       }
 
       const employmentTypeMap: Record<string, "employed" | "self_employed" | "contract" | "other"> = {
@@ -474,6 +479,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         loan_amount: loanAmount,
         loan_purpose: loanPurpose,
         loan_term_months: loanTerm,
+        term_unit: selectedProduct.term_unit || (isPaydaySoft || isMarketeer ? "days" : "months"),
         interest_rate: selectedProduct.interest_rate,
         monthly_payment: loanCalc.monthlyPayment,
         total_repayment: loanCalc.totalRepayment,
@@ -588,6 +594,50 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         };
         if (columnMap[docType]) {
           await supabase.from("loan_applications").update({ [columnMap[docType]]: filePath }).eq("id", applicationId);
+        }
+      }
+
+      // Link verified vault identity docs when borrower skipped re-upload in the form
+      if (kycStatus?.isVerified) {
+        const uploadedTypes = new Set(docEntries.map(([t]) => t));
+        const vaultToAppDocType: Record<string, string> = {
+          nrc_front: "nrc_front",
+          nrc_back: "nrc_back",
+          selfie: "selfie_holding_nrc",
+          selfie_holding_nrc: "selfie_holding_nrc",
+        };
+        const legacyColumnMap: Record<string, string> = {
+          nrc_front: "nrc_front_url",
+          nrc_back: "nrc_back_url",
+          selfie_holding_nrc: "selfie_url",
+          selfie: "selfie_url",
+        };
+        const { data: vaultDocs } = await supabase
+          .from("borrower_document_vault")
+          .select("doc_type, doc_label, file_url, file_name, mime_type, file_size, is_verified")
+          .eq("borrower_id", user.id)
+          .in("doc_type", ["nrc_front", "nrc_back", "selfie", "selfie_holding_nrc"]);
+        for (const vaultDoc of vaultDocs ?? []) {
+          const appDocType = vaultToAppDocType[vaultDoc.doc_type] ?? vaultDoc.doc_type;
+          if (uploadedTypes.has(appDocType)) continue;
+          const docMeta = requiredDocs.find((d) => d.document_type === appDocType);
+          await supabase.from("application_documents").insert({
+            application_id: applicationId,
+            borrower_id: user.id,
+            doc_type: appDocType,
+            doc_label: docMeta?.document_name || vaultDoc.doc_label,
+            file_name: vaultDoc.file_name,
+            file_url: vaultDoc.file_url,
+            file_size: vaultDoc.file_size,
+            mime_type: vaultDoc.mime_type,
+            is_required: docMeta?.is_mandatory ?? true,
+            loan_product_id: selectedProduct.id,
+            status: vaultDoc.is_verified ? "verified" : "uploaded",
+          });
+          const legacyCol = legacyColumnMap[vaultDoc.doc_type];
+          if (legacyCol) {
+            await supabase.from("loan_applications").update({ [legacyCol]: vaultDoc.file_url }).eq("id", applicationId);
+          }
         }
       }
 
