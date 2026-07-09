@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "npm@10.9.2",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -14,6 +15,8 @@
     "build": "npm run build -w apps/staff-web && npm run build -w apps/borrower-mobile",
     "build:staff": "npm run build -w apps/staff-web",
     "build:borrower": "npm run build -w apps/borrower-mobile",
+    "deploy:staff": "wrangler pages deploy apps/staff-web/dist --project-name phinduloans-staff-web",
+    "deploy:borrower": "wrangler pages deploy apps/borrower-mobile/dist --project-name phinduloans-borrower-web",
     "preview:staff": "npm run preview -w apps/staff-web",
     "preview:borrower": "npm run preview -w apps/borrower-mobile",
     "lint": "eslint apps packages",
