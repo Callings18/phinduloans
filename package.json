@@ -15,8 +15,8 @@
     "build": "npm run build -w apps/staff-web && npm run build -w apps/borrower-mobile",
     "build:staff": "npm run build -w apps/staff-web",
     "build:borrower": "npm run build -w apps/borrower-mobile",
-    "deploy:staff": "wrangler pages deploy apps/staff-web/dist --project-name phinduloans-staff-web",
-    "deploy:borrower": "wrangler pages deploy apps/borrower-mobile/dist --project-name phinduloans-borrower-web",
+    "deploy:staff": "wrangler deploy --config wrangler.staff.jsonc",
+    "deploy:borrower": "wrangler deploy --config wrangler.borrower.jsonc",
     "preview:staff": "npm run preview -w apps/staff-web",
     "preview:borrower": "npm run preview -w apps/borrower-mobile",
     "lint": "eslint apps packages",
@@ -121,6 +121,6 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
-    "wrangler": "^3.78.0"
+    "wrangler": "^4.110.0"
   }
 }
