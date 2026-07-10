@@ -13,6 +13,37 @@ interface SMSRequest {
   title?: string;
 }
 
+function normalizeExciteSmsUrl(url: string): string {
+  return (url || "https://gateway.excitesms.com/api/v3")
+    .replace("gateway.excitesms.tech", "gateway.excitesms.com")
+    .replace(/\/+$/, "");
+}
+
+async function getExciteSmsCredentials(supabase: any): Promise<{
+  apiUrl: string;
+  apiToken: string;
+  senderId: string;
+}> {
+  const { data: providersData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_providers")
+    .maybeSingle();
+  const { data: configData } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "notification_config")
+    .maybeSingle();
+  const providers = providersData?.value || {};
+  const config = configData?.value || {};
+
+  return {
+    apiUrl: normalizeExciteSmsUrl(providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3"),
+    apiToken: (providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "").trim(),
+    senderId: (providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu").trim(),
+  };
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -52,15 +83,13 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    const apiKey = Deno.env.get("AFRICASTALKING_API_KEY");
-    const username = Deno.env.get("AFRICASTALKING_USERNAME");
+    const logSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { apiUrl, apiToken, senderId } = await getExciteSmsCredentials(logSupabase);
 
-    if (!apiKey || !username) {
-      console.error("[SMS] Africa's Talking credentials not configured");
+    if (!apiToken) {
+      console.error("[SMS] ExciteSMS credentials not configured");
       
       const { to, message, userId, title }: SMSRequest = await req.json();
-
-      const logSupabase = createClient(supabaseUrl, supabaseServiceKey);
       const recipients = Array.isArray(to) ? to : [to];
       
       for (const recipient of recipients) {
@@ -71,7 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
           title: title || "SMS Notification",
           message: message,
           status: "pending_config",
-          provider_response: { note: "SMS provider not configured" }
+          provider_response: { note: "ExciteSMS provider not configured", provider: "excitesms" }
         });
       }
 
@@ -105,55 +134,47 @@ const handler = async (req: Request): Promise<Response> => {
       return cleaned;
     }).join(",");
 
-    console.log("[SMS] Sending to:", formattedRecipients);
+    console.log("[SMS] Sending via ExciteSMS to:", formattedRecipients);
 
-    const atUrl = username === "sandbox" 
-      ? "https://api.sandbox.africastalking.com/version1/messaging"
-      : "https://api.africastalking.com/version1/messaging";
-
-    const formData = new URLSearchParams();
-    formData.append("username", username);
-    formData.append("to", formattedRecipients);
-    formData.append("message", message);
-    formData.append("from", "PHINDU");
-
-    const response = await fetch(atUrl, {
+    const response = await fetch(`${apiUrl}/sms/send`, {
       method: "POST",
       headers: {
-        "apiKey": apiKey,
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
         "Accept": "application/json"
       },
-      body: formData.toString()
+      body: JSON.stringify({
+        recipient: formattedRecipients.replace(/\+/g, ""),
+        sender_id: senderId,
+        type: "plain",
+        message,
+      })
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({ status: "error", message: "Invalid provider response" }));
     console.log("[SMS] Provider response:", JSON.stringify(result));
 
-    const logClient = createClient(supabaseUrl, supabaseServiceKey);
-
     const recipientList = formattedRecipients.split(",");
+    const providerStatus = String(result?.data?.status || result?.status || "").toLowerCase();
+    const isSuccess = response.ok && result?.status !== "error" && !["failed", "rejected", "undelivered"].includes(providerStatus);
     for (const recipient of recipientList) {
-      const messageResult = result.SMSMessageData?.Recipients?.find(
-        (r: any) => r.number === recipient
-      );
-      
-      await logClient.from("notification_logs").insert({
+      await logSupabase.from("notification_logs").insert({
         user_id: userId || null,
         type: "sms",
         recipient: recipient,
         title: title || "SMS Notification",
         message: message,
-        status: messageResult?.status === "Success" ? "sent" : "failed",
-        sent_at: messageResult?.status === "Success" ? new Date().toISOString() : null,
-        provider_response: messageResult || result
+        status: isSuccess ? "sent" : "failed",
+        sent_at: isSuccess ? new Date().toISOString() : null,
+        provider_response: { ...result, provider: "excitesms" }
       });
     }
 
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        result: result.SMSMessageData 
+        success: isSuccess,
+        result,
+        provider: "excitesms"
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );

@@ -56,20 +56,16 @@ interface NotificationSettings {
   notify_on_promotion?: boolean;
   notify_on_court_case?: boolean;
   notify_on_contract_sent?: boolean;
-  // SMS Provider Selection
-  sms_provider?: 'twilio' | 'excitesms';
+  // SMS Provider Selection — ExciteSMS only
+  sms_provider?: 'excitesms';
   // ExciteSMS Credentials
   excitesms_api_url?: string;
   excitesms_api_token?: string;
   excitesms_sender_id?: string;
 }
 
-// Get Twilio credentials - first from DB settings, then fallback to env secrets
-async function getTwilioCredentials(supabase: any): Promise<{
-  accountSid: string;
-  authToken: string;
-  phoneNumber: string;
-  whatsappNumber: string;
+// Get email credentials - first from DB settings, then fallback to env secrets
+async function getEmailCredentials(supabase: any): Promise<{
   sendgridApiKey: string;
   sendgridFromEmail: string;
 }> {
@@ -89,24 +85,15 @@ async function getTwilioCredentials(supabase: any): Promise<{
   const providers = providersData?.value || {};
   const config = configData?.value || {};
   
-  // Return values checking both DB sources, then env secrets as fallback
   return {
-    accountSid: (providers.twilio_account_sid || config.twilio_sid || Deno.env.get("TWILIO_ACCOUNT_SID") || "").trim(),
-    authToken: (providers.twilio_auth_token || config.twilio_token || Deno.env.get("TWILIO_AUTH_TOKEN") || "").trim(),
-    phoneNumber: (providers.twilio_phone_number || config.twilio_phone_number || Deno.env.get("TWILIO_PHONE_NUMBER") || "+15304548702").trim(),
-    whatsappNumber: (providers.twilio_whatsapp_number || config.twilio_whatsapp_number || Deno.env.get("TWILIO_WHATSAPP_NUMBER") || "+15558992764").trim(),
     sendgridApiKey: (providers.sendgrid_api_key || config.sendgrid_api_key || Deno.env.get("SENDGRID_API_KEY") || "").trim(),
     sendgridFromEmail: (providers.sendgrid_from_email || config.sendgrid_from_email || Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com").trim(),
   };
 }
 
 // Legacy sync function for functions that can't await
-function getTwilioCredentialsSync() {
+function getEmailCredentialsSync() {
   return {
-    accountSid: Deno.env.get("TWILIO_ACCOUNT_SID"),
-    authToken: Deno.env.get("TWILIO_AUTH_TOKEN"),
-    phoneNumber: Deno.env.get("TWILIO_PHONE_NUMBER"),
-    whatsappNumber: Deno.env.get("TWILIO_WHATSAPP_NUMBER"),
     sendgridApiKey: Deno.env.get("SENDGRID_API_KEY"),
     sendgridFromEmail: Deno.env.get("SENDGRID_FROM_EMAIL") || "noreply@phindu.com",
   };
@@ -247,105 +234,7 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
 }
 
 // ============================================================================
-// TWILIO SMS
-// ============================================================================
-
-async function sendSMS_Twilio(to: string, message: string, creds?: any): Promise<any> {
-  const credentials = creds || getTwilioCredentialsSync();
-  
-  if (!credentials.accountSid || !credentials.authToken) {
-    throw new Error("Twilio credentials not configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)");
-  }
-
-  if (!credentials.phoneNumber) {
-    throw new Error("Twilio phone number not configured (TWILIO_PHONE_NUMBER)");
-  }
-
-  const phone = formatPhoneNumber(to);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
-  
-  const formData = new URLSearchParams();
-  formData.append("To", phone);
-  formData.append("From", credentials.phoneNumber);
-  formData.append("Body", message);
-
-  const auth = btoa(`${credentials.accountSid}:${credentials.authToken}`);
-  
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString()
-  });
-
-  const result = await response.json();
-  console.log("[SMS - Twilio] Response:", JSON.stringify(result));
-
-  if (result.error_code || result.code) {
-    throw new Error(result.message || "Failed to send SMS via Twilio");
-  }
-
-  return result;
-}
-
-// ============================================================================
-// TWILIO WHATSAPP (with optional media support)
-// ============================================================================
-
-async function sendWhatsApp_Twilio(to: string, message: string, mediaUrl?: string, creds?: any): Promise<any> {
-  const credentials = creds || getTwilioCredentialsSync();
-
-  if (!credentials.accountSid || !credentials.authToken) {
-    throw new Error("Twilio credentials not configured");
-  }
-
-  if (!credentials.whatsappNumber) {
-    throw new Error("Twilio WhatsApp number not configured (TWILIO_WHATSAPP_NUMBER)");
-  }
-
-  let whatsappFrom = credentials.whatsappNumber;
-  if (!whatsappFrom.startsWith("whatsapp:")) {
-    whatsappFrom = `whatsapp:${whatsappFrom}`;
-  }
-
-  const phone = formatPhoneNumber(to);
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`;
-  
-  const formData = new URLSearchParams();
-  formData.append("To", `whatsapp:${phone}`);
-  formData.append("From", whatsappFrom);
-  formData.append("Body", message);
-  
-  // Add media URL if provided (for PDFs, images, etc.)
-  if (mediaUrl) {
-    formData.append("MediaUrl", mediaUrl);
-  }
-
-  const auth = btoa(`${credentials.accountSid}:${credentials.authToken}`);
-  
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString()
-  });
-
-  const result = await response.json();
-  console.log("[WhatsApp - Twilio] Response:", JSON.stringify(result));
-
-  if (result.error_code || result.code) {
-    throw new Error(result.message || "Failed to send WhatsApp message via Twilio");
-  }
-
-  return result;
-}
-
-// ============================================================================
-// TWILIO SENDGRID EMAIL (with optional attachment)
+// SENDGRID EMAIL (with optional attachment)
 // ============================================================================
 
 async function sendEmail_SendGrid(
@@ -356,7 +245,7 @@ async function sendEmail_SendGrid(
   attachment?: { content: string; filename: string; type?: string },
   creds?: any
 ): Promise<any> {
-  const credentials = creds || getTwilioCredentialsSync();
+  const credentials = creds || getEmailCredentialsSync();
 
   if (!credentials.sendgridApiKey) {
     throw new Error("SendGrid API key not configured (SENDGRID_API_KEY)");
@@ -759,27 +648,17 @@ async function handleAdminContractSigned(
   // Send SMS to admin
   if (adminPhone && settings.sms_enabled !== false) {
     try {
-      const smsProvider = settings.sms_provider || Deno.env.get("SMS_PROVIDER") || 'twilio';
-      if (smsProvider === 'excitesms') {
-        const exciteCreds = await getExciteSmsCredentials(supabase);
-        results.sms = await sendSMS_ExciteSMS(adminPhone, message, exciteCreds);
-      } else {
-        results.sms = await sendSMS_Twilio(adminPhone, message);
-      }
+      const exciteCreds = await getExciteSmsCredentials(supabase);
+      results.sms = await sendSMS_ExciteSMS(adminPhone, message, exciteCreds);
     } catch (err: any) {
       console.error("[Admin Notification] SMS failed:", err.message);
       results.sms = { error: err.message };
     }
   }
 
-  // Send WhatsApp to admin
+  // WhatsApp is disabled while only ExciteSMS is active.
   if (adminPhone && settings.whatsapp_enabled !== false) {
-    try {
-      results.whatsapp = await sendWhatsApp_Twilio(adminPhone, message);
-    } catch (err: any) {
-      console.error("[Admin Notification] WhatsApp failed:", err.message);
-      results.whatsapp = { error: err.message };
-    }
+    results.whatsapp = { skipped: true, error: "WhatsApp notifications are disabled" };
   }
 
   // Send Email to admin with rich HTML content
@@ -968,8 +847,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     let result: any;
     let status = "sent";
-    const smsProviderName = settings.sms_provider || Deno.env.get("SMS_PROVIDER") || 'twilio';
-    const provider = type === 'email' ? 'sendgrid' : (type === 'sms' ? smsProviderName : 'twilio');
+    const provider = type === 'email' ? 'sendgrid' : (type === 'sms' ? 'excitesms' : 'disabled');
 
     try {
       if (type === 'sms') {
@@ -977,28 +855,11 @@ const handler = async (req: Request): Promise<Response> => {
           throw new Error("SMS notifications are disabled");
         }
         
-        // Check which SMS provider to use (priority: DB settings > env var > default 'twilio')
-        const smsProvider = settings.sms_provider || Deno.env.get("SMS_PROVIDER") || 'twilio';
-        console.log(`[Notification] Using SMS provider: ${smsProvider}`);
-        
-        if (smsProvider === 'excitesms') {
-          try {
-            const exciteCreds = await getExciteSmsCredentials(supabase);
-            result = await sendSMS_ExciteSMS(to, message, exciteCreds);
-          } catch (exciteError: any) {
-            console.error("[Notification] ExciteSMS failed, falling back to Twilio:", exciteError.message);
-            const twilioCreds = await getTwilioCredentials(supabase);
-            result = await sendSMS_Twilio(to, message, twilioCreds);
-          }
-        } else {
-          const twilioCreds = await getTwilioCredentials(supabase);
-          result = await sendSMS_Twilio(to, message, twilioCreds);
-        }
+        console.log("[Notification] Using SMS provider: excitesms");
+        const exciteCreds = await getExciteSmsCredentials(supabase);
+        result = await sendSMS_ExciteSMS(to, message, exciteCreds);
       } else if (type === 'whatsapp') {
-        if (settings.whatsapp_enabled === false) {
-          throw new Error("WhatsApp notifications are disabled");
-        }
-        result = await sendWhatsApp_Twilio(to, message, mediaUrl);
+        throw new Error("WhatsApp notifications are disabled");
       } else if (type === 'email') {
         if (settings.email_enabled === false) {
           throw new Error("Email notifications are disabled");

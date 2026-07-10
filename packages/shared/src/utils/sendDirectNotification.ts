@@ -60,7 +60,7 @@ export async function sendDirectNotification(params: SendDirectNotificationParam
 }
 
 /**
- * Send an SMS via Twilio (through edge function)
+ * Send an SMS via the configured ExciteSMS edge function.
  */
 export async function sendSMSDirect(to: string, message: string, title?: string) {
   const result = await sendDirectNotification({
@@ -80,7 +80,7 @@ export async function sendSMSDirect(to: string, message: string, title?: string)
 }
 
 /**
- * Send a WhatsApp message via Twilio (through edge function)
+ * Send a WhatsApp message through the notification edge function when enabled.
  */
 export async function sendWhatsAppDirect(
   to: string, 

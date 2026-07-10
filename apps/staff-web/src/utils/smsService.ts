@@ -1,4 +1,4 @@
-// Legacy SMS service - now uses the unified notification service with Twilio
+// Legacy SMS service - now uses the unified notification service with ExciteSMS
 import { notificationService } from "@phinduloans/shared/utils/notificationService";
 
 export interface SMSParams {
