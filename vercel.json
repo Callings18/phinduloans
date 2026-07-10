@@ -1,3 +1,15 @@
 {
+  "redirects": [
+    {
+      "source": "/admin",
+      "destination": "https://office.phindu.com/admin",
+      "permanent": false
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://office.phindu.com/admin/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

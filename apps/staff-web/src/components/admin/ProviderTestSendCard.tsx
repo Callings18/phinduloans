@@ -1,5 +1,5 @@
 /**
- * ProviderTestSendCard — one-click "Test send" for SMS / Email / WhatsApp.
+ * ProviderTestSendCard — one-click "Test send" for SMS.
  * Sits in Settings → Notifications so the client can verify provider
  * credentials at a glance without writing test code or finding hidden buttons.
  */
@@ -8,16 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@phin
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Label } from "@phinduloans/shared/components/ui/label";
-import { Loader2, MessageSquare, Mail, Phone, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle2, XCircle } from "lucide-react";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 
-type Channel = "sms" | "email" | "whatsapp";
+type Channel = "sms";
 
 const CHANNELS: { id: Channel; label: string; icon: typeof MessageSquare; placeholder: string }[] = [
   { id: "sms", label: "SMS", icon: MessageSquare, placeholder: "+260971234567" },
-  { id: "email", label: "Email", icon: Mail, placeholder: "you@example.com" },
-  { id: "whatsapp", label: "WhatsApp", icon: Phone, placeholder: "+260971234567" },
 ];
 
 interface ResultMap {
@@ -28,13 +26,9 @@ const ProviderTestSendCard = () => {
   const { toast } = useToast();
   const [recipients, setRecipients] = useState<Record<Channel, string>>({
     sms: "",
-    email: "",
-    whatsapp: "",
   });
   const [pending, setPending] = useState<Record<Channel, boolean>>({
     sms: false,
-    email: false,
-    whatsapp: false,
   });
   const [results, setResults] = useState<ResultMap>({});
 
@@ -43,7 +37,7 @@ const ProviderTestSendCard = () => {
     if (!recipient) {
       toast({
         title: "Recipient required",
-        description: `Enter a ${channel === "email" ? "valid email" : "phone number"} to test.`,
+        description: "Enter a phone number to test.",
         variant: "destructive",
       });
       return;
@@ -53,11 +47,10 @@ const ProviderTestSendCard = () => {
     try {
       const { error } = await supabase.functions.invoke("send-notification", {
         body: {
-          type: channel,
-          recipient,
+          type: "sms",
+          to: recipient,
           title: "Phindu test send",
-          message: `This is a Phindu test ${channel.toUpperCase()} sent at ${new Date().toLocaleString()}. If you received this, the provider is configured correctly.`,
-          subject: channel === "email" ? "Phindu test send" : undefined,
+          message: `This is a Phindu test SMS sent at ${new Date().toLocaleString()}. If you received this, ExciteSMS is configured correctly.`,
         },
       });
       if (error) throw error;
@@ -77,7 +70,7 @@ const ProviderTestSendCard = () => {
       <CardHeader>
         <CardTitle>Test send</CardTitle>
         <CardDescription>
-          Verify each provider works. Sends a single real message via the notification queue.
+          Verify ExciteSMS works by sending a single real message.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
