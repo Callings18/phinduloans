@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
+import { officePath } from "@phinduloans/shared/config/siteMode";
 import { Sparkles } from "lucide-react";
 
 /** Borrower-only sign-in (phone OTP). */
@@ -21,10 +22,10 @@ const Auth = () => {
   useEffect(() => {
     if (!isLoading && user) {
       if (isStaff) {
-        navigate(safeNextPath || "/dashboard");
-      } else {
-        navigate(safeNextPath || "/dashboard");
+        window.location.replace(officePath("/admin"));
+        return;
       }
+      navigate(safeNextPath || "/dashboard");
     }
   }, [user, isLoading, isStaff, navigate, safeNextPath]);
 

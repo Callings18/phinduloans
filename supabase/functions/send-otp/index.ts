@@ -115,33 +115,73 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   const creds = route;
   if (!creds.apiToken) throw new Error("Primary SMS provider is not configured");
 
-  const phone = formatPhoneNumber(to).replace("+", "");
-  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, tokenLen=${creds.apiToken.length}, urlHost=${new URL(creds.apiUrl).host}`);
-  const response = await fetch(`${creds.apiUrl}/sms/send`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${creds.apiToken}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
-    body: JSON.stringify({ recipient: phone, sender_id: creds.senderId, type: "plain", message }),
-  });
+  // ExciteSMS accepts Zambian MSISDNs as 260XXXXXXXXX (no "+"). Keep E.164 for logs.
+  const e164 = formatPhoneNumber(to);
+  const msisdn = e164.replace(/^\+/, "");
+  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, tokenLen=${creds.apiToken.length}, urlHost=${new URL(creds.apiUrl).host}, to=${msisdn}`);
 
-  const responseText = await response.text();
-  let parsedResult: unknown;
+  const attempt = async (recipient: string, includeType: boolean) => {
+    const body: Record<string, string> = {
+      recipient,
+      sender_id: creds.senderId,
+      message,
+    };
+    if (includeType) body.type = "plain";
+
+    const response = await fetch(`${creds.apiUrl}/sms/send`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${creds.apiToken}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseText = await response.text();
+    let parsedResult: unknown;
+    try {
+      parsedResult = JSON.parse(responseText);
+    } catch {
+      console.error(`[OTP] Primary provider returned non-JSON (${response.status}): ${responseText.slice(0, 200)}`);
+      throw new Error("Primary SMS delivery failed");
+    }
+    return { response, result: asRecord(parsedResult) };
+  };
+
+  // Prefer MSISDN without "+", then retry with "+" if the gateway rejects the first form.
+  let response: Response;
+  let result: JsonRecord;
   try {
-    parsedResult = JSON.parse(responseText);
-  } catch {
-    console.error(`[OTP] Primary provider returned non-JSON (${response.status})`);
-    throw new Error("Primary SMS delivery failed");
+    ({ response, result } = await attempt(msisdn, true));
+  } catch (firstErr) {
+    throw firstErr;
   }
-  const result = asRecord(parsedResult);
-  const data = asRecord(result.data);
 
-  const deliveryStatus = String(data.status || result.status || "").toLowerCase();
-  if (!response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(deliveryStatus)) {
-    console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
-    throw new Error("SMS provider rejected the OTP. Please verify the ExciteSMS token, approved sender ID, and account balance.");
+  const deliveryStatus = String(asRecord(result.data).status || result.status || "").toLowerCase();
+  const rejected = !response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(deliveryStatus);
+
+  if (rejected) {
+    console.error(`[OTP] ExciteSMS ${route.label} first attempt failed status=${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
+    try {
+      ({ response, result } = await attempt(e164, false));
+    } catch {
+      // fall through to rejection handling below
+    }
+  }
+
+  const data = asRecord(result.data);
+  const finalStatus = String(data.status || result.status || "").toLowerCase();
+  if (!response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(finalStatus)) {
+    const providerMsg = String(result?.message || data?.message || "").trim();
+    console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${finalStatus || "unknown"}; message=${providerMsg.slice(0, 160)}`);
+    // Never surface raw MSISDNs / provider junk as the user-facing error.
+    const looksLikePhone = /^\+?260\d{9}$/.test(providerMsg.replace(/\s+/g, ""));
+    throw new Error(
+      looksLikePhone || !providerMsg
+        ? "SMS provider rejected the OTP. Please verify the ExciteSMS token, approved sender ID, and account balance."
+        : `SMS delivery failed: ${providerMsg}`,
+    );
   }
 
   return {
@@ -418,8 +458,13 @@ serve(async (req) => {
       // cleanup best-effort only
     }
     const message = error instanceof Error ? error.message : "Failed to send verification code. Please try again.";
+    const compact = message.replace(/\s+/g, "");
+    const friendly =
+      /^\+?260\d{9}$/.test(compact)
+        ? "SMS delivery failed. Please check your phone number and try again."
+        : message;
     return new Response(
-      JSON.stringify({ success: false, error: message }),
+      JSON.stringify({ success: false, error: friendly }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

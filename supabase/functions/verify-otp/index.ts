@@ -141,19 +141,29 @@ serve(async (req) => {
       if (existingProfile) {
         userId = existingProfile.id;
       } else {
+        // Do NOT pass `phone` into auth.admin.createUser.
+        // Phone OTP is handled by our custom send-otp/verify-otp flow; Supabase Phone Auth
+        // is often disabled on Lovable, and createUser(phone=...) then fails with cryptic
+        // errors that surface as the raw number (e.g. "26097xxxxxxx").
         const { data: newUser, error: signupError } = await supabase.auth.admin.createUser({
           email: syntheticEmail,
           password: generatedPassword,
           email_confirm: true,
-          phone: formattedPhone,
-          phone_confirm: true,
-          user_metadata: { full_name: fullName || null },
+          user_metadata: {
+            full_name: fullName || null,
+            phone: formattedPhone,
+          },
         });
 
         if (signupError || !newUser?.user) {
           console.error("[Verify OTP] Signup error:", signupError);
+          const raw = signupError?.message || "Failed to create account";
+          const looksLikePhone = /^\+?260\d{9}$/.test(raw.replace(/\s+/g, ""));
+          const friendly = looksLikePhone || /phone/i.test(raw)
+            ? "Could not create your account. Please try again or contact support."
+            : raw;
           return new Response(
-            JSON.stringify({ success: false, error: signupError?.message || "Failed to create account" }),
+            JSON.stringify({ success: false, error: friendly }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -199,18 +209,23 @@ serve(async (req) => {
       let loginEmail = profile?.email ?? null;
       let userId = profile?.id ?? null;
 
-      // If profile has no email (phone-only signup), look it up from auth.users via phone
+      // If profile has no email (phone-only signup), recover via synthetic email on auth.users
       if (!loginEmail || !userId) {
         const safePhone = formattedPhone.replace(/[^0-9]/g, "");
         const fallback = `${safePhone}@phone.phindu.local`;
-        // Try direct lookup via admin API
         const { data: usersByEmail } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
         const match = usersByEmail?.users?.find(
-          (u) => u.phone === formattedPhone.replace(/^\+/, "") || u.email === fallback,
+          (u) =>
+            u.email === fallback ||
+            u.user_metadata?.phone === formattedPhone ||
+            u.phone === formattedPhone ||
+            u.phone === formattedPhone.replace(/^\+/, ""),
         );
         if (match) {
           userId = match.id;
           loginEmail = match.email ?? fallback;
+        } else {
+          loginEmail = fallback;
         }
       }
 

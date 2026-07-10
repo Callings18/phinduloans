@@ -35,20 +35,25 @@ function isSnoozed(): boolean {
   return Number.isFinite(until) && until > Date.now();
 }
 
-export const PWAInstallPrompt = () => {
+type PWAInstallPromptProps = {
+  /** When false, never show (e.g. marketing/office, or guest on auth). Default true. */
+  enabled?: boolean;
+};
+
+export const PWAInstallPrompt = ({ enabled = true }: PWAInstallPromptProps) => {
   const { deferredPrompt, promptInstall } = usePwaInstallPrompt();
   const [showPrompt, setShowPrompt] = useState(false);
   const { toast } = useToast();
   const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (isStandaloneDisplayMode()) {
+    if (!enabled || isStandaloneDisplayMode()) {
       setShowPrompt(false);
       return;
     }
 
     const tryShow = () => {
-      if (isStandaloneDisplayMode()) {
+      if (!enabled || isStandaloneDisplayMode()) {
         setShowPrompt(false);
         return;
       }
@@ -56,12 +61,10 @@ export const PWAInstallPrompt = () => {
         setShowPrompt(false);
         return;
       }
-      // On iOS the browser never fires beforeinstallprompt — still show instructions.
-      // On Chromium, only show once we have a deferred prompt OR after the first 10s tick anyway.
       setShowPrompt(true);
     };
 
-    // First gentle nudge, then re-evaluate each minute (mute/snooze always wins).
+    // Soft nudge only — never blocks the web app.
     const firstTimer = window.setTimeout(tryShow, FIRST_DELAY_MS);
     intervalRef.current = window.setInterval(tryShow, RECHECK_INTERVAL_MS);
 
@@ -71,10 +74,10 @@ export const PWAInstallPrompt = () => {
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [deferredPrompt]);
+  }, [deferredPrompt, enabled]);
 
   const handleInstall = async () => {
-    // Android → ship the official APK directly.
+    // Prefer APK download (web→APK pipeline). Fall back to PWA on non-Android.
     if (isAndroidDevice()) {
       downloadApk();
       toast({
@@ -93,7 +96,7 @@ export const PWAInstallPrompt = () => {
       toast({
         title: "Use your browser menu",
         description:
-          "Open your browser menu (⋮) and tap 'Install app' or 'Add to Home Screen'.",
+          "Open your browser menu (⋮) and tap 'Install app' or 'Add to Home Screen'. Or open More options for the APK link.",
       });
       return;
     }
@@ -109,7 +112,6 @@ export const PWAInstallPrompt = () => {
         intervalRef.current = null;
       }
     } else {
-      // Treat declined as a snooze so we don't immediately re-pop.
       localStorage.setItem(SNOOZE_KEY, String(Date.now() + CLOSE_SNOOZE_MS));
       setShowPrompt(false);
     }
@@ -138,7 +140,7 @@ export const PWAInstallPrompt = () => {
     });
   };
 
-  if (!showPrompt) {
+  if (!enabled || !showPrompt) {
     return null;
   }
 
@@ -170,7 +172,7 @@ export const PWAInstallPrompt = () => {
                   Install the Phindu Loans app
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Apply for loans faster, get push reminders, and use the app offline.
+                  Optional — you can keep using the full web app. Install for faster access and reminders.
                 </p>
               </div>
 

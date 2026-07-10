@@ -7,14 +7,14 @@ import { Toaster as Sonner } from "@phinduloans/shared/components/ui/sonner";
 import { TooltipProvider } from "@phinduloans/shared/components/ui/tooltip";
 import { AuthProvider } from "@phinduloans/shared/hooks/useAuth";
 import { ThemeProvider } from "@phinduloans/shared/theme/ThemeProvider";
-import PWAInstallPrompt from "@phinduloans/shared/components/common/PWAInstallPrompt";
+import { BorrowerInstallNudge } from "./components/common/BorrowerInstallNudge";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Apply from "./pages/Apply";
+import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
-import { BorrowerInstallGate } from "./components/common/BorrowerInstallGate";
 
 const queryClient = new QueryClient();
 
@@ -28,42 +28,18 @@ function App() {
               <Toaster />
               <Sonner />
               <BrowserRouter>
-                <PWAInstallPrompt />
+                {/* Soft optional nudge for logged-in borrowers only — never blocks web apply/login */}
+                <BorrowerInstallNudge />
                 <Routes>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ErrorBoundary>
-                        <BorrowerInstallGate>
-                          <Dashboard />
-                        </BorrowerInstallGate>
-                      </ErrorBoundary>
-                    }
-                  />
+                  <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
                   <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
-                  <Route
-                    path="/apply"
-                    element={
-                      <ErrorBoundary>
-                        <BorrowerInstallGate>
-                          <Apply />
-                        </BorrowerInstallGate>
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/pre-qualify"
-                    element={
-                      <ErrorBoundary>
-                        <BorrowerInstallGate>
-                          <Apply />
-                        </BorrowerInstallGate>
-                      </ErrorBoundary>
-                    }
-                  />
+                  <Route path="/apply" element={<ErrorBoundary><Apply /></ErrorBoundary>} />
+                  <Route path="/pre-qualify" element={<ErrorBoundary><Apply /></ErrorBoundary>} />
+                  <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
+                  <Route path="/download" element={<ErrorBoundary><Install /></ErrorBoundary>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </BrowserRouter>

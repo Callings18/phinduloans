@@ -22,7 +22,6 @@ import LoanProducts from "./pages/LoanProducts";
 import Contact from "./pages/Contact";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
-import Install from "./pages/Install";
 import BorrowerDashboardGate from "./pages/BorrowerDashboardGate";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
@@ -113,9 +112,10 @@ function App() {
                   <Route path="/contact" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Contact /></ErrorBoundary>} />
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
-                  <Route path="/install" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
-                  <Route path="/download" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
-                  <Route path="/app" element={officeMode ? <Navigate to={borrowerAppPath("/auth")} replace /> : <ErrorBoundary><Install /></ErrorBoundary>} />
+                  {/* Install UX lives only on the borrower app (app.phindu.com) */}
+                  <Route path="/install" element={<Navigate to={borrowerAppPath("/install")} replace />} />
+                  <Route path="/download" element={<Navigate to={borrowerAppPath("/install")} replace />} />
+                  <Route path="/app" element={<Navigate to={borrowerAppPath("/auth")} replace />} />
                   <Route path="/pre-qualify" element={<Navigate to={borrowerAppPath("/auth")} replace />} />
                   <Route path="/dashboard" element={officeMode ? <Navigate to={borrowerAppPath("/dashboard")} replace /> : <ErrorBoundary><BorrowerDashboardGate /></ErrorBoundary>} />
                   <Route path="/profile" element={<Navigate to={borrowerAppPath("/profile")} replace />} />

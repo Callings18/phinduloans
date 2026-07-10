@@ -30,8 +30,10 @@ const borrowerMain = readFileSync(borrowerMainPath, "utf8");
 expect(borrowerMain.includes('navigator.serviceWorker.register("/service-worker.js")'), "Borrower app should register service-worker.js in main.tsx.");
 
 const borrowerApp = readFileSync(borrowerAppPath, "utf8");
-expect(borrowerApp.includes("PWAInstallPrompt"), "Borrower app should mount PWAInstallPrompt.");
-expect(borrowerApp.includes("BorrowerInstallGate"), "Borrower app should use BorrowerInstallGate.");
+expect(borrowerApp.includes("BorrowerInstallNudge") || borrowerApp.includes("PWAInstallPrompt"), "Borrower app should mount soft install nudge.");
+expect(!borrowerApp.includes("BorrowerInstallGate"), "Borrower app should not hard-block web with BorrowerInstallGate (web-first).");
+expect(borrowerApp.includes('path="/install"'), "Borrower app should expose /install for APK/PWA options.");
+expect(borrowerApp.includes('path="/dashboard"'), "Borrower app should expose /dashboard for web-first access.");
 
 const staffIndex = readFileSync(staffIndexPath, "utf8");
 expect(!staffIndex.includes('rel="manifest"'), "Staff index must not include a web manifest link.");

@@ -7,6 +7,7 @@ import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { toast } from "sonner";
 import { Phone, ArrowRight, Loader2, ArrowLeft, User, CreditCard } from "lucide-react";
 import { z } from "zod";
+import { normalizePhoneToE164 } from "@phinduloans/shared/utils/authHelpers";
 
 const phoneSchema = z.string()
   .min(9, "Phone number must be at least 9 digits")
@@ -53,6 +54,17 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
     }
   }, [countdown]);
 
+  const sanitizeAuthError = (message: string): string => {
+    const compact = message.replace(/\s+/g, "");
+    if (/^\+?260\d{9}$/.test(compact) || /^260\d{9}$/.test(compact)) {
+      return "Could not complete phone verification. Please try again or contact support.";
+    }
+    if (/edge function/i.test(message) || /non-2xx/i.test(message)) {
+      return "SMS service is temporarily unavailable. Please try again in a moment.";
+    }
+    return message;
+  };
+
   const parseInvokeError = async (error: unknown): Promise<string> => {
     const fallback = "Failed to send OTP";
     if (!error || typeof error !== "object") return fallback;
@@ -60,13 +72,13 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
     if (e.context?.json) {
       try {
         const payload = await e.context.json();
-        if (payload?.error) return payload.error;
-        if (payload?.message) return payload.message;
+        if (payload?.error) return sanitizeAuthError(payload.error);
+        if (payload?.message) return sanitizeAuthError(payload.message);
       } catch {
         // ignore
       }
     }
-    return e.message || fallback;
+    return sanitizeAuthError(e.message || fallback);
   };
 
   const handleNameContinue = () => {
@@ -101,20 +113,23 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
 
     setIsLoading(true);
     try {
+      const normalizedPhone = normalizePhoneToE164(phone);
       const { data, error } = await supabase.functions.invoke("send-otp", {
-        body: { phone, purpose },
+        body: { phone: normalizedPhone, purpose },
       });
       if (error) {
         const msg = await parseInvokeError(error);
         throw new Error(msg);
       }
-      if (!data?.success) throw new Error(data?.error || "Failed to send OTP");
+      if (!data?.success) throw new Error(sanitizeAuthError(data?.error || "Failed to send OTP"));
 
+      // Keep UI + verify step on the same normalized value used by the edge function.
+      setPhone(normalizedPhone);
       toast.success("OTP sent to your phone!");
       setMode("otp_verify");
       setCountdown(60);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to send OTP";
+      const message = error instanceof Error ? sanitizeAuthError(error.message) : "Failed to send OTP";
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -129,15 +144,19 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
 
     setIsLoading(true);
     try {
-      const body: Record<string, unknown> = { phone, code: otp, purpose };
+      const normalizedPhone = normalizePhoneToE164(phone);
+      const body: Record<string, unknown> = { phone: normalizedPhone, code: otp, purpose };
       if (purpose === "signup") {
         body.fullName = fullName;
         body.nrcNumber = nrcNumber;
       }
 
       const { data, error } = await supabase.functions.invoke("verify-otp", { body });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Verification failed");
+      if (error) {
+        const msg = await parseInvokeError(error);
+        throw new Error(msg);
+      }
+      if (!data?.success) throw new Error(sanitizeAuthError(data?.error || "Verification failed"));
 
       if (purpose === "login" && data.magicLink) {
         toast.success("Login successful!");
@@ -150,7 +169,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
         onSuccess(data.userId);
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Verification failed";
+      const message = error instanceof Error ? sanitizeAuthError(error.message) : "Verification failed";
       toast.error(message);
     } finally {
       setIsLoading(false);

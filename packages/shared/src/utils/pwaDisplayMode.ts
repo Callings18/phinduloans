@@ -14,18 +14,10 @@ export function isStandaloneDisplayMode(): boolean {
 }
 
 /**
- * When true, borrower apply/dashboard and browser-tab signup are blocked until the PWA is installed.
- * - `VITE_BORROWER_WEB_INSTALL_GATE=false` — always off (e.g. local testing).
- * - `VITE_BORROWER_WEB_INSTALL_GATE=true` — always on.
- * - unset — on in production builds only.
+ * When true, borrower apply/dashboard are blocked until the PWA/APK is installed.
+ * Product default is web-first: gate is always OFF.
+ * Kept for backwards-compatible env reads; prefer soft nudge + /install APK page.
  */
 export function isBorrowerWebInstallGateEnabled(): boolean {
-  const raw = import.meta.env.VITE_BORROWER_WEB_INSTALL_GATE;
-  if (raw === "false" || raw === "0") {
-    return false;
-  }
-  if (raw === "true" || raw === "1") {
-    return true;
-  }
-  return import.meta.env.PROD;
+  return false;
 }
