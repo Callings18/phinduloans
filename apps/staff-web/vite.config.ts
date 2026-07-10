@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react-swc";
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  root: appDir,
   server: {
     host: "::",
     port: 8080,
@@ -20,6 +21,8 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
   build: {
+    outDir: path.resolve(appDir, "./dist"),
+    emptyOutDir: true,
     commonjsOptions: {
       include: [/node_modules/],
       transformMixedEsModules: true,
