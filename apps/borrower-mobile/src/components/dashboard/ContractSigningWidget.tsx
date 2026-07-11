@@ -85,10 +85,11 @@ export default function ContractSigningWidget({ userId }: Props) {
 
   const advanceStatusAfterSign = async (loanId: string, currentStatus: string) => {
     if (["approved", "contract_signing"].includes(currentStatus)) {
-      await supabase
+      const { error } = await supabase
         .from("loan_applications")
         .update({ status: "awaiting_disbursement", updated_at: new Date().toISOString() })
         .eq("id", loanId);
+      if (error) throw error;
     }
   };
 
