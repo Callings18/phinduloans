@@ -156,19 +156,48 @@ serve(async (req) => {
         });
 
         if (signupError || !newUser?.user) {
-          console.error("[Verify OTP] Signup error:", signupError);
-          const raw = signupError?.message || "Failed to create account";
-          const looksLikePhone = /^\+?260\d{9}$/.test(raw.replace(/\s+/g, ""));
-          const friendly = looksLikePhone || /phone/i.test(raw)
-            ? "Could not create your account. Please try again or contact support."
-            : raw;
-          return new Response(
-            JSON.stringify({ success: false, error: friendly }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+          // If an auth user already exists for this phone (synthetic email already taken),
+          // recover that account and log them in instead of failing signup.
+          const rawMsg = signupError?.message || "";
+          const alreadyExists =
+            (signupError as any)?.code === "email_exists" ||
+            (signupError as any)?.status === 422 ||
+            /already been registered/i.test(rawMsg) ||
+            /email_exists/i.test(rawMsg);
 
-        userId = newUser.user.id;
+          if (alreadyExists) {
+            const { data: usersList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
+            const match = usersList?.users?.find(
+              (u) =>
+                u.email === syntheticEmail ||
+                u.user_metadata?.phone === formattedPhone ||
+                u.phone === formattedPhone ||
+                u.phone === formattedPhone.replace(/^\+/, ""),
+            );
+            if (match) {
+              console.log("[Verify OTP] Existing auth user recovered for phone; logging in");
+              userId = match.id;
+            } else {
+              return new Response(
+                JSON.stringify({ success: false, error: "An account already exists for this number. Please try logging in." }),
+                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          } else {
+            console.error("[Verify OTP] Signup error:", signupError);
+            const raw = rawMsg || "Failed to create account";
+            const looksLikePhone = /^\+?260\d{9}$/.test(raw.replace(/\s+/g, ""));
+            const friendly = looksLikePhone || /phone/i.test(raw)
+              ? "Could not create your account. Please try again or contact support."
+              : raw;
+            return new Response(
+              JSON.stringify({ success: false, error: friendly }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } else {
+          userId = newUser.user.id;
+        }
 
         // Hide synthetic email in profile; store only phone + name + NRC
         await supabase
