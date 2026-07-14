@@ -32,7 +32,7 @@
     "stress:readonly": "node scripts/stress-readonly-smoke.mjs",
     "test:e2e:headed": "playwright test tests/e2e/smoke.spec.ts --headed",
     "audit:pwa": "node scripts/audit-borrower-pwa.mjs",
-    "cap:sync": "pnpm --filter @phinduloans/borrower-mobile cap:sync",
+    "cap:sync": "npm run cap:sync -w apps/borrower-mobile",
     "build:dev": "npm run build:dev -w apps/staff-web && npm run build:dev -w apps/borrower-mobile"
   },
   "dependencies": {
