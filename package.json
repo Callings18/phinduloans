@@ -5,8 +5,9 @@
   "type": "module",
   "packageManager": "npm@10.9.2",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/staff-web",
+    "apps/borrower-mobile",
+    "packages/shared"
   ],
   "scripts": {
     "dev": "vite --config apps/staff-web/vite.config.ts",
