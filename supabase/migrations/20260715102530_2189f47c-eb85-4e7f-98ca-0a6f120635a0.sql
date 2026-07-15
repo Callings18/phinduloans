@@ -1,0 +1,1 @@
+REVOKE SELECT (crb_auto_approve_score, crb_manual_review_score, crb_auto_decline_score, min_credit_score, max_dti_ratio) ON public.loan_products FROM anon;
