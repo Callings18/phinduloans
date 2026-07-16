@@ -198,15 +198,11 @@ serve(async (req) => {
             /email_exists/i.test(rawMsg);
 
           if (alreadyExists) {
-            const { data: usersList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-            const match = usersList?.users?.find(
-              (u) =>
-                u.email === syntheticEmail ||
-                u.user_metadata?.phone === formattedPhone ||
-                u.phone === formattedPhone ||
-                u.phone === formattedPhone.replace(/^\+/, ""),
-            );
+            const match = await findAuthUserByPhoneOrEmail(supabase, formattedPhone, syntheticEmail);
             if (match) {
+              console.log("[Verify OTP] Existing auth user recovered for phone; logging in");
+              userId = match.id;
+            } else {
               console.log("[Verify OTP] Existing auth user recovered for phone; logging in");
               userId = match.id;
             } else {
