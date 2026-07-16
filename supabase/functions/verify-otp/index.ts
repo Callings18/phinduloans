@@ -270,14 +270,7 @@ serve(async (req) => {
       if (!loginEmail || !userId) {
         const safePhone = formattedPhone.replace(/[^0-9]/g, "");
         const fallback = `${safePhone}@phone.phindu.local`;
-        const { data: usersByEmail } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-        const match = usersByEmail?.users?.find(
-          (u) =>
-            u.email === fallback ||
-            u.user_metadata?.phone === formattedPhone ||
-            u.phone === formattedPhone ||
-            u.phone === formattedPhone.replace(/^\+/, ""),
-        );
+        const match = await findAuthUserByPhoneOrEmail(supabase, formattedPhone, fallback);
         if (match) {
           userId = match.id;
           loginEmail = match.email ?? fallback;
