@@ -17,8 +17,8 @@
     "build:all": "npm run build:staff && npm run build:borrower",
     "build:staff": "vite build --config apps/staff-web/vite.config.ts",
     "build:borrower": "vite build --config apps/borrower-mobile/vite.config.ts",
-    "deploy:staff": "wrangler deploy --config wrangler.staff.jsonc",
-    "deploy:borrower": "wrangler deploy --config wrangler.borrower.jsonc",
+    "deploy:staff": "npx wrangler@4.110.0 deploy --config wrangler.staff.jsonc",
+    "deploy:borrower": "npx wrangler@4.110.0 deploy --config wrangler.borrower.jsonc",
     "preview:staff": "vite preview --config apps/staff-web/vite.config.ts",
     "preview:borrower": "vite preview --config apps/borrower-mobile/vite.config.ts",
     "lint": "eslint apps packages",
@@ -74,14 +74,12 @@
     "@sentry/react": "^8.55.1",
     "@supabase/supabase-js": "^2.89.0",
     "@tanstack/react-query": "^5.83.0",
-    "@testing-library/jest-dom": "^6.9.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
-    "jsdom": "^20.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.462.0",
@@ -100,7 +98,6 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
-    "vitest": "^4.1.9",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
@@ -117,12 +114,13 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "jsdom": "^20.0.3",
     "lovable-tagger": "^1.1.13",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
-    "wrangler": "^4.110.0"
+    "vitest": "^4.1.9"
   }
 }
