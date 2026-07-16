@@ -35,6 +35,38 @@ function formatPhoneNumber(phone: string): string {
   }
 }
 
+// Paginated lookup so borrowers past the 200-user mark can still be
+// recovered by phone/synthetic email. Supabase admin.listUsers has no
+// server-side email filter, so we walk pages until we find the match or
+// run out of pages.
+async function findAuthUserByPhoneOrEmail(
+  supabase: ReturnType<typeof createClient>,
+  formattedPhone: string,
+  syntheticEmail: string,
+) {
+  const perPage = 200;
+  const maxPages = 50; // hard safety cap (~10k users)
+  const phoneNoPlus = formattedPhone.replace(/^\+/, "");
+  for (let page = 1; page <= maxPages; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      console.error("[Verify OTP] listUsers error on page", page, error);
+      return null;
+    }
+    const users = data?.users ?? [];
+    const match = users.find(
+      (u: any) =>
+        u.email === syntheticEmail ||
+        u.user_metadata?.phone === formattedPhone ||
+        u.phone === formattedPhone ||
+        u.phone === phoneNoPlus,
+    );
+    if (match) return match;
+    if (users.length < perPage) return null; // last page
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
