@@ -21,7 +21,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
   build: {
-    outDir: path.resolve(appDir, "./dist"),
+    outDir: path.resolve(appDir, "../../dist"),
     emptyOutDir: true,
     commonjsOptions: {
       include: [/node_modules/],
