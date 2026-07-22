@@ -48,10 +48,14 @@ async function getExciteCredentials(supabase: any) {
   const { data: c } = await supabase.from("system_settings").select("value").eq("key", "notification_config").maybeSingle();
   const pv = p?.value || {};
   const cv = c?.value || {};
-  const apiUrl = (pv.excitesms_api_url || cv.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3").replace("excitesms.tech", "excitesms.com");
+  const clean = (t: string) => (t || "").trim().replace(/^Bearer\s+/i, "").trim();
+  const apiUrl = (Deno.env.get("EXCITESMS_API_URL") || pv.excitesms_api_url || cv.excitesms_api_url || "https://gateway.excitesms.com/api/v3")
+    .replace("excitesms.tech", "excitesms.com")
+    .replace(/\/sms\/send\/?$/i, "")
+    .replace(/\/+$/, "");
   return {
     apiUrl,
-    apiToken: (pv.excitesms_api_token || cv.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "").trim(),
+    apiToken: clean(Deno.env.get("EXCITESMS_API_TOKEN") || "") || clean(pv.excitesms_api_token || cv.excitesms_api_token || ""),
     senderId: (pv.excitesms_sender_id || cv.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu").trim(),
   };
 }

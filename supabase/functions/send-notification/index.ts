@@ -64,6 +64,10 @@ interface NotificationSettings {
   excitesms_sender_id?: string;
 }
 
+function cleanExciteApiToken(token: string): string {
+  return (token || "").trim().replace(/^Bearer\s+/i, "").trim();
+}
+
 // Get email credentials - first from DB settings, then fallback to env secrets
 async function getEmailCredentials(supabase: any): Promise<{
   sendgridApiKey: string;
@@ -151,18 +155,23 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
   const providers = providersData?.value || {};
   const config = configData?.value || {};
   
-  // Use the correct ExciteSMS domain (.com)
-  const apiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
-  
-  // Ensure we use .com (the correct domain)
-  const correctedApiUrl = apiUrl.replace("gateway.excitesms.tech", "gateway.excitesms.com");
-  
-  // Get and trim the API token (remove any trailing whitespace)
-  const rawToken = providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "";
-  
+  // Prefer env secret so a stale Admin Settings token cannot force Unauthenticated.
+  const apiUrl = Deno.env.get("EXCITESMS_API_URL") || providers.excitesms_api_url || config.excitesms_api_url || "https://gateway.excitesms.com/api/v3";
+  const correctedApiUrl = apiUrl
+    .replace("gateway.excitesms.tech", "gateway.excitesms.com")
+    .replace(/\/sms\/send\/?$/i, "")
+    .replace(/\/+$/, "");
+
+  const apiToken = cleanExciteApiToken(
+    Deno.env.get("EXCITESMS_API_TOKEN")
+      || providers.excitesms_api_token
+      || config.excitesms_api_token
+      || "",
+  );
+
   return {
     apiUrl: correctedApiUrl,
-    apiToken: rawToken.trim(),
+    apiToken,
     senderId: (providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu").trim(),
   };
 }
@@ -225,6 +234,10 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
   }
   
   console.log("[SMS - ExciteSMS] Response:", JSON.stringify(result));
+
+  if (response.status === 401 || /unauthenticated|unauthorized/i.test(String(result.message || ""))) {
+    throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Lovable secrets and Admin → Settings.");
+  }
 
   if (result.status === "error") {
     throw new Error(result.message || "Failed to send SMS via ExciteSMS");
@@ -645,7 +658,7 @@ async function handleAdminContractSigned(
 
   const results: any = { sms: null, whatsapp: null, email: null };
 
-  // Send SMS to admin
+  // Send SMS to admin (ExciteSMS only)
   if (adminPhone && settings.sms_enabled !== false) {
     try {
       const exciteCreds = await getExciteSmsCredentials(supabase);
@@ -854,7 +867,7 @@ const handler = async (req: Request): Promise<Response> => {
         if (settings.sms_enabled === false) {
           throw new Error("SMS notifications are disabled");
         }
-        
+
         console.log("[Notification] Using SMS provider: excitesms");
         const exciteCreds = await getExciteSmsCredentials(supabase);
         result = await sendSMS_ExciteSMS(to, message, exciteCreds);

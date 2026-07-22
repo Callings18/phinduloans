@@ -7,7 +7,8 @@ import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { toast } from "sonner";
 import { Phone, ArrowRight, Loader2, ArrowLeft, User, CreditCard } from "lucide-react";
 import { z } from "zod";
-import { normalizePhoneToE164 } from "@phinduloans/shared/utils/authHelpers";
+import { normalizePhoneToE164, completeBorrowerSessionFromOtpToken } from "@phinduloans/shared/utils/authHelpers";
+import { borrowerAppPath } from "@phinduloans/shared/config/siteMode";
 
 const phoneSchema = z.string()
   .min(9, "Phone number must be at least 9 digits")
@@ -158,16 +159,29 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
       }
       if (!data?.success) throw new Error(sanitizeAuthError(data?.error || "Verification failed"));
 
-      if (purpose === "login" && data.magicLink) {
-        toast.success("Login successful!");
-        window.location.href = data.magicLink;
-      } else if (purpose === "signup" && data.magicLink) {
-        toast.success("Account created!");
-        window.location.href = data.magicLink;
-      } else {
-        toast.success(purpose === "signup" ? "Account created!" : "Verified!");
+      if (data.tokenHash) {
+        const { error: sessionError } = await completeBorrowerSessionFromOtpToken(data.tokenHash);
+        if (sessionError) throw sessionError;
+        toast.success(purpose === "signup" ? "Account created!" : "Login successful!");
         onSuccess(data.userId);
+        return;
       }
+
+      // Legacy fallback: rewrite redirect target to borrower app dashboard
+      if (data.magicLink) {
+        try {
+          const url = new URL(data.magicLink);
+          url.searchParams.set("redirect_to", borrowerAppPath("/dashboard"));
+          toast.success(purpose === "signup" ? "Account created!" : "Login successful!");
+          window.location.href = url.toString();
+          return;
+        } catch {
+          // fall through to onSuccess without session
+        }
+      }
+
+      toast.success(purpose === "signup" ? "Account created!" : "Verified!");
+      onSuccess(data.userId);
     } catch (error: unknown) {
       const message = error instanceof Error ? sanitizeAuthError(error.message) : "Verification failed";
       toast.error(message);

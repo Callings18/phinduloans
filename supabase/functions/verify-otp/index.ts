@@ -35,6 +35,12 @@ function formatPhoneNumber(phone: string): string {
   }
 }
 
+/** Borrower PWA dashboard — used for magic-link redirectTo when in-app token exchange is unavailable. */
+function getBorrowerDashboardUrl(): string {
+  const base = (Deno.env.get("BORROWER_APP_URL") || "https://app.phindu.com").replace(/\/+$/, "");
+  return `${base}/dashboard`;
+}
+
 // Paginated lookup so borrowers past the 200-user mark can still be
 // recovered by phone/synthetic email. Supabase admin.listUsers has no
 // server-side email filter, so we walk pages until we find the match or
@@ -203,9 +209,6 @@ serve(async (req) => {
               console.log("[Verify OTP] Existing auth user recovered for phone; logging in");
               userId = match.id;
             } else {
-              console.log("[Verify OTP] Existing auth user recovered for phone; logging in");
-              userId = match.id;
-            } else {
               return new Response(
                 JSON.stringify({ success: false, error: "An account already exists for this number. Please try logging in." }),
                 { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -239,10 +242,12 @@ serve(async (req) => {
           .eq("id", userId);
       }
 
-      // Issue a magic link so the borrower lands signed-in immediately
+      // Issue session token for in-app verifyOtp (client stays on app.phindu.com)
+      const redirectTo = getBorrowerDashboardUrl();
       const { data: link } = await supabase.auth.admin.generateLink({
         type: "magiclink",
         email: syntheticEmail,
+        options: { redirectTo },
       });
 
       return new Response(
@@ -251,6 +256,7 @@ serve(async (req) => {
           message: "Account ready",
           userId,
           verified: true,
+          tokenHash: link?.properties?.hashed_token ?? null,
           magicLink: link?.properties?.action_link ?? null,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -287,9 +293,11 @@ serve(async (req) => {
         );
       }
 
+      const redirectTo = getBorrowerDashboardUrl();
       const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: loginEmail,
+        options: { redirectTo },
       });
 
       if (sessionError) {
@@ -306,6 +314,7 @@ serve(async (req) => {
           message: "Login successful",
           verified: true,
           userId,
+          tokenHash: sessionData.properties?.hashed_token ?? null,
           magicLink: sessionData.properties?.action_link,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

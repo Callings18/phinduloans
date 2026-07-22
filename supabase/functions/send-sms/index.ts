@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/**
+ * Legacy send-sms entrypoint — ExciteSMS only (Twilio / Africa's Talking removed).
+ * Prefer calling excite-sms or send-notification for new code.
+ */
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -13,17 +18,20 @@ interface SMSRequest {
   title?: string;
 }
 
-function normalizeExciteSmsUrl(url: string): string {
-  return (url || "https://gateway.excitesms.com/api/v3")
-    .replace("gateway.excitesms.tech", "gateway.excitesms.com")
-    .replace(/\/+$/, "");
+function cleanApiToken(token: string): string {
+  return (token || "").trim().replace(/^Bearer\s+/i, "").trim();
 }
 
-async function getExciteSmsCredentials(supabase: any): Promise<{
-  apiUrl: string;
-  apiToken: string;
-  senderId: string;
-}> {
+function formatZambianPhone(phone: string): string {
+  let cleaned = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+  if (cleaned.startsWith("+")) cleaned = cleaned.substring(1);
+  if (cleaned.startsWith("0") && cleaned.length === 10) cleaned = "260" + cleaned.substring(1);
+  if (cleaned.length === 9 && !cleaned.startsWith("260")) cleaned = "260" + cleaned;
+  if (!cleaned.startsWith("260") && cleaned.length >= 9) cleaned = "260" + cleaned;
+  return cleaned;
+}
+
+async function getExciteSmsCredentials(supabase: ReturnType<typeof createClient>) {
   const { data: providersData } = await supabase
     .from("system_settings")
     .select("value")
@@ -36,11 +44,21 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
     .maybeSingle();
   const providers = providersData?.value || {};
   const config = configData?.value || {};
+  const baseUrl = (
+    Deno.env.get("EXCITESMS_API_URL")
+    || providers.excitesms_api_url
+    || config.excitesms_api_url
+    || "https://gateway.excitesms.com/api/v3"
+  )
+    .replace("gateway.excitesms.tech", "gateway.excitesms.com")
+    .replace(/\/sms\/send\/?$/i, "")
+    .replace(/\/+$/, "");
 
   return {
-    apiUrl: normalizeExciteSmsUrl(providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3"),
-    apiToken: (providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "").trim(),
-    senderId: (providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu").trim(),
+    apiUrl: `${baseUrl}/sms/send`,
+    apiToken: cleanApiToken(Deno.env.get("EXCITESMS_API_TOKEN") || "")
+      || cleanApiToken(providers.excitesms_api_token || config.excitesms_api_token || ""),
+    senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "Phindu",
   };
 }
 
@@ -54,7 +72,6 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // --- Auth check: require authenticated staff/admin or service_role ---
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -83,36 +100,8 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    const logSupabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { apiUrl, apiToken, senderId } = await getExciteSmsCredentials(logSupabase);
-
-    if (!apiToken) {
-      console.error("[SMS] ExciteSMS credentials not configured");
-      
-      const { to, message, userId, title }: SMSRequest = await req.json();
-      const recipients = Array.isArray(to) ? to : [to];
-      
-      for (const recipient of recipients) {
-        await logSupabase.from("notification_logs").insert({
-          user_id: userId || null,
-          type: "sms",
-          recipient: recipient,
-          title: title || "SMS Notification",
-          message: message,
-          status: "pending_config",
-          provider_response: { note: "ExciteSMS provider not configured", provider: "excitesms" }
-        });
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "SMS queued for delivery"
-        }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { apiToken, senderId, apiUrl } = await getExciteSmsCredentials(supabase);
     const { to, message, userId, title }: SMSRequest = await req.json();
 
     if (!to || !message) {
@@ -122,67 +111,73 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const recipients = Array.isArray(to) ? to.join(",") : to;
-    
-    const formattedRecipients = recipients.split(",").map(phone => {
-      let cleaned = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-      if (cleaned.startsWith("0")) {
-        cleaned = "+260" + cleaned.substring(1);
-      } else if (!cleaned.startsWith("+")) {
-        cleaned = "+260" + cleaned;
+    const recipients = (Array.isArray(to) ? to : [to]).map(formatZambianPhone);
+
+    if (!apiToken) {
+      for (const recipient of recipients) {
+        await supabase.from("notification_logs").insert({
+          user_id: userId || null,
+          type: "sms",
+          recipient,
+          title: title || "SMS Notification",
+          message,
+          status: "pending_config",
+          provider_response: { note: "EXCITESMS_API_TOKEN not configured" },
+        });
       }
-      return cleaned;
-    }).join(",");
-
-    console.log("[SMS] Sending via ExciteSMS to:", formattedRecipients);
-
-    const response = await fetch(`${apiUrl}/sms/send`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        recipient: formattedRecipients.replace(/\+/g, ""),
-        sender_id: senderId,
-        type: "plain",
-        message,
-      })
-    });
-
-    const result = await response.json().catch(() => ({ status: "error", message: "Invalid provider response" }));
-    console.log("[SMS] Provider response:", JSON.stringify(result));
-
-    const recipientList = formattedRecipients.split(",");
-    const providerStatus = String(result?.data?.status || result?.status || "").toLowerCase();
-    const isSuccess = response.ok && result?.status !== "error" && !["failed", "rejected", "undelivered"].includes(providerStatus);
-    for (const recipient of recipientList) {
-      await logSupabase.from("notification_logs").insert({
-        user_id: userId || null,
-        type: "sms",
-        recipient: recipient,
-        title: title || "SMS Notification",
-        message: message,
-        status: isSuccess ? "sent" : "failed",
-        sent_at: isSuccess ? new Date().toISOString() : null,
-        provider_response: { ...result, provider: "excitesms" }
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: "ExciteSMS is not configured. Set EXCITESMS_API_TOKEN." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: isSuccess,
-        result,
-        provider: "excitesms"
-      }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    console.log("[SMS] ExciteSMS sending to:", recipients.join(", "));
 
-  } catch (error: any) {
-    console.error("[SMS] Error:", error);
+    const results = [];
+    for (const recipient of recipients) {
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          recipient,
+          sender_id: senderId,
+          type: "plain",
+          message,
+        }),
+      });
+      const result = await response.json().catch(() => ({ status: "error", message: "Invalid JSON" }));
+      const ok = response.ok && result?.status !== "error";
+      await supabase.from("notification_logs").insert({
+        user_id: userId || null,
+        type: "sms",
+        recipient,
+        title: title || "SMS Notification",
+        message,
+        status: ok ? "sent" : "failed",
+        sent_at: ok ? new Date().toISOString() : null,
+        provider_response: { provider: "excitesms", ...result },
+      });
+      results.push({ recipient, ok, result });
+    }
+
+    const allOk = results.every((r) => r.ok);
     return new Response(
-      JSON.stringify({ error: "SMS service temporarily unavailable" }),
+      JSON.stringify({
+        success: allOk,
+        message: allOk ? "SMS sent via ExciteSMS" : "One or more SMS failed",
+        results,
+      }),
+      { status: allOk ? 200 : 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "SMS send failed";
+    console.error("[SMS] Error:", message);
+    return new Response(
+      JSON.stringify({ success: false, error: message }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }

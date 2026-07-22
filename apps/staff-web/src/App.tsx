@@ -47,10 +47,13 @@ import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
-import { borrowerAppPath, getOfficeBaseUrl, isOfficeSiteMode } from "./config/publicUrls";
+import { borrowerAppPath, getOfficeBaseUrl, getSiteModeFromHostname, isOfficeSiteMode } from "./config/publicUrls";
+import ExternalRedirect from "./components/common/ExternalRedirect";
 
 const queryClient = new QueryClient();
 const officeMode = isOfficeSiteMode();
+/** Lovable/local preview hosts are "dev" — keep /admin in-app so preview isn't broken by a production office redirect. */
+const serveAdminLocally = officeMode || getSiteModeFromHostname() === "dev";
 const officeAdminUrl = `${getOfficeBaseUrl()}/admin`;
 
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
@@ -113,13 +116,13 @@ function App() {
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   {/* Install UX lives only on the borrower app (app.phindu.com) */}
-                  <Route path="/install" element={<Navigate to={borrowerAppPath("/install")} replace />} />
-                  <Route path="/download" element={<Navigate to={borrowerAppPath("/install")} replace />} />
-                  <Route path="/app" element={<Navigate to={borrowerAppPath("/auth")} replace />} />
-                  <Route path="/pre-qualify" element={<Navigate to={borrowerAppPath("/auth")} replace />} />
-                  <Route path="/dashboard" element={officeMode ? <Navigate to={borrowerAppPath("/dashboard")} replace /> : <ErrorBoundary><BorrowerDashboardGate /></ErrorBoundary>} />
-                  <Route path="/profile" element={<Navigate to={borrowerAppPath("/profile")} replace />} />
-                  {officeMode ? (
+                  <Route path="/install" element={<ExternalRedirect to={borrowerAppPath("/install")} />} />
+                  <Route path="/download" element={<ExternalRedirect to={borrowerAppPath("/install")} />} />
+                  <Route path="/app" element={<ExternalRedirect to={borrowerAppPath("/auth")} />} />
+                  <Route path="/pre-qualify" element={<ExternalRedirect to={borrowerAppPath("/auth")} />} />
+                  <Route path="/dashboard" element={officeMode ? <ExternalRedirect to={borrowerAppPath("/dashboard")} /> : <ErrorBoundary><BorrowerDashboardGate /></ErrorBoundary>} />
+                  <Route path="/profile" element={<ExternalRedirect to={borrowerAppPath("/profile")} />} />
+                  {serveAdminLocally ? (
                     <Route path="/admin" element={<AdminRoute />}>
                     <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
                     <Route
@@ -608,7 +611,10 @@ function App() {
                     />
                     </Route>
                   ) : (
-                    <Route path="/admin/*" element={<Navigate to={officeAdminUrl} replace />} />
+                    <Route
+                      path="/admin/*"
+                      element={<ExternalRedirect to={officeAdminUrl} preservePath />}
+                    />
                   )}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

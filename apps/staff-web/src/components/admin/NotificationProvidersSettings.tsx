@@ -34,7 +34,7 @@ interface NotificationProviderSettings {
   sms_enabled: boolean;
   whatsapp_enabled: boolean;
   
-  // SMS Provider Selection
+  // SMS is ExciteSMS-only
   sms_provider: 'excitesms';
   
   // ExciteSMS Credentials
@@ -79,7 +79,7 @@ const defaultSettings: NotificationProviderSettings = {
   sms_enabled: true,
   whatsapp_enabled: false,
   
-  // SMS Provider Selection
+  // SMS is ExciteSMS-only
   sms_provider: 'excitesms',
   
   // ExciteSMS Credentials (empty - will fallback to env secrets if not set)
@@ -255,7 +255,6 @@ export const NotificationProvidersSettings = () => {
       return;
     }
 
-    // Determine which provider will be used for the test
     const providerName = 'ExciteSMS';
 
     setTestingChannel(channel);
@@ -371,7 +370,7 @@ export const NotificationProvidersSettings = () => {
                   </div>
                   <Switch
                     checked={settings.sms_enabled}
-                    onCheckedChange={(checked) => setSettings({ ...settings, sms_enabled: checked })}
+                    onCheckedChange={(checked) => setSettings({ ...settings, sms_enabled: checked, sms_provider: 'excitesms' })}
                   />
                 </div>
                 
@@ -379,6 +378,9 @@ export const NotificationProvidersSettings = () => {
                   <div className="ml-12 space-y-2">
                     <Label>SMS Provider</Label>
                     <p className="text-sm font-medium">ExciteSMS</p>
+                    <p className="text-xs text-muted-foreground">
+                      SMS uses ExciteSMS only. Prefer EXCITESMS_API_TOKEN in Lovable secrets.
+                    </p>
                   </div>
                 )}
               </div>
@@ -409,7 +411,7 @@ export const NotificationProvidersSettings = () => {
                   Credentials Management
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  You can configure ExciteSMS credentials in the "Credentials" tab. 
+                  Configure ExciteSMS credentials in the Credentials tab.
                   Settings are saved to the database and take effect immediately.
                 </p>
               </div>
@@ -426,18 +428,19 @@ export const NotificationProvidersSettings = () => {
                 ExciteSMS Credentials
               </CardTitle>
               <CardDescription>
-                Configure your ExciteSMS API credentials. Changes take effect immediately after saving.
+                SMS uses ExciteSMS only. Prefer EXCITESMS_API_TOKEN in Lovable secrets. Changes take effect immediately after saving.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+
               {/* ExciteSMS Section */}
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2 text-primary">
                   <Phone className="h-4 w-4" />
-                  ExciteSMS
+                  ExciteSMS (SMS)
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  Configure the only active SMS provider.
+                  Prefer setting EXCITESMS_API_TOKEN in Lovable secrets so a stale DB token cannot cause Unauthenticated errors.
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -473,7 +476,7 @@ export const NotificationProvidersSettings = () => {
                 
                 <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10">
                   <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <span className="text-sm text-primary font-medium">ExciteSMS is currently the active SMS provider</span>
+                  <span className="text-sm text-primary font-medium">ExciteSMS is the active SMS provider</span>
                 </div>
               </div>
 

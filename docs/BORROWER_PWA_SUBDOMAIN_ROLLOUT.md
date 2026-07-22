@@ -17,7 +17,7 @@ Set these frontend env vars for `apps/staff-web`:
 
 Set these backend/edge env vars:
 
-- `BORROWER_APP_URL=https://app.phindu.com` (used by `supabase/functions/create-borrower`)
+- `BORROWER_APP_URL=https://app.phindu.com` (used by `create-borrower`, `verify-otp` redirectTo)
 
 ## 2) Supabase Auth redirect allowlist
 

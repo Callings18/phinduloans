@@ -43,9 +43,23 @@ function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+/** Strip accidental Bearer prefix / whitespace that cause ExciteSMS "Unauthenticated". */
+function cleanApiToken(token: string): string {
+  return (token || "").trim().replace(/^Bearer\s+/i, "").trim();
+}
+
+function pickToken(...candidates: Array<string | undefined | null>): string {
+  for (const candidate of candidates) {
+    const cleaned = cleanApiToken(candidate || "");
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
 function normalizeExciteSmsUrl(url: string): string {
   return (url || "https://gateway.excitesms.com/api/v3")
     .replace("gateway.excitesms.tech", "gateway.excitesms.com")
+    .replace(/\/sms\/send\/?$/i, "")
     .replace(/\/+$/, "");
 }
 
@@ -65,23 +79,43 @@ async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promis
   const providers = providersData?.value || {};
   const config = configData?.value || {};
   const rawApiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
-  const primaryApiToken = providers.excitesms_api_token || config.excitesms_api_token || Deno.env.get("EXCITESMS_API_TOKEN") || "";
-  const configBackupToken = providers.excitesms_api_token && config.excitesms_api_token !== providers.excitesms_api_token ? config.excitesms_api_token : "";
-  const secondaryApiToken = providers.excitesms_secondary_api_token || configBackupToken || Deno.env.get("EXCITESMS_SECONDARY_API_TOKEN") || "";
+  // Prefer Lovable/env secret first so a stale AdminSettings token cannot force Unauthenticated.
+  const primaryApiToken = pickToken(
+    Deno.env.get("EXCITESMS_API_TOKEN"),
+    providers.excitesms_api_token,
+    config.excitesms_api_token,
+  );
+  const secondaryApiToken = pickToken(
+    Deno.env.get("EXCITESMS_SECONDARY_API_TOKEN"),
+    providers.excitesms_secondary_api_token,
+    // Only use config token as secondary when it differs from the chosen primary.
+    config.excitesms_api_token !== primaryApiToken ? config.excitesms_api_token : "",
+    providers.excitesms_api_token !== primaryApiToken ? providers.excitesms_api_token : "",
+  );
+  const senderId = pickToken(
+    providers.excitesms_sender_id,
+    config.excitesms_sender_id,
+    Deno.env.get("EXCITESMS_SENDER_ID"),
+  ) || "Phindu";
 
   return {
     excitesms: {
       primary: {
         apiUrl: normalizeExciteSmsUrl(rawApiUrl),
         apiToken: primaryApiToken,
-        senderId: providers.excitesms_sender_id || config.excitesms_sender_id || Deno.env.get("EXCITESMS_SENDER_ID") || "PhinduLoans",
+        senderId,
         label: "primary",
       },
       secondary: secondaryApiToken && secondaryApiToken !== primaryApiToken
         ? {
             apiUrl: normalizeExciteSmsUrl(rawApiUrl),
             apiToken: secondaryApiToken,
-            senderId: providers.excitesms_secondary_sender_id || providers.excitesms_sender_id || Deno.env.get("EXCITESMS_SECONDARY_SENDER_ID") || Deno.env.get("EXCITESMS_SENDER_ID") || "PhinduLoans",
+            senderId: pickToken(
+              providers.excitesms_secondary_sender_id,
+              providers.excitesms_sender_id,
+              Deno.env.get("EXCITESMS_SECONDARY_SENDER_ID"),
+              Deno.env.get("EXCITESMS_SENDER_ID"),
+            ) || senderId,
             label: "secondary",
           }
         : undefined,
@@ -91,12 +125,13 @@ async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promis
 
 async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRoute): Promise<SmsSendResult> {
   const creds = route;
-  if (!creds.apiToken) throw new Error("Primary SMS provider is not configured");
+  const apiToken = cleanApiToken(creds.apiToken);
+  if (!apiToken) throw new Error("ExciteSMS is not configured. Set EXCITESMS_API_TOKEN in Lovable secrets / Admin Settings.");
 
   // ExciteSMS accepts Zambian MSISDNs as 260XXXXXXXXX (no "+"). Keep E.164 for logs.
   const e164 = formatPhoneNumber(to);
   const msisdn = e164.replace(/^\+/, "");
-  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, tokenLen=${creds.apiToken.length}, urlHost=${new URL(creds.apiUrl).host}, to=${msisdn}`);
+  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, tokenLen=${apiToken.length}, urlHost=${new URL(creds.apiUrl).host}, to=${msisdn}`);
 
   const attempt = async (recipient: string, includeType: boolean) => {
     const body: Record<string, string> = {
@@ -109,7 +144,7 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
     const response = await fetch(`${creds.apiUrl}/sms/send`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${creds.apiToken}`,
+        "Authorization": `Bearer ${apiToken}`,
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
@@ -121,8 +156,8 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
     try {
       parsedResult = JSON.parse(responseText);
     } catch {
-      console.error(`[OTP] Primary provider returned non-JSON (${response.status}): ${responseText.slice(0, 200)}`);
-      throw new Error("Primary SMS delivery failed");
+      console.error(`[OTP] ExciteSMS returned non-JSON (${response.status}): ${responseText.slice(0, 200)}`);
+      throw new Error("ExciteSMS delivery failed (invalid provider response)");
     }
     return { response, result: asRecord(parsedResult) };
   };
@@ -130,17 +165,18 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   // Prefer MSISDN without "+", then retry with "+" if the gateway rejects the first form.
   let response: Response;
   let result: JsonRecord;
-  try {
-    ({ response, result } = await attempt(msisdn, true));
-  } catch (firstErr) {
-    throw firstErr;
-  }
+  ({ response, result } = await attempt(msisdn, true));
 
   const deliveryStatus = String(asRecord(result.data).status || result.status || "").toLowerCase();
+  const providerMsgFirst = String(result?.message || "").toLowerCase();
   const rejected = !response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(deliveryStatus);
 
   if (rejected) {
     console.error(`[OTP] ExciteSMS ${route.label} first attempt failed status=${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
+    // Auth failures won't be fixed by changing recipient format — fail fast with a clear message.
+    if (response.status === 401 || providerMsgFirst.includes("unauthenticated") || providerMsgFirst.includes("unauthorized")) {
+      throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Lovable secrets and Admin → Settings.");
+    }
     try {
       ({ response, result } = await attempt(e164, false));
     } catch {
@@ -153,11 +189,13 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   if (!response.ok || result?.status === "error" || ["failed", "rejected", "undelivered"].includes(finalStatus)) {
     const providerMsg = String(result?.message || data?.message || "").trim();
     console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${finalStatus || "unknown"}; message=${providerMsg.slice(0, 160)}`);
-    // Never surface raw MSISDNs / provider junk as the user-facing error.
+    if (/unauthenticated|unauthorized/i.test(providerMsg) || response.status === 401) {
+      throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Lovable secrets and Admin → Settings.");
+    }
     const looksLikePhone = /^\+?260\d{9}$/.test(providerMsg.replace(/\s+/g, ""));
     throw new Error(
       looksLikePhone || !providerMsg
-        ? "SMS provider rejected the OTP. Please verify the ExciteSMS token, approved sender ID, and account balance."
+        ? "ExciteSMS rejected the OTP. Verify the approved sender ID and account balance."
         : `SMS delivery failed: ${providerMsg}`,
     );
   }
@@ -182,16 +220,17 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   };
 }
 
-async function deliverOtpSms(to: string, message: string, settings: SmsSettings, preferBackup: boolean): Promise<SmsSendResult> {
-  const preferredExciteRoute = preferBackup && settings.excitesms.secondary ? settings.excitesms.secondary : settings.excitesms.primary;
-  const fallbackExciteRoute = preferredExciteRoute === settings.excitesms.secondary ? settings.excitesms.primary : settings.excitesms.secondary;
+/** ExciteSMS only — no Twilio / Africa's Talking fallbacks. */
+async function deliverOtpSms(to: string, message: string, settings: SmsSettings, preferSecondary: boolean): Promise<SmsSendResult> {
+  const preferred = preferSecondary && settings.excitesms.secondary ? settings.excitesms.secondary : settings.excitesms.primary;
+  const fallback = preferred === settings.excitesms.secondary ? settings.excitesms.primary : settings.excitesms.secondary;
 
   try {
-    return await sendViaExciteSms(to, message, preferredExciteRoute);
+    return await sendViaExciteSms(to, message, preferred);
   } catch (error) {
-    if (fallbackExciteRoute) {
-      console.error("[OTP] Preferred ExciteSMS route failed; retrying alternate ExciteSMS route", error);
-      return await sendViaExciteSms(to, message, fallbackExciteRoute);
+    if (fallback) {
+      console.error("[OTP] Preferred ExciteSMS route failed; retrying alternate ExciteSMS token/route", error);
+      return await sendViaExciteSms(to, message, fallback);
     }
     throw error;
   }

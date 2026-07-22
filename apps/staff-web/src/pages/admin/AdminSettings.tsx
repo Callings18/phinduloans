@@ -152,7 +152,9 @@ const AdminSettings = () => {
           if (setting.key === 'general_config') setGeneralConfig(setting.value as any);
           if (setting.key === 'company_info') setCompanyInfo(setting.value as any);
           if (setting.key === 'lending_rules') setLendingRules(setting.value as any);
-          if (setting.key === 'notification_config') setNotificationConfig(setting.value as any);
+          if (setting.key === 'notification_config') {
+            setNotificationConfig({ ...(setting.value as any), sms_provider: 'excitesms' });
+          }
         });
       }
 
@@ -179,7 +181,7 @@ const AdminSettings = () => {
       await saveSystemSetting('general_config', generalConfig);
       await saveSystemSetting('company_info', companyInfo);
       await saveSystemSetting('lending_rules', lendingRules);
-      await saveSystemSetting('notification_config', notificationConfig);
+      await saveSystemSetting('notification_config', { ...notificationConfig, sms_provider: 'excitesms' });
 
       // Save Payment Gateway Settings
       if (paymentSettings) {
@@ -567,8 +569,8 @@ const AdminSettings = () => {
                     <div className="space-y-2">
                       <Label>SMS Provider</Label>
                       <Select
-                        value={notificationConfig.sms_provider}
-                        onValueChange={(v) => setNotificationConfig({ ...notificationConfig, sms_provider: v })}
+                        value="excitesms"
+                        disabled
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -577,6 +579,7 @@ const AdminSettings = () => {
                           <SelectItem value="excitesms">ExciteSMS</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">SMS is ExciteSMS-only. Set EXCITESMS_API_TOKEN in Lovable secrets.</p>
                     </div>
                     <div className="space-y-2">
                       <Label>WhatsApp Provider</Label>
@@ -597,37 +600,35 @@ const AdminSettings = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     {/* ExciteSMS Credentials */}
-                    {notificationConfig.sms_provider === 'excitesms' && (
-                      <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
-                        <Label className="text-sm font-bold uppercase opacity-70">ExciteSMS Credentials</Label>
-                        <div className="space-y-2">
-                          <Label>API URL</Label>
-                          <Input
-                            placeholder="https://gateway.excitesms.com/api/v3"
-                            value={notificationConfig.excitesms_api_url}
-                            onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_api_url: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>API Token</Label>
-                          <Input
-                            type="password"
-                            placeholder="Your ExciteSMS API token"
-                            value={notificationConfig.excitesms_api_token}
-                            onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_api_token: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Sender ID</Label>
-                          <Input
-                            placeholder="Phindu"
-                            value={notificationConfig.excitesms_sender_id}
-                            onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_sender_id: e.target.value })}
-                          />
-                          <p className="text-[10px] text-muted-foreground">The sender ID shown on recipients' phones</p>
-                        </div>
+                    <div className="p-4 rounded-xl border border-border/50 bg-muted/20 space-y-3">
+                      <Label className="text-sm font-bold uppercase opacity-70">ExciteSMS Credentials</Label>
+                      <div className="space-y-2">
+                        <Label>API URL</Label>
+                        <Input
+                          placeholder="https://gateway.excitesms.com/api/v3"
+                          value={notificationConfig.excitesms_api_url}
+                          onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_api_url: e.target.value })}
+                        />
                       </div>
-                    )}
+                      <div className="space-y-2">
+                        <Label>API Token</Label>
+                        <Input
+                          type="password"
+                          placeholder="Your ExciteSMS API token"
+                          value={notificationConfig.excitesms_api_token}
+                          onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_api_token: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sender ID</Label>
+                        <Input
+                          placeholder="Phindu"
+                          value={notificationConfig.excitesms_sender_id}
+                          onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_sender_id: e.target.value })}
+                        />
+                        <p className="text-[10px] text-muted-foreground">Prefer EXCITESMS_API_TOKEN in Lovable secrets over a DB token.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>

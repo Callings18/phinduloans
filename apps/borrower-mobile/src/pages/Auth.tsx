@@ -25,7 +25,7 @@ const Auth = () => {
         window.location.replace(officePath("/admin"));
         return;
       }
-      navigate(safeNextPath || "/dashboard");
+      navigate(safeNextPath || "/dashboard", { replace: true });
     }
   }, [user, isLoading, isStaff, navigate, safeNextPath]);
 
@@ -36,7 +36,7 @@ const Auth = () => {
         ? "You've successfully logged in."
         : "Welcome to Phindu Credit Solutions.",
     });
-    navigate(safeNextPath || "/dashboard");
+    navigate(safeNextPath || "/dashboard", { replace: true });
   };
 
   if (isLoading) {
