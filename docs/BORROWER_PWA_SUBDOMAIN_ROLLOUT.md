@@ -81,17 +81,75 @@ npm run audit:pwa
 
 ## 4) Deploy marketing / office (Cloudflare)
 
-Use two deploy targets from the same `apps/staff-web` app:
+Use **two separate Cloudflare projects** from the same `apps/staff-web` source.
+`VITE_SITE_MODE` is baked at **build time** — one artifact cannot correctly serve both
+`phindu.com` and `office.phindu.com`. Do not bind both domains to a single deploy.
+
+| Domain | Cloudflare project (example) | Build command | Output dir | Required env |
+|--------|------------------------------|---------------|------------|--------------|
+| `phindu.com` (+ `www`) | marketing / `phindu-marketing` | `npm run build:staff` | `apps/staff-web/dist` | `VITE_SITE_MODE=marketing` |
+| `office.phindu.com` | office / `phindu-office` | `npm run build:staff` | `apps/staff-web/dist` | `VITE_SITE_MODE=office` |
+| `app.phindu.com` | borrower / `phindu-borrower` | `npm run build:borrower` | `apps/borrower-mobile/dist` | (no `VITE_SITE_MODE`) |
+
+Shared env on all three builds:
+
+```env
+VITE_BORROWER_APP_URL=https://app.phindu.com
+VITE_OFFICE_BASE_URL=https://office.phindu.com
+VITE_MARKETING_BASE_URL=https://phindu.com
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_PUBLISHABLE_KEY=...
+```
+
+### Exact local → Cloudflare Workers static deploy
+
+Repo helpers (after a mode-specific build):
+
+```bash
+# Marketing → phindu.com  (MUST set VITE_SITE_MODE before build)
+set VITE_SITE_MODE=marketing
+set VITE_BORROWER_APP_URL=https://app.phindu.com
+set VITE_OFFICE_BASE_URL=https://office.phindu.com
+npm run build:staff
+npx wrangler@4.110.0 pages deploy apps/staff-web/dist --project-name=phindu-marketing
+# or, if using the Workers assets config bound only to marketing:
+# npm run deploy:staff   # wrangler.staff.jsonc → apps/staff-web/dist
+
+# Office → office.phindu.com  (separate project / separate deploy)
+set VITE_SITE_MODE=office
+npm run build:staff
+npx wrangler@4.110.0 pages deploy apps/staff-web/dist --project-name=phindu-office
+
+# Borrower PWA → app.phindu.com
+npm run build:borrower
+npm run deploy:borrower   # wrangler.borrower.jsonc → apps/borrower-mobile/dist
+```
+
+On Cloudflare Pages (dashboard CI): Root Directory = repo root, Install = `npm install`,
+Build / Output / env as in the table above. SPA: `not_found_handling = single-page-application`
+(already set in `wrangler.staff.jsonc` / `wrangler.borrower.jsonc`).
+
+### What each mode must do after redeploy
 
 1. Marketing (`phindu.com`) — `VITE_SITE_MODE=marketing`
    - Login / `/auth` / `/login` → `app.phindu.com`
-   - `/dashboard`, `/profile`, `/apply`, `/install`, etc. → borrower app
+   - `/dashboard`, `/profile`, `/apply`, `/install`, etc. → **hard redirect** to borrower app (no borrower UI paint)
+   - Navbar **My Dashboard** → absolute `https://app.phindu.com/dashboard`
    - `/admin/*` → `office.phindu.com/admin`
-   - No AI chrome
+   - No FloatingAssistant / PhinduAI
 2. Office (`office.phindu.com`) — `VITE_SITE_MODE=office`
    - Staff Auth at `/auth`
    - Public marketing routes redirect to `/admin`
    - FloatingAssistant available
+
+### If live `phindu.com` still shows borrower dashboard / AI
+
+That is almost always **stale Cloudflare assets**, not a main-branch bug. Confirm:
+
+1. Live JS still looks like old conditional `/dashboard` (renders borrower UI) instead of `ExternalRedirect`.
+2. Baked mode is empty: search the marketing bundle for `"".toLowerCase()==="office"` → `VITE_SITE_MODE` was missing at build.
+3. `CF-Cache-Status: HIT` on `/` or `/assets/*.js` — purge cache or redeploy so `index-*.js` hash changes.
+4. Hard refresh / unregister any old service worker on `phindu.com` (marketing must not ship a SW; borrower SW is only on `app.phindu.com`).
 
 ## 5) PWA audit checklist
 
