@@ -22,7 +22,6 @@ import LoanProducts from "./pages/LoanProducts";
 import Contact from "./pages/Contact";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
-import BorrowerDashboardGate from "./pages/BorrowerDashboardGate";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
 import AdminLoanDrafts from "./pages/admin/AdminLoanDrafts";
@@ -120,7 +119,8 @@ function App() {
                   <Route path="/download" element={<ExternalRedirect to={borrowerAppPath("/install")} />} />
                   <Route path="/app" element={<ExternalRedirect to={borrowerAppPath("/auth")} />} />
                   <Route path="/pre-qualify" element={<ExternalRedirect to={borrowerAppPath("/auth")} />} />
-                  <Route path="/dashboard" element={officeMode ? <ExternalRedirect to={borrowerAppPath("/dashboard")} /> : <ErrorBoundary><BorrowerDashboardGate /></ErrorBoundary>} />
+                  {/* Borrower UI lives only on app.phindu.com — never host dashboard on marketing/office */}
+                  <Route path="/dashboard" element={<ExternalRedirect to={borrowerAppPath("/dashboard")} />} />
                   <Route path="/profile" element={<ExternalRedirect to={borrowerAppPath("/profile")} />} />
                   {serveAdminLocally ? (
                     <Route path="/admin" element={<AdminRoute />}>

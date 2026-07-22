@@ -23,13 +23,26 @@ Set these backend/edge env vars:
 
 In Supabase dashboard (`Authentication -> URL Configuration`), add:
 
-- Site URL: keep current production URL if needed
+- **Site URL (preferred):** `https://app.phindu.com` so any leftover magic-link hops stay on the borrower app
 - Additional Redirect URLs:
   - `https://app.phindu.com/**`
   - `https://office.phindu.com/**`
   - `https://phindu.com/**`
 
 Do not remove existing URLs until traffic is fully migrated.
+
+### OTP must not land on marketing
+
+Borrower SMS OTP uses in-app `tokenHash` + hard `window.location.replace` to `https://app.phindu.com/dashboard`.
+
+**Required after each OTP-related code change:**
+
+1. Redeploy edge function **`verify-otp`** (returns `tokenHash`, `redirectTo` = `BORROWER_APP_URL/dashboard`)
+2. Secret **`BORROWER_APP_URL=https://app.phindu.com`**
+3. Redeploy **borrower** build to `app.phindu.com`
+4. Redeploy **marketing** (`VITE_SITE_MODE=marketing`) so `phindu.com/dashboard` external-redirects to app
+
+If `verify-otp` is stale, magic links can still bounce through Site URL (`phindu.com`) and look like “landing page first, then dashboard.”
 
 ## 3) Deploy borrower PWA (`app.phindu.com`)
 
@@ -100,6 +113,8 @@ Validation:
 ## 7) Post-deploy smoke tests
 
 1. `phindu.com` "Apply/Get Started" routes to `app.phindu.com`.
-2. Staff login on `office.phindu.com` works unchanged.
-3. Borrower deep links in SMS/openers point to `app.phindu.com`.
-4. Staff domain does not expose web manifest for install.
+2. `https://app.phindu.com/auth` → SMS OTP → lands on **`https://app.phindu.com/dashboard`** in one step (no `phindu.com` homepage).
+3. `https://phindu.com/dashboard` → immediate redirect to **`https://app.phindu.com/dashboard`**.
+4. Staff login on `office.phindu.com` works unchanged.
+5. Borrower deep links in SMS/openers point to `app.phindu.com`.
+6. Staff domain does not expose web manifest for install.

@@ -9,18 +9,14 @@ import "@fontsource/outfit/700.css";
 import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "@phinduloans/shared/index.css";
-import { ensureCorrectHost, getExpectedModeForStaffWebBuild, borrowerAppPath, getSiteModeFromHostname } from "@phinduloans/shared/config/siteMode";
+import {
+  ensureCorrectHost,
+  getExpectedModeForStaffWebBuild,
+  redirectBorrowerPathsOffMarketing,
+} from "@phinduloans/shared/config/siteMode";
 
-/** If Supabase auth completes on marketing domain, forward tokens to borrower PWA. */
-function forwardSupabaseAuthHashToBorrowerApp(): void {
-  if (typeof window === "undefined") return;
-  const hash = window.location.hash;
-  if (!hash || (!hash.includes("access_token") && !hash.includes("type=magiclink"))) return;
-  if (getSiteModeFromHostname() !== "marketing") return;
-  window.location.replace(`${borrowerAppPath("/dashboard")}${hash}`);
-}
-
-forwardSupabaseAuthHashToBorrowerApp();
+// Marketing host must never keep borrowers on /dashboard or auth-hash completions.
+redirectBorrowerPathsOffMarketing();
 ensureCorrectHost(getExpectedModeForStaffWebBuild());
 
 if (import.meta.env.VITE_SENTRY_DSN) {

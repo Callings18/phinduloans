@@ -163,20 +163,21 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
         const { error: sessionError } = await completeBorrowerSessionFromOtpToken(data.tokenHash);
         if (sessionError) throw sessionError;
         toast.success(purpose === "signup" ? "Account created!" : "Login successful!");
+        // Auth parent hard-replaces to app.phindu.com/dashboard (never marketing Site URL).
         onSuccess(data.userId);
         return;
       }
 
-      // Legacy fallback: rewrite redirect target to borrower app dashboard
+      // Legacy fallback only: force redirect_to onto borrower app, never Site URL (phindu.com).
       if (data.magicLink) {
         try {
           const url = new URL(data.magicLink);
           url.searchParams.set("redirect_to", borrowerAppPath("/dashboard"));
           toast.success(purpose === "signup" ? "Account created!" : "Login successful!");
-          window.location.href = url.toString();
+          window.location.replace(url.toString());
           return;
         } catch {
-          // fall through to onSuccess without session
+          // fall through — still send user to app dashboard via onSuccess
         }
       }
 

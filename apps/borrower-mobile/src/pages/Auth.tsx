@@ -3,8 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
-import { officePath } from "@phinduloans/shared/config/siteMode";
+import { borrowerAppPath, officePath } from "@phinduloans/shared/config/siteMode";
 import { Sparkles } from "lucide-react";
+
+/** Absolute borrower destination — never leave app.phindu.com for marketing Site URL. */
+function goToBorrowerDestination(path: string | null) {
+  const target = path && path.startsWith("/") ? path : "/dashboard";
+  window.location.replace(borrowerAppPath(target));
+}
 
 /** Borrower-only sign-in (phone OTP). */
 const Auth = () => {
@@ -25,9 +31,9 @@ const Auth = () => {
         window.location.replace(officePath("/admin"));
         return;
       }
-      navigate(safeNextPath || "/dashboard", { replace: true });
+      goToBorrowerDestination(safeNextPath);
     }
-  }, [user, isLoading, isStaff, navigate, safeNextPath]);
+  }, [user, isLoading, isStaff, safeNextPath]);
 
   const handlePhoneAuthSuccess = () => {
     toast({
@@ -36,7 +42,7 @@ const Auth = () => {
         ? "You've successfully logged in."
         : "Welcome to Phindu Credit Solutions.",
     });
-    navigate(safeNextPath || "/dashboard", { replace: true });
+    goToBorrowerDestination(safeNextPath);
   };
 
   if (isLoading) {

@@ -89,3 +89,38 @@ export function ensureCorrectHost(expectedMode: SiteMode): void {
     window.location.replace(correctOrigin + window.location.pathname + window.location.search);
   }
 }
+
+const BORROWER_PATH_PREFIXES = [
+  "/dashboard",
+  "/profile",
+  "/apply",
+  "/pre-qualify",
+  "/install",
+  "/download",
+];
+
+/**
+ * On marketing host, bounce borrower paths (and Supabase auth hash) to app.phindu.com
+ * before React paints. Call from staff-web main.tsx only.
+ */
+export function redirectBorrowerPathsOffMarketing(): void {
+  if (typeof window === "undefined") return;
+  if (getSiteModeFromHostname() !== "marketing") return;
+
+  const { pathname, search, hash } = window.location;
+  const hasAuthHash =
+    Boolean(hash) &&
+    (hash.includes("access_token") || hash.includes("type=magiclink") || hash.includes("type=recovery"));
+
+  if (hasAuthHash) {
+    window.location.replace(`${borrowerAppPath("/dashboard")}${hash}`);
+    return;
+  }
+
+  const isBorrowerPath = BORROWER_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  if (isBorrowerPath) {
+    window.location.replace(`${getBorrowerAppUrl()}${pathname}${search}${hash}`);
+  }
+}

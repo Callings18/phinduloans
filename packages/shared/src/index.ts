@@ -10,5 +10,6 @@ export {
   isDevHost,
   isOfficeSiteMode,
   officePath,
+  redirectBorrowerPathsOffMarketing,
 } from "./config/siteMode";
 export type { SiteMode } from "./config/siteMode";
