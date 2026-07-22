@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@phin
 import { notificationService } from "@phinduloans/shared/utils/notificationService";
 import { getSignedUrl } from "@phinduloans/shared/utils/storageHelpers";
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
@@ -74,6 +75,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@phinduloans/shared/co
 import { generateLoanContract, downloadLoanContract, emailContract, shareContractViaWhatsApp, uploadContractAndSaveUrl } from "@phinduloans/shared/utils/generateLoanContract";
 import RiskAssessmentModule from "@/components/admin/RiskAssessmentModule";
 import ApplicationDocumentsTab from "@/components/admin/ApplicationDocumentsTab";
+import DocumentVerificationTab from "@/components/admin/DocumentVerificationTab";
 import GuidedTour from "@/components/common/GuidedTour";
 import { Step } from "react-joyride";
 import { HelpCircle } from "lucide-react";
@@ -128,6 +130,7 @@ function assertTransitionRpcSuccess(data: unknown) {
 }
 
 const AdminApplications = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -254,6 +257,37 @@ const AdminApplications = () => {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+
+  // Deep link: /admin/applications?id=<loan_id> opens the application dialog
+  useEffect(() => {
+    const openId = searchParams.get("id");
+    if (!openId || isLoading) return;
+
+    const openFromList = (app: (typeof applications)[number]) => {
+      setSelectedApp(app);
+      setAssigneeId((app as { assigned_to?: string }).assigned_to || "");
+      setIsViewOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("id");
+      setSearchParams(next, { replace: true });
+    };
+
+    const existing = applications.find((app) => app.id === openId);
+    if (existing) {
+      openFromList(existing);
+      return;
+    }
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from("loan_applications")
+        .select("*")
+        .eq("id", openId)
+        .maybeSingle();
+      if (error || !data) return;
+      openFromList(data);
+    })();
+  }, [searchParams, applications, isLoading, setSearchParams]);
 
   // Placeholder for workflow data - tables don't exist yet  
   const workflowStages: any[] = [];
@@ -2458,6 +2492,12 @@ const AdminApplications = () => {
 
               <TabsContent value="documents" className="space-y-4 mt-4">
                 <ApplicationDocumentsTab selectedApp={selectedApp} />
+                <div className="pt-2 border-t border-border/50">
+                  <DocumentVerificationTab
+                    loanId={selectedApp.id}
+                    borrowerId={selectedApp.user_id}
+                  />
+                </div>
               </TabsContent>
 
               <TabsContent value="notes" className="space-y-4 mt-4">

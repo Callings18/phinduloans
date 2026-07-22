@@ -2462,6 +2462,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
               {/* Documents Tab */}
               <TabsContent value="documents" className="m-0 space-y-4">
                 <LoanDocumentsCard loan={loan} />
+                <div className="pt-2 border-t border-border/50">
+                  <DocumentVerificationTab loanId={loan.id} borrowerId={loan.user_id} />
+                </div>
               </TabsContent>
 
               {/* Repayments Tab */}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, forwardRef } from "react";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { X, Bell, CheckCircle, AlertTriangle, Info, FileText, Download, ExternalLink } from "lucide-react";
+import { X, Bell, CheckCircle, AlertTriangle, Info, FileText, Download, ExternalLink, ClipboardList } from "lucide-react";
 import { cn } from "@phinduloans/shared/lib/utils";
 import { Button } from "@phinduloans/shared/components/ui/button";
 
@@ -19,6 +19,39 @@ interface Notification {
     borrowerPhone?: string;
     signatureUrl?: string;
     signedContractUrl?: string;
+    loanAmount?: number;
+    source?: string;
+  };
+}
+
+type LoanApplicationRow = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  loan_amount: number | null;
+  source: string | null;
+  created_at: string;
+};
+
+function loanApplicationToNotification(app: LoanApplicationRow): Notification {
+  const amount = app.loan_amount != null ? `K${Number(app.loan_amount).toLocaleString()}` : "—";
+  const sourceLabel = app.source === "dashboard" ? "Borrower portal" : (app.source || "Staff");
+  return {
+    id: `loan-app-${app.id}`,
+    type: "admin_notification",
+    title: "New loan application",
+    message: `${app.full_name || "Borrower"} applied for ${amount} (${sourceLabel})`,
+    recipient: "admin",
+    created_at: app.created_at || new Date().toISOString(),
+    status: "sent",
+    event_type: "application_submitted",
+    provider_response: {
+      loanId: app.id,
+      borrowerName: app.full_name || undefined,
+      borrowerPhone: app.phone || undefined,
+      loanAmount: app.loan_amount ?? undefined,
+      source: app.source || undefined,
+    },
   };
 }
 
@@ -26,62 +59,76 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => {
-    // Create audio element for notification sound
-    audioRef.current = new Audio("/notification-sound.mp3");
-    audioRef.current.volume = 0.5;
+  const pushNotification = (notification: Notification) => {
+    if (audioRef.current) {
+      audioRef.current.play().catch(() => undefined);
+    }
+    setNotifications((prev) => [notification, ...prev].slice(0, 5));
+    const timeout = notification.event_type === "contract_signed" ? 15000 : 12000;
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+    }, timeout);
+  };
 
-    // Subscribe to real-time notifications
-    const channel = supabase
-      .channel('admin-notifications')
+  useEffect(() => {
+    audioRef.current = new Audio("/notification-sound.mp3");
+    if (audioRef.current) audioRef.current.volume = 0.5;
+
+    const logsChannel = supabase
+      .channel("admin-notifications-logs")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notification_logs',
+          event: "INSERT",
+          schema: "public",
+          table: "notification_logs",
         },
         (payload) => {
-          const newNotification = payload.new as Notification;
-          
-          // Play notification sound
-          if (audioRef.current) {
-            audioRef.current.play().catch(e => console.log("Audio play failed:", e));
-          }
+          pushNotification(payload.new as Notification);
+        },
+      )
+      .subscribe();
 
-          // Add notification to list
-          setNotifications(prev => [newNotification, ...prev].slice(0, 5));
-
-          // Auto-remove after 15 seconds for contract signed, 10 seconds for others
-          const timeout = newNotification.event_type === 'contract_signed' ? 15000 : 10000;
-          setTimeout(() => {
-            setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
-          }, timeout);
-        }
+    const applicationsChannel = supabase
+      .channel("admin-notifications-applications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "loan_applications",
+        },
+        (payload) => {
+          pushNotification(loanApplicationToNotification(payload.new as LoanApplicationRow));
+        },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(logsChannel);
+      supabase.removeChannel(applicationsChannel);
     };
   }, []);
 
   const removeNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const getIcon = (type: string, eventType?: string) => {
-    if (eventType === 'contract_signed') {
+    if (eventType === "application_submitted") {
+      return <ClipboardList className="h-5 w-5 text-primary" />;
+    }
+    if (eventType === "contract_signed") {
       return <FileText className="h-5 w-5 text-success" />;
     }
     switch (type) {
-      case 'email':
+      case "email":
         return <FileText className="h-5 w-5 text-info" />;
-      case 'sms':
+      case "sms":
         return <Bell className="h-5 w-5 text-success" />;
-      case 'whatsapp':
+      case "whatsapp":
         return <CheckCircle className="h-5 w-5 text-success" />;
-      case 'admin_notification':
+      case "admin_notification":
         return <AlertTriangle className="h-5 w-5 text-warning" />;
       default:
         return <Info className="h-5 w-5 text-primary" />;
@@ -89,45 +136,51 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
   };
 
   const getTypeLabel = (type: string, eventType?: string) => {
-    if (eventType === 'contract_signed') {
-      return '📝 Contract Signed';
+    if (eventType === "application_submitted") {
+      return "New Application";
+    }
+    if (eventType === "contract_signed") {
+      return "Contract Signed";
     }
     switch (type) {
-      case 'email': return 'Email Sent';
-      case 'sms': return 'SMS Sent';
-      case 'whatsapp': return 'WhatsApp Sent';
-      case 'admin_notification': return 'Admin Alert';
-      default: return 'Notification';
+      case "email": return "Email Sent";
+      case "sms": return "SMS Sent";
+      case "whatsapp": return "WhatsApp Sent";
+      case "admin_notification": return "Admin Alert";
+      default: return "Notification";
     }
   };
 
   const handleViewContract = async (notification: Notification) => {
-    // If we have a signed contract URL, open it
     if (notification.provider_response?.signedContractUrl) {
-      window.open(notification.provider_response.signedContractUrl, '_blank');
+      window.open(notification.provider_response.signedContractUrl, "_blank");
       return;
     }
-    
-    // Otherwise, generate a new signed URL from the signature path
+
     if (notification.provider_response?.signatureUrl) {
       try {
         const { data } = await supabase.storage
-          .from('loan-documents')
+          .from("loan-documents")
           .createSignedUrl(notification.provider_response.signatureUrl, 3600);
-        
+
         if (data?.signedUrl) {
-          window.open(data.signedUrl, '_blank');
+          window.open(data.signedUrl, "_blank");
         }
       } catch (error) {
-        console.error('Failed to get signed URL:', error);
+        console.error("Failed to get signed URL:", error);
       }
     }
   };
 
   const handleViewLoan = (loanId?: string) => {
     if (loanId) {
-      // Navigate to the loans page - the modal will be opened from there
       window.location.href = `/admin/loans?highlight=${loanId}`;
+    }
+  };
+
+  const handleViewApplication = (loanId?: string) => {
+    if (loanId) {
+      window.location.href = `/admin/applications?id=${loanId}`;
     }
   };
 
@@ -136,44 +189,45 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
   return (
     <div ref={ref} className="fixed top-4 right-4 z-[100] space-y-3 max-w-md">
       {notifications.map((notification) => {
-        const isContractSigned = notification.event_type === 'contract_signed';
+        const isContractSigned = notification.event_type === "contract_signed";
+        const isNewApplication = notification.event_type === "application_submitted";
         const hasSignature = !!notification.provider_response?.signatureUrl;
-        
+        const loanId = notification.provider_response?.loanId;
+
         return (
           <div
             key={notification.id}
             className={cn(
               "relative overflow-hidden rounded-lg border shadow-2xl",
               "bg-gradient-to-r from-card via-card to-card/95",
-              isContractSigned ? "border-success/50" : "border-primary/30",
+              isContractSigned ? "border-success/50" : isNewApplication ? "border-primary/50" : "border-primary/30",
               "backdrop-blur-sm",
-              "animate-in slide-in-from-right-full duration-300"
+              "animate-in slide-in-from-right-full duration-300",
             )}
           >
-            {/* Glossy top gradient */}
             <div className={cn(
               "absolute inset-x-0 top-0 h-1",
-              isContractSigned 
+              isContractSigned
                 ? "bg-gradient-to-r from-success via-success/80 to-success"
-                : "bg-gradient-to-r from-[#6B1A3A] via-[#9B2D5A] to-[#6B1A3A]"
+                : isNewApplication
+                  ? "bg-gradient-to-r from-[#6B1A3A] via-[#9B2D5A] to-[#6B1A3A]"
+                  : "bg-gradient-to-r from-[#6B1A3A] via-[#9B2D5A] to-[#6B1A3A]",
             )} />
-            
+
             <div className="p-4">
               <div className="flex items-start gap-3">
-                {/* Icon */}
                 <div className={cn(
                   "flex-shrink-0 rounded-full p-2",
-                  isContractSigned ? "bg-success/20" : "bg-primary/10"
+                  isContractSigned ? "bg-success/20" : "bg-primary/10",
                 )}>
                   {getIcon(notification.type, notification.event_type)}
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={cn(
                       "text-xs font-semibold uppercase tracking-wide",
-                      isContractSigned ? "text-success" : "text-primary"
+                      isContractSigned ? "text-success" : "text-primary",
                     )}>
                       {getTypeLabel(notification.type, notification.event_type)}
                     </span>
@@ -184,21 +238,14 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
                   <p className="text-sm font-medium text-foreground">
                     {notification.title}
                   </p>
-                  {notification.provider_response?.borrowerName && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {notification.provider_response.borrowerName}
-                      {notification.provider_response.borrowerPhone && 
-                        ` • ${notification.provider_response.borrowerPhone}`
-                      }
+                  {(notification.message || notification.provider_response?.borrowerName) && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      {notification.provider_response?.borrowerName
+                        ? notification.message
+                        : notification.message || `To: ${notification.recipient}`}
                     </p>
                   )}
-                  {!notification.provider_response?.borrowerName && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      To: {notification.recipient}
-                    </p>
-                  )}
-                  
-                  {/* Action buttons for contract signed */}
+
                   {isContractSigned && (
                     <div className="flex gap-2 mt-3">
                       {hasSignature && (
@@ -212,12 +259,12 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
                           View Signature
                         </Button>
                       )}
-                      {notification.provider_response?.loanId && (
+                      {loanId && (
                         <Button
                           size="sm"
                           variant="default"
                           className="h-7 text-xs"
-                          onClick={() => handleViewLoan(notification.provider_response?.loanId)}
+                          onClick={() => handleViewLoan(loanId)}
                         >
                           <ExternalLink className="h-3 w-3 mr-1" />
                           View Loan
@@ -225,10 +272,24 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
                       )}
                     </div>
                   )}
+
+                  {isNewApplication && loanId && (
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        onClick={() => handleViewApplication(loanId)}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Review Application
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Close button */}
                 <button
+                  type="button"
                   onClick={() => removeNotification(notification.id)}
                   className="flex-shrink-0 p-1 rounded-full hover:bg-destructive/10 transition-colors"
                 >
@@ -237,16 +298,15 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
               </div>
             </div>
 
-            {/* Progress bar for auto-dismiss */}
             <div className="h-1 bg-muted overflow-hidden">
-              <div 
+              <div
                 className={cn(
                   "h-full animate-shrink-width",
-                  isContractSigned 
+                  isContractSigned
                     ? "bg-gradient-to-r from-success to-success/80"
-                    : "bg-gradient-to-r from-[#6B1A3A] to-[#9B2D5A]"
+                    : "bg-gradient-to-r from-[#6B1A3A] to-[#9B2D5A]",
                 )}
-                style={{ animationDuration: isContractSigned ? '15s' : '10s' }}
+                style={{ animationDuration: isContractSigned ? "15s" : "12s" }}
               />
             </div>
           </div>
