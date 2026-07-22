@@ -1,6 +1,6 @@
 // App root component
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";
 import PermissionRoute from "./components/admin/PermissionRoute";
 import ErrorBoundary from "@phinduloans/shared/components/common/ErrorBoundary";
@@ -54,6 +54,12 @@ const officeMode = isOfficeSiteMode();
 /** Lovable/local preview hosts are "dev" — keep /admin in-app so preview isn't broken by a production office redirect. */
 const serveAdminLocally = officeMode || getSiteModeFromHostname() === "dev";
 const officeAdminUrl = `${getOfficeBaseUrl()}/admin`;
+
+/** Marketing /auth|/login → absolute borrower app URL, preserving query string. */
+function MarketingBorrowerAuthRedirect() {
+  const { search } = useLocation();
+  return <ExternalRedirect to={borrowerAppPath(`/auth${search}`)} />;
+}
 
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
@@ -112,13 +118,33 @@ function App() {
                   <Route path="/terms" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Terms /></ErrorBoundary>} />
                   <Route path="/loan-products" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><LoanProducts /></ErrorBoundary>} />
                   <Route path="/contact" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Contact /></ErrorBoundary>} />
-                  <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
-                  <Route path="/login" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+                  {/* Staff Auth only on office; marketing Login → borrower app */}
+                  <Route
+                    path="/auth"
+                    element={
+                      officeMode ? (
+                        <ErrorBoundary><Auth /></ErrorBoundary>
+                      ) : (
+                        <MarketingBorrowerAuthRedirect />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/login"
+                    element={
+                      officeMode ? (
+                        <ErrorBoundary><Auth /></ErrorBoundary>
+                      ) : (
+                        <MarketingBorrowerAuthRedirect />
+                      )
+                    }
+                  />
                   {/* Install UX lives only on the borrower app (app.phindu.com) */}
                   <Route path="/install" element={<ExternalRedirect to={borrowerAppPath("/install")} />} />
                   <Route path="/download" element={<ExternalRedirect to={borrowerAppPath("/install")} />} />
                   <Route path="/app" element={<ExternalRedirect to={borrowerAppPath("/auth")} />} />
                   <Route path="/pre-qualify" element={<ExternalRedirect to={borrowerAppPath("/auth")} />} />
+                  <Route path="/apply" element={<ExternalRedirect to={borrowerAppPath("/apply")} />} />
                   {/* Borrower UI lives only on app.phindu.com — never host dashboard on marketing/office */}
                   <Route path="/dashboard" element={<ExternalRedirect to={borrowerAppPath("/dashboard")} />} />
                   <Route path="/profile" element={<ExternalRedirect to={borrowerAppPath("/profile")} />} />
@@ -618,7 +644,7 @@ function App() {
                   )}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-                <FloatingAssistant />
+                {officeMode ? <FloatingAssistant /> : null}
               </BrowserRouter>
             </TooltipProvider>
           </AuthProvider>

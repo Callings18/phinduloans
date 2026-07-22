@@ -23,7 +23,15 @@ export default function ExternalRedirect({ to, preservePath = false }: ExternalR
         window.location.replace(dest);
         return;
       }
-      window.location.replace(to);
+      // Preserve query/hash for deep links (e.g. /dashboard?tab=payments → app).
+      const target = new URL(to);
+      if (location.search && !target.search) {
+        target.search = location.search;
+      }
+      if (location.hash && !target.hash) {
+        target.hash = location.hash;
+      }
+      window.location.replace(target.toString());
     } catch {
       window.location.replace(to);
     }

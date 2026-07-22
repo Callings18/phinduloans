@@ -97,11 +97,15 @@ const BORROWER_PATH_PREFIXES = [
   "/pre-qualify",
   "/install",
   "/download",
+  "/app",
+  "/auth",
+  "/login",
 ];
 
 /**
  * On marketing host, bounce borrower paths (and Supabase auth hash) to app.phindu.com
  * before React paints. Call from staff-web main.tsx only.
+ * Staff auth lives only on office.phindu.com — marketing /auth → borrower Login.
  */
 export function redirectBorrowerPathsOffMarketing(): void {
   if (typeof window === "undefined") return;

@@ -1,11 +1,11 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { notificationService } from "@phinduloans/shared/utils/notificationService";
+import { getBorrowerAppUrl } from "@phinduloans/shared/config/siteMode";
 
-const borrowerPortalBase = (import.meta.env.VITE_BORROWER_APP_URL || "").replace(/\/+$/, "");
+/** Always absolute app.phindu.com URLs — never host-relative (breaks when opened from office/marketing). */
 function borrowerPortalUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  if (!borrowerPortalBase) return normalized;
-  return `${borrowerPortalBase}${normalized}`;
+  return `${getBorrowerAppUrl()}${normalized}`;
 }
 
 async function insertBorrowerInboxNotification(input: {

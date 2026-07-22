@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@phinduloans/shared/components/ui/button";
@@ -25,6 +25,7 @@ import NotificationCenter from "@phinduloans/shared/components/common/Notificati
 import { adminMenuGroups, type SidebarMenuItem } from "./adminSidebarConfig";
 import { isBetaModule } from "@phinduloans/shared/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
+import { borrowerAppPath } from "@/config/publicUrls";
 
 const AdminSidebar = () => {
   const { sidebarCollapsed, setSidebarCollapsed, mobileNavOpen, closeMobileNav } = useAdminShell();
@@ -35,7 +36,6 @@ const AdminSidebar = () => {
   );
   const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
   const location = useLocation();
-  const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
   const { can, isLoading: permsLoading } = usePermissions();
 
@@ -291,12 +291,14 @@ const AdminSidebar = () => {
       <div className="p-4 border-t border-sidebar-border shrink-0 space-y-2">
         <Button
           variant="outline"
-          onClick={() => navigate("/dashboard?view=borrower")}
+          onClick={() => {
+            window.location.assign(borrowerAppPath("/dashboard"));
+          }}
           className={cn(
             "w-full justify-start border-primary/30 text-primary hover:bg-primary/10",
             showCollapsedNav && "justify-center",
           )}
-          title="View Borrower Dashboard"
+          title="Open borrower app"
         >
           <Eye size={20} />
           {!showCollapsedNav && <span className="ml-3">View as Borrower</span>}

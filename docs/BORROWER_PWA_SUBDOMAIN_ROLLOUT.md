@@ -1,21 +1,37 @@
 # Borrower PWA + Three-Domain Rollout
 
-This runbook finalizes the architecture:
+Hard separation (same Lovable Cloud / Supabase DB):
 
-- `https://phindu.com` -> marketing site
-- `https://office.phindu.com` -> staff LMS/admin
-- `https://app.phindu.com` -> borrower PWA
+| Domain | Role |
+|--------|------|
+| `https://phindu.com` | Marketing website **only** — no AI, no staff UI, no borrower dashboard |
+| `https://office.phindu.com` | Staff / admin LMS **only** |
+| `https://app.phindu.com` | Borrower PWA **only** |
+
+Rules:
+
+- Marketing **Login** → `app.phindu.com/auth` (borrowers), never staff
+- Staff sign in only at `office.phindu.com/auth` (do not advertise on marketing nav)
+- No FloatingAssistant / PhinduAI on marketing
+- Borrower deep links and notifications always use absolute `app.phindu.com` URLs
 
 ## 1) Environment configuration
 
-Set these frontend env vars for `apps/staff-web`:
+### Three Cloudflare builds (correct `VITE_SITE_MODE`)
+
+| Deploy target | App | Key env |
+|---------------|-----|---------|
+| `phindu.com` | `apps/staff-web` | `VITE_SITE_MODE=marketing` |
+| `office.phindu.com` | `apps/staff-web` | `VITE_SITE_MODE=office` |
+| `app.phindu.com` | `apps/borrower-mobile` | borrower build |
+
+Shared frontend env:
 
 - `VITE_BORROWER_APP_URL=https://app.phindu.com`
-- `VITE_SITE_MODE=marketing` for `phindu.com` deploy
-- `VITE_SITE_MODE=office` for `office.phindu.com` deploy
 - `VITE_OFFICE_BASE_URL=https://office.phindu.com`
+- `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (same Lovable Cloud project)
 
-Set these backend/edge env vars:
+Backend / edge secrets:
 
 - `BORROWER_APP_URL=https://app.phindu.com` (used by `create-borrower`, `verify-otp` redirectTo)
 
@@ -40,7 +56,8 @@ Borrower SMS OTP uses in-app `tokenHash` + hard `window.location.replace` to `ht
 1. Redeploy edge function **`verify-otp`** (returns `tokenHash`, `redirectTo` = `BORROWER_APP_URL/dashboard`)
 2. Secret **`BORROWER_APP_URL=https://app.phindu.com`**
 3. Redeploy **borrower** build to `app.phindu.com`
-4. Redeploy **marketing** (`VITE_SITE_MODE=marketing`) so `phindu.com/dashboard` external-redirects to app
+4. Redeploy **marketing** (`VITE_SITE_MODE=marketing`) so `phindu.com/dashboard` and `phindu.com/auth` external-redirect to app
+5. Redeploy **office** (`VITE_SITE_MODE=office`) for staff Auth + FloatingAssistant
 
 If `verify-otp` is stale, magic links can still bounce through Site URL (`phindu.com`) and look like “landing page first, then dashboard.”
 
@@ -62,17 +79,19 @@ Static checks before deploy:
 npm run audit:pwa
 ```
 
-## 4) Deploy marketing/staff domains
+## 4) Deploy marketing / office (Cloudflare)
 
 Use two deploy targets from the same `apps/staff-web` app:
 
-1. Marketing target (`phindu.com`)
-   - `VITE_SITE_MODE=marketing`
-2. Office target (`office.phindu.com`)
-   - `VITE_SITE_MODE=office`
-
-In marketing mode, `/admin/*` redirects to `https://office.phindu.com/admin`.
-In office mode, public marketing routes redirect to `/admin`.
+1. Marketing (`phindu.com`) — `VITE_SITE_MODE=marketing`
+   - Login / `/auth` / `/login` → `app.phindu.com`
+   - `/dashboard`, `/profile`, `/apply`, `/install`, etc. → borrower app
+   - `/admin/*` → `office.phindu.com/admin`
+   - No AI chrome
+2. Office (`office.phindu.com`) — `VITE_SITE_MODE=office`
+   - Staff Auth at `/auth`
+   - Public marketing routes redirect to `/admin`
+   - FloatingAssistant available
 
 ## 5) PWA audit checklist
 
@@ -89,7 +108,7 @@ Manual checks (required before go-live):
 2. Service worker registration and update behavior.
 3. Offline app shell rendering.
 4. Login/session/deep links (`/dashboard?tab=payments`, `/apply`).
-5. Notification click-through with `action_url`.
+5. Notification click-through with absolute `action_url` on `app.phindu.com`.
 6. Responsive layout on 320px/375px/428px.
 
 ## 6) Push notification readiness
@@ -112,9 +131,11 @@ Validation:
 
 ## 7) Post-deploy smoke tests
 
-1. `phindu.com` "Apply/Get Started" routes to `app.phindu.com`.
-2. `https://app.phindu.com/auth` → SMS OTP → lands on **`https://app.phindu.com/dashboard`** in one step (no `phindu.com` homepage).
-3. `https://phindu.com/dashboard` → immediate redirect to **`https://app.phindu.com/dashboard`**.
-4. Staff login on `office.phindu.com` works unchanged.
-5. Borrower deep links in SMS/openers point to `app.phindu.com`.
-6. Staff domain does not expose web manifest for install.
+1. `phindu.com` **Login** → `app.phindu.com/auth` (not office).
+2. `phindu.com` has no AI assistant / PhinduAI.
+3. `https://app.phindu.com/auth` → SMS OTP → lands on **`https://app.phindu.com/dashboard`** in one step.
+4. `https://phindu.com/dashboard` → immediate redirect to **`https://app.phindu.com/dashboard`**.
+5. `https://phindu.com/auth` → redirect to **`https://app.phindu.com/auth`**.
+6. Staff login only on `office.phindu.com/auth`.
+7. Borrower deep links in SMS/inbox point to absolute `app.phindu.com` URLs.
+8. Staff domain does not expose web manifest for install.

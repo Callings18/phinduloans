@@ -6,7 +6,7 @@ import { Label } from "@phinduloans/shared/components/ui/label";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { Sparkles, Mail, Lock, Loader2, ArrowRight } from "lucide-react";
-import { borrowerAppPath, officePath, getSiteModeFromHostname } from "@/config/publicUrls";
+import { borrowerAppPath, getSiteModeFromHostname } from "@/config/publicUrls";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -20,8 +20,9 @@ const Auth = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Defense-in-depth: marketing must never render staff Auth (route should ExternalRedirect).
     if (getSiteModeFromHostname() === "marketing") {
-      window.location.replace(officePath("/auth") + window.location.search);
+      window.location.replace(borrowerAppPath("/auth") + window.location.search);
     }
   }, []);
 

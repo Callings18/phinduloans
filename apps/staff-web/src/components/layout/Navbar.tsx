@@ -10,7 +10,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@phinduloans/shared/components/ui/dropdown-menu";
-import PhinduAI from "../common/PhinduAI";
 const phinduLogo = "/icons/icon-512.png";
 import ThemeToggle from "@phinduloans/shared/components/common/ThemeToggle";
 import NotificationCenter from "@phinduloans/shared/components/common/NotificationCenter";
@@ -19,10 +18,11 @@ import { borrowerAppPath, isOfficeSiteMode, officePath } from "@/config/publicUr
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const { user, isAdmin, isStaff, signOut, isLoading } = useAuth();
+  const { user, isStaff, signOut, isLoading } = useAuth();
   const officeMode = isOfficeSiteMode();
-  const staffAuthUrl = officeMode ? "/auth" : officePath("/auth");
   const staffAdminUrl = officeMode ? "/admin" : officePath("/admin");
+  /** Marketing Login always → borrower app; staff use office.phindu.com directly. */
+  const loginHref = officeMode ? "/auth" : borrowerAppPath("/auth");
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -149,7 +149,7 @@ const Navbar = () => {
                     {officeMode ? (
                       <Link to="/auth">Login</Link>
                     ) : (
-                      <a href={staffAuthUrl}>Login</a>
+                      <a href={loginHref}>Login</a>
                     )}
                   </Button>
                   <Button variant="hero" asChild>
@@ -223,7 +223,7 @@ const Navbar = () => {
                         {officeMode ? (
                           <Link to="/auth" onClick={() => setIsOpen(false)}>Login</Link>
                         ) : (
-                          <a href={staffAuthUrl} onClick={() => setIsOpen(false)}>Login</a>
+                          <a href={loginHref} onClick={() => setIsOpen(false)}>Login</a>
                         )}
                       </Button>
                       <Button variant="hero" asChild>
@@ -237,7 +237,6 @@ const Navbar = () => {
           )}
         </div>
       </nav>
-      <PhinduAI />
     </>
   );
 };
