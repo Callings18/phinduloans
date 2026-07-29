@@ -13,9 +13,9 @@ describe("computeMonthlyProfit", () => {
     expect(res.totals.netProfit).toBe(0);
   });
 
-  it("computes expected interest by due month and made interest by paid month", () => {
+  it("computes expected interest by loan booking month and made interest by paid month", () => {
     // Loan: principal 1000, total 1200 => interest ratio = 200/1200 = 0.1667
-    const loans = [{ id: "L1", loan_amount: 1000, total_repayment: 1200 }];
+    const loans = [{ id: "L1", loan_amount: 1000, total_repayment: 1200, status: "active", disbursed_at: dayIn(1) }];
     const repayments = [
       // installment 600 due this month, paid this month
       { loan_id: "L1", amount: 600, status: "paid", due_date: dayIn(0), paid_date: dayIn(0) },
@@ -26,11 +26,21 @@ describe("computeMonthlyProfit", () => {
     const thisMonth = res.rows.find((r) => r.monthKey === monthKey(0))!;
     const lastMonth = res.rows.find((r) => r.monthKey === monthKey(1))!;
 
-    // 600 * (200/1200) = 100
-    expect(thisMonth.expectedInterest).toBeCloseTo(100, 1);
+    // Expected interest is booked once when the loan starts: 1200 - 1000 = 200.
+    expect(thisMonth.expectedInterest).toBe(0);
     expect(thisMonth.interestMade).toBeCloseTo(100, 1);
-    expect(lastMonth.expectedInterest).toBeCloseTo(100, 1);
+    expect(lastMonth.expectedInterest).toBeCloseTo(200, 1);
     expect(lastMonth.interestMade).toBe(0);
+  });
+
+  it("shows full Marketeer expected interest when loans are booked", () => {
+    const loans = [
+      { id: "M1", loan_amount: 9500, total_repayment: 12350, status: "active", disbursed_at: dayIn(0) },
+    ];
+    const res = computeMonthlyProfit(loans, [], [], 2);
+    const thisMonth = res.rows.find((r) => r.monthKey === monthKey(0));
+    expect(thisMonth?.expectedInterest).toBe(2850);
+    expect(res.totals.expectedInterest).toBe(2850);
   });
 
   it("subtracts expenses to produce net profit", () => {
