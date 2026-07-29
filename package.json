@@ -6,7 +6,6 @@
   "packageManager": "npm@10.9.2",
   "workspaces": [
     "apps/staff-web",
-    "apps/borrower-mobile",
     "packages/shared"
   ],
   "scripts": {
@@ -22,7 +21,7 @@
     "preview:staff": "vite preview --config apps/staff-web/vite.config.ts",
     "preview:borrower": "vite preview --config apps/borrower-mobile/vite.config.ts",
     "lint": "eslint apps packages",
-    "typecheck": "npm run typecheck -w apps/staff-web && npm run typecheck -w apps/borrower-mobile",
+    "typecheck": "npm run typecheck -w apps/staff-web && tsc --noEmit -p apps/borrower-mobile/tsconfig.app.json",
     "test": "vitest run",
     "test:integration:loan-flow": "vitest run tests/integration/loan-flow.full.test.ts",
     "test:integration:houses": "node scripts/run-loan-flow-all-houses.mjs",
@@ -33,14 +32,10 @@
     "stress:readonly": "node scripts/stress-readonly-smoke.mjs",
     "test:e2e:headed": "playwright test tests/e2e/smoke.spec.ts --headed",
     "audit:pwa": "node scripts/audit-borrower-pwa.mjs",
-    "cap:sync": "npm run cap:sync -w apps/borrower-mobile",
-    "build:dev": "npm run build:dev -w apps/staff-web && npm run build:dev -w apps/borrower-mobile"
+    "cap:sync": "npm --prefix apps/borrower-mobile run cap:sync",
+    "build:dev": "vite build --mode development --config apps/staff-web/vite.config.ts && vite build --mode development --config apps/borrower-mobile/vite.config.ts"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.0",
-    "@capacitor/cli": "^8.3.0",
-    "@capacitor/core": "^8.3.0",
-    "@capacitor/ios": "^8.3.0",
     "@fontsource/outfit": "^5.2.8",
     "@hookform/resolvers": "^3.10.0",
     "@lovable.dev/cloud-auth-js": "^1.1.2",
