@@ -82,7 +82,7 @@ export default function HouseLoansPage() {
   const [customTo, setCustomTo] = useState("");
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
-  const [sortBy, setSortBy] = useState<SortKey>("date_desc");
+  const [sortBy, setSortBy] = useState<SortKey>("date_asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -298,7 +298,7 @@ export default function HouseLoansPage() {
     setCustomTo("");
     setMinAmount("");
     setMaxAmount("");
-    setSortBy("date_desc");
+    setSortBy("date_asc");
     setCurrentPage(1);
   };
 
@@ -309,7 +309,7 @@ export default function HouseLoansPage() {
     datePreset !== "all" ||
     minAmount ||
     maxAmount ||
-    sortBy !== "date_desc";
+    sortBy !== "date_asc";
 
   const exportCsv = () => {
     const rows = [
@@ -405,7 +405,7 @@ export default function HouseLoansPage() {
             </div>
 
             <div className="md:col-span-2">
-              <Select value={dateField} onValueChange={(v: DateField) => setDateField(v)}>
+              <Select value={dateField} onValueChange={(v: DateField) => { setDateField(v); setCurrentPage(1); }}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="due_date">Due date</SelectItem>
@@ -451,8 +451,8 @@ export default function HouseLoansPage() {
               <Select value={sortBy} onValueChange={(v: SortKey) => setSortBy(v)}>
                 <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="date_desc">Newest first</SelectItem>
-                  <SelectItem value="date_asc">Oldest first</SelectItem>
+                  <SelectItem value="date_asc">Earliest date first</SelectItem>
+                  <SelectItem value="date_desc">Latest date first</SelectItem>
                   <SelectItem value="amount_desc">Amount (high → low)</SelectItem>
                   <SelectItem value="amount_asc">Amount (low → high)</SelectItem>
                   <SelectItem value="name_asc">Borrower name (A–Z)</SelectItem>
