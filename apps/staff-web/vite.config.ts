@@ -23,6 +23,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(appDir, "../../dist"),
     emptyOutDir: true,
+    reportCompressedSize: false,
     commonjsOptions: {
       include: [/node_modules/],
       transformMixedEsModules: true,
