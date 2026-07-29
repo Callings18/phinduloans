@@ -294,6 +294,7 @@ export default function HouseLoansPage() {
     setStatusFilter("all");
     setLateBucket("all");
     setDatePreset("all");
+    setDateField("due_date");
     setCustomFrom("");
     setCustomTo("");
     setMinAmount("");
@@ -307,6 +308,7 @@ export default function HouseLoansPage() {
     statusFilter !== "all" ||
     lateBucket !== "all" ||
     datePreset !== "all" ||
+    dateField !== "due_date" ||
     minAmount ||
     maxAmount ||
     sortBy !== "date_asc";
