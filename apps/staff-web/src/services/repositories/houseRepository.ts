@@ -30,6 +30,7 @@ type HouseLoan = {
   loan_amount: number | null;
   status: string;
   created_at: string;
+  disbursed_at?: string | null;
   full_name?: string | null;
   email?: string | null;
   phone?: string | null;
