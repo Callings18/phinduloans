@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
@@ -169,10 +169,10 @@ export default function HouseLoansPage() {
     return map;
   }, [repayments, activeLoanIds]);
 
-  const getDateValue = (loan: any, field: DateField): string | null => {
+  const getDateValue = useCallback((loan: any, field: DateField): string | null => {
     if (field === "due_date") return nextDueByLoan[loan.id]?.dueDate ?? null;
     return loan[field] ?? null;
-  };
+  }, [nextDueByLoan]);
 
   // Date range derived from preset
   const dateRange = useMemo<{ from: string | null; to: string | null }>(() => {
@@ -257,7 +257,7 @@ export default function HouseLoansPage() {
       }
     });
     return sorted;
-  }, [loans, search, statusFilter, lateBucket, overdueByLoan, dateRange, dateField, minAmount, maxAmount, sortBy, nextDueByLoan]);
+  }, [loans, search, statusFilter, lateBucket, overdueByLoan, dateRange, dateField, minAmount, maxAmount, sortBy, getDateValue]);
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
