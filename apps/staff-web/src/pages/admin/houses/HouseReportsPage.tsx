@@ -69,6 +69,7 @@ type HouseLoanRow = {
   loan_term_months?: number | null;
   term_unit?: string | null;
   created_at: string;
+  disbursed_at?: string | null;
 };
 
 type HouseDisbursementRow = {
