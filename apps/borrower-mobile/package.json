@@ -17,6 +17,6 @@
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "^8.3.0",
-    "@phinduloans/shared": "*"
+    "@phinduloans/shared": "file:../../packages/shared"
   }
 }
