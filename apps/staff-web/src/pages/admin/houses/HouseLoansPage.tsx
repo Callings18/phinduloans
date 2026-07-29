@@ -64,7 +64,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 type DatePreset = "all" | "today" | "7d" | "30d" | "this_month" | "last_month" | "custom";
-type DateField = "created_at" | "disbursement_date";
+type DateField = "due_date" | "created_at" | "disbursed_at";
 type SortKey = "date_desc" | "date_asc" | "amount_desc" | "amount_asc" | "name_asc" | "overdue_desc";
 type LateBucket = "all" | "on_track" | "1_7" | "8_30" | "30_plus" | "defaulted";
 
@@ -77,7 +77,7 @@ export default function HouseLoansPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [lateBucket, setLateBucket] = useState<LateBucket>("all");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
-  const [dateField, setDateField] = useState<DateField>("created_at");
+  const [dateField, setDateField] = useState<DateField>("due_date");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [minAmount, setMinAmount] = useState("");
@@ -151,6 +151,29 @@ export default function HouseLoansPage() {
     return map;
   }, [repayments, todayStr, activeLoanIds]);
 
+  const nextDueByLoan = useMemo(() => {
+    const map: Record<string, { dueDate: string; amount: number; status: string | null }> = {};
+    (repayments ?? []).forEach((r: any) => {
+      if (!activeLoanIds.has(r.loan_id)) return;
+      if (r.status === "paid" || r.status === "cancelled") return;
+      if (!r.due_date) return;
+      const existing = map[r.loan_id];
+      if (!existing || r.due_date < existing.dueDate) {
+        map[r.loan_id] = {
+          dueDate: r.due_date,
+          amount: Number(r.amount || 0),
+          status: r.status ?? null,
+        };
+      }
+    });
+    return map;
+  }, [repayments, activeLoanIds]);
+
+  const getDateValue = (loan: any, field: DateField): string | null => {
+    if (field === "due_date") return nextDueByLoan[loan.id]?.dueDate ?? null;
+    return loan[field] ?? null;
+  };
+
   // Date range derived from preset
   const dateRange = useMemo<{ from: string | null; to: string | null }>(() => {
     const now = new Date();
@@ -201,7 +224,7 @@ export default function HouseLoansPage() {
         if (lateBucket === "30_plus" && !(od && od.daysLate > 30)) return false;
       }
       // Date range
-      const dVal: string | null = (l as any)[dateField] ?? null;
+      const dVal = getDateValue(l, dateField);
       if (dateRange.from || dateRange.to) {
         if (!dVal) return false;
         const d = dVal.slice(0, 10);
@@ -220,7 +243,7 @@ export default function HouseLoansPage() {
     sorted.sort((a: any, b: any) => {
       switch (sortBy) {
         case "date_asc":
-          return (a.created_at || "").localeCompare(b.created_at || "");
+          return (getDateValue(a, dateField) || "9999-12-31").localeCompare(getDateValue(b, dateField) || "9999-12-31");
         case "amount_desc":
           return Number(b.loan_amount || 0) - Number(a.loan_amount || 0);
         case "amount_asc":
@@ -230,11 +253,11 @@ export default function HouseLoansPage() {
         case "overdue_desc":
           return (overdueByLoan[b.id]?.daysLate || 0) - (overdueByLoan[a.id]?.daysLate || 0);
         default:
-          return (b.created_at || "").localeCompare(a.created_at || "");
+          return (getDateValue(b, dateField) || "").localeCompare(getDateValue(a, dateField) || "");
       }
     });
     return sorted;
-  }, [loans, search, statusFilter, lateBucket, overdueByLoan, dateRange, dateField, minAmount, maxAmount, sortBy]);
+  }, [loans, search, statusFilter, lateBucket, overdueByLoan, dateRange, dateField, minAmount, maxAmount, sortBy, nextDueByLoan]);
 
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
@@ -290,9 +313,10 @@ export default function HouseLoansPage() {
 
   const exportCsv = () => {
     const rows = [
-      ["Borrower", "Phone", "NRC", "Amount", "Term", "Status", "Days Late", "Overdue Amount", "Created", "Disbursed"],
+      ["Borrower", "Phone", "NRC", "Amount", "Term", "Status", "Days Late", "Overdue Amount", "Due Date", "Created", "Disbursed"],
       ...filtered.map((l: any) => {
         const od = overdueByLoan[l.id];
+        const due = nextDueByLoan[l.id]?.dueDate;
         return [
           l.full_name || l.email || "",
           l.phone || "",
@@ -302,8 +326,9 @@ export default function HouseLoansPage() {
           statusConfig[l.status]?.label || l.status,
           od?.daysLate ?? 0,
           od?.amount ?? 0,
+          due ? format(new Date(due), "yyyy-MM-dd") : "",
           l.created_at ? format(new Date(l.created_at), "yyyy-MM-dd") : "",
-          l.disbursement_date ? format(new Date(l.disbursement_date), "yyyy-MM-dd") : "",
+          l.disbursed_at ? format(new Date(l.disbursed_at), "yyyy-MM-dd") : "",
         ];
       }),
     ];
@@ -383,8 +408,9 @@ export default function HouseLoansPage() {
               <Select value={dateField} onValueChange={(v: DateField) => setDateField(v)}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="due_date">Due date</SelectItem>
                   <SelectItem value="created_at">Created date</SelectItem>
-                  <SelectItem value="disbursement_date">Disbursed date</SelectItem>
+                  <SelectItem value="disbursed_at">Disbursed date</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -458,7 +484,7 @@ export default function HouseLoansPage() {
                   <TableHead>Term</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Overdue</TableHead>
-                  <TableHead>{dateField === "disbursement_date" ? "Disbursed" : "Created"}</TableHead>
+                  <TableHead>{dateField === "due_date" ? "Due Date" : dateField === "disbursed_at" ? "Disbursed" : "Created"}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -466,7 +492,8 @@ export default function HouseLoansPage() {
                 {paginated.map((l: any) => {
                   const cfg = statusConfig[l.status] || statusConfig.pending;
                   const od = overdueByLoan[l.id];
-                  const showDate = dateField === "disbursement_date" ? l.disbursement_date : l.created_at;
+                  const due = nextDueByLoan[l.id];
+                  const showDate = getDateValue(l, dateField);
                   return (
                     <TableRow key={l.id} className={od ? "bg-destructive/5" : undefined}>
                       <TableCell>
@@ -493,7 +520,12 @@ export default function HouseLoansPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{showDate ? format(new Date(showDate), "dd MMM yyyy") : "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {showDate ? format(new Date(showDate), "dd MMM yyyy") : "—"}
+                        {dateField === "due_date" && due?.amount ? (
+                          <span className="block text-[10px]">K{due.amount.toLocaleString()}</span>
+                        ) : null}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button asChild size="sm" variant="ghost" title="View">
