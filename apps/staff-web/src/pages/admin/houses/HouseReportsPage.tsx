@@ -69,6 +69,7 @@ type HouseLoanRow = {
   loan_term_months?: number | null;
   term_unit?: string | null;
   created_at: string;
+  disbursed_at?: string | null;
 };
 
 type HouseDisbursementRow = {
@@ -167,7 +168,7 @@ export default function HouseReportsPage() {
 
   const scopeLabel = scope === ALL ? "All houses" : product?.name || productCode;
 
-  // Monthly profit: interest expected (by due month) vs interest made (by paid month), net of expenses
+  // Monthly profit: booked loan interest vs interest made (by paid month), net of expenses
   const profit = useMemo(
     () => computeMonthlyProfit(loans, repayments, expenses, { from: period.from, to: period.to }),
     [loans, repayments, expenses, period],
@@ -235,7 +236,7 @@ export default function HouseReportsPage() {
     return l?.full_name || l?.email || `Loan ${loanId.slice(0, 8)}`;
   };
 
-  // Repayment-level drill-down for the selected month
+  // Loan/repayment-level drill-down for the selected month
   const drillData = useMemo(() => {
     if (!drillMonth) return null;
     return computeMonthContributions(loans, repayments, drillMonth.monthKey);
@@ -537,7 +538,7 @@ export default function HouseReportsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2"><Percent size={16} /> Monthly Profit Breakdown</CardTitle>
-          <p className="text-xs text-muted-foreground">Click a month to see the repayments behind its expected vs made interest.</p>
+          <p className="text-xs text-muted-foreground">Click a month to see the loans and repayments behind expected vs made interest.</p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -647,11 +648,11 @@ export default function HouseReportsPage() {
 
           <ScrollArea className="max-h-[60vh] pr-3">
             <div className="space-y-6">
-              {/* Expected: installments due this month */}
+              {/* Expected: loan interest booked this month */}
               <div>
                 <h4 className="mb-2 text-sm font-semibold flex items-center gap-2">
                   <span className="inline-block h-2.5 w-2.5 rounded-sm bg-muted-foreground/50" />
-                  Expected — installments due ({drillData?.expected.length ?? 0})
+                  Expected — loan interest booked ({drillData?.expected.length ?? 0})
                 </h4>
                 <DrillTable rows={drillData?.expected ?? []} loanName={loanName} mode="expected" total={drillData?.expectedTotal ?? 0} />
               </div>
@@ -687,7 +688,7 @@ function DrillTable({
   if (rows.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-3">
-        {mode === "expected" ? "No installments due in this month." : "No payments received in this month."}
+        {mode === "expected" ? "No loan interest booked in this month." : "No payments received in this month."}
       </p>
     );
   }
@@ -698,9 +699,9 @@ function DrillTable({
         <thead>
           <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/30">
             <th className="py-2 px-3 font-medium">Borrower</th>
-            <th className="py-2 px-3 font-medium">{mode === "expected" ? "Due" : "Paid"}</th>
+            <th className="py-2 px-3 font-medium">{mode === "expected" ? "Booked" : "Paid"}</th>
             <th className="py-2 px-3 font-medium">Status</th>
-            <th className="py-2 px-3 font-medium text-right">Repayment</th>
+            <th className="py-2 px-3 font-medium text-right">{mode === "expected" ? "Principal" : "Repayment"}</th>
             <th className="py-2 px-3 font-medium text-right">Interest</th>
             <th className="py-2 px-3 font-medium text-right">% of {mode === "expected" ? "Expected" : "Made"}</th>
           </tr>
