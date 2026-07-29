@@ -5,6 +5,8 @@ export interface ProfitLoanInput {
   loan_amount?: number | null;
   total_repayment?: number | null;
   status?: string | null;
+  created_at?: string | null;
+  disbursed_at?: string | null;
 }
 
 export interface ProfitRepaymentInput {
@@ -92,6 +94,19 @@ function interestRatioFor(loan: ProfitLoanInput | undefined): number {
   return (total - principal) / total;
 }
 
+function bookedInterestFor(loan: ProfitLoanInput | undefined): number {
+  if (!loan) return 0;
+  return Math.max(0, num(loan.total_repayment) - num(loan.loan_amount));
+}
+
+function loanExpectedDate(loan: ProfitLoanInput): string | null {
+  return loan.disbursed_at || loan.created_at || null;
+}
+
+function countsAsBookedLoan(loan: ProfitLoanInput): boolean {
+  return ["active", "disbursed", "completed", "defaulted"].includes(loan.status || "");
+}
+
 function normalizeOptions(
   options: number | ProfitPeriodOptions | undefined,
 ): ProfitPeriodOptions {
@@ -101,6 +116,7 @@ function normalizeOptions(
 
 /** Earliest yyyy-MM appearing in the data, or null when there is nothing. */
 function earliestMonthKey(
+  loans: ProfitLoanInput[],
   repayments: ProfitRepaymentInput[],
   expenses: ProfitExpenseInput[],
 ): string | null {
@@ -110,6 +126,7 @@ function earliestMonthKey(
     const key = d.slice(0, 7);
     if (!earliest || key < earliest) earliest = key;
   };
+  for (const loan of loans) consider(loanExpectedDate(loan));
   for (const r of repayments) {
     consider(r.due_date);
     consider(r.paid_date);
@@ -120,7 +137,7 @@ function earliestMonthKey(
 
 /**
  * Compute month-by-month profit for one or many loan houses.
- * - Expected interest is counted in the month an installment is DUE.
+ * - Expected interest is counted once, in the month a booked loan starts/disburses.
  * - Interest made is counted in the month an installment was PAID.
  * - Expenses (tied to the house's loans) are counted by expense_date month.
  * - Net profit (made) = interest made - expenses.
@@ -149,7 +166,7 @@ export function computeMonthlyProfit(
   } else if (typeof opts.monthsBack === "number") {
     from = startOfMonth(subMonths(to, Math.max(0, opts.monthsBack - 1)));
   } else {
-    const earliest = earliestMonthKey(repayments, expenses);
+    const earliest = earliestMonthKey(loans, repayments, expenses);
     from = earliest ? startOfMonth(new Date(`${earliest}-01T00:00:00`)) : startOfMonth(subMonths(to, 11));
   }
   if (from > to) from = to;
@@ -180,18 +197,19 @@ export function computeMonthlyProfit(
 
   let collected = 0;
 
+  for (const loan of loans) {
+    if (!countsAsBookedLoan(loan)) continue;
+    const key = loanExpectedDate(loan)?.slice(0, 7);
+    if (!key) continue;
+    const row = ensure(key);
+    if (row) row.expectedInterest += bookedInterestFor(loan);
+  }
+
   for (const rep of repayments) {
     if (rep?.is_reversed) continue;
     if (rep?.status === "cancelled") continue;
     const ratio = rep?.loan_id ? ratioByLoan.get(rep.loan_id) ?? 0 : 0;
     const amount = num(rep.amount);
-
-    // Expected interest -> due month
-    if (rep.due_date) {
-      const key = rep.due_date.slice(0, 7);
-      const row = ensure(key);
-      if (row) row.expectedInterest += amount * ratio;
-    }
 
     // Interest made -> paid month (paid + partial), based on what was actually paid
     const isPaid = rep.status === "paid" || rep.status === "partial";
@@ -245,6 +263,7 @@ export interface ProfitContributionRow {
   dueDate?: string | null;
   paidDate?: string | null;
   status?: string | null;
+  source?: "loan" | "repayment";
 }
 
 export interface MonthContributions {
@@ -257,7 +276,7 @@ export interface MonthContributions {
 
 /**
  * Per-repayment breakdown of what produced a given month's expected vs made interest.
- * - `expected` = installments DUE in that month (regardless of payment).
+ * - `expected` = loan booked interest for loans started/disbursed in that month.
  * - `made` = installments PAID (or partial) in that month.
  * Interest per row uses the same loan interest-ratio model as computeMonthlyProfit.
  */
@@ -274,24 +293,24 @@ export function computeMonthContributions(
   const expected: ProfitContributionRow[] = [];
   const made: ProfitContributionRow[] = [];
 
+  for (const loan of loans) {
+    if (!countsAsBookedLoan(loan)) continue;
+    const loanDate = loanExpectedDate(loan);
+    if (!loanDate || loanDate.slice(0, 7) !== monthKey) continue;
+    expected.push({
+      loanId: loan.id,
+      repaymentAmount: num(loan.loan_amount),
+      interest: Math.round(bookedInterestFor(loan) * 100) / 100,
+      dueDate: loanDate,
+      status: loan.status,
+      source: "loan",
+    });
+  }
+
   for (const rep of repayments) {
     if (rep?.is_reversed) continue;
     if (rep?.status === "cancelled") continue;
     const ratio = rep?.loan_id ? ratioByLoan.get(rep.loan_id) ?? 0 : 0;
-    const amount = num(rep.amount);
-    const expectedInterest = Math.round(amount * ratio * 100) / 100;
-
-    if (rep.due_date && rep.due_date.slice(0, 7) === monthKey) {
-      expected.push({
-        loanId: rep.loan_id ?? "",
-        repaymentAmount: amount,
-        interest: expectedInterest,
-        dueDate: rep.due_date,
-        paidDate: rep.paid_date,
-        status: rep.status,
-      });
-    }
-
     const isPaid = rep.status === "paid" || rep.status === "partial";
     if (isPaid && rep.paid_date && rep.paid_date.slice(0, 7) === monthKey) {
       const paid = paidTowardLoan(rep);
@@ -302,6 +321,7 @@ export function computeMonthContributions(
         dueDate: rep.due_date,
         paidDate: rep.paid_date,
         status: rep.status,
+        source: "repayment",
       });
     }
   }
