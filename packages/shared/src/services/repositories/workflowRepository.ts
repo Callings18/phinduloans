@@ -21,9 +21,9 @@ export interface PaymentClaimInput {
 
 function assertRpcOk(data: unknown) {
   if (data == null) return;
-  if (typeof data === "object" && data !== null && "ok" in data) {
-    const result = data as { ok?: boolean; error?: string };
-    if (result.ok === false) {
+  if (typeof data === "object" && data !== null) {
+    const result = data as { ok?: boolean; success?: boolean; error?: string };
+    if (result.ok === false || result.success === false) {
       throw new Error(result.error || "Transition failed");
     }
   }
@@ -165,33 +165,21 @@ export async function transitionLoanStatus(input: {
   reasonCode?: string;
   reasonText?: string;
 }) {
-  if (apiFeatureFlags.phase1Workflow) {
-    const res = await apiPost<{ ok?: boolean; error?: { message?: string } }>(
-      `/api/v1/loans/${input.loanId}/transitions`,
-      {
-        toStatus: input.toStatus,
-        reasonCode: input.reasonCode,
-        reasonText: input.reasonText,
-      },
-    );
-    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
-      throw new Error(res.error?.message ?? "Loan transition failed");
-    }
-    return;
-  }
-
-  if (input.toStatus === "disbursed") {
-    const { data, error } = await supabase.rpc("transition_loan_status", {
-      p_loan_id: input.loanId,
-      p_action: "disburse",
-      p_reason: input.reasonText ?? null,
-    });
-    if (error) throw error;
-    assertRpcOk(data);
-    return;
-  }
-
   if (input.toStatus === "under_review") {
+    if (apiFeatureFlags.phase1Workflow) {
+      const res = await apiPost<{ ok?: boolean; error?: { message?: string } }>(
+        `/api/v1/loans/${input.loanId}/transitions`,
+        {
+          toStatus: "under_review",
+          reasonCode: input.reasonCode,
+          reasonText: input.reasonText,
+        },
+      );
+      if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+        throw new Error(res.error?.message ?? "Loan transition failed");
+      }
+      return;
+    }
     const { data: sessionData } = await supabase.auth.getUser();
     const uid = sessionData.user?.id ?? null;
     const { error } = await supabase
@@ -206,7 +194,124 @@ export async function transitionLoanStatus(input: {
     return;
   }
 
-  throw new Error(
-    `transitionLoanStatus: cannot move to "${input.toStatus}" without API workflow (set VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL).`,
-  );
+  const actionMap: Record<string, string> = {
+    approved: "approve",
+    rejected: "reject",
+    disbursed: "disburse",
+    active: "activate",
+    completed: "complete",
+    defaulted: "default",
+  };
+  const action = actionMap[input.toStatus];
+  if (!action) {
+    throw new Error(`transitionLoanStatus: unknown target "${input.toStatus}"`);
+  }
+  await transitionLoanByAction(input.loanId, action, input.reasonText);
+}
+
+export async function transitionLoanByAction(loanId: string, action: string, reason?: string | null) {
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiPost<{ ok?: boolean; error?: { message?: string } }>(
+      `/api/v1/loans/${loanId}/transitions`,
+      { action, reasonText: reason ?? undefined },
+    );
+    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+      throw new Error(res.error?.message ?? "Loan transition failed");
+    }
+    return;
+  }
+
+  const { data, error } = await supabase.rpc("transition_loan_status", {
+    p_loan_id: loanId,
+    p_action: action,
+    p_reason: reason ?? null,
+  });
+  if (error) throw error;
+  assertRpcOk(data);
+}
+
+export async function completeDisbursement(params: {
+  disbursementId: string;
+  accountId: string;
+  transactionReference?: string | null;
+}) {
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiPost<{ ok?: boolean; error?: { message?: string } }>(
+      `/api/v1/disbursements/${params.disbursementId}/complete`,
+      {
+        accountId: params.accountId,
+        transactionReference: params.transactionReference ?? null,
+      },
+    );
+    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+      throw new Error(res.error?.message ?? "Disbursement completion failed");
+    }
+    return;
+  }
+
+  const { data, error } = await supabase.rpc("complete_disbursement", {
+    p_disbursement_id: params.disbursementId,
+    p_account_id: params.accountId,
+    p_transaction_reference: params.transactionReference || null,
+  });
+  if (error) throw error;
+  const result = data as { success?: boolean; ok?: boolean; error?: string } | null;
+  if (result?.ok === false || result?.success === false) {
+    throw new Error(result?.error || "Failed to complete disbursement");
+  }
+}
+
+export async function disburseLoan(params: {
+  loanId: string;
+  accountId: string;
+  amount: number;
+  disbursementMethod: string;
+  accountNumber?: string | null;
+  mobileMoneyNumber?: string | null;
+  transactionReference?: string | null;
+}) {
+  if (apiFeatureFlags.phase1Workflow) {
+    const res = await apiPost<{ ok?: boolean; error?: { message?: string } }>(
+      `/api/v1/loans/${params.loanId}/disburse`,
+      {
+        accountId: params.accountId,
+        amount: params.amount,
+        disbursementMethod: params.disbursementMethod,
+        accountNumber: params.accountNumber ?? null,
+        mobileMoneyNumber: params.mobileMoneyNumber ?? null,
+        transactionReference: params.transactionReference ?? null,
+      },
+    );
+    if (res && typeof res === "object" && "ok" in res && res.ok === false) {
+      throw new Error(res.error?.message ?? "Disbursement failed");
+    }
+    return;
+  }
+
+  const { data: inserted, error: disbError } = await supabase
+    .from("disbursements")
+    .insert({
+      loan_id: params.loanId,
+      amount: params.amount,
+      disbursement_method: params.disbursementMethod,
+      account_number: params.accountNumber || null,
+      mobile_money_number: params.mobileMoneyNumber || null,
+      transaction_reference: params.transactionReference || null,
+      status: "pending",
+      source_account_id: params.accountId,
+    })
+    .select("id")
+    .single();
+  if (disbError || !inserted?.id) throw disbError ?? new Error("Could not create disbursement");
+
+  try {
+    await completeDisbursement({
+      disbursementId: inserted.id,
+      accountId: params.accountId,
+      transactionReference: params.transactionReference,
+    });
+  } catch (err) {
+    await supabase.from("disbursements").delete().eq("id", inserted.id);
+    throw err;
+  }
 }

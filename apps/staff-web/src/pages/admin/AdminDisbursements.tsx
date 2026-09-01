@@ -28,6 +28,7 @@ import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
+import { completeDisbursement } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
 import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
 import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
@@ -383,16 +384,11 @@ const AdminDisbursements = () => {
         );
       }
 
-      const { data, error } = await supabase.rpc("complete_disbursement", {
-        p_disbursement_id: id,
-        p_account_id: disbursement.source_account_id,
-        p_transaction_reference: null,
+      await completeDisbursement({
+        disbursementId: id,
+        accountId: disbursement.source_account_id,
+        transactionReference: null,
       });
-      if (error) throw error;
-      const result = data as { success: boolean; error?: string } | null;
-      if (!result?.success) {
-        throw new Error(result?.error || "Failed to complete disbursement");
-      }
 
       // Generate repayment schedule client-side (DB trigger may also do it; this
       // is idempotent because createRepaymentScheduleForLoan checks first).

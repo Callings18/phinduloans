@@ -1,6 +1,9 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { callRpc } from "@phinduloans/shared/utils/rpcResult";
 import { recordLoanPayment as recordLoanPaymentFromApi } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import {
+  completeDisbursement,
+  transitionLoanByAction,
+} from "@phinduloans/shared/services/repositories/workflowRepository";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 
 type HouseReviewStage = "loan_officer" | "finance" | "manager";
@@ -55,12 +58,7 @@ export async function houseSetLoanStatus(loanId: string, status: string) {
     defaulted: "default",
   };
   const action = actionMap[status] || status;
-  const res = await callRpc(
-    "transition_loan_status",
-    { p_loan_id: loanId, p_action: action, p_reason: null },
-    "Status transition failed",
-  );
-  if (!res.success) throw new Error(res.error);
+  await transitionLoanByAction(loanId, action);
 }
 
 export async function houseStageReview(loanId: string, stage: HouseReviewStage) {
@@ -70,25 +68,15 @@ export async function houseStageReview(loanId: string, stage: HouseReviewStage) 
     manager: "approve",
   };
   const action = actionMap[stage] || stage;
-  const res = await callRpc(
-    "transition_loan_status",
-    { p_loan_id: loanId, p_action: action, p_reason: null },
-    "Review action failed",
-  );
-  if (!res.success) throw new Error(res.error);
+  await transitionLoanByAction(loanId, action);
 }
 
 export async function houseMarkDisbursementCompleted(params: CompleteDisbursementParams) {
-  const res = await callRpc(
-    "complete_disbursement",
-    {
-      p_disbursement_id: params.disbursementId,
-      p_account_id: params.accountId,
-      p_transaction_reference: params.transactionReference || null,
-    },
-    "Disbursement completion failed",
-  );
-  if (!res.success) throw new Error(res.error);
+  await completeDisbursement({
+    disbursementId: params.disbursementId,
+    accountId: params.accountId,
+    transactionReference: params.transactionReference || null,
+  });
 }
 
 export async function houseMarkRepaymentPaid(repaymentId: string) {

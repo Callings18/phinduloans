@@ -83,8 +83,12 @@ import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/compon
 import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
-import { transitionLoanStatus } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { createLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import {
+  disburseLoan,
+  transitionLoanByAction,
+  transitionLoanStatus,
+} from "@phinduloans/shared/services/repositories/workflowRepository";
 import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
 import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
@@ -118,17 +122,6 @@ const sourceConfig = {
   ussd: { label: "USSD", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: "📱" },
   mobile_app: { label: "Mobile App", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: "📲" },
 };
-
-function assertTransitionRpcSuccess(data: unknown) {
-  if (data == null) return;
-
-  if (typeof data === "object" && "ok" in data) {
-    const result = data as { ok?: boolean; error?: string };
-    if (!result.ok) {
-      throw new Error(result.error || "Transition failed");
-    }
-  }
-}
 
 const AdminApplications = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -473,15 +466,7 @@ const AdminApplications = () => {
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
       if (status === "approved" || status === "rejected") {
-        // Use the atomic RPC which handles status update, signatures, audit in one transaction
-        const action = status === "approved" ? "approve" : "reject";
-        const { data, error } = await supabase.rpc("transition_loan_status", {
-          p_loan_id: id,
-          p_action: action,
-          ...(reason ? { p_reason: reason } : {}),
-        });
-        if (error) throw error;
-        assertTransitionRpcSuccess(data);
+        await transitionLoanByAction(id, status === "approved" ? "approve" : "reject", reason);
       } else {
         // For other status changes (under_review, etc.), use direct update
         const updateData: any = {
@@ -561,44 +546,19 @@ const AdminApplications = () => {
   const stagedReviewMutation = useMutation({
     mutationFn: async (stage: "loan_officer" | "finance" | "manager") => {
       if (!selectedApp?.id || !user?.id) throw new Error("Application context missing.");
-      const now = new Date().toISOString();
-
       if (stage === "manager") {
-        await transitionLoanStatus({
-          loanId: selectedApp.id,
-          toStatus: "approved",
-          reasonCode: "manager_approved",
-          reasonText: reviewComment || "Manager approved after staged review.",
-        });
-        const { error } = await supabase
-          .from("loan_applications")
-          .update({
-            approval_stage: "manager_approved",
-            approved_by: user.id,
-            approved_at: now,
-          })
-          .eq("id", selectedApp.id);
-        if (error) throw error;
+        await transitionLoanByAction(
+          selectedApp.id,
+          "approve",
+          reviewComment || "Manager approved after staged review.",
+        );
         return;
       }
-
-      const updateData: Record<string, unknown> =
-        stage === "loan_officer"
-          ? {
-              approval_stage: "loan_officer_approved",
-              reviewed_by: user.id,
-              reviewed_at: now,
-              status: "under_review",
-            }
-          : {
-              approval_stage: "finance_approved",
-              finance_verified_by: user.id,
-              finance_verified_at: now,
-              status: "under_review",
-            };
-
-      const { error } = await supabase.from("loan_applications").update(updateData).eq("id", selectedApp.id);
-      if (error) throw error;
+      await transitionLoanByAction(
+        selectedApp.id,
+        stage === "loan_officer" ? "verify_documents" : "finance_approve",
+        reviewComment || undefined,
+      );
     },
     onSuccess: (_, stage) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
@@ -656,36 +616,15 @@ const AdminApplications = () => {
         );
       }
 
-      // 1) Create pending disbursement row (no financial side-effects yet).
-      //    Partial unique index uniq_disbursements_one_completed_per_loan blocks
-      //    a second non-top-up completion at the DB level.
-      const { data: inserted, error: disbError } = await supabase.from('disbursements').insert({
-        loan_id: selectedApp.id,
+      await disburseLoan({
+        loanId: selectedApp.id,
+        accountId: data.source_account_id,
         amount: disbursementAmount,
-        disbursement_method: data.disbursement_method,
-        account_number: data.account_number || null,
-        mobile_money_number: data.mobile_money_number || null,
-        transaction_reference: data.transaction_reference || null,
-        status: 'pending',
-        source_account_id: data.source_account_id,
-      }).select("id").single();
-      if (disbError) throw disbError;
-      const disbursementId = inserted!.id as string;
-
-      // 2) Complete via atomic RPC (debits account, writes ledger, advances loan
-      //    status, inserts audit + loan_status_transitions, sets disbursed_by/at).
-      const { data: rpcData, error: rpcError } = await supabase.rpc('complete_disbursement', {
-        p_disbursement_id: disbursementId,
-        p_account_id: data.source_account_id,
-        p_transaction_reference: data.transaction_reference || null,
+        disbursementMethod: data.disbursement_method,
+        accountNumber: data.account_number || null,
+        mobileMoneyNumber: data.mobile_money_number || null,
+        transactionReference: data.transaction_reference || null,
       });
-      if (rpcError) throw rpcError;
-      const result = rpcData as { success: boolean; error?: string } | null;
-      if (!result?.success) {
-        // RPC failed atomically — clean up the pending row so the loan stays disbursable.
-        await supabase.from('disbursements').delete().eq('id', disbursementId);
-        throw new Error(result?.error || 'Failed to complete disbursement');
-      }
 
       await logAudit({
         action: "DISBURSE",
@@ -696,8 +635,7 @@ const AdminApplications = () => {
           amount: disbursementAmount,
           disbursement_method: data.disbursement_method,
           source_account_id: data.source_account_id,
-          disbursement_id: disbursementId,
-          via: 'complete_disbursement_rpc',
+          via: "nest_complete_disbursement",
         },
       });
     },
@@ -816,40 +754,7 @@ const AdminApplications = () => {
   // Workflow transition (verify_documents, finance_approve, approve, reject) — all via RPC
   const transitionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: string; action: string; reason?: string }) => {
-      if (action === "approve" || action === "reject") {
-        const runRpc = async (withReason: boolean) =>
-          supabase.rpc(
-            "transition_loan_status",
-            withReason
-              ? { p_loan_id: id, p_action: action, p_reason: reason ?? null }
-              : { p_loan_id: id, p_action: action }
-          );
-
-        let { data, error } = await runRpc(true);
-        if (
-          error &&
-          String(error.message || "")
-            .toLowerCase()
-            .includes("function") &&
-          String(error.message || "").includes("transition_loan_status")
-        ) {
-          ({ data, error } = await runRpc(false));
-        }
-        if (error) throw error;
-        const result = data as { ok?: boolean; success?: boolean; error?: string };
-        if (result?.ok === false || result?.success === false) {
-          throw new Error(result?.error || "Transition failed");
-        }
-        return;
-      }
-
-      const { data, error } = await supabase.rpc("transition_loan_status", {
-        p_loan_id: id,
-        p_action: action,
-        ...(reason ? { p_reason: reason } : {}),
-      });
-      if (error) throw error;
-      assertTransitionRpcSuccess(data);
+      await transitionLoanByAction(id, action, reason);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
@@ -1258,38 +1163,7 @@ const AdminApplications = () => {
 
   /** Bulk workflow RPC: all actions go through the server-side RPC. */
   const assertBulkTransition = async (id: string, action: string, reason?: string) => {
-    if (action === "approve" || action === "reject") {
-      const runRpc = async (withReason: boolean) =>
-        supabase.rpc(
-          "transition_loan_status",
-          withReason
-            ? { p_loan_id: id, p_action: action, p_reason: reason ?? null }
-            : { p_loan_id: id, p_action: action }
-        );
-
-      let { data, error } = await runRpc(true);
-      if (
-        error &&
-        String(error.message || "")
-          .toLowerCase()
-          .includes("function") &&
-        String(error.message || "").includes("transition_loan_status")
-      ) {
-        ({ data, error } = await runRpc(false));
-      }
-      if (error) throw error;
-      const res = data as { ok?: boolean; success?: boolean; error?: string };
-      if (res?.ok === false || res?.success === false) throw new Error(res?.error || "Transition failed");
-      return;
-    }
-
-    const { data, error } = await supabase.rpc("transition_loan_status", {
-      p_loan_id: id,
-      p_action: action,
-      ...(reason !== undefined ? { p_reason: reason } : {}),
-    });
-    if (error) throw error;
-    assertTransitionRpcSuccess(data);
+    await transitionLoanByAction(id, action, reason);
   };
 
   // Handle bulk action execution
