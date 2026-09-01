@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { createBorrower } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import GuidedTour from "@/components/common/GuidedTour";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
@@ -310,21 +311,15 @@ const AdminBorrowers = () => {
         : null;
       const productCode = (selectedProduct as any)?.product_code ?? null;
 
-      const response = await supabase.functions.invoke('create-borrower', {
-        body: {
+      const created = await createBorrower({
           full_name: data.full_name,
           phone: data.phone || null,
           nrc_number: data.nrc_number || null,
           address: data.address || null,
           city: data.city || null,
           product_code: productCode,
-        },
-      });
-
-      if (response.error) throw response.error;
-      if (response.data?.error) throw new Error(response.data.error);
-
-      const created = response.data;
+        });
+      if ((created as { error?: string })?.error) throw new Error((created as { error: string }).error);
       if (!created?.user_id) return created;
 
       const principal = Number(data.principal_amount || 0);
@@ -394,19 +389,15 @@ const AdminBorrowers = () => {
       let createdCount = 0;
       for (const item of MARKETEER_BORROWERS) {
         const targetProductCode = (loanProducts.find((p: any) => p.id === targetProductId) as any)?.product_code ?? null;
-        const { data: response, error: responseError } = await supabase.functions.invoke("create-borrower", {
-          body: {
+        const created = await createBorrower({
             full_name: item.full_name,
             phone: null,
             nrc_number: null,
             address: null,
             city: "Lusaka",
             product_code: targetProductCode,
-          },
-        });
-        if (responseError) throw responseError;
-        if (response?.error) throw new Error(response.error);
-        const userId = response?.user_id;
+          });
+        const userId = created?.user_id;
         if (!userId) continue;
 
         const { error: loanError } = await supabase.from("loan_applications").insert({

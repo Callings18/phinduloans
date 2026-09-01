@@ -84,6 +84,7 @@ import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
 import { transitionLoanStatus } from "@phinduloans/shared/services/repositories/workflowRepository";
+import { createLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
 import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
@@ -400,7 +401,8 @@ const AdminApplications = () => {
       }, termUnit);
 
       // First create the loan to get the ID
-      const { data: insertedLoan, error: insertError } = await supabase.from('loan_applications').insert({
+      const { id: loanId } = await createLoanApplication({
+        application: {
         user_id: borrower.id,
         loan_product_id: data.loanData.product_id || null,
         full_name: borrower.full_name || borrower.email,
@@ -425,10 +427,8 @@ const AdminApplications = () => {
         admin_notes: data.loanData.admin_notes || null,
         status: 'pending',
         source: 'internal',
-      }).select('id').single();
-
-      if (insertError) throw insertError;
-      const loanId = insertedLoan.id;
+        },
+      });
 
       // Upload documents to application_documents table based on product required_documents
       const productForDocs = loanProducts?.find(p => p.id === data.loanData.product_id);

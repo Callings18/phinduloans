@@ -12,7 +12,9 @@ PostgreSQL + Prisma + REST (`/api/v1/...`). Intended to **strangler-migrate** of
 
 ## Endpoints
 
-- `GET /api/v1/health` — liveness (Railway healthcheck)
+- `POST /api/v1/admin/borrowers` — staff add borrower (replaces Lovable `create-borrower` function)
+- `POST /api/v1/applications` — borrower or staff create application
+- `POST /api/v1/repayments/:id/record` — record payment + receipt (`record_loan_payment`)
 - `GET /api/v1/health/ready` — database ping
 - `GET /api/v1/loan-products?active=true&sort=name|interest_rate|min_amount&order=asc|desc`
 - `POST /api/v1/loans/:id/transitions` — staff status change (Supabase bearer + staff role)

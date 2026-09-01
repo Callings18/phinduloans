@@ -1,15 +1,21 @@
 /**
  * Strangler flags: route specific domains to the HTTP API instead of direct Supabase.
- * Set in `.env`: `VITE_API_LOAN_PRODUCTS=true` and `VITE_API_URL` (defaults to
- * `http://localhost:3000`, the Nest `backend` service). Workflow routes live on Nest:
- * `/api/v1/loan-products`, loan transitions, payment claims, notifications.
+ * If `VITE_API_URL` is set (Railway / local Nest), core writes go to Nest automatically.
  */
 function envBool(key: keyof ImportMetaEnv): boolean {
   const v = import.meta.env[key];
   return v === "true" || v === true;
 }
 
+function apiUrlConfigured(): boolean {
+  const raw = import.meta.env.VITE_API_URL;
+  return typeof raw === "string" && raw.trim().length > 0;
+}
+
+const useNestWrites = envBool("VITE_API_CORE_WRITES") || envBool("VITE_API_PHASE1_WORKFLOW") || apiUrlConfigured();
+
 export const apiFeatureFlags = {
-  loanProducts: envBool("VITE_API_LOAN_PRODUCTS"),
-  phase1Workflow: envBool("VITE_API_PHASE1_WORKFLOW"),
+  loanProducts: envBool("VITE_API_LOAN_PRODUCTS") || useNestWrites,
+  phase1Workflow: useNestWrites,
+  coreWrites: useNestWrites,
 } as const;

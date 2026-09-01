@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AuthModule } from "./auth/auth.module";
+import { CoreWritesModule } from "./core/core-writes.module";
 import { HealthModule } from "./health/health.module";
 import { LoanProductsModule } from "./loan-products/loan-products.module";
 import { LoansModule } from "./loans/loans.module";
@@ -15,6 +16,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     AuthModule,
     HealthModule,
     LoanProductsModule,
+    CoreWritesModule,
     LoansModule,
     PaymentClaimsModule,
     NotificationsModule,

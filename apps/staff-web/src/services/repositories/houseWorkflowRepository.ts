@@ -1,5 +1,6 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { callRpc } from "@phinduloans/shared/utils/rpcResult";
+import { recordLoanPayment as recordLoanPaymentFromApi } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 
 type HouseReviewStage = "loan_officer" | "finance" | "manager";
@@ -33,24 +34,15 @@ export interface CompleteDisbursementParams {
  * This handles: marking repayment paid, crediting the account, auto-completing loan, audit logging.
  */
 export async function recordLoanPayment(params: RecordPaymentParams): Promise<PaymentReceiptData> {
-  const rpcArgs: Record<string, unknown> = {
-    p_repayment_id: params.repaymentId,
-    p_amount: params.amount,
-    p_payment_method: params.paymentMethod || "cash",
-    p_account_id: params.accountId || null,
-    p_transaction_reference: params.transactionReference || null,
-    p_paid_date: params.paidDate || null,
-  };
-  if (params.penaltyAmount !== undefined && params.penaltyAmount > 0) {
-    rpcArgs.p_penalty_amount = params.penaltyAmount;
-  }
-  const res = await callRpc<PaymentReceiptData>(
-    "record_loan_payment",
-    rpcArgs,
-    "Payment recording failed",
-  );
-  if (!res.success) throw new Error(res.error);
-  return { success: true, ...res.data } as PaymentReceiptData;
+  return recordLoanPaymentFromApi({
+    repaymentId: params.repaymentId,
+    amount: params.amount,
+    paymentMethod: params.paymentMethod,
+    accountId: params.accountId,
+    transactionReference: params.transactionReference,
+    paidDate: params.paidDate,
+    penaltyAmount: params.penaltyAmount,
+  });
 }
 
 export async function houseSetLoanStatus(loanId: string, status: string) {

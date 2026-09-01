@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@phinduloans/shared/components/ui/dialog";
-import { useHouseBorrowers, useHouseLoans } from "@/hooks/useHouseData";
+import { createBorrower } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { Search, User, Plus, Phone, IdCard, MapPin, CreditCard } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
@@ -96,8 +96,7 @@ export default function HouseBorrowersPage() {
       } else {
         if (!form.email.trim()) throw new Error("Email is required.");
       }
-      const response = await supabase.functions.invoke("create-borrower", {
-        body: {
+      const data = await createBorrower({
           email: form.email.trim() || null,
           full_name: form.full_name,
           phone: form.phone || null,
@@ -105,14 +104,9 @@ export default function HouseBorrowersPage() {
           address: form.address || null,
           city: form.city || null,
           product_code: productCode,
-        },
-      });
-      if (response.error) {
-        const details = (response.error as any)?.context?.json?.error || (response.error as any)?.message;
-        throw new Error(details || "Borrower creation failed.");
-      }
-      if (response.data?.error) throw new Error(response.data.error);
-      return response.data;
+        });
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["house-borrowers", productCode] });

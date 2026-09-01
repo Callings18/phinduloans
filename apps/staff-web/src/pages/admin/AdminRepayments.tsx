@@ -67,6 +67,7 @@ import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import PaginationControls from "@/components/common/PaginationControls";
 import { DesktopTableWrap, MobileCardStack } from "@/components/common/ResponsiveDataViews";
 import { fetchAdminPaymentClaims, reviewPaymentClaim } from "@phinduloans/shared/services/repositories/workflowRepository";
+import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 
 interface Repayment {
   id: string;
@@ -233,20 +234,15 @@ const AdminRepayments = () => {
       }
       const amountDue = Number(repayment.amount) || 0;
       const paidDate = new Date().toISOString().split("T")[0];
-      const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
-        p_repayment_id: repaymentId,
-        p_amount: paidAmount,
-        p_payment_method: paymentMethod,
-        p_account_id: destinationAccountId,
-        p_transaction_reference: transactionRef || `PAY-${Date.now()}`,
-        p_paid_date: paidDate,
-        p_penalty_amount: penaltyAmount,
+      const rpcResult = await recordLoanPayment({
+        repaymentId,
+        amount: paidAmount,
+        paymentMethod,
+        accountId: destinationAccountId,
+        transactionReference: transactionRef || `PAY-${Date.now()}`,
+        paidDate,
+        penaltyAmount,
       });
-      if (rpcError) throw rpcError;
-      const rpcResult = rpcData as PaymentReceiptData | null;
-      if (!rpcResult?.success) {
-        throw new Error(rpcResult?.error || "Failed to record payment");
-      }
 
       if (claimId) {
         await reviewPaymentClaim({

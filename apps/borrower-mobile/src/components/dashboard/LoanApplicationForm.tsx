@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { createLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@phinduloans/shared/utils/loanCalculations";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { LOAN_APPLICATION_IDENTITY_DOC_TYPES, borrowerIdentityKycSatisfiedFromVault } from "@phinduloans/shared/constants/borrowerKycDocs";
@@ -465,9 +466,10 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         self_employed: "self_employed", "self-employed": "self_employed",
       };
 
-      const { data: newApp, error: insertError } = await supabase.from("loan_applications").insert({
+      const applicationPayload = {
         user_id: user.id,
         full_name: profile.full_name || "",
+        email: profile.email || "",
         phone: profile.phone || "",
         nrc_number: profile.nrc_number || "",
         address: profile.address || "",
@@ -493,16 +495,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           collateral_value: Number(collateralValue) || 0,
         } : {}),
         product_specific_data: Object.keys(productSpecificData).length > 0 ? productSpecificData : {},
-      }).select("id").single();
+      };
 
-      if (insertError) throw insertError;
-      const applicationId = newApp.id;
-
-      // Persist multi-borrower structure for COLLATERAL loans only
-      if (isCollateralLoan) {
-        const borrowerRows = [
+      const borrowerRows = isCollateralLoan
+        ? [
           {
-            loan_application_id: applicationId,
             customer_id: primaryBorrower.customer_id || user.id,
             full_name: primaryBorrower.full_name,
             nrc_number: primaryBorrower.nrc_number,
@@ -513,7 +510,6 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             created_by: user.id,
           },
           ...coBorrowers.map((b) => ({
-            loan_application_id: applicationId,
             customer_id: b.customer_id || null,
             full_name: b.full_name,
             nrc_number: b.nrc_number,
@@ -524,7 +520,6 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             created_by: user.id,
           })),
           ...absoluteOwners.map((b) => ({
-            loan_application_id: applicationId,
             customer_id: b.customer_id || null,
             full_name: b.full_name,
             nrc_number: b.nrc_number,
@@ -534,27 +529,14 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             is_signatory: b.is_signatory,
             created_by: user.id,
           })),
-        ];
-        const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(borrowerRows);
-        if (borrowersErr) {
-          console.error("Failed to insert loan_borrowers:", borrowersErr);
-          submitWarnings.push("Co-borrower details could not be saved. Our team will follow up.");
-        }
-      }
+        ]
+        : [];
 
-
-      // Auto-enroll borrower in the loan product's House roster (best-effort)
-      try {
-        if (productCode) {
-          await (supabase.from as any)("product_house_borrowers").upsert(
-            { product_code: productCode, borrower_id: user.id, added_by: user.id },
-            { onConflict: "product_code,borrower_id" },
-          );
-        }
-      } catch (houseErr) {
-        console.warn("House roster enrollment skipped:", houseErr);
-        submitWarnings.push("House roster enrollment was skipped; your application was still submitted.");
-      }
+      const { id: applicationId } = await createLoanApplication({
+        application: applicationPayload,
+        borrowers: borrowerRows,
+        productCode: productCode || undefined,
+      });
 
       // Upload documents
       const docEntries = Object.entries(documentFiles).filter(([, file]) => file !== null);

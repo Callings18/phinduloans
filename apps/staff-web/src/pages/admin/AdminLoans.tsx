@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@phinduloans/shared/components/ui/dropdown-menu";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -494,19 +495,14 @@ const AdminLoans = () => {
         if (installmentOutstanding <= 0) continue;
         const allocation = Math.min(remaining, installmentOutstanding);
 
-        const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
-          p_repayment_id: installment.id,
-          p_amount: allocation,
-          p_payment_method: quickPaymentData.payment_method,
-          p_account_id: quickPaymentData.destination_account_id,
-          p_transaction_reference: `${txBase}-${processedInstallments + 1}`,
-          p_paid_date: paidDate,
+        const rpcResult = await recordLoanPayment({
+          repaymentId: installment.id,
+          amount: allocation,
+          paymentMethod: quickPaymentData.payment_method,
+          accountId: quickPaymentData.destination_account_id,
+          transactionReference: `${txBase}-${processedInstallments + 1}`,
+          paidDate,
         });
-        if (rpcError) throw rpcError;
-        const rpcResult = rpcData as PaymentReceiptData | null;
-        if (!rpcResult?.success) {
-          throw new Error(rpcResult?.error || "Failed to record repayment");
-        }
         lastReceipt = rpcResult;
 
         remaining -= allocation;
