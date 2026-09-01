@@ -46,6 +46,10 @@ export function getSiteModeFromHostname(hostname?: string): SiteMode | "dev" {
   if (host === "localhost" || host === "127.0.0.1") {
     return "dev";
   }
+  // Railway preview hosts must not bounce to phindu.com until custom domains are attached.
+  if (host.endsWith(".up.railway.app") || host.endsWith(".railway.app")) {
+    return "dev";
+  }
   if (host === "phindu.com" || host === "www.phindu.com") {
     return "marketing";
   }

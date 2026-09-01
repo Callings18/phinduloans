@@ -2,7 +2,10 @@
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
+# Four services share this file. Set PHINDU_SERVICE per service:
+#   office (default) | marketing | borrower | api
+# Do not healthcheck /api/v1/health here — that would kill the SPAs.
+# Set healthcheck /api/v1/health only on the api service in the Railway UI.
+
 [deploy]
-healthcheckPath = "/api/v1/health"
-healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

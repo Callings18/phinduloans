@@ -4,3 +4,12 @@
 !**/.env.example
 .git
 npm-debug.log
+backend/dist
+**/dist
+**/.cache
+**/coverage
+**/*.md
+!backend/README.md
+apps/borrower-mobile/android
+apps/borrower-mobile/ios
+**/.DS_Store

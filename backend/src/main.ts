@@ -16,8 +16,36 @@ async function bootstrap() {
     process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean) ?? [
       "http://localhost:8080",
       "http://127.0.0.1:8080",
+      "http://localhost:8081",
     ];
-  app.enableCors({ origin: corsOrigins, credentials: true });
+
+  app.enableCors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      try {
+        const host = new URL(origin).hostname.toLowerCase();
+        if (host.endsWith(".up.railway.app") || host.endsWith(".railway.app")) {
+          callback(null, true);
+          return;
+        }
+        if (host === "phindu.com" || host === "www.phindu.com" || host === "office.phindu.com" || host === "app.phindu.com") {
+          callback(null, true);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      callback(null, false);
+    },
+    credentials: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
