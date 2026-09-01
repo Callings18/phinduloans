@@ -2,11 +2,13 @@ import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { AuthService } from "./auth.service";
+import { StaffGuard } from "./guards/staff.guard";
+import { SupabaseAuthGuard } from "./guards/supabase-auth.guard";
 import { JwtStrategy } from "./jwt.strategy";
+import { SupabaseService } from "./supabase.service";
 
 /**
- * JWT scaffolding for future auth parity with Supabase sessions.
- * Protected routes will use `JwtAuthGuard` + `@Roles()` once login is implemented.
+ * Supabase bearer sessions for current clients; JWT module remains for a later native auth cutover.
  */
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { JwtStrategy } from "./jwt.strategy";
       },
     }),
   ],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, JwtStrategy, SupabaseService, SupabaseAuthGuard, StaffGuard],
+  exports: [AuthService, JwtModule, SupabaseService, SupabaseAuthGuard, StaffGuard],
 })
 export class AuthModule {}

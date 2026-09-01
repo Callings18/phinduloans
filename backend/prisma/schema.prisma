@@ -15,7 +15,7 @@ model LoanProduct {
   amount_logic                 String?
   auto_disbursement            Boolean?
   blacklist_check_required     Boolean?
-  channels                     String[]?
+  channels                     String[]
   collateral_required          Boolean?
   contract_template_url        String?
   crb_auto_approve_score       Decimal?  @db.Decimal(18, 4)
@@ -28,9 +28,9 @@ model LoanProduct {
   digital_signature_required     Boolean?
   early_repayment_allowed      Boolean?
   early_repayment_fee_percent  Decimal?  @db.Decimal(18, 4)
-  eligible_locations           String[]?
+  eligible_locations           String[]
   employer_whitelist_enabled   Boolean?
-  employment_types             String[]?
+  employment_types             String[]
   enforcement_fee_percent      Decimal?  @db.Decimal(18, 4)
   flat_interest_mode           String?
   grace_period_days            Int?
@@ -68,9 +68,9 @@ model LoanProduct {
   processing_fee_percent       Decimal?  @db.Decimal(18, 4)
   product_code                 String?
   repayment_frequency          String?
-  repayment_methods            String[]?
+  repayment_methods            String[]
   required_documents           Json?
-  requirements                 String[]?
+  requirements                 String[]
   status                       String?
   term_unit                    String
   updated_at                   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
@@ -78,4 +78,97 @@ model LoanProduct {
   version                      Int?
 
   @@map("loan_products")
+}
+
+/// Subset of `loan_applications` used by the Nest write API (existing Supabase table).
+model LoanApplication {
+  id          String    @id @db.Uuid
+  user_id     String    @db.Uuid
+  status      String
+  reviewed_by String?   @db.Uuid
+  reviewed_at DateTime? @db.Timestamptz(6)
+
+  @@map("loan_applications")
+}
+
+model LoanStatusTransition {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loan_id     String   @db.Uuid
+  from_status String
+  to_status   String
+  actor_type  String
+  actor_id    String?  @db.Uuid
+  reason_code String?
+  reason_text String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("loan_status_transitions")
+}
+
+model LoanEvent {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loan_id          String   @db.Uuid
+  event_type       String
+  performed_by     String?  @db.Uuid
+  reason           String?
+  previous_values  Json?
+  new_values       Json?
+  visibility       String?  @default("both")
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  performed_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("loan_events")
+}
+
+model UserRole {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  role       String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("user_roles")
+}
+
+model NotificationLog {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String?  @db.Uuid
+  title              String?
+  message            String?
+  type               String
+  status             String?
+  recipient          String
+  provider_response  Json?
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("notification_logs")
+}
+
+model LoanRepayment {
+  id               String   @id @db.Uuid
+  loan_id          String   @db.Uuid
+  user_id          String   @db.Uuid
+  amount           Decimal  @db.Decimal(18, 4)
+  original_amount  Decimal? @db.Decimal(18, 4)
+  principal_paid   Decimal? @db.Decimal(18, 4)
+  status           String?
+
+  @@map("loan_repayments")
+}
+
+model PaymentClaim {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loan_id               String    @db.Uuid
+  repayment_id          String    @db.Uuid
+  user_id               String    @db.Uuid
+  amount                Decimal   @db.Decimal(18, 4)
+  reference             String
+  receipt_url           String?
+  status                String    @default("pending")
+  review_comment        String?
+  decision_reason_code  String?
+  verified_at           DateTime? @db.Timestamptz(6)
+  verified_by           String?   @db.Uuid
+  created_at            DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@map("payment_claims")
 }

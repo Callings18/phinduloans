@@ -1,6 +1,6 @@
-# API Next (Phase 1)
+# API Next (legacy)
 
-Next.js route handlers powering borrower/admin workflow endpoints for status transitions, timeline, payment-claims, and notifications.
+Phase 1 workflow routes now live on the Nest service in `backend/` (`:3000`). This Next app remains only as a fallback during cutover. New work should go to Nest.
 
 ## Run
 

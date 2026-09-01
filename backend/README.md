@@ -12,8 +12,29 @@ PostgreSQL + Prisma + REST (`/api/v1/...`). Intended to **strangler-migrate** of
 
 ## Endpoints
 
-- `GET /api/v1/loan-products?active=true&sort=name|interest_rate|min_amount&order=asc|desc` — list products (JSON compatible with frontend `loan_products` row shape; decimals as numbers).
+- `GET /api/v1/health` — liveness (Railway healthcheck)
+- `GET /api/v1/health/ready` — database ping
+- `GET /api/v1/loan-products?active=true&sort=name|interest_rate|min_amount&order=asc|desc`
+- `POST /api/v1/loans/:id/transitions` — staff status change (Supabase bearer + staff role)
+- `GET /api/v1/loans/:id/events`
+- `POST /api/v1/repayments/:id/payment-claims`
+- `GET /api/v1/admin/payment-claims`
+- `POST /api/v1/payment-claims/:id/review`
+- `GET /api/v1/notifications/me` · `POST /api/v1/notifications/:id/read`
 - OpenAPI: `http://localhost:3000/api/docs`
+
+Money and status writes use Prisma transactions against the existing Postgres (typically the Supabase database). Do not run `prisma migrate` to create these tables; they already exist.
+
+## Railway
+
+Create a service from this repo. Root Dockerfile builds `backend/`. Set:
+
+- `DATABASE_URL` — same Postgres as production Supabase (pooler URI is fine)
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+- `CORS_ORIGIN` — staff + borrower origins
+- `PORT` — Railway injects this; the app listens on it
+
+Healthcheck: `GET /api/v1/health`
 
 ## Environment
 
@@ -22,5 +43,7 @@ PostgreSQL + Prisma + REST (`/api/v1/...`). Intended to **strangler-migrate** of
 | `DATABASE_URL` | PostgreSQL connection string |
 | `PORT` | HTTP port (default `3000`) |
 | `CORS_ORIGIN` | Comma-separated allowed origins (default includes `http://localhost:8080`) |
+| `SUPABASE_URL` | Project URL for `auth.getUser` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role (or `SUPABASE_ANON_KEY` for token checks only) |
 | `JWT_SECRET` | Secret for future JWT auth |
 | `JWT_EXPIRES` | Access token TTL (default `15m`) |

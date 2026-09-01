@@ -1,9 +1,9 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 
-/** Base URL for API (no trailing slash). Default matches apps/api-next dev port. */
+/** Base URL for API (no trailing slash). Default is Nest `backend` on port 3000. */
 export function getApiBaseUrl(): string {
   const raw = import.meta.env.VITE_API_URL as string | undefined;
-  const base = (raw ?? "http://localhost:3001").replace(/\/$/, "");
+  const base = (raw ?? "http://localhost:3000").replace(/\/$/, "");
   return base;
 }
 
