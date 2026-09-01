@@ -2,10 +2,9 @@
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
-# Four services share this file. Set PHINDU_SERVICE per service:
-#   office (default) | marketing | borrower | api
-# Do not healthcheck /api/v1/health here — that would kill the SPAs.
-# Set healthcheck /api/v1/health only on the api service in the Railway UI.
+# Two services on the Railway trial: api + staff-web.
+# staff-web uses PHINDU_SERVICE=web → landing, /admin, and /borrower on one domain.
+# After upgrading Railway, split with PHINDU_SERVICE=office|marketing|borrower.
 
 [deploy]
 restartPolicyType = "ON_FAILURE"

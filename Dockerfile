@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
-# One repo → four Railway services. Set PHINDU_SERVICE=api|office|marketing|borrower
-ARG PHINDU_SERVICE=office
+# One repo → Railway services. Trial plan allows two services:
+#   api  → PHINDU_SERVICE=api
+#   web  → PHINDU_SERVICE=web  (landing + /admin + /borrower)
+# After upgrade, split with office | marketing | borrower.
+ARG PHINDU_SERVICE=web
 
 # ---------- Nest API ----------
 FROM node:20-alpine AS api-build
@@ -35,7 +38,7 @@ COPY apps/borrower-mobile/package.json apps/borrower-mobile/
 RUN npm ci
 COPY . .
 
-ARG PHINDU_SERVICE=office
+ARG PHINDU_SERVICE=web
 ARG VITE_SUPABASE_URL=https://yqrfheavftgybhcafzpt.supabase.co
 ARG VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcmZoZWF2ZnRneWJoY2FmenB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyMzM5NzksImV4cCI6MjA4MTgwOTk3OX0.IGgNEPOV3UQKJ02SVxB1p3XzoSGSOK-r_U3zUBezgBA
 ARG VITE_API_URL=
@@ -57,16 +60,25 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN set -eu; \
   if [ "$PHINDU_SERVICE" = "marketing" ]; then export VITE_SITE_MODE=marketing; \
   elif [ "$PHINDU_SERVICE" = "office" ]; then export VITE_SITE_MODE=office; \
-  elif [ -n "$VITE_SITE_MODE" ]; then export VITE_SITE_MODE; \
-  else export VITE_SITE_MODE=office; \
+  elif [ "$PHINDU_SERVICE" = "web" ]; then unset VITE_SITE_MODE; \
+  elif [ -n "${VITE_SITE_MODE:-}" ]; then :; \
+  else unset VITE_SITE_MODE; \
   fi; \
-  echo "Building PHINDU_SERVICE=$PHINDU_SERVICE VITE_SITE_MODE=$VITE_SITE_MODE"; \
+  echo "Building PHINDU_SERVICE=$PHINDU_SERVICE VITE_SITE_MODE=${VITE_SITE_MODE:-}"; \
+  mkdir -p /out; \
   if [ "$PHINDU_SERVICE" = "borrower" ]; then \
     npm run build:borrower; \
-    mkdir -p /out && cp -R apps/borrower-mobile/dist/. /out/; \
+    cp -R apps/borrower-mobile/dist/. /out/; \
+  elif [ "$PHINDU_SERVICE" = "web" ]; then \
+    npm run build:staff; \
+    cp -R dist/. /out/; \
+    export VITE_BASE=/borrower/; \
+    npm run build:borrower; \
+    mkdir -p /out/borrower; \
+    cp -R apps/borrower-mobile/dist/. /out/borrower/; \
   else \
     npm run build:staff; \
-    mkdir -p /out && cp -R dist/. /out/; \
+    cp -R dist/. /out/; \
   fi
 
 FROM nginx:1.27-alpine AS web
@@ -82,6 +94,7 @@ FROM api AS runtime-api
 FROM web AS runtime-office
 FROM web AS runtime-marketing
 FROM web AS runtime-borrower
+FROM web AS runtime-web
 
-ARG PHINDU_SERVICE=office
+ARG PHINDU_SERVICE=web
 FROM runtime-${PHINDU_SERVICE} AS runtime

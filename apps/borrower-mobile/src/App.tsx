@@ -18,6 +18,9 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const routerBasename =
+  import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
+
 function App() {
   return (
     <ThemeProvider>
@@ -27,7 +30,7 @@ function App() {
             <TooltipProvider>
               <Toaster />
               <Sonner />
-              <BrowserRouter>
+              <BrowserRouter basename={routerBasename}>
                 {/* Soft optional nudge for logged-in borrowers only — never blocks web apply/login */}
                 <BorrowerInstallNudge />
                 <Routes>

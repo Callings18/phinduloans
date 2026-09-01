@@ -7,6 +7,7 @@ const appDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: appDir,
+  base: process.env.VITE_BASE || "/",
   server: {
     host: "::",
     port: 8081,

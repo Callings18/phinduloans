@@ -29,16 +29,18 @@ Money and status writes use Prisma transactions against the existing Postgres (t
 
 ## Railway
 
-The repo root Dockerfile serves four services via `PHINDU_SERVICE`:
+The repo root Dockerfile selects a service with `PHINDU_SERVICE`.
+
+The Railway trial only allows two services, so production preview is:
 
 | Service | `PHINDU_SERVICE` | What loads |
 |---------|------------------|------------|
-| `@phinduloans/staff-web` | `office` (default) | Staff ERP |
-| `marketing` | `marketing` | Landing site |
-| `borrower` | `borrower` | Borrower PWA |
+| `@phinduloans/staff-web` | `web` | Landing, `/admin`, and `/borrower` |
 | `api` | `api` | Nest (`/api/v1`) |
 
-Same Supabase Postgres for API `DATABASE_URL` and frontend `VITE_SUPABASE_*`. Browser apps cannot use Railway private DNS — give `api` a public domain and set `VITE_API_URL` on the three frontends, then redeploy them.
+After upgrading Railway, split frontends with `office` / `marketing` / `borrower`.
+
+Same Supabase Postgres for API `DATABASE_URL` and frontend `VITE_SUPABASE_*`. Browser apps cannot use Railway private DNS — give `api` a public domain and set `VITE_API_URL` on staff-web, then redeploy it.
 
 API service variables:
 

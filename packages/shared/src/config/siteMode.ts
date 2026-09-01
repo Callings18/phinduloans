@@ -9,16 +9,37 @@ const DEFAULT_BORROWER_APP_URL = "https://app.phindu.com";
 const DEFAULT_OFFICE_URL = "https://office.phindu.com";
 const DEFAULT_MARKETING_URL = "https://phindu.com";
 
+function previewOrigin(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname.toLowerCase();
+  if (host.endsWith(".up.railway.app") || host.endsWith(".railway.app")) {
+    return window.location.origin;
+  }
+  return null;
+}
+
 export function getBorrowerAppUrl(): string {
-  return (import.meta.env.VITE_BORROWER_APP_URL || DEFAULT_BORROWER_APP_URL).replace(/\/+$/, "");
+  const fromEnv = (import.meta.env.VITE_BORROWER_APP_URL || "").replace(/\/+$/, "");
+  if (fromEnv) return fromEnv;
+  const preview = previewOrigin();
+  if (preview) return `${preview}/borrower`;
+  return DEFAULT_BORROWER_APP_URL;
 }
 
 export function getOfficeBaseUrl(): string {
-  return (import.meta.env.VITE_OFFICE_BASE_URL || DEFAULT_OFFICE_URL).replace(/\/+$/, "");
+  const fromEnv = (import.meta.env.VITE_OFFICE_BASE_URL || "").replace(/\/+$/, "");
+  if (fromEnv) return fromEnv;
+  const preview = previewOrigin();
+  if (preview) return preview;
+  return DEFAULT_OFFICE_URL;
 }
 
 function getMarketingBaseUrl(): string {
-  return (import.meta.env.VITE_MARKETING_BASE_URL || DEFAULT_MARKETING_URL).replace(/\/+$/, "");
+  const fromEnv = (import.meta.env.VITE_MARKETING_BASE_URL || "").replace(/\/+$/, "");
+  if (fromEnv) return fromEnv;
+  const preview = previewOrigin();
+  if (preview) return preview;
+  return DEFAULT_MARKETING_URL;
 }
 
 export function borrowerAppPath(path: string): string {
