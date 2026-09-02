@@ -9,6 +9,7 @@ import { Button } from "@phinduloans/shared/components/ui/button";
 import { Textarea } from "@phinduloans/shared/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@phinduloans/shared/components/ui/select";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
+import { transitionLoanByAction, transitionLoanStatus } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { ShieldCheck, AlertCircle, CheckCircle, XCircle, Loader2, CreditCard, Shield } from "lucide-react";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@phinduloans/shared/components/ui/tabs";
@@ -162,12 +163,10 @@ const RiskAssessmentModule = ({
                 if (error) throw error;
             }
 
-            if (vars.decision === 'approve' || vars.decision === 'reject') {
-                const newStatus = vars.decision === 'approve' ? 'under_review' : 'rejected';
-                await supabase
-                    .from('loan_applications')
-                    .update({ status: newStatus as any })
-                    .eq('id', applicationId);
+            if (vars.decision === "approve") {
+                await transitionLoanStatus({ loanId: applicationId, toStatus: "under_review" });
+            } else if (vars.decision === "reject") {
+                await transitionLoanByAction(applicationId, "reject");
             }
         },
         onSuccess: () => {

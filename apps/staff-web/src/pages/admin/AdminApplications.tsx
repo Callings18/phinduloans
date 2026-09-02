@@ -459,35 +459,36 @@ const AdminApplications = () => {
   // Update status mutation — uses server-side RPC for approve/reject
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
-      if (status === "approved" || status === "rejected") {
+        if (status === "approved" || status === "rejected") {
         await transitionLoanByAction(id, status === "approved" ? "approve" : "reject", reason);
+      } else if (status === "under_review") {
+        await transitionLoanStatus({ loanId: id, toStatus: "under_review", reasonText: reason });
+        await updateLoanApplication(id, {
+          application: {
+            reviewed_by: user?.id,
+            reviewed_at: new Date().toISOString(),
+            approval_stage: "under_review",
+            ...(reason ? { rejection_reason: reason } : {}),
+          },
+        });
       } else {
-        // For other status changes (under_review, etc.), use direct update
-        const updateData: any = {
-          status,
-          reviewed_by: user?.id,
-          reviewed_at: new Date().toISOString(),
-        };
-        if (status === "under_review") {
-          updateData.approval_stage = "under_review";
-        }
-        if (reason) {
-          updateData.rejection_reason = reason;
-        }
-        const { error } = await supabase
-          .from('loan_applications')
-          .update(updateData)
-          .eq('id', id);
-        if (error) throw error;
-
-        await logAudit({
-          action: "STATUS_UPDATE",
-          entity_type: "loan_application",
-          entity_id: id,
-          module: "loans",
-          new_values: { status, rejection_reason: reason ?? null },
+        await updateLoanApplication(id, {
+          application: {
+            status,
+            reviewed_by: user?.id,
+            reviewed_at: new Date().toISOString(),
+            ...(reason ? { rejection_reason: reason } : {}),
+          },
         });
       }
+
+      await logAudit({
+        action: "STATUS_UPDATE",
+        entity_type: "loan_application",
+        entity_id: id,
+        module: "loans",
+        new_values: { status, rejection_reason: reason ?? null },
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });

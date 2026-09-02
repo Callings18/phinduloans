@@ -26,7 +26,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { notifyBorrowerVisibleNote } from "@phinduloans/shared/utils/notifyBorrowerPortal";
 import { transitionLoanByAction } from "@phinduloans/shared/services/repositories/workflowRepository";
-import { updateLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { addLoanNote, updateLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 
 interface ApprovalWorkflowTabProps {
   loan: {
@@ -237,14 +237,7 @@ export default function ApprovalWorkflowTab({ loan }: ApprovalWorkflowTabProps) 
   const addNoteMutation = useMutation({
     mutationFn: async () => {
       if (!user || !noteText.trim()) throw new Error("Note is required");
-      const { error } = await supabase.from("loan_notes").insert({
-        loan_id: loan.id,
-        user_id: user.id,
-        note: noteText.trim(),
-        note_type: visibleToBorrower ? "visible_to_borrower" : "internal",
-        is_internal: !visibleToBorrower,
-      });
-      if (error) throw error;
+      await addLoanNote(loan.id, noteText.trim(), visibleToBorrower);
     },
     onSuccess: async () => {
       const sentNote = noteText.trim();

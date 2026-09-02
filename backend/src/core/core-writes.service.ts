@@ -79,6 +79,7 @@ const LOAN_PATCH_KEYS = new Set([
   "reviewed_by",
   "reviewed_at",
   "updated_at",
+  "rejection_reason",
 ]);
 
 const PROFILE_PATCH_KEYS = new Set([
@@ -111,6 +112,20 @@ function pickProfilePatch(input: Record<string, unknown>) {
   }
   return out;
 }
+
+const LEGACY_DOC_COLUMNS: Record<string, string> = {
+  payslip_1: "payslip_url",
+  payslip_2: "payslip_2_url",
+  payslip_3: "payslip_3_url",
+  bank_statement_1: "bank_statement_url",
+  nrc_front: "nrc_front_url",
+  nrc_back: "nrc_back_url",
+  selfie_holding_nrc: "selfie_url",
+  selfie: "selfie_url",
+  collateral_image_1: "collateral_image_url",
+  collateral_image_2: "collateral_image_2_url",
+  collateral_image_3: "collateral_image_3_url",
+};
 
 function normalizePhoneForAuth(phone?: string | null) {
   const digits = String(phone || "").replace(/\D/g, "");
@@ -384,11 +399,14 @@ export class CoreWritesService {
     const admin = this.supabase.getAdminClient();
     const { data: loan, error: loanErr } = await admin
       .from("loan_applications")
-      .select("id, loan_product_id")
+      .select("id, user_id, loan_product_id")
       .eq("id", loanId)
       .maybeSingle();
     if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
     if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    if (actor.actorType !== "admin" && loan.user_id !== actor.userId) {
+      apiFail(HttpStatus.FORBIDDEN, "FORBIDDEN", "You can only attach documents to your own application");
+    }
 
     const rows = documents.map((doc) => ({
       application_id: loanId,
@@ -422,7 +440,74 @@ export class CoreWritesService {
       if (vaultErr) this.logger.warn(`vault insert: ${vaultErr.message}`);
     }
 
+    const legacyPatch: Record<string, string> = {};
+    for (const doc of documents) {
+      const col = LEGACY_DOC_COLUMNS[doc.doc_type];
+      if (col) legacyPatch[col] = doc.file_url;
+    }
+    if (Object.keys(legacyPatch).length > 0) {
+      const { error: legacyErr } = await admin.from("loan_applications").update(legacyPatch).eq("id", loanId);
+      if (legacyErr) this.logger.warn(`legacy doc columns: ${legacyErr.message}`);
+    }
+
     return { ok: true, data: { count: rows.length } };
+  }
+
+  async addLoanNote(
+    loanId: string,
+    dto: { note: string; visibleToBorrower?: boolean },
+    actor: AuthUser,
+  ) {
+    const text = dto.note.trim();
+    if (!text) apiFail(HttpStatus.BAD_REQUEST, "NOTE_REQUIRED", "Note text is required");
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    const visible = Boolean(dto.visibleToBorrower);
+    const { data: inserted, error } = await admin
+      .from("loan_notes")
+      .insert({
+        loan_id: loanId,
+        user_id: actor.userId,
+        note: text,
+        note_type: visible ? "visible_to_borrower" : "internal",
+        is_internal: !visible,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted) apiFail(HttpStatus.BAD_REQUEST, "NOTE_INSERT_FAILED", error?.message ?? "Could not add note");
+    return { ok: true, data: { id: inserted.id } };
+  }
+
+  async createWriteOff(dto: { loanId: string; amount: number; reason: string }, actor: AuthUser) {
+    const reason = dto.reason.trim();
+    if (!reason) apiFail(HttpStatus.BAD_REQUEST, "REASON_REQUIRED", "Write-off reason is required");
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, status")
+      .eq("id", dto.loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    const { data: inserted, error } = await admin
+      .from("loan_writeoffs")
+      .insert({
+        loan_id: dto.loanId,
+        writeoff_amount: dto.amount,
+        reason,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    if (error || !inserted) apiFail(HttpStatus.BAD_REQUEST, "WRITEOFF_INSERT_FAILED", error?.message ?? "Could not create write-off");
+    this.logger.log(`writeoff_created ${inserted.id} loan=${dto.loanId} by ${actor.userId}`);
+    return { ok: true, data: { id: inserted.id } };
   }
 
   async borrowerSignContract(loanId: string, signedContractUrl: string, actor: AuthUser) {

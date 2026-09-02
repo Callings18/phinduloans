@@ -39,7 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@phinduloans/shared/components/ui/dropdown-menu";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { recordLoanPayment, updateLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { disburseLoan, transitionLoanByAction } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -369,9 +369,8 @@ const AdminLoans = () => {
       const { calculateLoan } = await import("@phinduloans/shared/utils/loanCalculations");
       const calc = calculateLoan(principal, termValue, productSettings, termUnit);
 
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({
+      await updateLoanApplication(editingLoan.id, {
+        application: {
           loan_amount: principal,
           loan_term_months: termValue,
           interest_rate: rate,
@@ -379,11 +378,10 @@ const AdminLoans = () => {
           total_repayment: calc.totalRepayment,
           monthly_income: Number(editMonthlyIncome) || editingLoan.monthly_income,
           loan_purpose: editLoanPurpose,
-          employment_type: editEmploymentType as "employed" | "self_employed" | "contract" | "other",
+          employment_type: editEmploymentType,
           admin_notes: editAdminNotes || null,
-        })
-        .eq("id", editingLoan.id);
-      if (error) throw error;
+        },
+      });
 
       await logAudit({
         action: "LOAN_EDIT",

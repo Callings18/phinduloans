@@ -396,3 +396,20 @@ export async function borrowerSignContract(loanId: string, signedContractUrl: st
   }
   throw new Error("Set VITE_API_URL to record signed contracts through the API");
 }
+
+export async function addLoanNote(loanId: string, note: string, visibleToBorrower = false) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { id: string } }>(`/api/v1/loans/${loanId}/notes`, {
+      note,
+      visibleToBorrower,
+    });
+  }
+  throw new Error("Set VITE_API_URL to add loan notes through the API");
+}
+
+export async function createWriteOff(loanId: string, amount: number, reason: string) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { id: string } }>("/api/v1/write-offs", { loanId, amount, reason });
+  }
+  throw new Error("Set VITE_API_URL to create write-offs through the API");
+}

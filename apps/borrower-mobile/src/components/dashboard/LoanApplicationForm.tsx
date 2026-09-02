@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { createLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { createLoanApplication, registerLoanDocuments } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@phinduloans/shared/utils/loanCalculations";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { LOAN_APPLICATION_IDENTITY_DOC_TYPES, borrowerIdentityKycSatisfiedFromVault } from "@phinduloans/shared/constants/borrowerKycDocs";
@@ -538,7 +538,18 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         productCode: productCode || undefined,
       });
 
-      // Upload documents
+      const toRegister: Array<{
+        borrower_id: string;
+        doc_type: string;
+        doc_label: string;
+        file_url: string;
+        file_name: string;
+        mime_type?: string | null;
+        file_size?: number | null;
+        loan_product_id?: string | null;
+        saveToVault?: boolean;
+      }> = [];
+
       const docEntries = Object.entries(documentFiles).filter(([, file]) => file !== null);
       for (const [docType, file] of docEntries) {
         if (!file) continue;
@@ -554,8 +565,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         }
 
         const docMeta = requiredDocs.find(d => d.document_type === docType);
-        await supabase.from("application_documents").insert({
-          application_id: applicationId,
+        toRegister.push({
           borrower_id: user.id,
           doc_type: docType,
           doc_label: docMeta?.document_name || docType,
@@ -563,23 +573,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           file_url: filePath,
           file_size: file.size,
           mime_type: file.type,
-          is_required: docMeta?.is_mandatory ?? true,
           loan_product_id: selectedProduct.id,
-          status: "uploaded",
+          saveToVault: false,
         });
-
-        const columnMap: Record<string, string> = {
-          payslip_1: "payslip_url", payslip_2: "payslip_2_url", payslip_3: "payslip_3_url",
-          bank_statement_1: "bank_statement_url",
-          nrc_front: "nrc_front_url", nrc_back: "nrc_back_url",
-          selfie_holding_nrc: "selfie_url",
-        };
-        if (columnMap[docType]) {
-          await supabase.from("loan_applications").update({ [columnMap[docType]]: filePath }).eq("id", applicationId);
-        }
       }
 
-      // Link verified vault identity docs when borrower skipped re-upload in the form
       if (kycStatus?.isVerified) {
         const uploadedTypes = new Set(docEntries.map(([t]) => t));
         const vaultToAppDocType: Record<string, string> = {
@@ -587,12 +585,6 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           nrc_back: "nrc_back",
           selfie: "selfie_holding_nrc",
           selfie_holding_nrc: "selfie_holding_nrc",
-        };
-        const legacyColumnMap: Record<string, string> = {
-          nrc_front: "nrc_front_url",
-          nrc_back: "nrc_back_url",
-          selfie_holding_nrc: "selfie_url",
-          selfie: "selfie_url",
         };
         const { data: vaultDocs } = await supabase
           .from("borrower_document_vault")
@@ -603,27 +595,20 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
           const appDocType = vaultToAppDocType[vaultDoc.doc_type] ?? vaultDoc.doc_type;
           if (uploadedTypes.has(appDocType)) continue;
           const docMeta = requiredDocs.find((d) => d.document_type === appDocType);
-          await supabase.from("application_documents").insert({
-            application_id: applicationId,
+          toRegister.push({
             borrower_id: user.id,
             doc_type: appDocType,
             doc_label: docMeta?.document_name || vaultDoc.doc_label,
             file_name: vaultDoc.file_name,
             file_url: vaultDoc.file_url,
-            file_size: vaultDoc.file_size,
+            file_size: vaultDoc.file_size ?? undefined,
             mime_type: vaultDoc.mime_type,
-            is_required: docMeta?.is_mandatory ?? true,
             loan_product_id: selectedProduct.id,
-            status: vaultDoc.is_verified ? "verified" : "uploaded",
+            saveToVault: false,
           });
-          const legacyCol = legacyColumnMap[vaultDoc.doc_type];
-          if (legacyCol) {
-            await supabase.from("loan_applications").update({ [legacyCol]: vaultDoc.file_url }).eq("id", applicationId);
-          }
         }
       }
 
-      // Upload collateral images
       for (let i = 0; i < collateralImages.length; i++) {
         const file = collateralImages[i];
         const filePath = `${user.id}/${applicationId}/collateral_${i + 1}_${Date.now()}.${file.name.split('.').pop()}`;
@@ -634,11 +619,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         if (uploadErr) {
           submitWarnings.push(`Collateral image ${i + 1} could not be uploaded.`);
         } else {
-          const colField = i === 0 ? "collateral_image_url" : i === 1 ? "collateral_image_2_url" : "collateral_image_3_url";
-          await supabase.from("loan_applications").update({ [colField]: filePath }).eq("id", applicationId);
-
-          await supabase.from("application_documents").insert({
-            application_id: applicationId,
+          toRegister.push({
             borrower_id: user.id,
             doc_type: `collateral_image_${i + 1}`,
             doc_label: `Collateral Image ${i + 1}`,
@@ -646,11 +627,14 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
             file_url: filePath,
             file_size: file.size,
             mime_type: file.type,
-            is_required: true,
             loan_product_id: selectedProduct.id,
-            status: "uploaded",
+            saveToVault: false,
           });
         }
+      }
+
+      if (toRegister.length > 0) {
+        await registerLoanDocuments(applicationId, toRegister);
       }
 
       toast({ title: "Application Submitted!", description: "Your loan application has been submitted for review." });

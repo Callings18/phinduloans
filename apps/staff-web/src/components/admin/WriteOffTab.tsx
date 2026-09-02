@@ -46,6 +46,11 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { generateClearanceCertificate, downloadClearanceCertificate } from "@/utils/generateClearanceCertificate";
+import {
+  approveWriteOff,
+  createWriteOff,
+  recordWriteOffRecovery,
+} from "@phinduloans/shared/services/repositories/coreWritesRepository";
 
 interface Loan {
   id: string;
@@ -100,16 +105,8 @@ export default function WriteOffTab({ loan, totalPaid, totalPending }: WriteOffT
   // Create write-off mutation
   const createWriteOffMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("loan_writeoffs").insert({
-        loan_id: loan.id,
-        writeoff_amount: Number(writeOffAmount),
-        reason: writeOffReason,
-        status: "pending",
-      });
+      await createWriteOff(loan.id, Number(writeOffAmount), writeOffReason);
 
-      if (error) throw error;
-
-      // Log collection activity
       await supabase.from("collection_activities").insert({
         loan_id: loan.id,
         activity_type: "writeoff_initiated",
@@ -132,31 +129,8 @@ export default function WriteOffTab({ loan, totalPaid, totalPending }: WriteOffT
   // Approve write-off mutation
   const approveWriteOffMutation = useMutation({
     mutationFn: async () => {
-      const { error: writeOffError } = await supabase
-        .from("loan_writeoffs")
-        .update({
-          status: "approved",
-          approved_at: new Date().toISOString(),
-        })
-        .eq("id", writeOff?.id);
-
-      if (writeOffError) throw writeOffError;
-
-      // Update loan status to defaulted
-      const { error: loanError } = await supabase
-        .from("loan_applications")
-        .update({ status: "defaulted" })
-        .eq("id", loan.id);
-
-      if (loanError) throw loanError;
-
-      // Log activity
-      await supabase.from("collection_activities").insert({
-        loan_id: loan.id,
-        activity_type: "writeoff_approved",
-        notes: `Write-off approved. Amount: K${Number(writeOff?.writeoff_amount || 0).toLocaleString()}`,
-        outcome: "Loan written off",
-      });
+      if (!writeOff?.id) throw new Error("No write-off found");
+      await approveWriteOff(writeOff.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-writeoff", loan.id] });
@@ -174,26 +148,7 @@ export default function WriteOffTab({ loan, totalPaid, totalPending }: WriteOffT
   const recordRecoveryMutation = useMutation({
     mutationFn: async () => {
       if (!writeOff) throw new Error("No write-off found");
-
-      const newRecoveryAmount = (writeOff.recovery_amount || 0) + Number(recoveryAmount);
-
-      const { error } = await supabase
-        .from("loan_writeoffs")
-        .update({
-          recovery_amount: newRecoveryAmount,
-          recovery_notes: `${writeOff.recovery_notes || ""}\n[${format(new Date(), "yyyy-MM-dd")}] Recovered K${Number(recoveryAmount).toLocaleString()}: ${recoveryNotes}`.trim(),
-        })
-        .eq("id", writeOff.id);
-
-      if (error) throw error;
-
-      // Log activity
-      await supabase.from("collection_activities").insert({
-        loan_id: loan.id,
-        activity_type: "recovery_recorded",
-        notes: `Recovery recorded: K${Number(recoveryAmount).toLocaleString()}. ${recoveryNotes}`,
-        outcome: `Total recovered: K${newRecoveryAmount.toLocaleString()}`,
-      });
+      await recordWriteOffRecovery(writeOff.id, Number(recoveryAmount), recoveryNotes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-writeoff", loan.id] });

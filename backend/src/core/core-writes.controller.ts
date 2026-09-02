@@ -8,8 +8,10 @@ import {
   BorrowerSignContractDto,
   CreateApplicationDto,
   CreateBorrowerDto,
+  CreateLoanNoteDto,
   CreatePendingDisbursementDto,
   CreateStaffDto,
+  CreateWriteOffDto,
   DeleteLoanDto,
   RecordPaymentDto,
   RecoverWriteOffDto,
@@ -77,6 +79,13 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Mark loan completed when schedule is fully paid" })
   reconcile(@Param("loanId") loanId: string) {
     return this.core.reconcileCompletion(loanId);
+  }
+
+  @Post("write-offs")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Create a pending write-off request" })
+  createWriteOff(@Body() dto: CreateWriteOffDto, @CurrentUser() user: AuthUser) {
+    return this.core.createWriteOff(dto, user);
   }
 
   @Post("write-offs/:id/approve")
@@ -179,7 +188,6 @@ export class CoreWritesController {
   }
 
   @Post("loans/:loanId/documents")
-  @UseGuards(StaffGuard)
   @ApiOperation({ summary: "Register uploaded KYC/document metadata after storage upload" })
   registerDocuments(
     @Param("loanId") loanId: string,
@@ -197,5 +205,16 @@ export class CoreWritesController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.core.borrowerSignContract(loanId, dto.signedContractUrl, user);
+  }
+
+  @Post("loans/:loanId/notes")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Add an internal or borrower-visible loan note" })
+  addLoanNote(
+    @Param("loanId") loanId: string,
+    @Body() dto: CreateLoanNoteDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.core.addLoanNote(loanId, dto, user);
   }
 }

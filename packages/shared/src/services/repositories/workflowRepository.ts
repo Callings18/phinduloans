@@ -180,18 +180,7 @@ export async function transitionLoanStatus(input: {
       }
       return;
     }
-    const { data: sessionData } = await supabase.auth.getUser();
-    const uid = sessionData.user?.id ?? null;
-    const { error } = await supabase
-      .from("loan_applications")
-      .update({
-        status: "under_review",
-        reviewed_by: uid,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq("id", input.loanId);
-    if (error) throw error;
-    return;
+    throw new Error("Set VITE_API_URL to move loans to under review through the API");
   }
 
   const actionMap: Record<string, string> = {
