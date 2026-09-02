@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { AuthUser } from "../auth/auth-user";
 import { SupabaseService } from "../auth/supabase.service";
 import { apiFail } from "../common/http";
+import { roundZmw } from "../money/as-money";
 import { insertRepaymentSchedule } from "./repayment-schedule";
 import type { ReloanDto, RestructureLoanDto, TopUpLoanDto } from "./dto/core-writes.dto";
 
@@ -552,17 +553,25 @@ export class CoreWritesService {
       .maybeSingle();
     if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
     if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    const amount = roundZmw(dto.amount);
     const { data: inserted, error } = await admin
       .from("loan_writeoffs")
       .insert({
         loan_id: dto.loanId,
-        writeoff_amount: dto.amount,
+        writeoff_amount: amount,
         reason,
         status: "pending",
       })
       .select("id")
       .single();
     if (error || !inserted) apiFail(HttpStatus.BAD_REQUEST, "WRITEOFF_INSERT_FAILED", error?.message ?? "Could not create write-off");
+    await admin.from("collection_activities").insert({
+      loan_id: dto.loanId,
+      activity_type: "writeoff_initiated",
+      notes: `Write-off initiated for K${amount.toLocaleString()}. Reason: ${reason}`,
+      outcome: "Pending approval",
+      staff_id: actor.userId,
+    });
     this.logger.log(`writeoff_created ${inserted.id} loan=${dto.loanId} by ${actor.userId}`);
     return { ok: true, data: { id: inserted.id } };
   }
@@ -641,14 +650,14 @@ export class CoreWritesService {
     const admin = this.supabase.getAdminClient();
     const args: Record<string, unknown> = {
       p_repayment_id: repaymentId,
-      p_amount: dto.amount,
+      p_amount: roundZmw(dto.amount),
       p_payment_method: dto.paymentMethod || "cash",
       p_account_id: dto.accountId || null,
       p_transaction_reference: dto.transactionReference || `PAY-${Date.now()}`,
       p_paid_date: dto.paidDate || new Date().toISOString().slice(0, 10),
     };
     if (dto.penaltyAmount !== undefined && dto.penaltyAmount > 0) {
-      args.p_penalty_amount = dto.penaltyAmount;
+      args.p_penalty_amount = roundZmw(dto.penaltyAmount);
     }
     const { data, error } = await admin.rpc("record_loan_payment", args);
     if (error) apiFail(HttpStatus.BAD_REQUEST, "PAYMENT_RPC_FAILED", error.message);
@@ -1018,7 +1027,7 @@ export class CoreWritesService {
       .from("disbursements")
       .insert({
         loan_id: dto.loanId,
-        amount: dto.amount,
+        amount: roundZmw(dto.amount),
         disbursement_method: dto.disbursementMethod,
         mobile_money_number: dto.mobileMoneyNumber || null,
         account_number: dto.accountNumber || null,
@@ -1031,6 +1040,25 @@ export class CoreWritesService {
       apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", error?.message || "Could not create disbursement");
     }
     return { ok: true, data: { id: inserted.id } };
+  }
+
+  async generateSchedule(loanId: string, regenerateRemaining: boolean) {
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error } = await admin
+      .from("loan_applications")
+      .select(
+        "id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit, repayment_start_date, disbursed_at",
+      )
+      .eq("id", loanId)
+      .maybeSingle();
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", error.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    try {
+      await insertRepaymentSchedule(admin, loan, { regenerateRemaining });
+    } catch (err) {
+      apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_FAILED", err instanceof Error ? err.message : "Could not generate schedule");
+    }
+    return { ok: true, data: { id: loanId } };
   }
 
   async reloan(loanId: string, dto: ReloanDto, actor: AuthUser) {
@@ -1233,14 +1261,14 @@ export class CoreWritesService {
       reason: dto.reason || "Top-up applied",
       previous_values: dto.previousValues || {},
       new_values: dto.newValues || {},
-      amount: dto.additionalAmount,
-      fees_charged: dto.totalFees,
-      net_amount: dto.netDisbursement,
+      amount: roundZmw(dto.additionalAmount),
+      fees_charged: roundZmw(dto.totalFees),
+      net_amount: roundZmw(dto.netDisbursement),
       source_account_id: dto.sourceAccountId,
     });
     if (evErr) apiFail(HttpStatus.BAD_REQUEST, "EVENT_INSERT_FAILED", evErr.message);
 
-    return { ok: true, data: { additionalAmount: dto.additionalAmount, netDisbursement: dto.netDisbursement } };
+    return { ok: true, data: { additionalAmount: roundZmw(dto.additionalAmount), netDisbursement: roundZmw(dto.netDisbursement) } };
   }
 
   async restructureLoan(loanId: string, dto: RestructureLoanDto, actor: AuthUser) {

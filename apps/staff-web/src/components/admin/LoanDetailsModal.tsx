@@ -116,7 +116,7 @@ import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getCanonicalStatusLabel } from "@phinduloans/shared/constants/loanStatusLabels";
-import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
+import { generateLoanRepaymentSchedule } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { calculateLoan } from "@phinduloans/shared/utils/loanCalculations";
 import { calculateLoanBalanceSnapshot } from "@phinduloans/shared/utils/loanBalance";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@phinduloans/shared/components/ui/tooltip";
@@ -723,18 +723,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const generateScheduleMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: loan.loan_term_months,
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          loan_product_id: loan.loan_product_id,
-          term_unit: (loan as any).term_unit,
-        },
-        supabase
-      );
+      await generateLoanRepaymentSchedule(loan.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });

@@ -28,6 +28,7 @@
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
     "test:e2e:borrower": "playwright test tests/e2e/borrower-critical.spec.ts",
     "test:e2e:phase4": "playwright test tests/e2e/phase4-borrower-apply.spec.ts",
+    "seed:super-admin": "node scripts/seed-super-admin.mjs",
     "seed:staging-uat": "node scripts/seed-staging-uat.mjs",
     "stress:readonly": "node scripts/stress-readonly-smoke.mjs",
     "test:e2e:headed": "playwright test tests/e2e/smoke.spec.ts --headed",

@@ -203,10 +203,11 @@ No service-role key was found in frontend source. Edge functions correctly use `
 
 **Today’s ops blockers (cannot be done from git alone):**
 
-1. Redeploy Nest **api**, then **staff-web**, with `VITE_API_URL` pointing at the public API.
-2. Redeploy Supabase Edge `send-otp` / `verify-otp`.
-3. Disconnect Lovable from production publish.
-4. UAT one house: staff login → apply → approve → disburse → repayment.
+1. Create a **new empty Supabase project** you own (new DB password). Apply `supabase/migrations`. Seed super-admin (`scripts/seed-super-admin.mjs`).
+2. Deploy **four** Railway services from this repo: `api`, `marketing`, `office`, `borrower` — see `deploy/RAILWAY.md`.
+3. Set Nest `EXCITESMS_*` + `BORROWER_APP_URL`. Borrower OTP is Nest (`/api/v1/auth/otp/*`), not Edge.
+4. Freeze/disconnect Lovable so it cannot republish.
+5. UAT one house: staff email → apply → approve → disburse → repay; borrower phone OTP.
 
 ---
 

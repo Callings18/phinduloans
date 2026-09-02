@@ -13,6 +13,7 @@ import {
   CreateStaffDto,
   CreateWriteOffDto,
   DeleteLoanDto,
+  GenerateScheduleDto,
   RecordPaymentDto,
   RecoverWriteOffDto,
   RegisterLoanDocumentsDto,
@@ -189,6 +190,16 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Create a pending disbursement (complete separately)" })
   createPending(@Body() dto: CreatePendingDisbursementDto) {
     return this.core.createPendingDisbursement(dto);
+  }
+
+  @Post("loans/:loanId/schedule")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Insert or regenerate the repayment schedule (no browser writes)" })
+  generateSchedule(
+    @Param("loanId") loanId: string,
+    @Body() dto: GenerateScheduleDto = {},
+  ) {
+    return this.core.generateSchedule(loanId, dto.regenerateRemaining === true);
   }
 
   @Post("loans/:loanId/reloan")

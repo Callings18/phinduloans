@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1
-# One repo → Railway services. Trial plan allows two services:
-#   api  → PHINDU_SERVICE=api
-#   web  → PHINDU_SERVICE=web  (landing + /admin + /borrower)
-# After upgrade, split with office | marketing | borrower.
+# One repo → Railway services. Preferred split (see deploy/RAILWAY.md):
+#   api | marketing | office | borrower
+# Trial (two services): api + web (landing + /admin + /borrower).
 ARG PHINDU_SERVICE=web
 
 # ---------- Nest API ----------

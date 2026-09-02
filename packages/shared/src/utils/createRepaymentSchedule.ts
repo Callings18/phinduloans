@@ -5,6 +5,7 @@
 import { format, addDays, addMonths } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getBusinessCalendar, nextBusinessDay } from "@phinduloans/shared/lib/businessCalendar";
+import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
 
 export interface LoanForSchedule {
   id: string;
@@ -33,6 +34,9 @@ export async function createRepaymentScheduleForLoan(
   supabase: SupabaseClient,
   options: { regenerateRemaining?: boolean } = {}
 ): Promise<void> {
+  if (apiFeatureFlags.coreWrites) {
+    throw new Error("Use generateLoanRepaymentSchedule — repayment rows are written by Nest");
+  }
   const regenerate = options.regenerateRemaining === true;
 
   // Find existing rows that must NOT be overwritten (paid/partial keep their installment_number).

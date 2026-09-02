@@ -6,6 +6,7 @@ import { HealthModule } from "./health/health.module";
 import { LoanProductsModule } from "./loan-products/loan-products.module";
 import { LoansModule } from "./loans/loans.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { OtpModule } from "./otp/otp.module";
 import { PaymentClaimsModule } from "./payment-claims/payment-claims.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
@@ -20,6 +21,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     LoansModule,
     PaymentClaimsModule,
     NotificationsModule,
+    OtpModule,
   ],
 })
 export class AppModule {}

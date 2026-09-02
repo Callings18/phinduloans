@@ -480,6 +480,13 @@ export class CreateWriteOffDto {
   reason!: string;
 }
 
+export class GenerateScheduleDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  regenerateRemaining?: boolean;
+}
+
 export class UpsertLoanDraftDto {
   @ApiProperty()
   @IsString()

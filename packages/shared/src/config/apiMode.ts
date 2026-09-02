@@ -18,4 +18,5 @@ export const apiFeatureFlags = {
   loanProducts: envBool("VITE_API_LOAN_PRODUCTS") || useNestWrites,
   phase1Workflow: useNestWrites,
   coreWrites: useNestWrites,
+  otp: useNestWrites,
 } as const;

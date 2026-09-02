@@ -66,8 +66,14 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
 function parseApiError(status: number, body: string, statusText: string): Error {
   try {
-    const j = JSON.parse(body) as { error?: { message?: string; code?: string }; message?: string };
-    const msg = j.error?.message ?? j.message ?? j.error?.code ?? body;
+    const j = JSON.parse(body) as {
+      error?: { message?: string; code?: string } | string;
+      message?: string;
+    };
+    const errPart = j.error;
+    const nested =
+      typeof errPart === "string" ? errPart : errPart?.message ?? errPart?.code;
+    const msg = nested ?? j.message ?? body;
     return new Error(`API ${status}: ${msg}`);
   } catch {
     return new Error(`API ${status}: ${body || statusText}`);

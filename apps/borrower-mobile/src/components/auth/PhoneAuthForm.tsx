@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { apiPost } from "@phinduloans/shared/api/httpClient";
+import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Label } from "@phinduloans/shared/components/ui/label";
@@ -60,7 +62,9 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
     if (/^\+?260\d{9}$/.test(compact) || /^260\d{9}$/.test(compact)) {
       return "Could not complete phone verification. Please try again or contact support.";
     }
-    if (/edge function/i.test(message) || /non-2xx/i.test(message)) {
+    if (/edge function/i.test(message) || /non-2xx/i.test(message) || /^API \d+:/i.test(message)) {
+      const stripped = message.replace(/^API \d+:\s*/i, "");
+      if (stripped && stripped !== message) return sanitizeAuthError(stripped);
       return "SMS service is temporarily unavailable. Please try again in a moment.";
     }
     return message;
@@ -115,12 +119,18 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
     setIsLoading(true);
     try {
       const normalizedPhone = normalizePhoneToE164(phone);
-      const { data, error } = await supabase.functions.invoke("send-otp", {
-        body: { phone: normalizedPhone, purpose },
-      });
-      if (error) {
-        const msg = await parseInvokeError(error);
-        throw new Error(msg);
+      let data: { success?: boolean; error?: string } | null = null;
+      if (apiFeatureFlags.otp) {
+        data = await apiPost("/api/v1/auth/otp/send", { phone: normalizedPhone, purpose });
+      } else {
+        const invoked = await supabase.functions.invoke("send-otp", {
+          body: { phone: normalizedPhone, purpose },
+        });
+        if (invoked.error) {
+          const msg = await parseInvokeError(invoked.error);
+          throw new Error(msg);
+        }
+        data = invoked.data;
       }
       if (!data?.success) throw new Error(sanitizeAuthError(data?.error || "Failed to send OTP"));
 
@@ -152,10 +162,22 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
         body.nrcNumber = nrcNumber;
       }
 
-      const { data, error } = await supabase.functions.invoke("verify-otp", { body });
-      if (error) {
-        const msg = await parseInvokeError(error);
-        throw new Error(msg);
+      let data: {
+        success?: boolean;
+        error?: string;
+        tokenHash?: string;
+        magicLink?: string;
+        userId?: string;
+      } | null = null;
+      if (apiFeatureFlags.otp) {
+        data = await apiPost("/api/v1/auth/otp/verify", body);
+      } else {
+        const invoked = await supabase.functions.invoke("verify-otp", { body });
+        if (invoked.error) {
+          const msg = await parseInvokeError(invoked.error);
+          throw new Error(msg);
+        }
+        data = invoked.data;
       }
       if (!data?.success) throw new Error(sanitizeAuthError(data?.error || "Verification failed"));
 

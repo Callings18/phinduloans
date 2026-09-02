@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import type { AuthUser } from "../auth/auth-user";
 import { SupabaseService } from "../auth/supabase.service";
 import { apiFail } from "../common/http";
+import { roundZmw } from "../money/as-money";
 import { assertValidTransition } from "./loan-status.machine";
 
 const STATUS_TO_ACTION: Record<string, string> = {
@@ -230,7 +231,7 @@ export class LoansService {
       .from("disbursements")
       .insert({
         loan_id: loanId,
-        amount: dto.amount,
+        amount: roundZmw(dto.amount),
         disbursement_method: dto.disbursementMethod,
         account_number: dto.accountNumber || null,
         mobile_money_number: dto.mobileMoneyNumber || null,

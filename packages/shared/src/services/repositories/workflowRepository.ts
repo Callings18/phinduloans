@@ -1,7 +1,6 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { apiGet, apiPost, getApiBaseUrl } from "@phinduloans/shared/api/httpClient";
+import { apiGet, apiPost } from "@phinduloans/shared/api/httpClient";
 import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
-import { repaymentRemainingKwacha } from "@phinduloans/shared/utils/repaymentRemaining";
 
 export interface LoanEvent {
   id: string;
@@ -19,20 +18,10 @@ export interface PaymentClaimInput {
   receiptUrl?: string | null;
 }
 
-function assertRpcOk(data: unknown) {
-  if (data == null) return;
-  if (typeof data === "object" && data !== null) {
-    const result = data as { ok?: boolean; success?: boolean; error?: string };
-    if (result.ok === false || result.success === false) {
-      throw new Error(result.error || "Transition failed");
-    }
-  }
-}
-
 export async function submitPaymentClaim(
   repaymentId: string,
   payload: PaymentClaimInput,
-  fallbackData?: { loanId: string; userId: string },
+  _fallbackData?: { loanId: string; userId: string },
 ) {
   if (apiFeatureFlags.phase1Workflow) {
     const res = await apiPost<{
@@ -58,41 +47,7 @@ export async function submitPaymentClaim(
     return (res as { data?: unknown })?.data;
   }
 
-  if (fallbackData) {
-    const { data: repRow, error: repFetchErr } = await supabase
-      .from("loan_repayments")
-      .select("amount, original_amount, principal_paid")
-      .eq("id", repaymentId)
-      .single();
-    if (repFetchErr || !repRow) throw new Error("Repayment not found");
-    const maxRemaining = repaymentRemainingKwacha(repRow);
-    const amt = Math.round(payload.amount * 100) / 100;
-    if (amt > maxRemaining + 0.009) {
-      throw new Error(
-        `Claim amount cannot exceed the remaining installment balance (K${maxRemaining.toLocaleString()}).`,
-      );
-    }
-
-    const { data, error } = await supabase
-      .from("payment_claims")
-      .insert({
-        repayment_id: repaymentId,
-        loan_id: fallbackData.loanId,
-        user_id: fallbackData.userId,
-        amount: payload.amount,
-        reference: payload.reference,
-        receipt_url: payload.receiptUrl ?? null,
-        // Match apps/api-next POST so admin queues and borrower UI stay aligned
-        status: "pending_review",
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
-  throw new Error(
-    `Payment claims: set VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL (API base is ${getApiBaseUrl()}), or set VITE_API_PHASE1_WORKFLOW=false for direct Supabase inserts.`,
-  );
+  throw new Error("Set VITE_API_URL so payment claims go through Nest");
 }
 
 /** Borrower-visible payment claims (same table whether created via API or Supabase). */
@@ -210,13 +165,7 @@ export async function transitionLoanByAction(loanId: string, action: string, rea
     return;
   }
 
-  const { data, error } = await supabase.rpc("transition_loan_status", {
-    p_loan_id: loanId,
-    p_action: action,
-    p_reason: reason ?? null,
-  });
-  if (error) throw error;
-  assertRpcOk(data);
+  throw new Error("Set VITE_API_URL so loan transitions go through Nest");
 }
 
 export async function completeDisbursement(params: {
@@ -238,16 +187,7 @@ export async function completeDisbursement(params: {
     return;
   }
 
-  const { data, error } = await supabase.rpc("complete_disbursement", {
-    p_disbursement_id: params.disbursementId,
-    p_account_id: params.accountId,
-    p_transaction_reference: params.transactionReference || null,
-  });
-  if (error) throw error;
-  const result = data as { success?: boolean; ok?: boolean; error?: string } | null;
-  if (result?.ok === false || result?.success === false) {
-    throw new Error(result?.error || "Failed to complete disbursement");
-  }
+  throw new Error("Set VITE_API_URL so disbursement completion goes through Nest");
 }
 
 export async function disburseLoan(params: {
@@ -277,30 +217,5 @@ export async function disburseLoan(params: {
     return;
   }
 
-  const { data: inserted, error: disbError } = await supabase
-    .from("disbursements")
-    .insert({
-      loan_id: params.loanId,
-      amount: params.amount,
-      disbursement_method: params.disbursementMethod,
-      account_number: params.accountNumber || null,
-      mobile_money_number: params.mobileMoneyNumber || null,
-      transaction_reference: params.transactionReference || null,
-      status: "pending",
-      source_account_id: params.accountId,
-    })
-    .select("id")
-    .single();
-  if (disbError || !inserted?.id) throw disbError ?? new Error("Could not create disbursement");
-
-  try {
-    await completeDisbursement({
-      disbursementId: inserted.id,
-      accountId: params.accountId,
-      transactionReference: params.transactionReference,
-    });
-  } catch (err) {
-    await supabase.from("disbursements").delete().eq("id", inserted.id);
-    throw err;
-  }
+  throw new Error("Set VITE_API_URL so disbursements go through Nest");
 }

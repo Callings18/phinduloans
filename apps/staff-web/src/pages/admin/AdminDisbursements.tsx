@@ -387,17 +387,7 @@ const AdminDisbursements = () => {
         accountId: disbursement.source_account_id,
         transactionReference: null,
       });
-
-      // Generate repayment schedule client-side (DB trigger may also do it; this
-      // is idempotent because createRepaymentScheduleForLoan checks first).
-      const { data: freshLoan, error: loanFetchError } = await supabase
-        .from("loan_applications")
-        .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id, term_unit")
-        .eq("id", disbursement.loan_id)
-        .single();
-      if (!loanFetchError && freshLoan) {
-        await createRepaymentScheduleForLoan(freshLoan, supabase);
-      }
+      // Schedule is created by complete_disbursement / Nest — do not insert from the browser.
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["disbursements"] });

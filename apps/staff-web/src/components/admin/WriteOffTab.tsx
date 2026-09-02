@@ -106,13 +106,6 @@ export default function WriteOffTab({ loan, totalPaid, totalPending }: WriteOffT
   const createWriteOffMutation = useMutation({
     mutationFn: async () => {
       await createWriteOff(loan.id, Number(writeOffAmount), writeOffReason);
-
-      await supabase.from("collection_activities").insert({
-        loan_id: loan.id,
-        activity_type: "writeoff_initiated",
-        notes: `Write-off initiated for K${Number(writeOffAmount).toLocaleString()}. Reason: ${writeOffReason}`,
-        outcome: "Pending approval",
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-writeoff", loan.id] });
