@@ -25,3 +25,9 @@ dist-ssr
 
 # Playwright / test artifacts
 test-results/
+
+# Secrets (never commit)
+.env
+.env.*
+!.env.example
+
