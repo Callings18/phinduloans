@@ -83,7 +83,7 @@ import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/compon
 import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
-import { createLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { createLoanApplication, deleteLoanApplication, updateLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import {
   disburseLoan,
   transitionLoanByAction,
@@ -679,8 +679,7 @@ const AdminApplications = () => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('loan_applications').delete().eq('id', id);
-      if (error) throw error;
+      await deleteLoanApplication(id);
 
       await logAudit({
         action: "DELETE",
@@ -712,12 +711,7 @@ const AdminApplications = () => {
   // Assign application mutation
   const assignMutation = useMutation({
     mutationFn: async ({ id, staffId }: { id: string; staffId: string }) => {
-      const { error } = await supabase
-        .from('loan_applications')
-        .update({ assigned_to: staffId || null } as any)
-        .eq('id', id);
-
-      if (error) throw error;
+      await updateLoanApplication(id, { application: { assigned_to: staffId || null } });
 
       await logAudit({
         action: "ASSIGN",
@@ -856,16 +850,14 @@ const AdminApplications = () => {
         .upload(fileName, file, { contentType: file.type, upsert: true });
       if (uploadError) throw uploadError;
       const now = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from("loan_applications")
-        .update({
+      await updateLoanApplication(applicationId, {
+        application: {
           signed_contract_url: fileName,
           borrower_signed: true,
           borrower_signed_at: now,
           signed_contract_uploaded_at: now,
-        })
-        .eq("id", applicationId);
-      if (updateError) throw updateError;
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
@@ -880,17 +872,15 @@ const AdminApplications = () => {
   const adminSignContractMutation = useMutation({
     mutationFn: async ({ applicationId, borrowerSignedAt }: { applicationId: string; borrowerSignedAt?: string | null }) => {
       const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({
+      await updateLoanApplication(applicationId, {
+        application: {
           admin_signed: true,
           admin_signed_at: now,
           admin_signed_by: user?.id ?? null,
           borrower_signed: true,
           borrower_signed_at: borrowerSignedAt || now,
-        })
-        .eq("id", applicationId);
-      if (error) throw error;
+        },
+      });
       await logAudit({
         action: 'CONTRACT_SIGNED_ADMIN',
         entity_type: 'loan_application',
@@ -1011,15 +1001,13 @@ const AdminApplications = () => {
         reasonText: "Application recommended for admin review",
       });
 
-      const { error: metadataError } = await supabase
-        .from("loan_applications")
-        .update({
+      await updateLoanApplication(selectedApp.id, {
+        application: {
           approval_stage: "recommended",
           recommended_by: user?.id,
           recommended_at: new Date().toISOString(),
-        })
-        .eq("id", selectedApp.id);
-      if (metadataError) throw metadataError;
+        },
+      });
       await logAudit({
         action: "RECOMMEND",
         entity_type: "loan_application",
@@ -1214,15 +1202,10 @@ const AdminApplications = () => {
       case 'assign':
         // Bulk assign to officer
         if (!inputValue) throw new Error('Please select an officer');
-        const assignPromises = selectedApplications.map(id =>
-          supabase.from('loan_applications').update({
-            assigned_to: inputValue,
-            status: 'under_review'
-          }).eq('id', id)
-        );
-        const assignResults = await Promise.all(assignPromises);
-        for (const r of assignResults) {
-          if (r.error) throw r.error;
+        for (const id of selectedApplications) {
+          await updateLoanApplication(id, {
+            application: { assigned_to: inputValue, status: "under_review" },
+          });
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
@@ -1292,12 +1275,8 @@ const AdminApplications = () => {
 
       case 'delete':
         // Bulk delete
-        const deletePromises = selectedApplications.map(id =>
-          supabase.from('loan_applications').delete().eq('id', id)
-        );
-        const deleteResults = await Promise.all(deletePromises);
-        for (const r of deleteResults) {
-          if (r.error) throw r.error;
+        for (const id of selectedApplications) {
+          await deleteLoanApplication(id);
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);

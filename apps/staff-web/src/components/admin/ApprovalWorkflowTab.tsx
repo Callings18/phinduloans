@@ -26,6 +26,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { notifyBorrowerVisibleNote } from "@phinduloans/shared/utils/notifyBorrowerPortal";
 import { transitionLoanByAction } from "@phinduloans/shared/services/repositories/workflowRepository";
+import { updateLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 
 interface ApprovalWorkflowTabProps {
   loan: {
@@ -213,11 +214,7 @@ export default function ApprovalWorkflowTab({ loan }: ApprovalWorkflowTabProps) 
         throw new Error("Disburse from Loans, Applications, or the loan Disburse action so accounts and the schedule stay in sync.");
       }
 
-      const { error } = await supabase
-        .from("loan_applications")
-        .update(updateData)
-        .eq("id", loan.id);
-      if (error) throw error;
+      await updateLoanApplication(loan.id, { application: updateData });
 
       await logAudit({
         action: `WORKFLOW_${stageKey.toUpperCase()}`,

@@ -6,6 +6,112 @@ import { apiFail } from "../common/http";
 import { insertRepaymentSchedule } from "./repayment-schedule";
 import type { ReloanDto, RestructureLoanDto, TopUpLoanDto } from "./dto/core-writes.dto";
 
+const PRE_MONEY_STATUSES = new Set([
+  "pending",
+  "under_review",
+  "approved",
+  "contract_signing",
+  "awaiting_disbursement",
+  "rejected",
+  "crb_failed",
+  "pmic_pending",
+]);
+
+const MONEY_STATUSES = new Set(["disbursed", "active", "completed", "defaulted"]);
+
+const SAFE_ON_ACTIVE_KEYS = new Set([
+  "admin_notes",
+  "contract_url",
+  "approval_stage",
+  "document_verified_by",
+  "document_verified_at",
+  "recommended_by",
+  "recommended_at",
+  "approved_by",
+  "approved_at",
+  "reviewed_by",
+  "reviewed_at",
+  "updated_at",
+  "assigned_to",
+]);
+
+const LOAN_PATCH_KEYS = new Set([
+  "loan_amount",
+  "loan_term_months",
+  "loan_purpose",
+  "collateral_description",
+  "collateral_value",
+  "full_name",
+  "email",
+  "phone",
+  "nrc_number",
+  "address",
+  "city",
+  "monthly_income",
+  "employer_name",
+  "job_title",
+  "employment_type",
+  "employment_duration",
+  "admin_notes",
+  "total_repayment",
+  "monthly_payment",
+  "interest_rate",
+  "repayment_start_date",
+  "product_specific_data",
+  "status",
+  "term_unit",
+  "contract_url",
+  "signed_contract_url",
+  "borrower_signed",
+  "borrower_signed_at",
+  "admin_signed",
+  "admin_signed_at",
+  "admin_signed_by",
+  "signed_contract_uploaded_at",
+  "assigned_to",
+  "document_verified_by",
+  "document_verified_at",
+  "recommended_by",
+  "recommended_at",
+  "approval_stage",
+  "approved_by",
+  "approved_at",
+  "reviewed_by",
+  "reviewed_at",
+  "updated_at",
+]);
+
+const PROFILE_PATCH_KEYS = new Set([
+  "full_name",
+  "email",
+  "phone",
+  "nrc_number",
+  "address",
+  "city",
+  "employer_name",
+  "job_title",
+  "employment_type",
+  "net_income",
+  "gender",
+  "marital_status",
+]);
+
+function pickLoanPatch(input: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (LOAN_PATCH_KEYS.has(key)) out[key] = value;
+  }
+  return out;
+}
+
+function pickProfilePatch(input: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (PROFILE_PATCH_KEYS.has(key)) out[key] = value;
+  }
+  return out;
+}
+
 function normalizePhoneForAuth(phone?: string | null) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return null;
@@ -200,6 +306,152 @@ export class CoreWritesService {
     }
 
     return { ok: true, data: { id: inserted.id } };
+  }
+
+  async updateLoan(
+    loanId: string,
+    dto: {
+      application?: Record<string, unknown>;
+      borrowers?: Record<string, unknown>[];
+      profile?: Record<string, unknown>;
+      profileUserId?: string;
+    },
+    actor: AuthUser,
+  ) {
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, status, user_id, loan_product_id")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const patch = pickLoanPatch(dto.application || {});
+    this.assertLoanPatchAllowed(loan.status, patch);
+
+    if (Object.keys(patch).length > 0) {
+      const { error: updErr } = await admin.from("loan_applications").update(patch).eq("id", loanId);
+      if (updErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_UPDATE_FAILED", updErr.message);
+    }
+
+    if (dto.borrowers) {
+      if (!PRE_MONEY_STATUSES.has(loan.status)) {
+        apiFail(HttpStatus.CONFLICT, "NOT_EDITABLE", "Borrowers can only be changed before disbursement");
+      }
+      const { error: delErr } = await admin.from("loan_borrowers").delete().eq("loan_application_id", loanId);
+      if (delErr) apiFail(HttpStatus.BAD_REQUEST, "BORROWERS_DELETE_FAILED", delErr.message);
+      if (dto.borrowers.length > 0) {
+        const rows = dto.borrowers.map((row) => ({
+          ...row,
+          loan_application_id: loanId,
+          created_by: actor.userId,
+        }));
+        const { error: insErr } = await admin.from("loan_borrowers").insert(rows);
+        if (insErr) apiFail(HttpStatus.BAD_REQUEST, "BORROWERS_INSERT_FAILED", insErr.message);
+      }
+    }
+
+    if (dto.profile) {
+      const profileId = dto.profileUserId || loan.user_id;
+      if (!profileId) apiFail(HttpStatus.BAD_REQUEST, "PROFILE_USER_REQUIRED", "No borrower id for profile update");
+      const profilePatch = pickProfilePatch(dto.profile);
+      if (Object.keys(profilePatch).length > 0) {
+        const { error: profErr } = await admin.from("profiles").update(profilePatch).eq("id", profileId);
+        if (profErr) apiFail(HttpStatus.BAD_REQUEST, "PROFILE_UPDATE_FAILED", profErr.message);
+      }
+    }
+
+    return { ok: true, data: { id: loanId } };
+  }
+
+  async registerLoanDocuments(
+    loanId: string,
+    documents: Array<{
+      borrower_id: string;
+      doc_type: string;
+      doc_label: string;
+      file_url: string;
+      file_name: string;
+      mime_type?: string | null;
+      file_size?: number | null;
+      loan_product_id?: string | null;
+      saveToVault?: boolean;
+    }>,
+    actor: AuthUser,
+  ) {
+    if (!documents?.length) apiFail(HttpStatus.BAD_REQUEST, "DOCS_REQUIRED", "No documents to register");
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, loan_product_id")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const rows = documents.map((doc) => ({
+      application_id: loanId,
+      borrower_id: doc.borrower_id,
+      doc_type: doc.doc_type,
+      doc_label: doc.doc_label,
+      file_url: doc.file_url,
+      file_name: doc.file_name,
+      mime_type: doc.mime_type || null,
+      file_size: doc.file_size ?? null,
+      loan_product_id: doc.loan_product_id ?? loan.loan_product_id,
+      uploaded_by: actor.userId,
+      status: "uploaded",
+    }));
+    const { error: docErr } = await admin.from("application_documents").insert(rows);
+    if (docErr) apiFail(HttpStatus.BAD_REQUEST, "DOCUMENT_INSERT_FAILED", docErr.message);
+
+    const vaultRows = documents
+      .filter((d) => d.saveToVault !== false)
+      .map((doc) => ({
+        borrower_id: doc.borrower_id,
+        doc_type: doc.doc_type,
+        doc_label: doc.doc_label,
+        file_url: doc.file_url,
+        file_name: doc.file_name,
+        mime_type: doc.mime_type || null,
+        file_size: doc.file_size ?? null,
+      }));
+    if (vaultRows.length > 0) {
+      const { error: vaultErr } = await admin.from("borrower_document_vault").insert(vaultRows);
+      if (vaultErr) this.logger.warn(`vault insert: ${vaultErr.message}`);
+    }
+
+    return { ok: true, data: { count: rows.length } };
+  }
+
+  private assertLoanPatchAllowed(currentStatus: string, patch: Record<string, unknown>) {
+    const keys = Object.keys(patch);
+    if (keys.length === 0) return;
+    const statusTarget = typeof patch.status === "string" ? patch.status : null;
+    if (statusTarget && statusTarget !== currentStatus) {
+      const allowed =
+        PRE_MONEY_STATUSES.has(currentStatus) ||
+        (currentStatus === "disbursed" && (statusTarget === "active" || statusTarget === "approved"));
+      if (!allowed) {
+        apiFail(
+          HttpStatus.CONFLICT,
+          "STATUS_LOCKED",
+          `Cannot move a ${currentStatus} loan to ${statusTarget} from this endpoint.`,
+        );
+      }
+    }
+    const onlySafe = keys.every((k) => SAFE_ON_ACTIVE_KEYS.has(k));
+    const onlyStatusAndSafe = keys.every((k) => k === "status" || SAFE_ON_ACTIVE_KEYS.has(k));
+    if (MONEY_STATUSES.has(currentStatus) && !onlySafe) {
+      if (!(currentStatus === "disbursed" && onlyStatusAndSafe)) {
+        apiFail(
+          HttpStatus.CONFLICT,
+          "NOT_EDITABLE",
+          "Active or completed loans can only receive notes, contract, or workflow metadata here.",
+        );
+      }
+    }
   }
 
   async recordPayment(

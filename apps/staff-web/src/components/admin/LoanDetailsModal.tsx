@@ -108,6 +108,7 @@ import {
   reverseLoanPayment,
   topUpLoan,
   undoLoanDisbursement,
+  updateLoanApplication,
 } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { disburseLoan } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { houseEarlySettlement } from "@/services/repositories/houseWorkflowRepository";
@@ -1362,11 +1363,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       if (status === "approved" && !canApprove) {
         throw new Error("You don't have permission to approve loans");
       }
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: status as any })
-        .eq("id", loan.id);
-      if (error) throw error;
+      await updateLoanApplication(loan.id, { application: { status } });
     },
     onSuccess: (_, newStatus) => {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
@@ -1382,11 +1379,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const saveNotesMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ admin_notes: adminNotes })
-        .eq("id", loan.id);
-      if (error) throw error;
+      await updateLoanApplication(loan.id, { application: { admin_notes: adminNotes } });
     },
     onSuccess: () => {
       toast.success("Notes saved");

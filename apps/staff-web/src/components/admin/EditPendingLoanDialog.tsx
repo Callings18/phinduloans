@@ -25,6 +25,7 @@ import CollateralBorrowersSection, {
   validateCollateralBorrowers,
 } from "@/components/loans/CollateralBorrowersSection";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
+import { registerLoanDocuments, updateLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import type { Database } from "@phinduloans/shared/integrations/supabase/types";
 
 interface Props {
@@ -335,66 +336,62 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
         update.monthly_payment = totals.monthlyPayment;
       }
 
-      const { error: loanErr } = await supabase.from("loan_applications").update(update).eq("id", loan.id);
-      if (loanErr) throw loanErr;
+      const primaryRow = {
+        ...primaryBorrowerEntry,
+        customer_id: loan.user_id,
+        role: "PRIMARY_BORROWER" as const,
+      };
 
-      if (isCollateralProduct && user?.id) {
-        const { error: delErr } = await supabase
-          .from("loan_borrowers")
-          .delete()
-          .eq("loan_application_id", loan.id);
-        if (delErr) throw delErr;
-
-        const primaryRow = {
-          ...primaryBorrowerEntry,
-          customer_id: loan.user_id,
-          role: "PRIMARY_BORROWER" as const,
-        };
-
-        const rows = [
-          {
-            loan_application_id: loan.id,
-            customer_id: primaryRow.customer_id,
-            full_name: primaryRow.full_name,
-            nrc_number: primaryRow.nrc_number,
-            phone: primaryRow.phone || null,
-            address: primaryRow.address || null,
-            role: "PRIMARY_BORROWER" as const,
-            is_signatory: primaryRow.is_signatory,
-            created_by: user.id,
-          },
-          ...coBorrowerEntries.map((b) => ({
-            loan_application_id: loan.id,
-            customer_id: b.customer_id || null,
-            full_name: b.full_name,
-            nrc_number: b.nrc_number,
-            phone: b.phone || null,
-            address: b.address || null,
-            role: "CO_BORROWER" as const,
-            is_signatory: b.is_signatory,
-            created_by: user.id,
-          })),
-          ...absoluteOwnerEntries.map((b) => ({
-            loan_application_id: loan.id,
-            customer_id: b.customer_id || null,
-            full_name: b.full_name,
-            nrc_number: b.nrc_number,
-            phone: b.phone || null,
-            address: b.address || null,
-            role: "ABSOLUTE_OWNER" as const,
-            is_signatory: b.is_signatory,
-            created_by: user.id,
-          })),
-        ];
-
-        const { error: insErr } = await supabase.from("loan_borrowers").insert(rows);
-        if (insErr) throw insErr;
-      }
+      await updateLoanApplication(loan.id, {
+        application: update,
+        borrowers: isCollateralProduct
+          ? [
+              {
+                customer_id: primaryRow.customer_id,
+                full_name: primaryRow.full_name,
+                nrc_number: primaryRow.nrc_number,
+                phone: primaryRow.phone || null,
+                address: primaryRow.address || null,
+                role: "PRIMARY_BORROWER" as const,
+                is_signatory: primaryRow.is_signatory,
+              },
+              ...coBorrowerEntries.map((b) => ({
+                customer_id: b.customer_id || null,
+                full_name: b.full_name,
+                nrc_number: b.nrc_number,
+                phone: b.phone || null,
+                address: b.address || null,
+                role: "CO_BORROWER" as const,
+                is_signatory: b.is_signatory,
+              })),
+              ...absoluteOwnerEntries.map((b) => ({
+                customer_id: b.customer_id || null,
+                full_name: b.full_name,
+                nrc_number: b.nrc_number,
+                phone: b.phone || null,
+                address: b.address || null,
+                role: "ABSOLUTE_OWNER" as const,
+                is_signatory: b.is_signatory,
+              })),
+            ]
+          : undefined,
+      });
 
       const borrowerId = loan.user_id as string | undefined;
       if (pendingUploads.length > 0 && !borrowerId) {
         throw new Error("This loan has no linked borrower; cannot upload documents.");
       }
+      const docs: Array<{
+        borrower_id: string;
+        doc_type: string;
+        doc_label: string;
+        file_url: string;
+        file_name: string;
+        mime_type?: string | null;
+        file_size?: number | null;
+        loan_product_id?: string | null;
+        saveToVault?: boolean;
+      }> = [];
       for (let i = 0; i < pendingUploads.length; i++) {
         const item = pendingUploads[i];
         const ext = item.file.name.split(".").pop() || "bin";
@@ -410,24 +407,8 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
           .upload(path, item.file, { upsert: false });
         if (upErr) throw upErr;
 
-        await supabase
-          .from("borrower_document_vault")
-          .insert({
-            borrower_id: borrowerId,
-            doc_type: slug,
-            doc_label: item.label.trim() || item.file.name,
-            file_url: path,
-            file_name: item.file.name,
-            mime_type: item.file.type || null,
-            file_size: item.file.size,
-          })
-          .then(({ error }) => {
-            if (error) console.warn("Vault insert (edit loan):", error);
-          });
-
-        const { error: docErr } = await supabase.from("application_documents").insert({
-          application_id: loan.id,
-          borrower_id: borrowerId,
+        docs.push({
+          borrower_id: borrowerId!,
           doc_type: slug,
           doc_label: item.label.trim() || item.file.name,
           file_url: path,
@@ -435,10 +416,11 @@ export default function EditPendingLoanDialog({ loan, open, onOpenChange, onSave
           mime_type: item.file.type || null,
           file_size: item.file.size,
           loan_product_id: loan.loan_product_id ?? null,
-          uploaded_by: user?.id ?? "admin",
-          status: "uploaded",
+          saveToVault: true,
         });
-        if (docErr) throw docErr;
+      }
+      if (docs.length > 0) {
+        await registerLoanDocuments(loan.id, docs);
       }
     },
     onSuccess: () => {

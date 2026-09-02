@@ -1,4 +1,4 @@
-import { IsNumber, IsObject, IsOptional, IsString, Min } from "class-validator";
+import { IsArray, IsNumber, IsObject, IsOptional, IsString, Min } from "class-validator";
 import { Type } from "class-transformer";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
@@ -400,4 +400,42 @@ export class RestructureLoanDto {
   @IsOptional()
   @IsObject()
   newValues?: Record<string, unknown>;
+}
+
+export class UpdateLoanDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  application?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ description: "When set, replace all loan_borrowers rows" })
+  @IsOptional()
+  @IsArray()
+  borrowers?: Record<string, unknown>[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  profile?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  profileUserId?: string;
+}
+
+export class RegisterLoanDocumentsDto {
+  @ApiProperty()
+  @IsArray()
+  documents!: Array<{
+    borrower_id: string;
+    doc_type: string;
+    doc_label: string;
+    file_url: string;
+    file_name: string;
+    mime_type?: string | null;
+    file_size?: number | null;
+    loan_product_id?: string | null;
+    saveToVault?: boolean;
+  }>;
 }

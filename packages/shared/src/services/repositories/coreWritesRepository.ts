@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "@phinduloans/shared/api/httpClient";
+import { apiGet, apiPatch, apiPost } from "@phinduloans/shared/api/httpClient";
 import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
@@ -77,6 +77,41 @@ export async function createLoanApplication(input: {
     );
   }
   return { id: data.id };
+}
+
+export async function updateLoanApplication(
+  loanId: string,
+  input: {
+    application?: Record<string, unknown>;
+    borrowers?: Record<string, unknown>[];
+    profile?: Record<string, unknown>;
+    profileUserId?: string;
+  },
+) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPatch<{ ok?: boolean; data?: { id: string } }>(`/api/v1/loans/${loanId}`, input);
+  }
+  throw new Error("Set VITE_API_URL to update loans through the API");
+}
+
+export type LoanDocumentMeta = {
+  borrower_id: string;
+  doc_type: string;
+  doc_label: string;
+  file_url: string;
+  file_name: string;
+  mime_type?: string | null;
+  file_size?: number | null;
+  loan_product_id?: string | null;
+  saveToVault?: boolean;
+};
+
+export async function registerLoanDocuments(loanId: string, documents: LoanDocumentMeta[]) {
+  if (!documents.length) return { ok: true, data: { count: 0 } };
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { count: number } }>(`/api/v1/loans/${loanId}/documents`, { documents });
+  }
+  throw new Error("Set VITE_API_URL to register documents through the API");
 }
 
 export async function recordLoanPayment(params: {

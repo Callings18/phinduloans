@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthUser } from "../auth/auth-user";
@@ -12,12 +12,14 @@ import {
   DeleteLoanDto,
   RecordPaymentDto,
   RecoverWriteOffDto,
+  RegisterLoanDocumentsDto,
   RejectWriteOffDto,
   ReloanDto,
   RestructureLoanDto,
   ReversePaymentDto,
   SetExpenseStatusDto,
   TopUpLoanDto,
+  UpdateLoanDto,
 } from "./dto/core-writes.dto";
 import { CoreWritesService } from "./core-writes.service";
 
@@ -166,5 +168,23 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Change remaining term/rate and rebuild the unpaid schedule tail" })
   restructure(@Param("loanId") loanId: string, @Body() dto: RestructureLoanDto, @CurrentUser() user: AuthUser) {
     return this.core.restructureLoan(loanId, dto, user);
+  }
+
+  @Patch("loans/:loanId")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Staff update of loan fields, collateral parties, or borrower profile" })
+  updateLoan(@Param("loanId") loanId: string, @Body() dto: UpdateLoanDto, @CurrentUser() user: AuthUser) {
+    return this.core.updateLoan(loanId, dto, user);
+  }
+
+  @Post("loans/:loanId/documents")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Register uploaded KYC/document metadata after storage upload" })
+  registerDocuments(
+    @Param("loanId") loanId: string,
+    @Body() dto: RegisterLoanDocumentsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.core.registerLoanDocuments(loanId, dto.documents, user);
   }
 }

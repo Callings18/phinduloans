@@ -19,6 +19,12 @@ import { useProductLoanRules } from "@phinduloans/shared/hooks/useProductLoanRul
 import type { LoanProductCode } from "@phinduloans/shared/config/loanProductModules";
 import { calculateMarketeerLoan, getMarketeerTiersOrDefault, generateMarketeerCollectionDates } from "@phinduloans/shared/lib/marketeerCalculations";
 import { fetchHouseProductByCode } from "@/services/repositories/houseRepository";
+import {
+  createLoanApplication,
+  deleteLoanApplication,
+  registerLoanDocuments,
+  updateLoanApplication,
+} from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@phinduloans/shared/components/ui/table";
 import { addDays, format } from "date-fns";
@@ -893,7 +899,16 @@ export default function ProductLoanFormShell({
   const uploadDocuments = async (loanId: string, borrowerId: string): Promise<Record<string, string>> => {
     const uploaded: Record<string, string> = {};
     const failures: string[] = [];
-    const adminUid = (await supabase.auth.getUser()).data.user?.id ?? null;
+    const toRegister: Array<{
+      borrower_id: string;
+      doc_type: string;
+      doc_label: string;
+      file_url: string;
+      file_name: string;
+      mime_type?: string | null;
+      file_size?: number | null;
+      saveToVault?: boolean;
+    }> = [];
 
     for (const [label, file] of Object.entries(docFiles)) {
       if (!file) continue;
@@ -909,32 +924,8 @@ export default function ProductLoanFormShell({
         failures.push(`${label}: ${uploadError.message}`);
         continue;
       }
-
-      // Per-loan record — REQUIRED. If this fails, the doc is invisible to admins.
-      const { error: appErr } = await supabase.from("application_documents").insert({
-        application_id: loanId,
-        borrower_id: borrowerId,
-        doc_type: sanitizedLabel,
-        doc_label: label,
-        file_url: path,
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-        uploaded_by: adminUid ?? "admin",
-        status: "uploaded",
-      });
-      if (appErr) {
-        console.error(`[uploadDocuments] application_documents insert failed for "${label}":`, appErr, {
-          application_id: loanId, borrower_id: borrowerId, path,
-        });
-        failures.push(`${label}: could not save record (${appErr.message})`);
-        // Storage upload still succeeded, but record is missing — leave in storage so we can retry.
-        continue;
-      }
       uploaded[label] = path;
-
-      // Best-effort vault persistence (cross-loan reuse). Non-blocking.
-      const { error: vaultErr } = await supabase.from("borrower_document_vault").insert({
+      toRegister.push({
         borrower_id: borrowerId,
         doc_type: sanitizedLabel,
         doc_label: label,
@@ -942,16 +933,15 @@ export default function ProductLoanFormShell({
         file_name: file.name,
         mime_type: file.type,
         file_size: file.size,
+        saveToVault: true,
       });
-      if (vaultErr) console.warn(`[uploadDocuments] vault insert (non-blocking) for "${label}":`, vaultErr);
     }
 
-    // Link any historical docs the officer explicitly confirmed for reuse (and didn't re-upload).
     for (const [label, hDoc] of Object.entries(reusedDocs)) {
       if (uploaded[label]) continue;
       const sanitizedLabel = label.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-      const { error: linkErr } = await supabase.from("application_documents").insert({
-        application_id: loanId,
+      uploaded[label] = hDoc.file_url;
+      toRegister.push({
         borrower_id: borrowerId,
         doc_type: sanitizedLabel,
         doc_label: label,
@@ -959,21 +949,22 @@ export default function ProductLoanFormShell({
         file_name: hDoc.file_name || `${sanitizedLabel}.bin`,
         mime_type: "application/octet-stream",
         file_size: 0,
-        uploaded_by: adminUid ?? "admin",
-        status: "uploaded",
+        saveToVault: false,
       });
-      if (linkErr) {
-        console.error(`[uploadDocuments] Reuse-link insert failed for "${label}":`, linkErr);
-        failures.push(`${label} (reused): ${linkErr.message}`);
-        continue;
+    }
+
+    if (toRegister.length > 0) {
+      try {
+        await registerLoanDocuments(loanId, toRegister);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Could not save document records";
+        failures.push(msg);
       }
-      uploaded[label] = hDoc.file_url;
     }
 
     if (failures.length > 0) {
-      // Surface failures so the admin actually knows docs didn't persist.
       throw new Error(
-        `Some documents could not be saved and are NOT attached to the loan:\n• ${failures.join("\n• ")}`
+        `Some documents could not be saved and are NOT attached to the loan:\n• ${failures.join("\n• ")}`,
       );
     }
 
@@ -1142,93 +1133,82 @@ export default function ProductLoanFormShell({
         },
       };
 
-      const { data: inserted, error } = await supabase
-        .from("loan_applications")
-        .insert(payload)
-        .select("id")
-        .single();
-      if (error) throw error;
+      const collateralRows =
+        productCode === "COLLATERAL"
+          ? [
+              {
+                customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
+                full_name: primaryBorrowerEntry.full_name,
+                nrc_number: primaryBorrowerEntry.nrc_number,
+                phone: primaryBorrowerEntry.phone || null,
+                address: primaryBorrowerEntry.address || null,
+                role: "PRIMARY_BORROWER" as const,
+                is_signatory: primaryBorrowerEntry.is_signatory,
+              },
+              ...coBorrowerEntries.map((b) => ({
+                customer_id: b.customer_id || null,
+                full_name: b.full_name,
+                nrc_number: b.nrc_number,
+                phone: b.phone || null,
+                address: b.address || null,
+                role: "CO_BORROWER" as const,
+                is_signatory: b.is_signatory,
+              })),
+              ...absoluteOwnerEntries.map((b) => ({
+                customer_id: b.customer_id || null,
+                full_name: b.full_name,
+                nrc_number: b.nrc_number,
+                phone: b.phone || null,
+                address: b.address || null,
+                role: "ABSOLUTE_OWNER" as const,
+                is_signatory: b.is_signatory,
+              })),
+            ]
+          : undefined;
 
-      // Persist multi-borrower structure for COLLATERAL only (DB trigger also enforces this)
-      if (productCode === "COLLATERAL" && inserted?.id) {
-        const rows = [
-          {
-            loan_application_id: inserted.id,
-            customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
-            full_name: primaryBorrowerEntry.full_name,
-            nrc_number: primaryBorrowerEntry.nrc_number,
-            phone: primaryBorrowerEntry.phone || null,
-            address: primaryBorrowerEntry.address || null,
-            role: "PRIMARY_BORROWER" as const,
-            is_signatory: primaryBorrowerEntry.is_signatory,
-            created_by: user?.id ?? null,
-          },
-          ...coBorrowerEntries.map((b) => ({
-            loan_application_id: inserted.id,
-            customer_id: b.customer_id || null,
-            full_name: b.full_name,
-            nrc_number: b.nrc_number,
-            phone: b.phone || null,
-            address: b.address || null,
-            role: "CO_BORROWER" as const,
-            is_signatory: b.is_signatory,
-            created_by: user?.id ?? null,
-          })),
-          ...absoluteOwnerEntries.map((b) => ({
-            loan_application_id: inserted.id,
-            customer_id: b.customer_id || null,
-            full_name: b.full_name,
-            nrc_number: b.nrc_number,
-            phone: b.phone || null,
-            address: b.address || null,
-            role: "ABSOLUTE_OWNER" as const,
-            is_signatory: b.is_signatory,
-            created_by: user?.id ?? null,
-          })),
-        ];
-        const { error: borrowersErr } = await supabase.from("loan_borrowers").insert(rows);
-        if (borrowersErr) {
-          setPendingLoanId(inserted.id);
-          throw new Error(`Loan was created but co-borrower records failed to save: ${borrowersErr.message}. Use Rollback draft or retry.`);
-        }
-      }
+      const { id: insertedId } = await createLoanApplication({
+        application: payload,
+        borrowers: collateralRows,
+        productCode,
+      });
 
-      if (inserted?.id) {
-        setPendingLoanId(inserted.id);
+      if (insertedId) {
+        setPendingLoanId(insertedId);
         setDocUploading(true);
         try {
-          const uploadedPaths = await uploadDocuments(inserted.id, selectedBorrower.id);
+          const uploadedPaths = await uploadDocuments(insertedId, selectedBorrower.id);
+          const profile = {
+            gender: gender || null,
+            marital_status: maritalStatus || null,
+            phone: contactNumber || selectedBorrower.phone,
+            nrc_number: idNumber || selectedBorrower.nrc_number,
+            address: residentialAddress || selectedBorrower.address,
+            city: city || selectedBorrower.city,
+            employer_name: employerName || selectedBorrower.employer_name,
+            job_title: jobTitle || selectedBorrower.job_title,
+            employment_type: employmentType,
+            net_income: Number(monthlyIncome) || selectedBorrower.net_income,
+          };
           if (Object.keys(uploadedPaths).length > 0) {
-            await supabase
-              .from("loan_applications")
-              .update({
+            await updateLoanApplication(insertedId, {
+              application: {
                 product_specific_data: {
                   ...payload.product_specific_data,
                   uploaded_docs: uploadedPaths,
                 },
-              })
-              .eq("id", inserted.id);
+              },
+              profile,
+              profileUserId: selectedBorrower.id,
+            });
+          } else {
+            await updateLoanApplication(insertedId, { profile, profileUserId: selectedBorrower.id });
           }
         } finally {
           setDocUploading(false);
         }
       }
 
-      // Persist enriched borrower data back to profile (gender, marital, employment, etc.)
-      await supabase.from("profiles").update({
-        gender: gender || null,
-        marital_status: maritalStatus || null,
-        phone: contactNumber || selectedBorrower.phone,
-        nrc_number: idNumber || selectedBorrower.nrc_number,
-        address: residentialAddress || selectedBorrower.address,
-        city: city || selectedBorrower.city,
-        employer_name: employerName || selectedBorrower.employer_name,
-        job_title: jobTitle || selectedBorrower.job_title,
-        employment_type: employmentType,
-        net_income: Number(monthlyIncome) || selectedBorrower.net_income,
-      }).eq("id", selectedBorrower.id);
-
-      return inserted?.id ?? null;
+      return insertedId ?? null;
     },
     onSuccess: async () => {
       setLastError(null);
@@ -1333,49 +1313,41 @@ export default function ProductLoanFormShell({
           contact_number: contactNumber,
         },
       };
-      const { error: upErr } = await supabase.from("loan_applications").update(update).eq("id", editLoanId);
-      if (upErr) throw upErr;
-
-      if (productCode === "COLLATERAL") {
-        await supabase.from("loan_borrowers").delete().eq("loan_application_id", editLoanId);
-        const rows = [
-          {
-            loan_application_id: editLoanId,
-            customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
-            full_name: primaryBorrowerEntry.full_name,
-            nrc_number: primaryBorrowerEntry.nrc_number,
-            phone: primaryBorrowerEntry.phone || null,
-            address: primaryBorrowerEntry.address || null,
-            role: "PRIMARY_BORROWER" as const,
-            is_signatory: primaryBorrowerEntry.is_signatory,
-            created_by: user.id,
-          },
-          ...coBorrowerEntries.map((b) => ({
-            loan_application_id: editLoanId,
-            customer_id: b.customer_id || null,
-            full_name: b.full_name,
-            nrc_number: b.nrc_number,
-            phone: b.phone || null,
-            address: b.address || null,
-            role: "CO_BORROWER" as const,
-            is_signatory: b.is_signatory,
-            created_by: user.id,
-          })),
-          ...absoluteOwnerEntries.map((b) => ({
-            loan_application_id: editLoanId,
-            customer_id: b.customer_id || null,
-            full_name: b.full_name,
-            nrc_number: b.nrc_number,
-            phone: b.phone || null,
-            address: b.address || null,
-            role: "ABSOLUTE_OWNER" as const,
-            is_signatory: b.is_signatory,
-            created_by: user.id,
-          })),
-        ];
-        const { error: insErr } = await supabase.from("loan_borrowers").insert(rows);
-        if (insErr) throw insErr;
-      }
+      await updateLoanApplication(editLoanId, {
+        application: update,
+        borrowers:
+          productCode === "COLLATERAL"
+            ? [
+                {
+                  customer_id: primaryBorrowerEntry.customer_id || selectedBorrower.id,
+                  full_name: primaryBorrowerEntry.full_name,
+                  nrc_number: primaryBorrowerEntry.nrc_number,
+                  phone: primaryBorrowerEntry.phone || null,
+                  address: primaryBorrowerEntry.address || null,
+                  role: "PRIMARY_BORROWER" as const,
+                  is_signatory: primaryBorrowerEntry.is_signatory,
+                },
+                ...coBorrowerEntries.map((b) => ({
+                  customer_id: b.customer_id || null,
+                  full_name: b.full_name,
+                  nrc_number: b.nrc_number,
+                  phone: b.phone || null,
+                  address: b.address || null,
+                  role: "CO_BORROWER" as const,
+                  is_signatory: b.is_signatory,
+                })),
+                ...absoluteOwnerEntries.map((b) => ({
+                  customer_id: b.customer_id || null,
+                  full_name: b.full_name,
+                  nrc_number: b.nrc_number,
+                  phone: b.phone || null,
+                  address: b.address || null,
+                  role: "ABSOLUTE_OWNER" as const,
+                  is_signatory: b.is_signatory,
+                })),
+              ]
+            : undefined,
+      });
 
       // Upload any newly attached docs (additive — never delete existing).
       if (Object.values(docFiles).some(Boolean)) {
@@ -1406,12 +1378,7 @@ export default function ProductLoanFormShell({
     if (!pendingLoanId) return;
     setRollbackPending(true);
     try {
-      const { error } = await supabase
-        .from("loan_applications")
-        .delete()
-        .eq("id", pendingLoanId)
-        .eq("status", "pending");
-      if (error) throw error;
+      await deleteLoanApplication(pendingLoanId, "Rolled back unfinished house loan");
       toast({ title: "Draft rolled back", description: "The unfinished loan has been removed. You can edit and try again." });
       setPendingLoanId(null);
       setLastError(null);

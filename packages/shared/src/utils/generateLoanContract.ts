@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { supabase } from '@phinduloans/shared/integrations/supabase/client';
 import { logAudit } from '@phinduloans/shared/utils/auditLog';
+import { updateLoanApplication } from '@phinduloans/shared/services/repositories/coreWritesRepository';
 import { PDF_THEME } from '@phinduloans/shared/utils/pdfTheme';
 
 interface LoanData {
@@ -920,15 +921,7 @@ export const uploadContractAndSaveUrl = async (loan: LoanData): Promise<string |
       return null;
     }
 
-    const { error: updateError } = await supabase
-      .from('loan_applications')
-      .update({ contract_url: fileName })
-      .eq('id', loan.id);
-
-    if (updateError) {
-      console.error('Failed to save contract_url:', updateError);
-      return null;
-    }
+    await updateLoanApplication(loan.id, { application: { contract_url: fileName } });
 
     await logAudit({
       action: 'CONTRACT_GENERATED',
