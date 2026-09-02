@@ -338,6 +338,13 @@ export class TopUpLoanDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  newTermMonths?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsObject()
   previousValues?: Record<string, unknown>;
 
@@ -438,4 +445,10 @@ export class RegisterLoanDocumentsDto {
     loan_product_id?: string | null;
     saveToVault?: boolean;
   }>;
+}
+
+export class BorrowerSignContractDto {
+  @ApiProperty()
+  @IsString()
+  signedContractUrl!: string;
 }

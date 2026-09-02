@@ -5,6 +5,7 @@ import type { AuthUser } from "../auth/auth-user";
 import { StaffGuard } from "../auth/guards/staff.guard";
 import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
 import {
+  BorrowerSignContractDto,
   CreateApplicationDto,
   CreateBorrowerDto,
   CreatePendingDisbursementDto,
@@ -186,5 +187,15 @@ export class CoreWritesController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.core.registerLoanDocuments(loanId, dto.documents, user);
+  }
+
+  @Post("loans/:loanId/borrower-sign")
+  @ApiOperation({ summary: "Borrower records a signed contract path and advances pre-disbursement status" })
+  borrowerSign(
+    @Param("loanId") loanId: string,
+    @Body() dto: BorrowerSignContractDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.core.borrowerSignContract(loanId, dto.signedContractUrl, user);
   }
 }

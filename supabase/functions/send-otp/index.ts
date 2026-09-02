@@ -79,7 +79,7 @@ async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promis
   const providers = providersData?.value || {};
   const config = configData?.value || {};
   const rawApiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
-  // Prefer Lovable/env secret first so a stale AdminSettings token cannot force Unauthenticated.
+  // Prefer the env secret first so a stale AdminSettings token cannot force Unauthenticated.
   const primaryApiToken = pickToken(
     Deno.env.get("EXCITESMS_API_TOKEN"),
     providers.excitesms_api_token,
@@ -126,7 +126,7 @@ async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promis
 async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRoute): Promise<SmsSendResult> {
   const creds = route;
   const apiToken = cleanApiToken(creds.apiToken);
-  if (!apiToken) throw new Error("ExciteSMS is not configured. Set EXCITESMS_API_TOKEN in Lovable secrets / Admin Settings.");
+  if (!apiToken) throw new Error("ExciteSMS is not configured. Set EXCITESMS_API_TOKEN in Supabase secrets / Admin Settings.");
 
   // ExciteSMS accepts Zambian MSISDNs as 260XXXXXXXXX (no "+"). Keep E.164 for logs.
   const e164 = formatPhoneNumber(to);
@@ -175,7 +175,7 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
     console.error(`[OTP] ExciteSMS ${route.label} first attempt failed status=${response.status}/${deliveryStatus || "unknown"}; message=${String(result?.message || "none").slice(0, 160)}`);
     // Auth failures won't be fixed by changing recipient format — fail fast with a clear message.
     if (response.status === 401 || providerMsgFirst.includes("unauthenticated") || providerMsgFirst.includes("unauthorized")) {
-      throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Lovable secrets and Admin → Settings.");
+      throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Supabase secrets and Admin → Settings.");
     }
     try {
       ({ response, result } = await attempt(e164, false));
@@ -190,7 +190,7 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
     const providerMsg = String(result?.message || data?.message || "").trim();
     console.error(`[OTP] ExciteSMS ${route.label} failed with status ${response.status}/${finalStatus || "unknown"}; message=${providerMsg.slice(0, 160)}`);
     if (/unauthenticated|unauthorized/i.test(providerMsg) || response.status === 401) {
-      throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Lovable secrets and Admin → Settings.");
+      throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Supabase secrets and Admin → Settings.");
     }
     const looksLikePhone = /^\+?260\d{9}$/.test(providerMsg.replace(/\s+/g, ""));
     throw new Error(

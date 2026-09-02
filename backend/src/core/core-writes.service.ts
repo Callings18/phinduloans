@@ -425,6 +425,37 @@ export class CoreWritesService {
     return { ok: true, data: { count: rows.length } };
   }
 
+  async borrowerSignContract(loanId: string, signedContractUrl: string, actor: AuthUser) {
+    const path = signedContractUrl.trim();
+    if (!path) apiFail(HttpStatus.BAD_REQUEST, "CONTRACT_REQUIRED", "Signed contract path is required");
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, user_id, status")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    if (actor.actorType !== "admin" && loan.user_id !== actor.userId) {
+      apiFail(HttpStatus.FORBIDDEN, "FORBIDDEN", "You can only sign your own loan contract");
+    }
+
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      signed_contract_url: path,
+      signed_contract_uploaded_at: now,
+      borrower_signed: true,
+      borrower_signed_at: now,
+    };
+    if (loan.status === "approved" || loan.status === "contract_signing") {
+      patch.status = "awaiting_disbursement";
+      patch.updated_at = now;
+    }
+    const { error: updErr } = await admin.from("loan_applications").update(patch).eq("id", loanId);
+    if (updErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_UPDATE_FAILED", updErr.message);
+    return { ok: true, data: { id: loanId, status: patch.status || loan.status } };
+  }
+
   private assertLoanPatchAllowed(currentStatus: string, patch: Record<string, unknown>) {
     const keys = Object.keys(patch);
     if (keys.length === 0) return;
@@ -942,26 +973,33 @@ export class CoreWritesService {
     }
 
     if (optionalTopUp > 0 && dto.sourceAccountId) {
-      const { error: disbInsertErr } = await admin.from("disbursements").insert({
-        loan_id: newLoan.id,
-        amount: topUpNet,
-        disbursement_method: "cash",
-        status: "completed",
-        source_account_id: dto.sourceAccountId,
-        disbursed_at: reloanIso,
-        transaction_reference: `RELOAN-TOPUP-${String(newLoan.id).slice(0, 8).toUpperCase()}`,
-        is_top_up: true,
-      });
-      if (disbInsertErr) apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", disbInsertErr.message);
-      await this.debitSourceAccount(admin, {
-        accountId: dto.sourceAccountId,
-        amount: topUpNet,
-        actorId: actor.userId,
-        referenceType: "loan_reloan_topup",
-        referenceId: newLoan.id,
-        destination: `${parent.full_name} (reloan top-up)`,
-        notes: `Reloan top-up gross K${optionalTopUp.toLocaleString()}, fees K${topUpFees.toLocaleString()}, net K${topUpNet.toLocaleString()}.`,
-      });
+      const { data: topUpDisb, error: disbInsertErr } = await admin
+        .from("disbursements")
+        .insert({
+          loan_id: newLoan.id,
+          amount: topUpNet,
+          disbursement_method: "cash",
+          status: "pending",
+          source_account_id: dto.sourceAccountId,
+          transaction_reference: `RELOAN-TOPUP-${String(newLoan.id).slice(0, 8).toUpperCase()}`,
+          is_top_up: true,
+        })
+        .select("id")
+        .single();
+      if (disbInsertErr || !topUpDisb?.id) {
+        apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", disbInsertErr?.message || "Could not create reloan top-up disbursement");
+      }
+      try {
+        await this.completeDisbursementRpc(
+          admin,
+          topUpDisb.id,
+          dto.sourceAccountId,
+          `RELOAN-TOPUP-${String(newLoan.id).slice(0, 8).toUpperCase()}`,
+        );
+      } catch (err) {
+        await admin.from("disbursements").delete().eq("id", topUpDisb.id);
+        throw err;
+      }
     }
 
     const { error: ev1 } = await admin.from("loan_events").insert({
@@ -1002,12 +1040,14 @@ export class CoreWritesService {
     if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
     if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
 
+    const termMonths = dto.newTermMonths || loan.loan_term_months;
     const { error: loanUpdErr } = await admin
       .from("loan_applications")
       .update({
         loan_amount: dto.newPrincipal,
         total_repayment: dto.newTotalRepayment,
         monthly_payment: dto.newMonthlyPayment,
+        loan_term_months: termMonths,
         admin_notes: dto.notes,
       })
       .eq("id", loanId);
@@ -1026,7 +1066,7 @@ export class CoreWritesService {
         {
           id: loan.id,
           user_id: loan.user_id,
-          loan_term_months: loan.loan_term_months,
+          loan_term_months: termMonths,
           total_repayment: dto.newTotalRepayment,
           monthly_payment: dto.newMonthlyPayment,
           loan_product_id: loan.loan_product_id,
@@ -1038,14 +1078,10 @@ export class CoreWritesService {
       apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_FAILED", err instanceof Error ? err.message : "Could not regenerate schedule");
     }
 
-    await this.debitSourceAccount(admin, {
-      accountId: dto.sourceAccountId,
+    await this.insertAndCompleteTopUpDisbursement(admin, {
+      loanId,
       amount: dto.netDisbursement,
-      actorId: actor.userId,
-      referenceType: "loan_top_up",
-      referenceId: loanId,
-      destination: `Top-up for ${loan.full_name}`,
-      notes: `Top-up +K${dto.additionalAmount.toLocaleString()} (net K${dto.netDisbursement.toLocaleString()}) — ${dto.reason || "N/A"}`,
+      sourceAccountId: dto.sourceAccountId,
     });
 
     const { error: evErr } = await admin.from("loan_events").insert({
@@ -1148,53 +1184,53 @@ export class CoreWritesService {
     }
   }
 
-  private async debitSourceAccount(
+  private async insertAndCompleteTopUpDisbursement(
     admin: ReturnType<SupabaseService["getAdminClient"]>,
-    args: {
-      accountId: string;
-      amount: number;
-      actorId: string;
-      referenceType: string;
-      referenceId: string;
-      destination: string;
-      notes: string;
-    },
+    args: { loanId: string; amount: number; sourceAccountId: string },
   ) {
-    const { data: account, error: accErr } = await admin
-      .from("accounts")
-      .select("id, account_name, balance")
-      .eq("id", args.accountId)
-      .maybeSingle();
-    if (accErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_LOOKUP_FAILED", accErr.message);
-    if (!account) apiFail(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Source account not found");
-    const balanceBefore = Number(account.balance);
-    if (balanceBefore < args.amount) {
-      apiFail(
-        HttpStatus.CONFLICT,
-        "INSUFFICIENT_BALANCE",
-        `Insufficient balance in ${account.account_name}. Available: K${balanceBefore.toLocaleString()}`,
-      );
+    const ref = `TOP-UP-${String(args.loanId).slice(0, 8).toUpperCase()}`;
+    const { data: inserted, error } = await admin
+      .from("disbursements")
+      .insert({
+        loan_id: args.loanId,
+        amount: args.amount,
+        disbursement_method: "cash",
+        status: "pending",
+        source_account_id: args.sourceAccountId,
+        transaction_reference: ref,
+        is_top_up: true,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted?.id) {
+      apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", error?.message || "Could not create top-up disbursement");
     }
-    const balanceAfter = balanceBefore - args.amount;
-    const { error: updErr } = await admin
-      .from("accounts")
-      .update({ balance: balanceAfter, updated_at: new Date().toISOString() })
-      .eq("id", account.id);
-    if (updErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_UPDATE_FAILED", updErr.message);
-    const { error: txErr } = await admin.from("account_transactions").insert({
-      account_id: account.id,
-      transaction_type: "disbursement",
-      amount: args.amount,
-      balance_before: balanceBefore,
-      balance_after: balanceAfter,
-      reference_type: args.referenceType,
-      reference_id: args.referenceId,
-      source: account.account_name,
-      destination: args.destination,
-      notes: args.notes,
-      created_by: args.actorId,
+    try {
+      await this.completeDisbursementRpc(admin, inserted.id, args.sourceAccountId, ref);
+    } catch (err) {
+      await admin.from("disbursements").delete().eq("id", inserted.id);
+      throw err;
+    }
+  }
+
+  private async completeDisbursementRpc(
+    admin: ReturnType<SupabaseService["getAdminClient"]>,
+    disbursementId: string,
+    accountId: string,
+    transactionReference: string,
+  ) {
+    const { data, error } = await admin.rpc("complete_disbursement", {
+      p_disbursement_id: disbursementId,
+      p_account_id: accountId,
+      p_transaction_reference: transactionReference,
     });
-    if (txErr) apiFail(HttpStatus.BAD_REQUEST, "LEDGER_INSERT_FAILED", txErr.message);
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_RPC_FAILED", error.message);
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const row = data as { success?: boolean; ok?: boolean; error?: string };
+      if (row.success === false || row.ok === false) {
+        apiFail(HttpStatus.CONFLICT, "DISBURSE_REJECTED", row.error || "Disbursement was rejected");
+      }
+    }
   }
 
   private async rpc(fn: string, args: Record<string, unknown>, failCode: string) {

@@ -47,7 +47,7 @@ async function getExciteSmsCredentials(supabase: any): Promise<{
     .maybeSingle();
   const providers = providersData?.value || {};
   const config = configData?.value || {};
-  // Prefer Lovable/env secret first so a stale AdminSettings token cannot force Unauthenticated.
+  // Prefer the env secret first so a stale AdminSettings token cannot force Unauthenticated.
   const envToken = (Deno.env.get("EXCITESMS_API_TOKEN") || "").trim().replace(/^Bearer\s+/i, "").trim();
   const dbToken = (providers.excitesms_api_token || config.excitesms_api_token || "").trim().replace(/^Bearer\s+/i, "").trim();
   const baseUrl = Deno.env.get("EXCITESMS_API_URL") || providers.excitesms_api_url || config.excitesms_api_url || "https://gateway.excitesms.com/api/v3";

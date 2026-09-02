@@ -236,7 +236,7 @@ async function sendSMS_ExciteSMS(to: string, message: string, creds: any): Promi
   console.log("[SMS - ExciteSMS] Response:", JSON.stringify(result));
 
   if (response.status === 401 || /unauthenticated|unauthorized/i.test(String(result.message || ""))) {
-    throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Lovable secrets and Admin → Settings.");
+    throw new Error("ExciteSMS authentication failed (Unauthenticated). Update EXCITESMS_API_TOKEN in Supabase secrets and Admin → Settings.");
   }
 
   if (result.status === "error") {

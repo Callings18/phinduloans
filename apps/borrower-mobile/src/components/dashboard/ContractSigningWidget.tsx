@@ -17,6 +17,7 @@ import { downloadLoanContract, generateSignedContractPDF } from "@phinduloans/sh
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@phinduloans/shared/components/ui/tabs";
+import { borrowerSignContract } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 
 interface Loan {
   id: string;
@@ -83,16 +84,6 @@ export default function ContractSigningWidget({ userId }: Props) {
     enabled: !!userId,
   });
 
-  const advanceStatusAfterSign = async (loanId: string, currentStatus: string) => {
-    if (["approved", "contract_signing"].includes(currentStatus)) {
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: "awaiting_disbursement", updated_at: new Date().toISOString() })
-        .eq("id", loanId);
-      if (error) throw error;
-    }
-  };
-
   // Sign contract mutation
   const signContractMutation = useMutation({
     mutationFn: async () => {
@@ -132,20 +123,8 @@ export default function ContractSigningWidget({ userId }: Props) {
         new Date().toISOString(),
       );
 
-      // Update loan with signed contract reference (use PDF if generated, else raw signature)
-      const { error: updateError } = await supabase
-        .from("loan_applications")
-        .update({
-          signed_contract_url: signedPdfPath || sigFileName,
-          signed_contract_uploaded_at: new Date().toISOString(),
-          borrower_signed: true,
-          borrower_signed_at: new Date().toISOString(),
-        })
-        .eq("id", selectedLoan.id);
-
-      if (updateError) throw updateError;
-
-      await advanceStatusAfterSign(selectedLoan.id, selectedLoan.status);
+      const signedPath = signedPdfPath || sigFileName;
+      await borrowerSignContract(selectedLoan.id, signedPath);
 
       await logAudit({
         action: 'CONTRACT_SIGNED_BORROWER',
@@ -162,7 +141,7 @@ export default function ContractSigningWidget({ userId }: Props) {
           borrowerPhone: selectedLoan.phone,
           borrowerEmail: selectedLoan.email,
           loanAmount: selectedLoan.loan_amount,
-          signatureUrl: signedPdfPath || sigFileName,
+          signatureUrl: signedPath,
         },
       });
 
@@ -204,19 +183,7 @@ export default function ContractSigningWidget({ userId }: Props) {
 
       if (uploadError) throw uploadError;
 
-      const { error: updateError } = await supabase
-        .from("loan_applications")
-        .update({
-          signed_contract_url: fileName,
-          signed_contract_uploaded_at: new Date().toISOString(),
-          borrower_signed: true,
-          borrower_signed_at: new Date().toISOString(),
-        })
-        .eq("id", selectedLoan.id);
-
-      if (updateError) throw updateError;
-
-      await advanceStatusAfterSign(selectedLoan.id, selectedLoan.status);
+      await borrowerSignContract(selectedLoan.id, fileName);
 
       // Notify admin
       await supabase.functions.invoke("send-notification", {

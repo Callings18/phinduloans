@@ -35,6 +35,10 @@ vi.mock("@phinduloans/shared/services/repositories/coreWritesRepository", () => 
   recordLoanPayment: recordLoanPaymentMock,
   applyLoanPenalties: vi.fn(),
   getEarlySettlementQuote: vi.fn(),
+  createLoanApplication: vi.fn(),
+  restructureLoan: vi.fn(),
+  reverseLoanPayment: vi.fn(),
+  topUpLoan: vi.fn(),
 }));
 
 vi.mock("@phinduloans/shared/services/repositories/workflowRepository", () => ({

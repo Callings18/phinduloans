@@ -9,6 +9,7 @@ export default defineConfig({
     globals: true,
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
+      "apps/staff-web/src/**/*.{test,spec}.{ts,tsx}",
       "tests/integration/**/*.test.ts",
       "packages/**/__tests__/**/*.{test,spec}.{ts,tsx}",
     ],

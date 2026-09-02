@@ -1,8 +1,12 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import {
   applyLoanPenalties,
+  createLoanApplication,
   getEarlySettlementQuote,
   recordLoanPayment as recordLoanPaymentFromApi,
+  restructureLoan,
+  reverseLoanPayment,
+  topUpLoan,
 } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import {
   completeDisbursement,
@@ -169,53 +173,23 @@ export interface RestructureParams {
 }
 
 export async function houseRestructureLoan(params: RestructureParams) {
-  const { error: updateErr } = await supabase
+  const { data: loan, error } = await supabase
     .from("loan_applications")
-    .update({
-      loan_term_months: params.newTermMonths,
-      interest_rate: params.newInterestRate,
-      monthly_payment: params.newMonthlyPayment,
-      total_repayment: params.newTotalRepayment,
-      term_unit: params.termUnit || "months",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", params.loanId);
-  if (updateErr) throw updateErr;
-
-  // Cancel pending repayments before regenerating
-  const { error: cancelErr } = await supabase
-    .from("loan_repayments")
-    .update({ status: "cancelled" })
-    .eq("loan_id", params.loanId)
-    .in("status", ["pending", "overdue"]);
-  if (cancelErr) throw cancelErr;
-
-  const { createRepaymentScheduleForLoan } = await import("@phinduloans/shared/utils/createRepaymentSchedule");
-  await createRepaymentScheduleForLoan(
-    {
-      id: params.loanId,
-      user_id: params.userId,
-      loan_term_months: params.newTermMonths,
-      total_repayment: params.newTotalRepayment,
-      monthly_payment: params.newMonthlyPayment,
-      loan_product_id: params.loanProductId || null,
-      term_unit: params.termUnit || "months",
-    },
-    supabase,
-    { regenerateRemaining: true },
-  );
-
-  await supabase.from("audit_logs").insert({
-    action: "LOAN_RESTRUCTURED",
-    entity_type: "loan_application",
-    entity_id: params.loanId,
-    module: "loans",
-    new_values: {
-      term_months: params.newTermMonths,
-      interest_rate: params.newInterestRate,
-      total_repayment: params.newTotalRepayment,
-      reason: params.reason,
-    },
+    .select("loan_amount, admin_notes")
+    .eq("id", params.loanId)
+    .maybeSingle();
+  if (error) throw error;
+  const principal = Number(loan?.loan_amount || 0);
+  if (principal <= 0.01) throw new Error("Cannot restructure a loan with no principal");
+  await restructureLoan(params.loanId, {
+    principal,
+    newTermMonths: params.newTermMonths,
+    newInterestRate: params.newInterestRate,
+    newTotalRepayment: params.newTotalRepayment,
+    newMonthlyPayment: params.newMonthlyPayment,
+    notes: `${loan?.admin_notes || ""}\n\n[RESTRUCTURED]: ${params.reason}`.trim(),
+    reason: params.reason,
+    termUnit: params.termUnit,
   });
 }
 
@@ -235,82 +209,26 @@ export interface TopUpParams {
 export async function houseTopUpLoan(params: TopUpParams) {
   if (!params.fundingAccountId) throw new Error("Funding account is required for top-up");
 
-  // Update loan to new principal/term
   const { data: existing, error: fetchErr } = await supabase
     .from("loan_applications")
-    .select("loan_amount")
+    .select("loan_amount, admin_notes")
     .eq("id", params.loanId)
     .maybeSingle();
   if (fetchErr) throw fetchErr;
 
   const newPrincipal = Number(existing?.loan_amount || 0) + params.additionalPrincipal;
-
-  const { error: updateErr } = await supabase
-    .from("loan_applications")
-    .update({
-      loan_amount: newPrincipal,
-      loan_term_months: params.newTermMonths,
-      monthly_payment: params.newMonthlyPayment,
-      total_repayment: params.newTotalRepayment,
-      term_unit: params.termUnit || "months",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", params.loanId);
-  if (updateErr) throw updateErr;
-
-  // Create + complete a disbursement for the additional amount
-  const { data: disb, error: disbErr } = await supabase
-    .from("disbursements")
-    .insert({
-      loan_id: params.loanId,
-      amount: params.additionalPrincipal,
-      disbursement_method: "cash",
-      status: "pending",
-      source_account_id: params.fundingAccountId,
-    })
-    .select("id")
-    .single();
-  if (disbErr) throw disbErr;
-
-  await houseMarkDisbursementCompleted({
-    disbursementId: disb.id,
-    accountId: params.fundingAccountId,
-    transactionReference: "TOP-UP",
-  });
-
-  // Cancel existing pending repayments and regenerate
-  await supabase
-    .from("loan_repayments")
-    .update({ status: "cancelled" })
-    .eq("loan_id", params.loanId)
-    .in("status", ["pending", "overdue"]);
-
-  const { createRepaymentScheduleForLoan } = await import("@phinduloans/shared/utils/createRepaymentSchedule");
-  await createRepaymentScheduleForLoan(
-    {
-      id: params.loanId,
-      user_id: params.userId,
-      loan_term_months: params.newTermMonths,
-      total_repayment: params.newTotalRepayment,
-      monthly_payment: params.newMonthlyPayment,
-      loan_product_id: params.loanProductId || null,
-      term_unit: params.termUnit || "months",
-    },
-    supabase,
-    { regenerateRemaining: true },
-  );
-
-  await supabase.from("audit_logs").insert({
-    action: "LOAN_TOPUP",
-    entity_type: "loan_application",
-    entity_id: params.loanId,
-    module: "loans",
-    new_values: {
-      additional_principal: params.additionalPrincipal,
-      new_principal: newPrincipal,
-      funding_account_id: params.fundingAccountId,
-      reason: params.reason,
-    },
+  await topUpLoan(params.loanId, {
+    additionalAmount: params.additionalPrincipal,
+    netDisbursement: params.additionalPrincipal,
+    totalFees: 0,
+    newPrincipal,
+    newTotalRepayment: params.newTotalRepayment,
+    newMonthlyPayment: params.newMonthlyPayment,
+    notes: `${existing?.admin_notes || ""}\n\n[TOP-UP]: ${params.reason}`.trim(),
+    sourceAccountId: params.fundingAccountId,
+    reason: params.reason,
+    termUnit: params.termUnit,
+    newTermMonths: params.newTermMonths,
   });
 }
 
@@ -359,22 +277,11 @@ export async function houseReloanFromCompleted(params: ReloanParams): Promise<st
     source: "reloan",
   };
 
-  const { data: newLoan, error: insertErr } = await supabase
-    .from("loan_applications")
-    .insert(insertPayload)
-    .select("id")
-    .single();
-  if (insertErr) throw insertErr;
-
-  await supabase.from("audit_logs").insert({
-    action: "LOAN_RELOAN_CREATED",
-    entity_type: "loan_application",
-    entity_id: newLoan.id,
-    module: "loans",
-    new_values: { parent_loan_id: parent.id, new_principal: params.newPrincipal, reason: params.reason },
+  const { id } = await createLoanApplication({
+    application: insertPayload,
   });
 
-  return newLoan.id;
+  return id;
 }
 
 export interface ReversePaymentParams {
@@ -384,74 +291,5 @@ export interface ReversePaymentParams {
 }
 
 export async function houseReverseLastPayment(params: ReversePaymentParams) {
-  if (!params.accountId) throw new Error("Select the account to debit the reversal from");
-
-  const { data: rep, error: repErr } = await supabase
-    .from("loan_repayments")
-    .select("id, loan_id, amount, principal_paid, status, installment_number")
-    .eq("id", params.repaymentId)
-    .maybeSingle();
-  if (repErr) throw repErr;
-  if (!rep) throw new Error("Repayment not found");
-  if (rep.status !== "paid") throw new Error("Only paid repayments can be reversed");
-
-  const amount = Number(rep.principal_paid || rep.amount || 0);
-
-  const { data: account, error: accErr } = await supabase
-    .from("accounts")
-    .select("id, balance")
-    .eq("id", params.accountId)
-    .maybeSingle();
-  if (accErr) throw accErr;
-  if (!account) throw new Error("Account not found");
-  if (Number(account.balance) < amount) throw new Error("Account balance insufficient to reverse");
-
-  const newBalance = Number(account.balance) - amount;
-
-  // Debit the account
-  const { error: updErr } = await supabase
-    .from("accounts")
-    .update({ balance: newBalance, updated_at: new Date().toISOString() })
-    .eq("id", params.accountId);
-  if (updErr) throw updErr;
-
-  await supabase.from("account_transactions").insert({
-    account_id: params.accountId,
-    transaction_type: "adjustment_debit",
-    amount,
-    balance_before: Number(account.balance),
-    balance_after: newBalance,
-    destination: "Payment reversal",
-    reference_type: "repayment_reversal",
-    reference_id: rep.id,
-    notes: `Reversal of installment #${rep.installment_number}: ${params.reason}`,
-  });
-
-  // Flip repayment back to pending
-  const { error: revErr } = await supabase
-    .from("loan_repayments")
-    .update({
-      status: "pending",
-      paid_date: null,
-      principal_paid: null,
-      payment_method: null,
-      transaction_reference: null,
-    })
-    .eq("id", rep.id);
-  if (revErr) throw revErr;
-
-  // If the loan was completed, reopen to active
-  await supabase
-    .from("loan_applications")
-    .update({ status: "active", updated_at: new Date().toISOString() })
-    .eq("id", rep.loan_id)
-    .eq("status", "completed");
-
-  await supabase.from("audit_logs").insert({
-    action: "PAYMENT_REVERSED",
-    entity_type: "repayment",
-    entity_id: rep.id,
-    module: "collections",
-    new_values: { amount, account_id: params.accountId, reason: params.reason, loan_id: rep.loan_id },
-  });
+  await reverseLoanPayment(params.repaymentId, params.reason);
 }

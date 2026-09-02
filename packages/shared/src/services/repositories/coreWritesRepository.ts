@@ -352,6 +352,7 @@ export async function topUpLoan(
     sourceAccountId: string;
     reason?: string;
     termUnit?: string;
+    newTermMonths?: number;
     previousValues?: Record<string, unknown>;
     newValues?: Record<string, unknown>;
   },
@@ -384,4 +385,14 @@ export async function restructureLoan(
     return apiPost<{ ok?: boolean; data?: { loanId: string } }>(`/api/v1/loans/${loanId}/restructure`, input);
   }
   throw new Error("Set VITE_API_URL to restructure through the API");
+}
+
+export async function borrowerSignContract(loanId: string, signedContractUrl: string) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { id: string; status?: string } }>(
+      `/api/v1/loans/${loanId}/borrower-sign`,
+      { signedContractUrl },
+    );
+  }
+  throw new Error("Set VITE_API_URL to record signed contracts through the API");
 }
