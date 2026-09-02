@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { AuthUser } from "../auth/auth-user";
 import { SupabaseService } from "../auth/supabase.service";
 import { apiFail } from "../common/http";
+import { insertRepaymentSchedule } from "./repayment-schedule";
+import type { ReloanDto, RestructureLoanDto, TopUpLoanDto } from "./dto/core-writes.dto";
 
 function normalizePhoneForAuth(phone?: string | null) {
   const digits = String(phone || "").replace(/\D/g, "");
@@ -604,6 +606,343 @@ export class CoreWritesService {
       apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", error?.message || "Could not create disbursement");
     }
     return { ok: true, data: { id: inserted.id } };
+  }
+
+  async reloan(loanId: string, dto: ReloanDto, actor: AuthUser) {
+    const admin = this.supabase.getAdminClient();
+    await this.assertNoUnpaidPenalties(admin, loanId);
+
+    const { data: parent, error: parentErr } = await admin.from("loan_applications").select("*").eq("id", loanId).maybeSingle();
+    if (parentErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", parentErr.message);
+    if (!parent) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const optionalTopUp = Number(dto.optionalTopUpAmount || 0);
+    const topUpNet = Number(dto.topUpNetDisbursement || 0);
+    const topUpFees = Number(dto.topUpFees || 0);
+    if (optionalTopUp > 0) {
+      if (!dto.sourceAccountId) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_REQUIRED", "Select a source account for the optional top-up");
+      if (topUpNet <= 0) apiFail(HttpStatus.BAD_REQUEST, "TOPUP_TOO_SMALL", "Optional top-up is too small after fees");
+    }
+
+    const reloanIso = new Date(`${dto.reloanDate}T12:00:00Z`).toISOString();
+    const { error: closeError } = await admin
+      .from("loan_applications")
+      .update({ status: "completed", admin_notes: dto.parentNotes })
+      .eq("id", loanId);
+    if (closeError) apiFail(HttpStatus.BAD_REQUEST, "PARENT_CLOSE_FAILED", closeError.message);
+
+    // Insert as approved first so the active-status trigger does not generate a CURRENT_DATE schedule.
+    const { data: newLoan, error: insertError } = await admin
+      .from("loan_applications")
+      .insert({
+        user_id: parent.user_id,
+        full_name: parent.full_name,
+        email: parent.email,
+        phone: parent.phone,
+        nrc_number: parent.nrc_number,
+        address: parent.address || null,
+        city: parent.city || null,
+        date_of_birth: parent.date_of_birth || null,
+        employer_name: parent.employer_name || null,
+        employer_id: parent.employer_id || null,
+        job_title: parent.job_title || null,
+        employment_type: parent.employment_type,
+        employment_duration: parent.employment_duration || null,
+        monthly_income: parent.monthly_income || 0,
+        loan_amount: dto.newPrincipal,
+        loan_term_months: dto.newTermMonths,
+        term_unit: dto.termUnit || parent.term_unit,
+        interest_rate: dto.interestRate,
+        monthly_payment: dto.monthlyPayment,
+        total_repayment: dto.totalRepayment,
+        loan_purpose: parent.loan_purpose,
+        loan_product_id: parent.loan_product_id || null,
+        parent_loan_id: parent.id,
+        status: "approved",
+        source: "reloan",
+        repayment_start_date: dto.reloanDate,
+        admin_notes: dto.childNotes,
+        disbursed_by: actor.userId,
+        disbursed_at: reloanIso,
+        approved_by: actor.userId,
+        approved_at: reloanIso,
+      })
+      .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id")
+      .single();
+    if (insertError || !newLoan?.id) {
+      apiFail(HttpStatus.BAD_REQUEST, "RELOAN_INSERT_FAILED", insertError?.message || "Could not create reloan");
+    }
+
+    try {
+      await insertRepaymentSchedule(admin, {
+        id: newLoan.id,
+        user_id: newLoan.user_id,
+        loan_term_months: newLoan.loan_term_months,
+        total_repayment: newLoan.total_repayment,
+        monthly_payment: newLoan.monthly_payment,
+        loan_product_id: newLoan.loan_product_id,
+        term_unit: dto.termUnit || parent.term_unit,
+        repayment_start_date: dto.reloanDate,
+        disbursed_at: reloanIso,
+      });
+    } catch (err) {
+      apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_FAILED", err instanceof Error ? err.message : "Could not generate schedule");
+    }
+
+    if (optionalTopUp > 0 && dto.sourceAccountId) {
+      const { error: disbInsertErr } = await admin.from("disbursements").insert({
+        loan_id: newLoan.id,
+        amount: topUpNet,
+        disbursement_method: "cash",
+        status: "completed",
+        source_account_id: dto.sourceAccountId,
+        disbursed_at: reloanIso,
+        transaction_reference: `RELOAN-TOPUP-${String(newLoan.id).slice(0, 8).toUpperCase()}`,
+        is_top_up: true,
+      });
+      if (disbInsertErr) apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", disbInsertErr.message);
+      await this.debitSourceAccount(admin, {
+        accountId: dto.sourceAccountId,
+        amount: topUpNet,
+        actorId: actor.userId,
+        referenceType: "loan_reloan_topup",
+        referenceId: newLoan.id,
+        destination: `${parent.full_name} (reloan top-up)`,
+        notes: `Reloan top-up gross K${optionalTopUp.toLocaleString()}, fees K${topUpFees.toLocaleString()}, net K${topUpNet.toLocaleString()}.`,
+      });
+    }
+
+    const { error: ev1 } = await admin.from("loan_events").insert({
+      loan_id: parent.id,
+      event_type: "reloan",
+      performed_by: actor.userId,
+      reason: dto.parentEventReason || "Reloan",
+      previous_values: dto.previousValues || {},
+      new_values: dto.newValues || {},
+      new_loan_id: newLoan.id,
+      amount: dto.newPrincipal,
+    });
+    if (ev1) apiFail(HttpStatus.BAD_REQUEST, "EVENT_INSERT_FAILED", ev1.message);
+
+    const { error: ev2 } = await admin.from("loan_events").insert({
+      loan_id: newLoan.id,
+      event_type: "reloan_created",
+      performed_by: actor.userId,
+      reason: dto.childEventReason || `Created from loan ${String(parent.id).slice(0, 8).toUpperCase()}`,
+      previous_values: { parent_loan_id: parent.id, original_principal: parent.loan_amount },
+      new_values: dto.newValues || { principal: dto.newPrincipal, total_repayment: dto.totalRepayment },
+      amount: dto.newPrincipal,
+    });
+    if (ev2) apiFail(HttpStatus.BAD_REQUEST, "EVENT_INSERT_FAILED", ev2.message);
+
+    return { ok: true, data: { id: newLoan.id, newPrincipal: dto.newPrincipal } };
+  }
+
+  async topUpLoan(loanId: string, dto: TopUpLoanDto, actor: AuthUser) {
+    const admin = this.supabase.getAdminClient();
+    await this.assertNoUnpaidPenalties(admin, loanId);
+
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, user_id, loan_term_months, loan_product_id, term_unit, full_name, admin_notes")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const { error: loanUpdErr } = await admin
+      .from("loan_applications")
+      .update({
+        loan_amount: dto.newPrincipal,
+        total_repayment: dto.newTotalRepayment,
+        monthly_payment: dto.newMonthlyPayment,
+        admin_notes: dto.notes,
+      })
+      .eq("id", loanId);
+    if (loanUpdErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_UPDATE_FAILED", loanUpdErr.message);
+
+    const { error: cancelErr } = await admin
+      .from("loan_repayments")
+      .update({ status: "cancelled" })
+      .eq("loan_id", loanId)
+      .in("status", ["pending", "overdue"]);
+    if (cancelErr) apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_CANCEL_FAILED", cancelErr.message);
+
+    try {
+      await insertRepaymentSchedule(
+        admin,
+        {
+          id: loan.id,
+          user_id: loan.user_id,
+          loan_term_months: loan.loan_term_months,
+          total_repayment: dto.newTotalRepayment,
+          monthly_payment: dto.newMonthlyPayment,
+          loan_product_id: loan.loan_product_id,
+          term_unit: dto.termUnit || loan.term_unit,
+        },
+        { regenerateRemaining: true },
+      );
+    } catch (err) {
+      apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_FAILED", err instanceof Error ? err.message : "Could not regenerate schedule");
+    }
+
+    await this.debitSourceAccount(admin, {
+      accountId: dto.sourceAccountId,
+      amount: dto.netDisbursement,
+      actorId: actor.userId,
+      referenceType: "loan_top_up",
+      referenceId: loanId,
+      destination: `Top-up for ${loan.full_name}`,
+      notes: `Top-up +K${dto.additionalAmount.toLocaleString()} (net K${dto.netDisbursement.toLocaleString()}) — ${dto.reason || "N/A"}`,
+    });
+
+    const { error: evErr } = await admin.from("loan_events").insert({
+      loan_id: loanId,
+      event_type: "top_up",
+      performed_by: actor.userId,
+      reason: dto.reason || "Top-up applied",
+      previous_values: dto.previousValues || {},
+      new_values: dto.newValues || {},
+      amount: dto.additionalAmount,
+      fees_charged: dto.totalFees,
+      net_amount: dto.netDisbursement,
+      source_account_id: dto.sourceAccountId,
+    });
+    if (evErr) apiFail(HttpStatus.BAD_REQUEST, "EVENT_INSERT_FAILED", evErr.message);
+
+    return { ok: true, data: { additionalAmount: dto.additionalAmount, netDisbursement: dto.netDisbursement } };
+  }
+
+  async restructureLoan(loanId: string, dto: RestructureLoanDto, actor: AuthUser) {
+    const admin = this.supabase.getAdminClient();
+    await this.assertNoUnpaidPenalties(admin, loanId);
+
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, user_id, loan_product_id, term_unit")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const { error: loanError } = await admin
+      .from("loan_applications")
+      .update({
+        loan_amount: dto.principal,
+        loan_term_months: dto.newTermMonths,
+        interest_rate: dto.newInterestRate,
+        total_repayment: dto.newTotalRepayment,
+        monthly_payment: dto.newMonthlyPayment,
+        admin_notes: dto.notes,
+      })
+      .eq("id", loanId);
+    if (loanError) apiFail(HttpStatus.BAD_REQUEST, "LOAN_UPDATE_FAILED", loanError.message);
+
+    const { error: cancelErr } = await admin
+      .from("loan_repayments")
+      .update({ status: "cancelled" })
+      .eq("loan_id", loanId)
+      .in("status", ["pending", "overdue"]);
+    if (cancelErr) apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_CANCEL_FAILED", cancelErr.message);
+
+    try {
+      await insertRepaymentSchedule(
+        admin,
+        {
+          id: loan.id,
+          user_id: loan.user_id,
+          loan_term_months: dto.newTermMonths,
+          total_repayment: dto.newTotalRepayment,
+          monthly_payment: dto.newMonthlyPayment,
+          loan_product_id: loan.loan_product_id,
+          term_unit: dto.termUnit || loan.term_unit,
+        },
+        { regenerateRemaining: true },
+      );
+    } catch (err) {
+      apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_FAILED", err instanceof Error ? err.message : "Could not regenerate schedule");
+    }
+
+    const { error: evErr } = await admin.from("loan_events").insert({
+      loan_id: loanId,
+      event_type: "restructure",
+      performed_by: actor.userId,
+      reason: dto.reason || "Loan restructured",
+      previous_values: dto.previousValues || {},
+      new_values: dto.newValues || {},
+    });
+    if (evErr) apiFail(HttpStatus.BAD_REQUEST, "EVENT_INSERT_FAILED", evErr.message);
+
+    return { ok: true, data: { loanId } };
+  }
+
+  private async assertNoUnpaidPenalties(admin: ReturnType<SupabaseService["getAdminClient"]>, loanId: string) {
+    const { data: openRows, error } = await admin
+      .from("loan_repayments")
+      .select("penalty_amount, penalty_paid")
+      .eq("loan_id", loanId)
+      .in("status", ["pending", "overdue", "partial"]);
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "PENALTY_LOOKUP_FAILED", error.message);
+    const totalUnpaid = (openRows || []).reduce(
+      (sum, r) => sum + Math.max(0, Number(r.penalty_amount || 0) - Number(r.penalty_paid || 0)),
+      0,
+    );
+    if (totalUnpaid > 0.01) {
+      apiFail(
+        HttpStatus.CONFLICT,
+        "PENALTIES_OUTSTANDING",
+        `Cannot continue: K${totalUnpaid.toLocaleString()} in penalties must be cleared first.`,
+      );
+    }
+  }
+
+  private async debitSourceAccount(
+    admin: ReturnType<SupabaseService["getAdminClient"]>,
+    args: {
+      accountId: string;
+      amount: number;
+      actorId: string;
+      referenceType: string;
+      referenceId: string;
+      destination: string;
+      notes: string;
+    },
+  ) {
+    const { data: account, error: accErr } = await admin
+      .from("accounts")
+      .select("id, account_name, balance")
+      .eq("id", args.accountId)
+      .maybeSingle();
+    if (accErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_LOOKUP_FAILED", accErr.message);
+    if (!account) apiFail(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Source account not found");
+    const balanceBefore = Number(account.balance);
+    if (balanceBefore < args.amount) {
+      apiFail(
+        HttpStatus.CONFLICT,
+        "INSUFFICIENT_BALANCE",
+        `Insufficient balance in ${account.account_name}. Available: K${balanceBefore.toLocaleString()}`,
+      );
+    }
+    const balanceAfter = balanceBefore - args.amount;
+    const { error: updErr } = await admin
+      .from("accounts")
+      .update({ balance: balanceAfter, updated_at: new Date().toISOString() })
+      .eq("id", account.id);
+    if (updErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_UPDATE_FAILED", updErr.message);
+    const { error: txErr } = await admin.from("account_transactions").insert({
+      account_id: account.id,
+      transaction_type: "disbursement",
+      amount: args.amount,
+      balance_before: balanceBefore,
+      balance_after: balanceAfter,
+      reference_type: args.referenceType,
+      reference_id: args.referenceId,
+      source: account.account_name,
+      destination: args.destination,
+      notes: args.notes,
+      created_by: args.actorId,
+    });
+    if (txErr) apiFail(HttpStatus.BAD_REQUEST, "LEDGER_INSERT_FAILED", txErr.message);
   }
 
   private async rpc(fn: string, args: Record<string, unknown>, failCode: string) {

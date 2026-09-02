@@ -103,7 +103,10 @@ import {
   getEarlySettlementQuote,
   reconcileLoanCompletion,
   recordLoanPayment,
+  reloanLoan,
+  restructureLoan,
   reverseLoanPayment,
+  topUpLoan,
   undoLoanDisbursement,
 } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { disburseLoan } from "@phinduloans/shared/services/repositories/workflowRepository";
@@ -938,21 +941,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const newTermMonths = isFreshReloan
         ? freshTermNum
         : (Number.isFinite(freshTermNum) && freshTermNum > 0 ? freshTermNum : loan.loan_term_months);
-      // Backdate-friendly timestamps from the chosen reloan date (noon UTC for date-only safety)
-      const reloanIso = new Date(`${reloanDate}T12:00:00Z`).toISOString();
-
-      // Mark current loan as completed
-      const { error: closeError } = await supabase
-        .from("loan_applications")
-        .update({
-          status: "completed" as any,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RELOANED ${reloanDate}]: ${isFreshReloan ? `Fresh reloan with new principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""}`} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
-        })
-        .eq("id", loan.id);
-      if (closeError) throw closeError;
-
-      // DB trigger `cancel_repayments_on_loan_closure` will automatically
-      // cancel pending/overdue repayments when loan status changes to "completed".
 
       // Recalculate new loan terms with carry-forward outstanding plus optional top-up.
       const productForCalc: any = {
@@ -968,130 +956,37 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         termUnit as any
       );
 
-      // Create new loan application with carry-forward outstanding plus optional top-up as principal.
-      const { data: newLoan, error: insertError } = await supabase
-        .from("loan_applications")
-        .insert({
-          user_id: loan.user_id,
-          full_name: loan.full_name,
-          email: loan.email,
-          phone: loan.phone,
-          nrc_number: loan.nrc_number,
-          address: loan.address || null,
-          city: loan.city || null,
-          date_of_birth: loan.date_of_birth || null,
-          employer_name: loan.employer_name || null,
-          employer_id: loan.employer_id || null,
-          job_title: loan.job_title || null,
-          employment_type: loan.employment_type as any,
-          employment_duration: loan.employment_duration || null,
-          monthly_income: loan.monthly_income || 0,
-          loan_amount: newPrincipal,
-          loan_term_months: newTermMonths,
-          term_unit: termUnit,
-          interest_rate: interestRate,
-          monthly_payment: newCalc.monthlyPayment,
-          total_repayment: newCalc.totalRepayment,
-          loan_purpose: loan.loan_purpose,
-          loan_product_id: loan.loan_product_id || null,
-          parent_loan_id: loan.id,
-          status: "active" as any,
-          source: "reloan",
-          repayment_start_date: reloanDate,
-          admin_notes: `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()} on ${reloanDate}: ${isFreshReloan ? `Fresh reloan principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}.`} Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
-          disbursed_by: user?.id ?? null,
-          disbursed_at: reloanIso,
-          approved_by: user?.id ?? null,
-          approved_at: reloanIso,
-        })
-        .select("id, user_id, loan_term_months, total_repayment, monthly_payment, loan_product_id")
-        .single();
+      const parentNotes = `${loan.admin_notes || ""}\n\n[RELOANED ${reloanDate}]: ${isFreshReloan ? `Fresh reloan with new principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `Outstanding K${outstandingPrincipal.toLocaleString()} carried to new loan.${optionalTopUpAmount > 0 ? ` Optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()}).` : ""}`} Original principal K${loan.loan_amount.toLocaleString()}, paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`;
+      const childNotes = `Reloan from loan ${loan.id.slice(0, 8).toUpperCase()} on ${reloanDate}: ${isFreshReloan ? `Fresh reloan principal K${newPrincipal.toLocaleString()} over ${newTermMonths} ${termUnit}.` : `carry-forward outstanding K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + optional top-up K${optionalTopUpAmount.toLocaleString()} (net disbursed K${topUpNetDisbursement.toLocaleString()}, fees K${topUpFees.toLocaleString()})` : ""}.`} Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`;
 
-      if (insertError) throw insertError;
-
-      // Generate repayment schedule for the new loan
-      await createRepaymentScheduleForLoan(
-        {
-          id: newLoan.id,
-          user_id: newLoan.user_id,
-          loan_term_months: newLoan.loan_term_months,
-          total_repayment: newLoan.total_repayment,
-          monthly_payment: newLoan.monthly_payment,
-          loan_product_id: newLoan.loan_product_id,
-          term_unit: termUnit,
-          repayment_start_date: reloanDate,
-        },
-        supabase
-      );
-
-      if (optionalTopUpAmount > 0 && sourceAccount) {
-        // Create a disbursements row so this top-up shows up in reports and PMIC exports.
-        const { error: disbInsertErr } = await supabase.from("disbursements").insert({
-          loan_id: newLoan.id,
-          amount: topUpNetDisbursement,
-          disbursement_method: "cash",
-          status: "completed",
-          source_account_id: sourceAccount.id,
-          disbursed_at: reloanIso,
-          transaction_reference: `RELOAN-TOPUP-${newLoan.id.slice(0, 8).toUpperCase()}`,
-          is_top_up: true,
-        });
-        if (disbInsertErr) throw disbInsertErr;
-
-        const sourceBalanceAfter = Number(sourceAccount.balance) - topUpNetDisbursement;
-        const { error: sourceUpdateError } = await supabase
-          .from("accounts")
-          .update({ balance: sourceBalanceAfter, updated_at: new Date().toISOString() })
-          .eq("id", sourceAccount.id);
-        if (sourceUpdateError) throw sourceUpdateError;
-
-        const { error: txError } = await supabase.from("account_transactions").insert({
-          account_id: sourceAccount.id,
-          transaction_type: "disbursement",
-          amount: topUpNetDisbursement,
-          balance_before: Number(sourceAccount.balance),
-          balance_after: sourceBalanceAfter,
-          reference_type: "loan_reloan_topup",
-          reference_id: newLoan.id,
-          source: sourceAccount.account_name,
-          destination: `${loan.full_name} (reloan top-up)`,
-          notes: `Reloan top-up gross K${optionalTopUpAmount.toLocaleString()}, fees K${topUpFees.toLocaleString()}, net K${topUpNetDisbursement.toLocaleString()}.`,
-          created_by: user?.id,
-        });
-        if (txError) throw txError;
-      }
-
-      // Record loan event on original loan
-      const { error: reloanEv1Err } = await supabase.from("loan_events" as any).insert({
-        loan_id: loan.id,
-        event_type: "reloan",
-        performed_by: user?.id,
-        reason: `Reloan — carried K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + top-up K${optionalTopUpAmount.toLocaleString()} (net K${topUpNetDisbursement.toLocaleString()})` : ""} (Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}).${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""} New loan ${newLoan.id.slice(0, 8).toUpperCase()}.`,
-        previous_values: { principal: loan.loan_amount, total_repayment: loan.total_repayment, total_paid: totalAllPaid, status: loan.status },
-        new_values: { principal: newPrincipal, total_repayment: newCalc.totalRepayment, status: "active" },
-        new_loan_id: newLoan.id,
-        amount: newPrincipal,
+      const result = await reloanLoan(loan.id, {
+        newPrincipal,
+        newTermMonths,
+        interestRate,
+        monthlyPayment: newCalc.monthlyPayment,
+        totalRepayment: newCalc.totalRepayment,
+        reloanDate,
+        parentNotes,
+        childNotes,
+        termUnit,
+        optionalTopUpAmount,
+        topUpNetDisbursement,
+        topUpFees,
+        sourceAccountId: sourceAccount?.id,
+        parentEventReason: `Reloan — carried K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + top-up K${optionalTopUpAmount.toLocaleString()} (net K${topUpNetDisbursement.toLocaleString()})` : ""} (Original K${loan.loan_amount.toLocaleString()}, Paid K${totalAllPaid.toLocaleString()}).${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""} New loan.`,
+        childEventReason: `Created from loan ${loan.id.slice(0, 8).toUpperCase()}. Carry-forward K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + top-up K${optionalTopUpAmount.toLocaleString()}` : ""}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
+        previousValues: { principal: loan.loan_amount, total_repayment: loan.total_repayment, total_paid: totalAllPaid, status: loan.status },
+        newValues: { principal: newPrincipal, total_repayment: newCalc.totalRepayment, status: "active" },
       });
-      if (reloanEv1Err) throw reloanEv1Err;
-
-      // Record loan event on new loan for traceability
-      const { error: reloanEv2Err } = await supabase.from("loan_events" as any).insert({
-        loan_id: newLoan.id,
-        event_type: "reloan_created",
-        performed_by: user?.id,
-        reason: `Created from loan ${loan.id.slice(0, 8).toUpperCase()}. Carry-forward K${outstandingPrincipal.toLocaleString()}${optionalTopUpAmount > 0 ? ` + top-up K${optionalTopUpAmount.toLocaleString()}` : ""}.${reloanReason.trim() ? ` Reason: ${reloanReason.trim()}.` : ""}`,
-        previous_values: { parent_loan_id: loan.id, original_principal: loan.loan_amount },
-        new_values: { principal: newPrincipal, total_repayment: newCalc.totalRepayment },
-        amount: newPrincipal,
-      });
-      if (reloanEv2Err) throw reloanEv2Err;
+      const newLoanId = result.data?.id;
+      if (!newLoanId) throw new Error("Reloan did not return a new loan id");
 
       await logAudit({
         action: "RELOAN",
         entity_type: "loan_application",
         entity_id: loan.id,
         details: {
-          new_loan_id: newLoan.id,
+          new_loan_id: newLoanId,
           carry_forward_amount: outstandingPrincipal,
           optional_top_up_amount: optionalTopUpAmount,
           optional_top_up_net_disbursement: topUpNetDisbursement,
@@ -1102,7 +997,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         },
       });
 
-      return { newLoan, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement };
+      return { newLoan: { id: newLoanId }, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement };
     },
     onSuccess: ({ newLoan, outstandingPrincipal, optionalTopUpAmount, topUpNetDisbursement }) => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
@@ -1230,93 +1125,34 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const newTotal = balanceSnapshot.totalPaid + loanCalc.totalRepayment;
       const newMonthly = loanCalc.monthlyPayment;
 
-      // Update loan application
-      const { error: loanErr } = await supabase
-        .from("loan_applications")
-        .update({
-          loan_amount: newPrincipal,
-          total_repayment: newTotal,
-          monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: unpaid principal K${outstandingPrincipal.toLocaleString()} + new cash K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Lifecycle total repayment: K${newTotal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
-        })
-        .eq("id", loan.id);
-      if (loanErr) throw loanErr;
-
-      // Cancel all open rows so the shared scheduler can rebuild a clean tail.
-      const { error: delPendingErr } = await supabase
-        .from("loan_repayments")
-        .update({ status: "cancelled" })
-        .eq("loan_id", loan.id)
-        .in("status", ["pending", "overdue"]);
-      if (delPendingErr) throw delPendingErr;
-
-      // Use the shared scheduler so business-calendar / holidays / product cadence are respected.
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: loan.loan_term_months,
-          total_repayment: newTotal,
-          monthly_payment: newMonthly,
-          loan_product_id: loan.loan_product_id || null,
-          term_unit: termUnit,
-        },
-        supabase,
-        { regenerateRemaining: true },
-      );
-
-      // Deduct from source account
-      const newBalance = freshAccount.balance - netDisbursement;
-      const { error: topUpAccErr } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance, updated_at: new Date().toISOString() })
-        .eq("id", freshAccount.id);
-      if (topUpAccErr) throw topUpAccErr;
-
-      // Record transaction
-      const { error: topUpTxErr } = await supabase.from("account_transactions").insert({
-        account_id: freshAccount.id,
-        transaction_type: "disbursement",
-        amount: netDisbursement,
-        balance_before: freshAccount.balance,
-        balance_after: newBalance,
-        reference_type: "loan_top_up",
-        reference_id: loan.id,
-        source: freshAccount.account_name,
-        destination: `Top-up for ${loan.full_name}`,
-        notes: `Top-up +K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()}) — ${topUpReason || "N/A"}`,
-        created_by: user?.id,
-      });
-      if (topUpTxErr) throw topUpTxErr;
-
-      // Record loan event for history timeline
-      const { error: topUpEvErr } = await supabase.from("loan_events" as any).insert({
-        loan_id: loan.id,
-        event_type: "top_up",
-        performed_by: user?.id,
-        reason: topUpReason || "Top-up applied",
-        previous_values: {
+      await topUpLoan(loan.id, {
+        additionalAmount,
+        netDisbursement,
+        totalFees,
+        newPrincipal,
+        newTotalRepayment: newTotal,
+        newMonthlyPayment: newMonthly,
+        notes: `${loan.admin_notes || ""}\n\n[TOP-UP ${format(new Date(), "yyyy-MM-dd")}]: unpaid principal K${outstandingPrincipal.toLocaleString()} + new cash K${additionalAmount.toLocaleString()} (net K${netDisbursement.toLocaleString()} after K${totalFees.toLocaleString()} fees). Lifecycle total repayment: K${newTotal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. Reason: ${topUpReason || "N/A"}. Source: ${freshAccount.account_name}.`,
+        sourceAccountId: topUpSourceAccountId,
+        reason: topUpReason || "N/A",
+        termUnit,
+        previousValues: {
           principal: loan.loan_amount,
           interest_rate: loan.interest_rate,
           term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
+          term_unit: (loan as any).term_unit || "months",
           total_repayment: loan.total_repayment,
           monthly_payment: loan.monthly_payment,
         },
-        new_values: {
+        newValues: {
           principal: newPrincipal,
           interest_rate: interestRate,
           term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
+          term_unit: (loan as any).term_unit || "months",
           total_repayment: newTotal,
           monthly_payment: newMonthly,
         },
-        amount: additionalAmount,
-        fees_charged: totalFees,
-        net_amount: netDisbursement,
-        source_account_id: topUpSourceAccountId,
       });
-      if (topUpEvErr) throw topUpEvErr;
 
       await logAudit({
         action: "LOAN_TOP_UP",
@@ -1395,44 +1231,32 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const newTotal = balanceSnapshot.totalPaid + loanCalc.totalRepayment;
       const newMonthly = loanCalc.monthlyPayment;
 
-      // Update loan
-      const { error: loanError } = await supabase
-        .from("loan_applications")
-        .update({
-          loan_amount: principal,
-          loan_term_months: newTerm,
-          interest_rate: newRate,
-          total_repayment: newTotal,
-          monthly_payment: newMonthly,
-          admin_notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nUnpaid principal basis: K${principal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. New terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Lifecycle total: K${newTotal.toLocaleString()}`,
-        })
-        .eq("id", loan.id);
-
-      if (loanError) throw loanError;
-
-      // Cancel all open rows (pending/overdue) so the shared scheduler can rebuild a clean tail.
-      // Partial rows keep their installment_number — the scheduler skips locked numbers.
-      const { error: cancelErr } = await supabase
-        .from("loan_repayments")
-        .update({ status: "cancelled" })
-        .eq("loan_id", loan.id)
-        .in("status", ["pending", "overdue"]);
-      if (cancelErr) throw cancelErr;
-
-      // Use the shared scheduler so business-calendar / holidays / product cadence are respected.
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: newTerm,
-          total_repayment: newTotal,
-          monthly_payment: newMonthly,
-          loan_product_id: loan.loan_product_id || null,
-          term_unit: termUnit,
+      await restructureLoan(loan.id, {
+        principal,
+        newTermMonths: newTerm,
+        newInterestRate: newRate,
+        newTotalRepayment: newTotal,
+        newMonthlyPayment: newMonthly,
+        notes: `${loan.admin_notes || ""}\n\n[RESTRUCTURED ${format(new Date(), "yyyy-MM-dd")}]: ${restructureReason}\nUnpaid principal basis: K${principal.toLocaleString()}; already paid K${balanceSnapshot.totalPaid.toLocaleString()}. New terms: ${newTerm} ${termUnit} @ ${newRate}% (${interestPeriod}, ${interestType}). Lifecycle total: K${newTotal.toLocaleString()}`,
+        reason: restructureReason || "Loan restructured",
+        termUnit,
+        previousValues: {
+          principal: loan.loan_amount,
+          interest_rate: loan.interest_rate,
+          term: loan.loan_term_months,
+          term_unit: (loan as any).term_unit || "months",
+          total_repayment: loan.total_repayment,
+          monthly_payment: loan.monthly_payment,
         },
-        supabase,
-        { regenerateRemaining: true },
-      );
+        newValues: {
+          principal,
+          interest_rate: newRate,
+          term: newTerm,
+          term_unit: termUnit,
+          total_repayment: newTotal,
+          monthly_payment: newMonthly,
+        },
+      });
 
       await logAudit({
         action: "LOAN_RESTRUCTURED",
@@ -1444,30 +1268,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           new_total_repayment: newTotal,
           new_monthly_payment: newMonthly,
           reason: restructureReason,
-        },
-      });
-
-      // Record loan event for history timeline
-      await supabase.from("loan_events" as any).insert({
-        loan_id: loan.id,
-        event_type: "restructure",
-        performed_by: user?.id,
-        reason: restructureReason || "Loan restructured",
-        previous_values: {
-          principal: loan.loan_amount,
-          interest_rate: loan.interest_rate,
-          term: loan.loan_term_months,
-          term_unit: (loan as any).term_unit || 'months',
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-        },
-        new_values: {
-          principal: principal,
-          interest_rate: newRate,
-          term: newTerm,
-          term_unit: termUnit,
-          total_repayment: newTotal,
-          monthly_payment: newMonthly,
         },
       });
     },

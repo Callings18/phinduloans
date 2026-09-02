@@ -272,3 +272,81 @@ export async function createPendingDisbursement(input: {
   if (error || !data?.id) throw error ?? new Error("Could not create disbursement");
   return { ok: true, data: { id: data.id } };
 }
+
+export async function reloanLoan(
+  loanId: string,
+  input: {
+    newPrincipal: number;
+    newTermMonths: number;
+    interestRate: number;
+    monthlyPayment: number;
+    totalRepayment: number;
+    reloanDate: string;
+    parentNotes: string;
+    childNotes: string;
+    termUnit?: string;
+    optionalTopUpAmount?: number;
+    topUpNetDisbursement?: number;
+    topUpFees?: number;
+    sourceAccountId?: string;
+    parentEventReason?: string;
+    childEventReason?: string;
+    previousValues?: Record<string, unknown>;
+    newValues?: Record<string, unknown>;
+  },
+) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { id: string; newPrincipal: number } }>(
+      `/api/v1/loans/${loanId}/reloan`,
+      input,
+    );
+  }
+  throw new Error("Set VITE_API_URL to reloan through the API");
+}
+
+export async function topUpLoan(
+  loanId: string,
+  input: {
+    additionalAmount: number;
+    netDisbursement: number;
+    totalFees: number;
+    newPrincipal: number;
+    newTotalRepayment: number;
+    newMonthlyPayment: number;
+    notes: string;
+    sourceAccountId: string;
+    reason?: string;
+    termUnit?: string;
+    previousValues?: Record<string, unknown>;
+    newValues?: Record<string, unknown>;
+  },
+) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { additionalAmount: number; netDisbursement: number } }>(
+      `/api/v1/loans/${loanId}/top-up`,
+      input,
+    );
+  }
+  throw new Error("Set VITE_API_URL to top-up through the API");
+}
+
+export async function restructureLoan(
+  loanId: string,
+  input: {
+    principal: number;
+    newTermMonths: number;
+    newInterestRate: number;
+    newTotalRepayment: number;
+    newMonthlyPayment: number;
+    notes: string;
+    reason?: string;
+    termUnit?: string;
+    previousValues?: Record<string, unknown>;
+    newValues?: Record<string, unknown>;
+  },
+) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { loanId: string } }>(`/api/v1/loans/${loanId}/restructure`, input);
+  }
+  throw new Error("Set VITE_API_URL to restructure through the API");
+}

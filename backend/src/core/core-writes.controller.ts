@@ -13,8 +13,11 @@ import {
   RecordPaymentDto,
   RecoverWriteOffDto,
   RejectWriteOffDto,
+  ReloanDto,
+  RestructureLoanDto,
   ReversePaymentDto,
   SetExpenseStatusDto,
+  TopUpLoanDto,
 } from "./dto/core-writes.dto";
 import { CoreWritesService } from "./core-writes.service";
 
@@ -142,5 +145,26 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Create a pending disbursement (complete separately)" })
   createPending(@Body() dto: CreatePendingDisbursementDto) {
     return this.core.createPendingDisbursement(dto);
+  }
+
+  @Post("loans/:loanId/reloan")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Close parent loan and open a carry-forward or fresh reloan" })
+  reloan(@Param("loanId") loanId: string, @Body() dto: ReloanDto, @CurrentUser() user: AuthUser) {
+    return this.core.reloan(loanId, dto, user);
+  }
+
+  @Post("loans/:loanId/top-up")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Increase principal, rebuild remaining schedule, debit source account" })
+  topUp(@Param("loanId") loanId: string, @Body() dto: TopUpLoanDto, @CurrentUser() user: AuthUser) {
+    return this.core.topUpLoan(loanId, dto, user);
+  }
+
+  @Post("loans/:loanId/restructure")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Change remaining term/rate and rebuild the unpaid schedule tail" })
+  restructure(@Param("loanId") loanId: string, @Body() dto: RestructureLoanDto, @CurrentUser() user: AuthUser) {
+    return this.core.restructureLoan(loanId, dto, user);
   }
 }

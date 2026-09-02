@@ -188,3 +188,216 @@ export class CreatePendingDisbursementDto {
   @IsString()
   accountNumber?: string | null;
 }
+
+export class ReloanDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  newPrincipal!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  newTermMonths!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  interestRate!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  monthlyPayment!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  totalRepayment!: number;
+
+  @ApiProperty({ example: "2026-09-02" })
+  @IsString()
+  reloanDate!: string;
+
+  @ApiProperty()
+  @IsString()
+  parentNotes!: string;
+
+  @ApiProperty()
+  @IsString()
+  childNotes!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  termUnit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  optionalTopUpAmount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  topUpNetDisbursement?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  topUpFees?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  sourceAccountId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  parentEventReason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  childEventReason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  previousValues?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  newValues?: Record<string, unknown>;
+}
+
+export class TopUpLoanDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  additionalAmount!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  netDisbursement!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  totalFees!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  newPrincipal!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  newTotalRepayment!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  newMonthlyPayment!: number;
+
+  @ApiProperty()
+  @IsString()
+  notes!: string;
+
+  @ApiProperty()
+  @IsString()
+  sourceAccountId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  termUnit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  previousValues?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  newValues?: Record<string, unknown>;
+}
+
+export class RestructureLoanDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  principal!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  newTermMonths!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  newInterestRate!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  newTotalRepayment!: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  newMonthlyPayment!: number;
+
+  @ApiProperty()
+  @IsString()
+  notes!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  termUnit?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  previousValues?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  newValues?: Record<string, unknown>;
+}
