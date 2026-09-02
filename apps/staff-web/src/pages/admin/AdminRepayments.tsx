@@ -659,6 +659,10 @@ const AdminRepayments = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_repayments' }, () => {
         queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_claims' }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-repayments"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-payment-claims"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);

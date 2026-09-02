@@ -89,7 +89,6 @@ import {
   transitionLoanByAction,
   transitionLoanStatus,
 } from "@phinduloans/shared/services/repositories/workflowRepository";
-import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
 import { useLoanReviewChecklist } from "@/hooks/useLoanReviewChecklist";
 import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
@@ -282,11 +281,6 @@ const AdminApplications = () => {
       openFromList(data);
     })();
   }, [searchParams, applications, isLoading, setSearchParams]);
-
-  // Placeholder for workflow data - tables don't exist yet  
-  const workflowStages: any[] = [];
-  const workflowTransitions: any[] = [];
-  const workflowHistory: any[] = [];
 
   const { data: loanProducts } = useQuery({
     queryKey: ['loan-products'],

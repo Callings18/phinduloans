@@ -3,6 +3,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
 import { PageHeader, StatsGrid } from "@/components/layout/PageShell";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
@@ -135,6 +136,12 @@ const AdminCollections = () => {
   });
 
   const queryClient = useQueryClient();
+
+  useRealtimeInvalidate(
+    ["loan_repayments", "collection_activities", "collection_assignments", "demand_letters"],
+    [["overdue-repayments"], ["ptp-items"], ["collection-assignments"], ["demand-letters"]],
+    "admin-collections-realtime",
+  );
 
   // Fetch overdue repayments
   const { data: overdueRepayments, isLoading } = useQuery({

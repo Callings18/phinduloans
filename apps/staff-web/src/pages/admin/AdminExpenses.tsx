@@ -15,6 +15,7 @@ import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Textarea } from "@phinduloans/shared/components/ui/textarea";
 import { toast } from "@phinduloans/shared/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { Plus, Receipt, Check, X, FileText, Download, Search, Filter } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -95,6 +96,11 @@ const AdminExpenses = () => {
   const canCreateExpense = can("expenses", "create");
   const canApproveExpense = can("expenses", "approve");
   const queryClient = useQueryClient();
+  useRealtimeInvalidate(
+    ["expenses", "account_transactions"],
+    [["expenses"], ["accounts"], ["account_transactions"]],
+    "admin-expenses-realtime",
+  );
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");

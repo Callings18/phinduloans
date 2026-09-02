@@ -103,6 +103,8 @@ import {
   reconcileLoanCompletion,
   recordLoanPayment,
 } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { disburseLoan } from "@phinduloans/shared/services/repositories/workflowRepository";
+import { houseEarlySettlement } from "@/services/repositories/houseWorkflowRepository";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -261,6 +263,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   // Disbursement from detail view
   const [isDisburseOpen, setIsDisburseOpen] = useState(false);
   const [disburseSourceAccountId, setDisburseSourceAccountId] = useState("");
+  const [settlementAccountId, setSettlementAccountId] = useState("");
   const [disburseMethod, setDisburseMethod] = useState("bank_transfer");
   const [disburseTransactionRef, setDisburseTransactionRef] = useState("");
 
@@ -763,48 +766,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const processEarlySettlementMutation = useMutation({
     mutationFn: async () => {
       if (!loan || !earlySettlement) throw new Error("No loan or settlement data");
-
-      // Fetch pending AND overdue repayments to set principal_paid correctly
-      const { data: pendingRepsForSettle } = await supabase
-        .from("loan_repayments")
-        .select("id, amount, original_amount")
-        .eq("loan_id", loan.id)
-        .in("status", ["pending", "overdue"]);
-
-      // Mark each pending repayment as paid with correct principal_paid
-      for (const pr of (pendingRepsForSettle || [])) {
-        const origAmt = pr.original_amount || pr.amount;
-        await supabase
-          .from("loan_repayments")
-          .update({
-            status: "paid",
-            paid_date: new Date().toISOString().split("T")[0],
-            payment_method: "early_settlement",
-            principal_paid: Number(origAmt),
-            original_amount: origAmt,
-            amount: Number(origAmt),
-          })
-          .eq("id", pr.id);
-      }
-      const repaymentError = null; // handled per-row above
-
-      if (repaymentError) throw repaymentError;
-
-      // Update loan with settlement info
-      const { error: loanError } = await supabase
-        .from("loan_applications")
-        .update({
-          status: "completed",
-          settlement_date: new Date().toISOString().split("T")[0],
-          settlement_type: "early",
-          early_settlement_fee: earlySettlement.early_settlement_fee,
-          admin_notes: `${loan.admin_notes || ""}\n\n[EARLY SETTLEMENT ${format(new Date(), "yyyy-MM-dd")}]: Loan settled early. Payoff amount: K${earlySettlement.total_payoff_amount.toLocaleString()}`,
-        })
-        .eq("id", loan.id);
-
-      if (loanError) throw loanError;
-
-      // Log the settlement
+      if (!settlementAccountId) throw new Error("Select the account to credit settlement funds to");
+      await houseEarlySettlement({
+        loanId: loan.id,
+        accountId: settlementAccountId,
+        paymentMethod: "cash",
+      });
+      await reconcileLoanCompletion(loan.id);
       await supabase.from("collection_activities").insert({
         loan_id: loan.id,
         activity_type: "early_settlement",
@@ -900,64 +868,13 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
       }
 
-      // Deduct from source account
-      const newBalance = Number(freshAccount.balance) - netDisbursement;
-      const { error: accUpdateErr } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance, updated_at: new Date().toISOString() })
-        .eq("id", freshAccount.id);
-      if (accUpdateErr) throw accUpdateErr;
-
-      // Record transaction
-      const { error: txErr } = await supabase.from("account_transactions").insert({
-        account_id: freshAccount.id,
-        transaction_type: "disbursement",
+      await disburseLoan({
+        loanId: loan.id,
+        accountId: disburseSourceAccountId,
         amount: netDisbursement,
-        balance_before: Number(freshAccount.balance),
-        balance_after: newBalance,
-        reference_type: "loan_disbursement",
-        reference_id: loan.id,
-        source: freshAccount.account_name,
-        destination: `${loan.full_name} (Loan Disbursement)`,
-        notes: `Principal K${principal.toLocaleString()}, Fees K${totalFees.toLocaleString()}, Net K${netDisbursement.toLocaleString()}`,
-        created_by: user?.id,
+        disbursementMethod: disburseMethod,
+        transactionReference: disburseTransactionRef || null,
       });
-      if (txErr) throw txErr;
-
-      // Record disbursement
-      const { error: disbErr } = await supabase.from("disbursements").insert({
-        loan_id: loan.id,
-        amount: netDisbursement,
-        disbursement_method: disburseMethod,
-        source_account_id: freshAccount.id,
-        transaction_reference: disburseTransactionRef || null,
-        status: "completed",
-        disbursed_at: new Date().toISOString(),
-      });
-      if (disbErr) throw disbErr;
-
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: loan.loan_term_months,
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          loan_product_id: loan.loan_product_id,
-          term_unit: (loan as any).term_unit,
-        },
-        supabase,
-      );
-
-      // Record disbursement metadata (trigger already set status to active via generate_repayment_schedule)
-      const { error: loanErr } = await supabase
-        .from("loan_applications")
-        .update({
-          disbursed_by: user?.id,
-          disbursed_at: new Date().toISOString(),
-        })
-        .eq("id", loan.id);
-      if (loanErr) throw loanErr;
 
       await logAudit({
         action: "LOAN_DISBURSED",
@@ -3185,17 +3102,33 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                   <div>
                     <p className="text-sm font-medium">Process Settlement</p>
                     <p className="text-xs text-muted-foreground">
-                      Clicking "Process Settlement" will mark all pending repayments as paid and close the loan.
+                      Outstanding installments are recorded as payments on the selected account, then the loan is closed.
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Credit to account</Label>
+                <Select value={settlementAccountId} onValueChange={setSettlementAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(fundingAccounts || []).map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.account_name} — K{Number(acc.balance).toLocaleString()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setIsEarlySettlementOpen(false)}>Cancel</Button>
                 <Button
                   onClick={() => processEarlySettlementMutation.mutate()}
-                  disabled={processEarlySettlementMutation.isPending}
+                  disabled={processEarlySettlementMutation.isPending || !settlementAccountId}
                 >
                   {processEarlySettlementMutation.isPending ? (
                     <Loader2 className="animate-spin mr-1" size={14} />

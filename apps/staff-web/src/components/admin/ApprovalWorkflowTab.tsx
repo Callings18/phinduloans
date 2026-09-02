@@ -25,6 +25,7 @@ import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { notifyBorrowerVisibleNote } from "@phinduloans/shared/utils/notifyBorrowerPortal";
+import { transitionLoanByAction } from "@phinduloans/shared/services/repositories/workflowRepository";
 
 interface ApprovalWorkflowTabProps {
   loan: {
@@ -202,16 +203,14 @@ export default function ApprovalWorkflowTab({ loan }: ApprovalWorkflowTabProps) 
         updateData.recommended_at = now;
         updateData.approval_stage = "recommended";
       } else if (stageKey === "approval") {
+        await transitionLoanByAction(loan.id, "approve");
         updateData.approved_by = user.id;
         updateData.approved_at = now;
         updateData.reviewed_by = user.id;
         updateData.reviewed_at = now;
         updateData.approval_stage = "approved";
-        updateData.status = "approved";
       } else if (stageKey === "disbursement") {
-        updateData.disbursed_by = user.id;
-        updateData.disbursed_at = now;
-        updateData.approval_stage = "disbursed";
+        throw new Error("Disburse from Loans, Applications, or the loan Disburse action so accounts and the schedule stay in sync.");
       }
 
       const { error } = await supabase

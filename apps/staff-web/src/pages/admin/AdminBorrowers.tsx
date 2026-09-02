@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { createBorrower } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { createBorrower, createLoanApplication } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import GuidedTour from "@/components/common/GuidedTour";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
@@ -333,11 +333,11 @@ const AdminBorrowers = () => {
         const termDays = dailyRepayment > 0 ? Math.max(1, Math.round(totalRepayment / dailyRepayment)) : 26;
         const monthlyPayment = dailyRepayment > 0 ? dailyRepayment : Math.round(totalRepayment / termDays);
         const startDate = data.loan_start_date || new Date().toISOString().slice(0, 10);
-        const { error: loanError } = await supabase.from("loan_applications").insert({
+        await createLoanApplication({
+          application: {
           user_id: created.user_id,
           loan_product_id: selectedLoanProductId,
           full_name: data.full_name,
-          
           phone: data.phone || "",
           nrc_number: data.nrc_number || "N/A",
           address: data.address || "",
@@ -355,8 +355,8 @@ const AdminBorrowers = () => {
           status: "approved",
           approved_at: `${startDate}T08:00:00.000Z`,
           source: "admin_borrowers",
+          },
         });
-        if (loanError) throw loanError;
       }
 
       return created;
@@ -400,11 +400,11 @@ const AdminBorrowers = () => {
         const userId = created?.user_id;
         if (!userId) continue;
 
-        const { error: loanError } = await supabase.from("loan_applications").insert({
+        await createLoanApplication({
+          application: {
           user_id: userId,
           loan_product_id: targetProductId,
           full_name: item.full_name,
-          
           phone: "",
           nrc_number: "N/A",
           address: "",
@@ -422,8 +422,8 @@ const AdminBorrowers = () => {
           status: "approved",
           approved_at: new Date().toISOString(),
           source: "admin_marketeers_batch",
+          },
         });
-        if (loanError) throw loanError;
         createdCount += 1;
       }
 

@@ -55,6 +55,7 @@ import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 
 const AdminWriteOffs = () => {
   const { can } = usePermissions();
@@ -71,6 +72,12 @@ const AdminWriteOffs = () => {
   
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  useRealtimeInvalidate(
+    ["loan_writeoffs"],
+    [["admin-writeoffs"]],
+    "admin-writeoffs-realtime",
+  );
 
   // Fetch all write-offs
   const { data: writeOffs, isLoading } = useQuery({
