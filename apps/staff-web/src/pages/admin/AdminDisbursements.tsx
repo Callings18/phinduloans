@@ -27,8 +27,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
 import { completeDisbursement } from "@phinduloans/shared/services/repositories/workflowRepository";
+import { createPendingDisbursement } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
 import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
 import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
@@ -309,22 +309,20 @@ const AdminDisbursements = () => {
         throw new Error("Missing bank account destination. Add it in borrower KYC or enter it manually.");
       }
 
-      const { data: inserted, error: disbError } = await supabase.from("disbursements").insert({
-        loan_id: selectedLoan,
+      const created = await createPendingDisbursement({
+        loanId: selectedLoan,
         amount: disbursementAmount,
-        disbursement_method: formData.disbursement_method,
-        mobile_money_number: resolvedMobileMoneyNumber,
-        account_number: resolvedAccountNumber,
-        status: "pending",
-        source_account_id: formData.source_account_id,
-      }).select("id").single();
-
-      if (disbError) throw disbError;
+        disbursementMethod: formData.disbursement_method,
+        sourceAccountId: formData.source_account_id,
+        mobileMoneyNumber: resolvedMobileMoneyNumber,
+        accountNumber: resolvedAccountNumber,
+      });
+      const insertedId = created?.data?.id;
 
       await logAudit({
         action: "DISBURSE_CREATE",
         entity_type: "disbursement",
-        entity_id: inserted?.id ?? selectedLoan,
+        entity_id: insertedId ?? selectedLoan,
         module: "disbursement",
         new_values: { loan_id: selectedLoan, amount: disbursementAmount, status: "pending" },
       });

@@ -145,3 +145,46 @@ export class SetExpenseStatusDto {
   @IsString()
   rejectReason?: string;
 }
+
+export class ReversePaymentDto {
+  @ApiProperty()
+  @IsString()
+  reason!: string;
+}
+
+export class DeleteLoanDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class CreatePendingDisbursementDto {
+  @ApiProperty()
+  @IsString()
+  loanId!: string;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  amount!: number;
+
+  @ApiProperty()
+  @IsString()
+  disbursementMethod!: string;
+
+  @ApiProperty()
+  @IsString()
+  sourceAccountId!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  mobileMoneyNumber?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  accountNumber?: string | null;
+}

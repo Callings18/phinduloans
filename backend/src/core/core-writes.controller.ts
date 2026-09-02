@@ -7,10 +7,13 @@ import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
 import {
   CreateApplicationDto,
   CreateBorrowerDto,
+  CreatePendingDisbursementDto,
   CreateStaffDto,
+  DeleteLoanDto,
   RecordPaymentDto,
   RecoverWriteOffDto,
   RejectWriteOffDto,
+  ReversePaymentDto,
   SetExpenseStatusDto,
 } from "./dto/core-writes.dto";
 import { CoreWritesService } from "./core-writes.service";
@@ -103,5 +106,41 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Shift pending installments off non-working days" })
   shiftPending() {
     return this.core.shiftPendingRepayments();
+  }
+
+  @Post("repayments/:repaymentId/reverse")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Reverse a recorded repayment and debit the credited account" })
+  reversePayment(
+    @Param("repaymentId") repaymentId: string,
+    @Body() dto: ReversePaymentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.core.reversePayment(repaymentId, dto.reason, user);
+  }
+
+  @Post("loans/:loanId/undo-disbursement")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Refund source account, drop schedule, revert loan to approved" })
+  undoDisbursement(@Param("loanId") loanId: string, @CurrentUser() user: AuthUser) {
+    return this.core.undoDisbursement(loanId, user);
+  }
+
+  @Post("loans/:loanId/delete")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Delete a pre-disbursement loan application" })
+  deleteLoan(
+    @Param("loanId") loanId: string,
+    @Body() dto: DeleteLoanDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.core.deleteLoan(loanId, dto.reason, user);
+  }
+
+  @Post("disbursements")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Create a pending disbursement (complete separately)" })
+  createPending(@Body() dto: CreatePendingDisbursementDto) {
+    return this.core.createPendingDisbursement(dto);
   }
 }

@@ -360,6 +360,252 @@ export class CoreWritesService {
     return { ok: true, data: row ?? data };
   }
 
+  async reversePayment(repaymentId: string, reason: string, actor: AuthUser) {
+    const why = reason.trim();
+    if (!why) apiFail(HttpStatus.BAD_REQUEST, "REASON_REQUIRED", "Reversal reason is required");
+    const admin = this.supabase.getAdminClient();
+
+    const { data: repayment, error: repErr } = await admin
+      .from("loan_repayments")
+      .select("id, loan_id, amount, original_amount, principal_paid, installment_number, status")
+      .eq("id", repaymentId)
+      .maybeSingle();
+    if (repErr) apiFail(HttpStatus.BAD_REQUEST, "REPAYMENT_LOOKUP_FAILED", repErr.message);
+    if (!repayment) apiFail(HttpStatus.NOT_FOUND, "REPAYMENT_NOT_FOUND", "Repayment not found");
+    if (repayment.status !== "paid" && repayment.status !== "partial") {
+      apiFail(HttpStatus.CONFLICT, "NOT_REVERSIBLE", "Only paid or partial installments can be reversed");
+    }
+
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, status, full_name")
+      .eq("id", repayment.loan_id)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const refundAmount = Number(repayment.principal_paid || repayment.amount || 0);
+    const { data: tx } = await admin
+      .from("account_transactions")
+      .select("id, account_id, amount")
+      .eq("reference_type", "repayment")
+      .eq("reference_id", repaymentId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (tx?.account_id && refundAmount > 0) {
+      const { data: account, error: accErr } = await admin
+        .from("accounts")
+        .select("id, balance")
+        .eq("id", tx.account_id)
+        .maybeSingle();
+      if (accErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_LOOKUP_FAILED", accErr.message);
+      if (account) {
+        const balanceBefore = Number(account.balance);
+        const balanceAfter = balanceBefore - refundAmount;
+        if (balanceAfter < 0) {
+          apiFail(
+            HttpStatus.CONFLICT,
+            "INSUFFICIENT_BALANCE",
+            `Cannot reverse: account balance (K${balanceBefore.toLocaleString()}) is less than the refund (K${refundAmount.toLocaleString()}).`,
+          );
+        }
+        const { error: balErr } = await admin
+          .from("accounts")
+          .update({ balance: balanceAfter, updated_at: new Date().toISOString() })
+          .eq("id", account.id);
+        if (balErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_UPDATE_FAILED", balErr.message);
+        const { error: txErr } = await admin.from("account_transactions").insert({
+          account_id: account.id,
+          transaction_type: "adjustment_debit",
+          amount: refundAmount,
+          balance_before: balanceBefore,
+          balance_after: balanceAfter,
+          destination: "Payment reversal",
+          reference_type: "repayment_reversal",
+          reference_id: repaymentId,
+          notes: `Reversal of installment #${repayment.installment_number ?? "?"} for ${loan.full_name}: ${why}`,
+          created_by: actor.userId,
+        });
+        if (txErr) apiFail(HttpStatus.BAD_REQUEST, "LEDGER_INSERT_FAILED", txErr.message);
+      }
+    }
+
+    const { error: updErr } = await admin
+      .from("loan_repayments")
+      .update({
+        status: "pending",
+        paid_date: null,
+        payment_method: null,
+        transaction_reference: null,
+        is_reversed: true,
+        reversed_at: new Date().toISOString(),
+        reversed_by: actor.userId,
+        reversal_reason: why,
+        principal_paid: 0,
+        interest_paid: 0,
+        penalty_paid: 0,
+        amount: repayment.original_amount || repayment.amount,
+      })
+      .eq("id", repaymentId);
+    if (updErr) apiFail(HttpStatus.BAD_REQUEST, "REPAYMENT_UPDATE_FAILED", updErr.message);
+
+    if (loan.status === "completed") {
+      const { error: statusErr } = await admin
+        .from("loan_applications")
+        .update({ status: "active" })
+        .eq("id", loan.id);
+      if (statusErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_STATUS_FAILED", statusErr.message);
+    }
+
+    await admin.from("collection_activities").insert({
+      loan_id: loan.id,
+      activity_type: "payment_reversal",
+      notes: `Payment of K${refundAmount.toLocaleString()} reversed. Reason: ${why}`,
+      outcome: tx ? "Payment reverted; account debited" : "Payment reverted (no source account on record)",
+    });
+
+    return { ok: true, data: { repaymentId, refundAmount, loanId: loan.id } };
+  }
+
+  async undoDisbursement(loanId: string, actor: AuthUser) {
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, status, full_name")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+
+    const { count } = await admin
+      .from("loan_repayments")
+      .select("id", { count: "exact", head: true })
+      .eq("loan_id", loanId)
+      .in("status", ["paid", "partial"]);
+    if ((count || 0) > 0) {
+      apiFail(HttpStatus.CONFLICT, "HAS_PAYMENTS", "Cannot undo disbursement after payments have been recorded");
+    }
+
+    const { data: disbursement } = await admin
+      .from("disbursements")
+      .select("id, source_account_id, amount")
+      .eq("loan_id", loanId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (disbursement?.source_account_id) {
+      const { data: sourceAccount, error: accErr } = await admin
+        .from("accounts")
+        .select("id, balance, account_name")
+        .eq("id", disbursement.source_account_id)
+        .maybeSingle();
+      if (accErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_LOOKUP_FAILED", accErr.message);
+      if (sourceAccount) {
+        const refundAmount = Number(disbursement.amount);
+        const newBalance = Number(sourceAccount.balance) + refundAmount;
+        const { error: undoAccErr } = await admin
+          .from("accounts")
+          .update({ balance: newBalance, updated_at: new Date().toISOString() })
+          .eq("id", sourceAccount.id);
+        if (undoAccErr) apiFail(HttpStatus.BAD_REQUEST, "ACCOUNT_UPDATE_FAILED", undoAccErr.message);
+        const { error: undoTxErr } = await admin.from("account_transactions").insert({
+          account_id: sourceAccount.id,
+          transaction_type: "refund",
+          amount: refundAmount,
+          balance_before: Number(sourceAccount.balance),
+          balance_after: newBalance,
+          reference_type: "disbursement_reversal",
+          reference_id: loanId,
+          source: "Disbursement Reversal",
+          destination: sourceAccount.account_name,
+          notes: `Undo disbursement for ${loan.full_name} — K${refundAmount.toLocaleString()} refunded`,
+          created_by: actor.userId,
+        });
+        if (undoTxErr) apiFail(HttpStatus.BAD_REQUEST, "LEDGER_INSERT_FAILED", undoTxErr.message);
+      }
+    }
+
+    const { error: delDisbErr } = await admin.from("disbursements").delete().eq("loan_id", loanId);
+    if (delDisbErr) apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_DELETE_FAILED", delDisbErr.message);
+    const { error: delRepErr } = await admin.from("loan_repayments").delete().eq("loan_id", loanId);
+    if (delRepErr) apiFail(HttpStatus.BAD_REQUEST, "SCHEDULE_DELETE_FAILED", delRepErr.message);
+    const { error: statusErr } = await admin.from("loan_applications").update({ status: "approved" }).eq("id", loanId);
+    if (statusErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_STATUS_FAILED", statusErr.message);
+
+    return { ok: true, data: { loanId, refunded_amount: disbursement?.amount ?? null } };
+  }
+
+  async deleteLoan(loanId: string, reason: string | undefined, actor: AuthUser) {
+    const deletable = new Set([
+      "pending",
+      "under_review",
+      "approved",
+      "contract_signing",
+      "awaiting_disbursement",
+      "rejected",
+      "crb_failed",
+      "pmic_pending",
+    ]);
+    const admin = this.supabase.getAdminClient();
+    const { data: loan, error: loanErr } = await admin
+      .from("loan_applications")
+      .select("id, status")
+      .eq("id", loanId)
+      .maybeSingle();
+    if (loanErr) apiFail(HttpStatus.BAD_REQUEST, "LOAN_LOOKUP_FAILED", loanErr.message);
+    if (!loan) apiFail(HttpStatus.NOT_FOUND, "LOAN_NOT_FOUND", "Loan not found");
+    if (!deletable.has(loan.status)) {
+      apiFail(
+        HttpStatus.CONFLICT,
+        "NOT_DELETABLE",
+        `Cannot delete a loan in status "${loan.status}". Undo disbursement first.`,
+      );
+    }
+
+    await admin.from("loan_repayments").delete().eq("loan_id", loanId);
+    await admin.from("disbursements").delete().eq("loan_id", loanId);
+    await admin.from("loan_status_transitions").delete().eq("loan_id", loanId);
+    await admin.from("loan_events").delete().eq("loan_id", loanId);
+    const { error } = await admin.from("loan_applications").delete().eq("id", loanId);
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "LOAN_DELETE_FAILED", error.message);
+
+    this.logger.log(`loan_deleted ${loanId} by ${actor.userId} reason=${reason || ""}`);
+    return { ok: true, data: { loanId, previous_status: loan.status } };
+  }
+
+  async createPendingDisbursement(
+    dto: {
+      loanId: string;
+      amount: number;
+      disbursementMethod: string;
+      sourceAccountId: string;
+      mobileMoneyNumber?: string | null;
+      accountNumber?: string | null;
+    },
+  ) {
+    const admin = this.supabase.getAdminClient();
+    const { data: inserted, error } = await admin
+      .from("disbursements")
+      .insert({
+        loan_id: dto.loanId,
+        amount: dto.amount,
+        disbursement_method: dto.disbursementMethod,
+        mobile_money_number: dto.mobileMoneyNumber || null,
+        account_number: dto.accountNumber || null,
+        status: "pending",
+        source_account_id: dto.sourceAccountId,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted?.id) {
+      apiFail(HttpStatus.BAD_REQUEST, "DISBURSE_INSERT_FAILED", error?.message || "Could not create disbursement");
+    }
+    return { ok: true, data: { id: inserted.id } };
+  }
+
   private async rpc(fn: string, args: Record<string, unknown>, failCode: string) {
     const admin = this.supabase.getAdminClient();
     const { data, error } = await admin.rpc(fn, args);

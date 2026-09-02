@@ -99,9 +99,12 @@ import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentR
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import {
   applyLoanPenalties,
+  deleteLoanApplication,
   getEarlySettlementQuote,
   reconcileLoanCompletion,
   recordLoanPayment,
+  reverseLoanPayment,
+  undoLoanDisbursement,
 } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { disburseLoan } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { houseEarlySettlement } from "@/services/repositories/houseWorkflowRepository";
@@ -626,94 +629,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!selectedPaidRepayment || !loan) throw new Error("No repayment selected");
       if (!reversalReason.trim()) throw new Error("Reversal reason is required");
-
-      const refundAmount = Number(selectedPaidRepayment.principal_paid || selectedPaidRepayment.amount || 0);
-
-      // 1. Locate the account_transactions row that booked this repayment
-      const { data: tx } = await supabase
-        .from("account_transactions")
-        .select("id, account_id, amount, balance_after")
-        .eq("reference_type", "repayment")
-        .eq("reference_id", selectedPaidRepayment.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // 2. Refund / debit the account
-      if (tx && tx.account_id && refundAmount > 0) {
-        const { data: account, error: accErr } = await supabase
-          .from("accounts")
-          .select("id, balance")
-          .eq("id", tx.account_id)
-          .maybeSingle();
-        if (accErr) throw accErr;
-        if (account) {
-          const balanceBefore = Number(account.balance);
-          const balanceAfter = balanceBefore - refundAmount;
-          if (balanceAfter < 0) {
-            throw new Error(`Cannot reverse: account balance (K${balanceBefore.toLocaleString()}) is less than the refund (K${refundAmount.toLocaleString()}).`);
-          }
-          const { error: balErr } = await supabase
-            .from("accounts")
-            .update({ balance: balanceAfter, updated_at: new Date().toISOString() })
-            .eq("id", account.id);
-          if (balErr) throw balErr;
-          await supabase.from("account_transactions").insert({
-            account_id: account.id,
-            transaction_type: "adjustment_debit",
-            amount: refundAmount,
-            balance_before: balanceBefore,
-            balance_after: balanceAfter,
-            destination: "Payment reversal",
-            reference_type: "repayment_reversal",
-            reference_id: selectedPaidRepayment.id,
-            notes: `Reversal of installment #${selectedPaidRepayment.installment_number ?? "?"} for ${loan.full_name}: ${reversalReason}`,
-            created_by: user?.id,
-          });
-        }
-      }
-
-      const { error } = await supabase
-        .from("loan_repayments")
-        .update({
-          status: "pending",
-          paid_date: null,
-          payment_method: null,
-          transaction_reference: null,
-          is_reversed: true,
-          reversed_at: new Date().toISOString(),
-          reversal_reason: reversalReason,
-          principal_paid: 0,
-          interest_paid: 0,
-          penalty_paid: 0,
-          amount: selectedPaidRepayment.original_amount || selectedPaidRepayment.amount,
-        })
-        .eq("id", selectedPaidRepayment.id);
-
-      if (error) throw error;
-
-      // If loan was completed, revert to active
-      if (loan.status === "completed") {
-        const { error: revLoanStatusErr } = await supabase
-          .from("loan_applications")
-          .update({ status: "active" })
-          .eq("id", loan.id);
-        if (revLoanStatusErr) throw revLoanStatusErr;
-      }
-
-      const { error: revCollErr } = await supabase.from("collection_activities").insert({
-        loan_id: loan.id,
-        activity_type: "payment_reversal",
-        notes: `Payment of K${refundAmount.toLocaleString()} reversed. Reason: ${reversalReason}`,
-        outcome: tx ? "Payment reverted; account debited" : "Payment reverted (no source account on record)",
-      });
-      if (revCollErr) throw revCollErr;
-
+      await reverseLoanPayment(selectedPaidRepayment.id, reversalReason.trim());
       await logAudit({
         action: "PAYMENT_REVERSED",
         entity_type: "repayment",
         entity_id: selectedPaidRepayment.id,
-        details: { amount: refundAmount, reason: reversalReason, loan_id: loan.id, account_id: tx?.account_id || null },
+        details: { reason: reversalReason, loan_id: loan.id },
       });
     },
     onSuccess: () => {
@@ -1569,76 +1490,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const undoDisbursementMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-
-      // Find the disbursement to refund the source account
-      const { data: disbursementRecord } = await supabase
-        .from("disbursements")
-        .select("*, source_account_id, amount")
-        .eq("loan_id", loan.id)
-        .maybeSingle();
-
-      // Refund source account if applicable
-      if (disbursementRecord?.source_account_id) {
-        const { data: sourceAccount } = await supabase
-          .from("accounts")
-          .select("id, balance, account_name")
-          .eq("id", disbursementRecord.source_account_id)
-          .single();
-
-        if (sourceAccount) {
-          const refundAmount = Number(disbursementRecord.amount);
-          const newBalance = sourceAccount.balance + refundAmount;
-          const { error: undoAccErr } = await supabase
-            .from("accounts")
-            .update({ balance: newBalance, updated_at: new Date().toISOString() })
-            .eq("id", sourceAccount.id);
-          if (undoAccErr) throw undoAccErr;
-
-          // Record refund transaction
-          const { error: undoTxErr } = await supabase.from("account_transactions").insert({
-            account_id: sourceAccount.id,
-            transaction_type: "refund",
-            amount: refundAmount,
-            balance_before: sourceAccount.balance,
-            balance_after: newBalance,
-            reference_type: "disbursement_reversal",
-            reference_id: loan.id,
-            source: "Disbursement Reversal",
-            destination: sourceAccount.account_name,
-            notes: `Undo disbursement for ${loan.full_name} — K${refundAmount.toLocaleString()} refunded`,
-            created_by: user?.id,
-          });
-          if (undoTxErr) throw undoTxErr;
-        }
-      }
-
-      // Delete disbursement record
-      const { error: delDisbErr } = await supabase
-        .from("disbursements")
-        .delete()
-        .eq("loan_id", loan.id);
-      if (delDisbErr) throw delDisbErr;
-
-      // Delete all repayments
-      const { error: delRepErr } = await supabase
-        .from("loan_repayments")
-        .delete()
-        .eq("loan_id", loan.id);
-      if (delRepErr) throw delRepErr;
-
-      // Revert loan status to approved
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: "approved" })
-        .eq("id", loan.id);
-
-      if (error) throw error;
-
+      await undoLoanDisbursement(loan.id);
       await logAudit({
         action: "UNDO_DISBURSEMENT",
         entity_type: "loan_application",
         entity_id: loan.id,
-        details: { refunded_amount: disbursementRecord?.amount, source_account_id: disbursementRecord?.source_account_id },
       });
     },
     onSuccess: () => {
@@ -1675,19 +1531,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
           `Cannot delete a loan in status "${loan.status}". Undo disbursement first.`,
         );
       }
-
-      // Best-effort cleanup of dependent rows that may not cascade.
-      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
-      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
-      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
-      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
-
-      const { error } = await supabase
-        .from("loan_applications")
-        .delete()
-        .eq("id", loan.id);
-      if (error) throw error;
-
+      await deleteLoanApplication(loan.id, deleteReason || undefined);
       await logAudit({
         action: "DELETE_LOAN_APPLICATION",
         entity_type: "loan_application",

@@ -220,3 +220,55 @@ export async function shiftPendingRepaymentsToBusinessDays() {
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
 }
+
+export async function reverseLoanPayment(repaymentId: string, reason: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/repayments/${repaymentId}/reverse`, { reason });
+    return;
+  }
+  throw new Error("Set VITE_API_URL to reverse payments through the API");
+}
+
+export async function undoLoanDisbursement(loanId: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/loans/${loanId}/undo-disbursement`);
+    return;
+  }
+  throw new Error("Set VITE_API_URL to undo disbursement through the API");
+}
+
+export async function deleteLoanApplication(loanId: string, reason?: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/loans/${loanId}/delete`, { reason });
+    return;
+  }
+  throw new Error("Set VITE_API_URL to delete loans through the API");
+}
+
+export async function createPendingDisbursement(input: {
+  loanId: string;
+  amount: number;
+  disbursementMethod: string;
+  sourceAccountId: string;
+  mobileMoneyNumber?: string | null;
+  accountNumber?: string | null;
+}) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{ ok?: boolean; data?: { id: string } }>("/api/v1/disbursements", input);
+  }
+  const { data, error } = await supabase
+    .from("disbursements")
+    .insert({
+      loan_id: input.loanId,
+      amount: input.amount,
+      disbursement_method: input.disbursementMethod,
+      mobile_money_number: input.mobileMoneyNumber || null,
+      account_number: input.accountNumber || null,
+      status: "pending",
+      source_account_id: input.sourceAccountId,
+    })
+    .select("id")
+    .single();
+  if (error || !data?.id) throw error ?? new Error("Could not create disbursement");
+  return { ok: true, data: { id: data.id } };
+}
