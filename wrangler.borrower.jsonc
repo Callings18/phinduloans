@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "phinduloans-borrower-web",
+  "name": "phinduloans-borrower",
   "compatibility_date": "2026-07-09",
   "assets": {
     "directory": "./apps/borrower-mobile/dist",
