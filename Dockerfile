@@ -33,7 +33,8 @@ RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
 COPY apps/staff-web/package.json apps/staff-web/
 COPY packages/shared/package.json packages/shared/
-COPY apps/borrower-mobile/package.json apps/borrower-mobile/
+# borrower-mobile is not an npm workspace; copying its package.json before
+# `npm ci` makes npm expect Capacitor/esbuild entries that are not in the lockfile.
 RUN npm ci
 COPY . .
 
