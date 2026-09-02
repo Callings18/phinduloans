@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { setExpenseStatus } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { PageHeader } from "@/components/layout/PageShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
@@ -202,16 +203,7 @@ const AdminExpenses = () => {
       }
 
       if (status === "approved" || status === "rejected" || status === "paid") {
-        const { data, error } = await supabase.rpc("admin_set_expense_status", {
-          p_expense_id: id,
-          p_new_status: status,
-          p_reject_reason: rejectReason ?? null,
-        });
-        if (error) throw error;
-        const result = data as { success?: boolean; error?: string };
-        if (result && !result.success) {
-          throw new Error(result.error || "Operation failed");
-        }
+        await setExpenseStatus(id, status, rejectReason);
       } else {
         const { error } = await supabase.from("expenses").update({ status }).eq("id", id);
         if (error) throw error;

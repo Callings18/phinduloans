@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
-import { callRpc } from "@phinduloans/shared/utils/rpcResult";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -98,7 +97,12 @@ import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { downloadRepaymentReceipt } from "@phinduloans/shared/utils/generateRepaymentReceipt";
 import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
-import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import {
+  applyLoanPenalties,
+  getEarlySettlementQuote,
+  reconcileLoanCompletion,
+  recordLoanPayment,
+} from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -582,16 +586,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const reconcileCompletionMutation = useMutation({
     mutationFn: async () => {
       if (!loan?.id) throw new Error("No loan selected");
-      const res = await callRpc<{
+      return reconcileLoanCompletion(loan.id) as Promise<{
         updated?: boolean;
         status?: string;
         total_paid?: number;
         total_due?: number;
         principal_reconciled?: boolean;
         all_installments_clear?: boolean;
-      }>("admin_reconcile_loan_completion", { p_loan_id: loan.id });
-      if (!res.success) throw new Error(res.error);
-      return res.data;
+      }>;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -729,14 +731,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const applyPenaltiesMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-
-      // Use the database function to apply penalties
-      const { data, error } = await supabase.rpc("apply_loan_penalties", {
-        p_loan_id: loan.id,
-      });
-
-      if (error) throw error;
-      return data;
+      return applyLoanPenalties(loan.id);
     },
     onSuccess: (totalPenalty) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -753,13 +748,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const calculateEarlySettlementMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-
-      const { data, error } = await supabase.rpc("calculate_early_settlement", {
-        p_loan_id: loan.id,
-      });
-
-      if (error) throw error;
-      return data?.[0] as EarlySettlement;
+      return getEarlySettlementQuote(loan.id) as Promise<EarlySettlement>;
     },
     onSuccess: (data) => {
       setEarlySettlement(data);

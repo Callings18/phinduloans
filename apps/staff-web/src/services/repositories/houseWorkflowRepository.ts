@@ -1,5 +1,9 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
-import { recordLoanPayment as recordLoanPaymentFromApi } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import {
+  applyLoanPenalties,
+  getEarlySettlementQuote,
+  recordLoanPayment as recordLoanPaymentFromApi,
+} from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import {
   completeDisbursement,
   transitionLoanByAction,
@@ -106,15 +110,11 @@ export async function houseMarkRepaymentPaid(repaymentId: string) {
  * ========================================================== */
 
 export async function houseApplyPenalties(loanId: string): Promise<number> {
-  const { data, error } = await (supabase.rpc as any)("apply_loan_penalties", { p_loan_id: loanId });
-  if (error) throw error;
-  return Number(data || 0);
+  return applyLoanPenalties(loanId);
 }
 
 export async function houseEarlySettlementQuote(loanId: string) {
-  const { data, error } = await (supabase.rpc as any)("calculate_early_settlement", { p_loan_id: loanId });
-  if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
+  const row = await getEarlySettlementQuote(loanId);
   return {
     outstanding_principal: Number(row?.outstanding_principal || 0),
     outstanding_interest: Number(row?.outstanding_interest || 0),

@@ -290,4 +290,91 @@ export class CoreWritesService {
       message: "Staff user created. Share the temporary password with them securely.",
     };
   }
+
+  async applyPenalties(loanId: string) {
+    const data = await this.rpc("apply_loan_penalties", { p_loan_id: loanId }, "PENALTY_RPC_FAILED");
+    return { ok: true, data: Number(data || 0) };
+  }
+
+  async earlySettlementQuote(loanId: string) {
+    const data = await this.rpc("calculate_early_settlement", { p_loan_id: loanId }, "SETTLEMENT_RPC_FAILED");
+    const row = Array.isArray(data) ? data[0] : data;
+    return { ok: true, data: row ?? null };
+  }
+
+  async reconcileCompletion(loanId: string) {
+    const data = await this.rpcEnvelope(
+      "admin_reconcile_loan_completion",
+      { p_loan_id: loanId },
+      "RECONCILE_RPC_FAILED",
+    );
+    return { ok: true, data };
+  }
+
+  async approveWriteOff(writeOffId: string) {
+    const data = await this.rpcEnvelope(
+      "admin_approve_loan_writeoff",
+      { p_writeoff_id: writeOffId },
+      "WRITEOFF_APPROVE_FAILED",
+    );
+    return { ok: true, data };
+  }
+
+  async rejectWriteOff(writeOffId: string, reason: string) {
+    if (!reason?.trim()) apiFail(HttpStatus.BAD_REQUEST, "REASON_REQUIRED", "Rejection reason is required");
+    const data = await this.rpcEnvelope(
+      "admin_reject_loan_writeoff",
+      { p_writeoff_id: writeOffId, p_reason: reason.trim() },
+      "WRITEOFF_REJECT_FAILED",
+    );
+    return { ok: true, data };
+  }
+
+  async recoverWriteOff(writeOffId: string, amount: number, notes?: string) {
+    const data = await this.rpcEnvelope(
+      "admin_record_writeoff_recovery",
+      { p_writeoff_id: writeOffId, p_amount: amount, p_notes: notes || "" },
+      "WRITEOFF_RECOVERY_FAILED",
+    );
+    return { ok: true, data };
+  }
+
+  async setExpenseStatus(expenseId: string, status: string, rejectReason?: string) {
+    const data = await this.rpcEnvelope(
+      "admin_set_expense_status",
+      {
+        p_expense_id: expenseId,
+        p_new_status: status,
+        p_reject_reason: rejectReason ?? null,
+      },
+      "EXPENSE_STATUS_FAILED",
+    );
+    return { ok: true, data };
+  }
+
+  async shiftPendingRepayments() {
+    const admin = this.supabase.getAdminClient();
+    const { data, error } = await admin.rpc("shift_pending_repayments_to_business_days");
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "SHIFT_REPAYMENTS_FAILED", error.message);
+    const row = Array.isArray(data) ? data[0] : data;
+    return { ok: true, data: row ?? data };
+  }
+
+  private async rpc(fn: string, args: Record<string, unknown>, failCode: string) {
+    const admin = this.supabase.getAdminClient();
+    const { data, error } = await admin.rpc(fn, args);
+    if (error) apiFail(HttpStatus.BAD_REQUEST, failCode, error.message);
+    return data;
+  }
+
+  private async rpcEnvelope(fn: string, args: Record<string, unknown>, failCode: string) {
+    const data = await this.rpc(fn, args, failCode);
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const row = data as { success?: boolean; ok?: boolean; error?: string };
+      if (row.success === false || row.ok === false) {
+        apiFail(HttpStatus.CONFLICT, `${failCode}_REJECTED`, row.error || "Operation failed");
+      }
+    }
+    return data;
+  }
 }

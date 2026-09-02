@@ -33,6 +33,8 @@ vi.mock("@phinduloans/shared/integrations/supabase/client", () => ({
 
 vi.mock("@phinduloans/shared/services/repositories/coreWritesRepository", () => ({
   recordLoanPayment: recordLoanPaymentMock,
+  applyLoanPenalties: vi.fn(),
+  getEarlySettlementQuote: vi.fn(),
 }));
 
 vi.mock("@phinduloans/shared/services/repositories/workflowRepository", () => ({

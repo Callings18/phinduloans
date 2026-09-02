@@ -115,3 +115,33 @@ export class CreateApplicationDto {
   @IsString()
   productCode?: string;
 }
+
+export class RejectWriteOffDto {
+  @ApiProperty()
+  @IsString()
+  reason!: string;
+}
+
+export class RecoverWriteOffDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  amount!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class SetExpenseStatusDto {
+  @ApiProperty()
+  @IsString()
+  status!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  rejectReason?: string;
+}

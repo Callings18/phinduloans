@@ -1,4 +1,4 @@
-import { apiPost } from "@phinduloans/shared/api/httpClient";
+import { apiGet, apiPost } from "@phinduloans/shared/api/httpClient";
 import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
@@ -121,4 +121,102 @@ export async function recordLoanPayment(params: {
   const res = await callRpc<PaymentReceiptData>("record_loan_payment", rpcArgs, "Payment recording failed");
   if (!res.success) throw new Error(res.error);
   return { success: true, ...res.data } as PaymentReceiptData;
+}
+
+function unwrapRpc<T>(res: { ok?: boolean; data?: T }) {
+  return res?.data as T;
+}
+
+export async function applyLoanPenalties(loanId: string): Promise<number> {
+  if (apiFeatureFlags.coreWrites) {
+    const res = await apiPost<{ ok?: boolean; data?: number }>(`/api/v1/loans/${loanId}/penalties`);
+    return Number(unwrapRpc(res) || 0);
+  }
+  const { data, error } = await (supabase.rpc as any)("apply_loan_penalties", { p_loan_id: loanId });
+  if (error) throw error;
+  return Number(data || 0);
+}
+
+export async function getEarlySettlementQuote(loanId: string) {
+  if (apiFeatureFlags.coreWrites) {
+    const res = await apiGet<{ ok?: boolean; data?: Record<string, number> | null }>(
+      `/api/v1/loans/${loanId}/early-settlement`,
+    );
+    return unwrapRpc(res);
+  }
+  const { data, error } = await (supabase.rpc as any)("calculate_early_settlement", { p_loan_id: loanId });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
+export async function reconcileLoanCompletion(loanId: string) {
+  if (apiFeatureFlags.coreWrites) {
+    const res = await apiPost<{ ok?: boolean; data?: Record<string, unknown> }>(
+      `/api/v1/loans/${loanId}/reconcile-completion`,
+    );
+    return unwrapRpc(res);
+  }
+  const res = await callRpc("admin_reconcile_loan_completion", { p_loan_id: loanId }, "Could not complete loan");
+  if (!res.success) throw new Error(res.error);
+  return res.data;
+}
+
+export async function approveWriteOff(writeOffId: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/write-offs/${writeOffId}/approve`);
+    return;
+  }
+  const res = await callRpc("admin_approve_loan_writeoff", { p_writeoff_id: writeOffId }, "Write-off approval failed");
+  if (!res.success) throw new Error(res.error);
+}
+
+export async function rejectWriteOff(writeOffId: string, reason: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/write-offs/${writeOffId}/reject`, { reason });
+    return;
+  }
+  const res = await callRpc(
+    "admin_reject_loan_writeoff",
+    { p_writeoff_id: writeOffId, p_reason: reason },
+    "Write-off rejection failed",
+  );
+  if (!res.success) throw new Error(res.error);
+}
+
+export async function recordWriteOffRecovery(writeOffId: string, amount: number, notes: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/write-offs/${writeOffId}/recover`, { amount, notes });
+    return;
+  }
+  const res = await callRpc(
+    "admin_record_writeoff_recovery",
+    { p_writeoff_id: writeOffId, p_amount: amount, p_notes: notes },
+    "Recovery recording failed",
+  );
+  if (!res.success) throw new Error(res.error);
+}
+
+export async function setExpenseStatus(expenseId: string, status: string, rejectReason?: string) {
+  if (apiFeatureFlags.coreWrites) {
+    await apiPost(`/api/v1/expenses/${expenseId}/status`, { status, rejectReason });
+    return;
+  }
+  const res = await callRpc(
+    "admin_set_expense_status",
+    { p_expense_id: expenseId, p_new_status: status, p_reject_reason: rejectReason ?? null },
+    "Expense status update failed",
+  );
+  if (!res.success) throw new Error(res.error);
+}
+
+export async function shiftPendingRepaymentsToBusinessDays() {
+  if (apiFeatureFlags.coreWrites) {
+    const res = await apiPost<{ ok?: boolean; data?: { shifted_count?: number; loans_touched?: number } }>(
+      "/api/v1/admin/repayments/shift-business-days",
+    );
+    return unwrapRpc(res);
+  }
+  const { data, error } = await (supabase.rpc as any)("shift_pending_repayments_to_business_days");
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
 }

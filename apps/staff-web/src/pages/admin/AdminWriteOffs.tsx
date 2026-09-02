@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { approveWriteOff, recordWriteOffRecovery, rejectWriteOff } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -101,12 +102,7 @@ const AdminWriteOffs = () => {
   const approveWriteOffMutation = useMutation({
     mutationFn: async (writeOffId: string) => {
       if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
-      const { data, error } = await supabase.rpc("admin_approve_loan_writeoff", {
-        p_writeoff_id: writeOffId,
-      });
-      if (error) throw error;
-      const result = data as { success?: boolean; error?: string };
-      if (result && !result.success) throw new Error(result.error || "Operation failed");
+      await approveWriteOff(writeOffId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });
@@ -123,13 +119,7 @@ const AdminWriteOffs = () => {
   const rejectWriteOffMutation = useMutation({
     mutationFn: async ({ writeOffId, reason }: { writeOffId: string; reason: string }) => {
       if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
-      const { data, error } = await supabase.rpc("admin_reject_loan_writeoff", {
-        p_writeoff_id: writeOffId,
-        p_reason: reason,
-      });
-      if (error) throw error;
-      const result = data as { success?: boolean; error?: string };
-      if (result && !result.success) throw new Error(result.error || "Operation failed");
+      await rejectWriteOff(writeOffId, reason);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });
@@ -147,14 +137,7 @@ const AdminWriteOffs = () => {
   const recordRecoveryMutation = useMutation({
     mutationFn: async ({ writeOffId, amount, notes }: { writeOffId: string; amount: number; notes: string }) => {
       if (!canManageWriteOffs) throw new Error("Permission denied: write-offs manage");
-      const { data, error } = await supabase.rpc("admin_record_writeoff_recovery", {
-        p_writeoff_id: writeOffId,
-        p_amount: amount,
-        p_notes: notes,
-      });
-      if (error) throw error;
-      const result = data as { success?: boolean; error?: string };
-      if (result && !result.success) throw new Error(result.error || "Operation failed");
+      await recordWriteOffRecovery(writeOffId, amount, notes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-writeoffs"] });

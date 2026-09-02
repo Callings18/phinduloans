@@ -7,6 +7,7 @@ import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Loader2, Save, Plus, Trash2, RefreshCw } from "lucide-react";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { shiftPendingRepaymentsToBusinessDays } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import {
   BusinessCalendar,
@@ -93,9 +94,7 @@ const CalendarSettings = () => {
     if (!confirm("Shift all future pending installments off non-working days to the next allowed day?")) return;
     setShifting(true);
     try {
-      const { data, error } = await supabase.rpc("shift_pending_repayments_to_business_days" as any);
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
+      const row = await shiftPendingRepaymentsToBusinessDays();
       toast({
         title: "Schedules updated",
         description: `${row?.shifted_count ?? 0} installments moved across ${row?.loans_touched ?? 0} active loans.`,
