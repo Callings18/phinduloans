@@ -61,7 +61,7 @@ const guideSections: GuideSection[] = [
     subsections: [
       {
         title: "Logging In",
-        content: `1. Navigate to the admin login page.\n2. Enter your staff credentials (email and password) provided by the Super Admin.\n3. If you're using OTP login, enter your phone number and verify with the code sent to you.\n4. On first login, the system will walk you through a guided tour of the admin panel.`,
+        content: `1. Navigate to the admin login page.\n2. Enter your staff email and password provided by the Super Admin. Phone OTP is not used for staff (it is reserved for borrowers).\n3. On first login, the system will walk you through a guided tour of the admin panel.`,
       },
       {
         title: "Understanding Roles & Permissions",
@@ -81,7 +81,7 @@ const guideSections: GuideSection[] = [
     subsections: [
       {
         title: "Borrower Registration",
-        content: `Borrowers sign up through the public website:\n\n1. Click **Apply** on the homepage → redirected to login/signup.\n2. Register with phone number (verified via OTP) and then set up email & password.\n3. After signup, borrower lands on their **Dashboard**.\n4. The system sends a **Welcome Notification** (SMS + Email + WhatsApp if enabled).`,
+        content: `Borrowers sign up through the borrower app:\n\n1. Click **Apply** on the homepage → redirected to the borrower app login/signup.\n2. Register with phone number (verified via OTP). Email/password is not required for borrowers.\n3. After signup, borrower lands on their **Dashboard**.\n4. The system can send a welcome notification when SMS is configured.`,
       },
       {
         title: "KYC Verification",

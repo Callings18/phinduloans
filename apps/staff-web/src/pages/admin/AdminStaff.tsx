@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@phinduloans/shared/compone
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { toast } from "sonner";
+import { createStaffUser } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { Shield, Plus, Search, UserCog, Trash2, Loader2, Info, UserPlus, Copy, Check } from "lucide-react";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -155,18 +156,11 @@ const AdminStaff = () => {
         onError: (e: Error) => toast.error(e.message || "Failed to assign role"),
     });
 
-    // Create new staff user via edge function
+    // Create staff with email/password (Nest when VITE_API_URL is set)
     const createStaffMutation = useMutation({
         mutationFn: async (form: typeof createForm) => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error("Not authenticated");
-
-            const res = await supabase.functions.invoke("create-staff-user", {
-                body: form,
-            });
-            if (res.error) throw new Error(res.error.message || "Failed to create user");
-            if (res.data?.error) throw new Error(res.data.error);
-            return res.data;
+            const data = await createStaffUser(form);
+            return data;
         },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['staff-list'] });
@@ -284,9 +278,10 @@ const AdminStaff = () => {
                                                 onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value }))} />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label>Phone (optional)</Label>
+                                            <Label>Phone (contact only, optional)</Label>
                                             <Input placeholder="+260 9XX XXX XXX" value={createForm.phone}
                                                 onChange={(e) => setCreateForm(f => ({ ...f, phone: e.target.value }))} />
+                                            <p className="text-xs text-muted-foreground">Staff log in with email and password. This number is not used for OTP.</p>
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Role *</Label>

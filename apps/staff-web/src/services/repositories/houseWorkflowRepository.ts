@@ -153,14 +153,7 @@ export async function houseEarlySettlement(params: EarlySettlementParams) {
 }
 
 export async function houseMarkDefaulted(loanId: string, reason: string) {
-  const { data, error } = await (supabase.rpc as any)("admin_mark_loan_defaulted", {
-    p_loan_id: loanId,
-    p_reason: reason,
-  });
-  if (error) throw error;
-  if (data && typeof data === "object" && data.success === false) {
-    throw new Error(data.error || "Failed to mark loan defaulted");
-  }
+  await transitionLoanByAction(loanId, "default", reason);
 }
 
 export interface RestructureParams {

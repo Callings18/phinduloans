@@ -37,6 +37,27 @@ export async function createBorrower(input: CreateBorrowerInput) {
   return response.data;
 }
 
+export async function createStaffUser(input: {
+  email: string;
+  full_name: string;
+  role: string;
+  phone?: string | null;
+}) {
+  if (apiFeatureFlags.coreWrites) {
+    return apiPost<{
+      ok?: boolean;
+      success?: boolean;
+      user_id?: string;
+      temp_password?: string;
+      message?: string;
+    }>("/api/v1/admin/staff", input);
+  }
+  const res = await supabase.functions.invoke("create-staff-user", { body: input });
+  if (res.error) throw new Error(res.error.message || "Failed to create user");
+  if (res.data?.error) throw new Error(res.data.error);
+  return res.data;
+}
+
 export async function createLoanApplication(input: {
   application: Record<string, unknown>;
   borrowers?: Record<string, unknown>[];

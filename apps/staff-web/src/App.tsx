@@ -118,11 +118,11 @@ function App() {
                   <Route path="/terms" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Terms /></ErrorBoundary>} />
                   <Route path="/loan-products" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><LoanProducts /></ErrorBoundary>} />
                   <Route path="/contact" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Contact /></ErrorBoundary>} />
-                  {/* Staff Auth only on office; marketing Login → borrower app */}
+                  {/* Staff Auth: office host, or combined Railway preview (dev hostname) */}
                   <Route
                     path="/auth"
                     element={
-                      officeMode ? (
+                      officeMode || serveAdminLocally ? (
                         <ErrorBoundary><Auth /></ErrorBoundary>
                       ) : (
                         <MarketingBorrowerAuthRedirect />
@@ -132,7 +132,7 @@ function App() {
                   <Route
                     path="/login"
                     element={
-                      officeMode ? (
+                      officeMode || serveAdminLocally ? (
                         <ErrorBoundary><Auth /></ErrorBoundary>
                       ) : (
                         <MarketingBorrowerAuthRedirect />

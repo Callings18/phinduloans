@@ -98,6 +98,7 @@ import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { downloadRepaymentReceipt } from "@phinduloans/shared/utils/generateRepaymentReceipt";
 import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
+import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -516,17 +517,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       const penaltyAllocation = Math.min(paidAmount, penaltyRemaining);
       const paidDate = new Date().toISOString().split("T")[0];
 
-      const rpcArgs = {
-        p_repayment_id: selectedRepayment.id,
-        p_amount: paidAmount,
-        p_payment_method: paymentMethod,
-        p_account_id: destinationAccountId,
-        p_transaction_reference: transactionRef || null,
-        p_paid_date: paidDate,
-        p_penalty_amount: penaltyAllocation,
-      };
-
-      // Structured context log before the call — pasteable into bug reports.
       console.info("[recordPayment] Calling record_loan_payment", {
         loan: { id: loan.id, name: loan.full_name, status: (loan as any).status, productCode: (loan as any).loan_products?.product_code },
         installment: {
@@ -544,34 +534,15 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         payment: { paidAmount, penaltyAllocation, accountResolution, destinationAccountId, method: paymentMethod, ref: transactionRef || null },
       });
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", rpcArgs);
-
-      if (rpcError) {
-        console.error("[recordPayment] RPC failed", { rpcArgs, rpcError });
-        const code = (rpcError as any).code;
-        const raw = rpcError.message || "";
-        // Map common Postgres / RPC errors to plain-English guidance.
-        if (code === "PGRST301" || /jwt|permission denied|rls/i.test(raw)) {
-          throw new Error("You don't have permission to record this payment. Sign in again or ask an admin.");
-        }
-        if (/account.*balance|insufficient/i.test(raw)) {
-          throw new Error("The destination account update failed (insufficient balance or stale data). Refresh and retry.");
-        }
-        if (/exceeds|greater than/i.test(raw)) {
-          throw new Error(`Server rejected the amount: ${raw}`);
-        }
-        if (/network|fetch|timeout/i.test(raw)) {
-          throw new Error("Network error reaching the server. Check your connection and retry.");
-        }
-        throw new Error(`Payment failed: ${raw || "Unknown server error"}. Details logged to console.`);
-      }
-
-      const rpcResult = rpcData as PaymentReceiptData | null;
-      if (!rpcResult?.success) {
-        console.error("[recordPayment] RPC returned success=false", { rpcArgs, rpcResult });
-        throw new Error(rpcResult?.error || "The server could not record this payment. Details logged to console.");
-      }
-
+      const rpcResult = await recordLoanPayment({
+        repaymentId: selectedRepayment.id,
+        amount: paidAmount,
+        paymentMethod,
+        accountId: destinationAccountId,
+        transactionReference: transactionRef || null,
+        paidDate,
+        penaltyAmount: penaltyAllocation,
+      });
       console.info("[recordPayment] Success", { rpcResult });
       return { paidAmount, isPartial: paidAmount < totalRemaining - 0.01, isOverpayment: false, receipt: rpcResult };
     },

@@ -4,7 +4,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthUser } from "../auth/auth-user";
 import { StaffGuard } from "../auth/guards/staff.guard";
 import { SupabaseAuthGuard } from "../auth/guards/supabase-auth.guard";
-import { CreateApplicationDto, CreateBorrowerDto, RecordPaymentDto } from "./dto/core-writes.dto";
+import { CreateApplicationDto, CreateBorrowerDto, CreateStaffDto, RecordPaymentDto } from "./dto/core-writes.dto";
 import { CoreWritesService } from "./core-writes.service";
 
 @ApiTags("core-writes")
@@ -19,6 +19,13 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Create or link a borrower (replaces create-borrower Edge Function)" })
   createBorrower(@Body() dto: CreateBorrowerDto, @CurrentUser() user: AuthUser) {
     return this.core.createBorrower(dto, user);
+  }
+
+  @Post("admin/staff")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Create a staff user with email/password (replaces create-staff-user Edge Function)" })
+  createStaff(@Body() dto: CreateStaffDto, @CurrentUser() user: AuthUser) {
+    return this.core.createStaff(dto, user);
   }
 
   @Post("applications")

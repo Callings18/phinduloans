@@ -293,6 +293,24 @@ serve(async (req) => {
         );
       }
 
+      const { data: loginRoles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      const staffRoles = new Set([
+        "admin", "super_admin", "loan_officer", "credit_officer",
+        "finance_officer", "collections_officer", "auditor", "support",
+      ]);
+      if (loginRoles?.some((r: { role: string }) => staffRoles.has(r.role))) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Office staff sign in with email and password on the office portal. Phone OTP is for borrowers only.",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       const redirectTo = getBorrowerDashboardUrl();
       const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',

@@ -102,6 +102,12 @@ const Auth = () => {
                   {isLogin ? "Sign Up" : "Sign In"}
                 </button>
               </p>
+              <p className="text-muted-foreground text-xs mt-4">
+                Staff?{" "}
+                <a href={officePath("/auth")} className="text-primary hover:underline">
+                  Sign in with email
+                </a>
+              </p>
             </div>
           </div>
         </div>

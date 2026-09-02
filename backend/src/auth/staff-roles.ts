@@ -8,6 +8,7 @@ export const STAFF_ROLES = new Set([
   "finance_officer",
   "collections_officer",
   "auditor",
+  "support",
 ]);
 
 export function isStaffRole(roles: string[]): boolean {

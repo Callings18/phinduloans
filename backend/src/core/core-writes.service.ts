@@ -231,4 +231,63 @@ export class CoreWritesService {
     }
     return { ok: true, data: rpc };
   }
+
+  async createStaff(
+    dto: { email: string; full_name: string; role: string; phone?: string | null },
+    actor: AuthUser,
+  ) {
+    const isAdmin = actor.roles.includes("admin") || actor.roles.includes("super_admin");
+    if (!isAdmin) apiFail(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED", "Only admins can create staff users");
+
+    const validRoles = [
+      "super_admin",
+      "admin",
+      "loan_officer",
+      "credit_officer",
+      "finance_officer",
+      "collections_officer",
+      "auditor",
+      "support",
+    ];
+    if (!validRoles.includes(dto.role)) {
+      apiFail(HttpStatus.BAD_REQUEST, "INVALID_ROLE", `Invalid role: ${dto.role}`);
+    }
+
+    const email = dto.email.trim().toLowerCase();
+    const full_name = dto.full_name.trim();
+    if (!email || !full_name) apiFail(HttpStatus.BAD_REQUEST, "FIELDS_REQUIRED", "email and full_name are required");
+
+    const admin = this.supabase.getAdminClient();
+    const tempPassword = `${randomUUID().slice(0, 12)}A1!`;
+    const { data: newUser, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name },
+    });
+    if (createError || !newUser.user) {
+      apiFail(HttpStatus.BAD_REQUEST, "CREATE_STAFF_FAILED", createError?.message || "Failed to create staff user");
+    }
+
+    const userId = newUser.user.id;
+    await admin.from("profiles").upsert({
+      id: userId,
+      email,
+      full_name,
+      phone: dto.phone || null,
+    });
+    const { error: roleErr } = await admin.from("user_roles").upsert(
+      { user_id: userId, role: dto.role },
+      { onConflict: "user_id,role" },
+    );
+    if (roleErr) this.logger.warn(`staff role upsert: ${roleErr.message}`);
+
+    return {
+      ok: true,
+      success: true,
+      user_id: userId,
+      temp_password: tempPassword,
+      message: "Staff user created. Share the temporary password with them securely.",
+    };
+  }
 }

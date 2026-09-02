@@ -82,6 +82,25 @@ export class CreateBorrowerDto {
   marital_status?: string;
 }
 
+export class CreateStaffDto {
+  @ApiProperty()
+  @IsString()
+  email!: string;
+
+  @ApiProperty()
+  @IsString()
+  full_name!: string;
+
+  @ApiProperty()
+  @IsString()
+  role!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  phone?: string | null;
+}
+
 export class CreateApplicationDto {
   @ApiProperty()
   @IsObject()

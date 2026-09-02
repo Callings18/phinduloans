@@ -7,93 +7,93 @@ import {
   recordLoanPayment,
 } from "./houseWorkflowRepository";
 
-const { rpcMock, fromMock, updateMock, updateEqMock, selectMock, selectEqMock, maybeSingleMock } = vi.hoisted(() => ({
-  rpcMock: vi.fn(),
+const {
+  fromMock,
+  selectMock,
+  selectEqMock,
+  maybeSingleMock,
+  recordLoanPaymentMock,
+  completeDisbursementMock,
+  transitionLoanByActionMock,
+} = vi.hoisted(() => ({
   fromMock: vi.fn(),
-  updateMock: vi.fn(),
-  updateEqMock: vi.fn(),
   selectMock: vi.fn(),
   selectEqMock: vi.fn(),
   maybeSingleMock: vi.fn(),
+  recordLoanPaymentMock: vi.fn(),
+  completeDisbursementMock: vi.fn(),
+  transitionLoanByActionMock: vi.fn(),
 }));
 
 vi.mock("@phinduloans/shared/integrations/supabase/client", () => ({
   supabase: {
-    rpc: rpcMock,
     from: fromMock,
   },
 }));
 
+vi.mock("@phinduloans/shared/services/repositories/coreWritesRepository", () => ({
+  recordLoanPayment: recordLoanPaymentMock,
+}));
+
+vi.mock("@phinduloans/shared/services/repositories/workflowRepository", () => ({
+  completeDisbursement: completeDisbursementMock,
+  transitionLoanByAction: transitionLoanByActionMock,
+}));
+
 describe("houseWorkflowRepository", () => {
   beforeEach(() => {
-    rpcMock.mockReset();
     fromMock.mockReset();
-    updateMock.mockReset();
-    updateEqMock.mockReset();
     selectMock.mockReset();
     selectEqMock.mockReset();
     maybeSingleMock.mockReset();
+    recordLoanPaymentMock.mockReset();
+    completeDisbursementMock.mockReset();
+    transitionLoanByActionMock.mockReset();
 
-    updateMock.mockReturnValue({ eq: updateEqMock });
-    updateEqMock.mockResolvedValue({ error: null });
+    recordLoanPaymentMock.mockResolvedValue({ success: true });
+    completeDisbursementMock.mockResolvedValue(undefined);
+    transitionLoanByActionMock.mockResolvedValue(undefined);
+
     selectMock.mockReturnValue({ eq: selectEqMock });
     selectEqMock.mockReturnValue({ maybeSingle: maybeSingleMock });
     maybeSingleMock.mockResolvedValue({ data: { amount: 100 }, error: null });
     fromMock.mockImplementation((table: string) => {
-      if (table === "disbursements") return { update: updateMock };
       if (table === "loan_repayments") return { select: selectMock };
-      return { update: updateMock, select: selectMock };
+      return { select: selectMock };
     });
   });
 
-  it("runs the full house workflow RPC chain", async () => {
-    rpcMock.mockResolvedValue({ data: { success: true }, error: null });
-
+  it("runs the full house workflow through Nest-backed helpers", async () => {
     await houseSetLoanStatus("loan-1", "approved");
     await houseStageReview("loan-1", "manager");
     await houseMarkDisbursementCompleted({ disbursementId: "disb-1", accountId: "acct-1" });
     await houseMarkRepaymentPaid("rep-1");
 
-    expect(rpcMock).toHaveBeenCalledTimes(4);
-    expect(rpcMock).toHaveBeenNthCalledWith(1, "transition_loan_status", {
-      p_loan_id: "loan-1",
-      p_action: "approve",
-      p_reason: null,
+    expect(transitionLoanByActionMock).toHaveBeenNthCalledWith(1, "loan-1", "approve");
+    expect(transitionLoanByActionMock).toHaveBeenNthCalledWith(2, "loan-1", "approve");
+    expect(completeDisbursementMock).toHaveBeenCalledWith({
+      disbursementId: "disb-1",
+      accountId: "acct-1",
+      transactionReference: null,
     });
-    expect(rpcMock).toHaveBeenNthCalledWith(2, "transition_loan_status", {
-      p_loan_id: "loan-1",
-      p_action: "approve",
-      p_reason: null,
-    });
-    expect(rpcMock).toHaveBeenNthCalledWith(3, "complete_disbursement", {
-      p_disbursement_id: "disb-1",
-      p_account_id: "acct-1",
-      p_transaction_reference: null,
-    });
-    expect(rpcMock).toHaveBeenNthCalledWith(4, "record_loan_payment", {
-      p_repayment_id: "rep-1",
-      p_amount: 100,
-      p_payment_method: "cash",
-      p_account_id: null,
-      p_transaction_reference: null,
-      p_paid_date: null,
+    expect(recordLoanPaymentMock).toHaveBeenCalledWith({
+      repaymentId: "rep-1",
+      amount: 100,
+      paymentMethod: undefined,
+      accountId: undefined,
+      transactionReference: undefined,
+      paidDate: undefined,
+      penaltyAmount: undefined,
     });
   });
 
-  it("loads the installment amount before calling record_loan_payment", async () => {
-    rpcMock.mockResolvedValueOnce({ data: { success: true }, error: null });
-
+  it("loads the installment amount before recording a payment", async () => {
     await houseMarkRepaymentPaid("rep-2");
 
     expect(fromMock).toHaveBeenCalledWith("loan_repayments");
-    expect(rpcMock).toHaveBeenCalledWith("record_loan_payment", {
-      p_repayment_id: "rep-2",
-      p_amount: 100,
-      p_payment_method: "cash",
-      p_account_id: null,
-      p_transaction_reference: null,
-      p_paid_date: null,
-    });
+    expect(recordLoanPaymentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repaymentId: "rep-2", amount: 100 }),
+    );
   });
 
   it("uses remaining principal+penalty for partially paid installments", async () => {
@@ -107,23 +107,15 @@ describe("houseWorkflowRepository", () => {
       },
       error: null,
     });
-    rpcMock.mockResolvedValueOnce({ data: { success: true, receipt_no: "R-1" }, error: null });
 
     await houseMarkRepaymentPaid("rep-partial");
 
-    expect(rpcMock).toHaveBeenCalledWith("record_loan_payment", {
-      p_repayment_id: "rep-partial",
-      p_amount: 340,
-      p_payment_method: "cash",
-      p_account_id: null,
-      p_transaction_reference: null,
-      p_paid_date: null,
-    });
+    expect(recordLoanPaymentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repaymentId: "rep-partial", amount: 340 }),
+    );
   });
 
-  it("passes penalty split to record_loan_payment when provided", async () => {
-    rpcMock.mockResolvedValueOnce({ data: { success: true, receipt_no: "R-2" }, error: null });
-
+  it("passes penalty split when provided", async () => {
     await recordLoanPayment({
       repaymentId: "rep-3",
       amount: 150,
@@ -132,25 +124,24 @@ describe("houseWorkflowRepository", () => {
       paymentMethod: "mobile_money",
     });
 
-    expect(rpcMock).toHaveBeenCalledWith("record_loan_payment", {
-      p_repayment_id: "rep-3",
-      p_amount: 150,
-      p_payment_method: "mobile_money",
-      p_account_id: "acct-9",
-      p_transaction_reference: null,
-      p_paid_date: null,
-      p_penalty_amount: 25,
+    expect(recordLoanPaymentMock).toHaveBeenCalledWith({
+      repaymentId: "rep-3",
+      amount: 150,
+      paymentMethod: "mobile_money",
+      accountId: "acct-9",
+      transactionReference: undefined,
+      paidDate: undefined,
+      penaltyAmount: 25,
     });
   });
 
-  it("throws RPC logical errors from backend", async () => {
-    rpcMock.mockResolvedValueOnce({ data: { success: false, error: "No product access" }, error: null });
+  it("throws transition errors from the backend helper", async () => {
+    transitionLoanByActionMock.mockRejectedValueOnce(new Error("No product access"));
     await expect(houseSetLoanStatus("loan-1", "approved")).rejects.toThrow("No product access");
   });
 
-  it("throws transport-level RPC errors", async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: new Error("network") });
+  it("throws transport-level errors from the backend helper", async () => {
+    transitionLoanByActionMock.mockRejectedValueOnce(new Error("network"));
     await expect(houseStageReview("loan-1", "finance")).rejects.toThrow("network");
   });
 });
-

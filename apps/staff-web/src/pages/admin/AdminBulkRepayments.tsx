@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from "@phinduloans/shared/components/ui/dialog";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { 
@@ -228,16 +229,14 @@ const AdminBulkRepayments = () => {
       // Delegate repayment accounting/status transitions to canonical RPC per installment.
       for (let idx = 0; idx < allocations.length; idx += 1) {
         const allocation = allocations[idx];
-        const { data: rpcData, error: rpcError } = await supabase.rpc("record_loan_payment", {
-          p_repayment_id: allocation.repaymentId,
-          p_amount: allocation.allocatedAmount,
-          p_payment_method: paymentMethod,
-          p_account_id: destinationAccountId,
-          p_transaction_reference: `${txBase}-${idx + 1}`,
-          p_paid_date: paidDate,
+        const rpcResult = await recordLoanPayment({
+          repaymentId: allocation.repaymentId,
+          amount: allocation.allocatedAmount,
+          paymentMethod,
+          accountId: destinationAccountId,
+          transactionReference: `${txBase}-${idx + 1}`,
+          paidDate,
         });
-        if (rpcError) throw rpcError;
-        const rpcResult = rpcData as { success?: boolean; error?: string } | null;
         if (!rpcResult?.success) {
           throw new Error(rpcResult?.error || "Failed to process bulk repayment allocation");
         }

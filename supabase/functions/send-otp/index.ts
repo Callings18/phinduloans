@@ -261,6 +261,32 @@ serve(async (req) => {
     const formattedPhone = formatPhoneNumber(phone);
     console.log(`[OTP] Request for ${formattedPhone}, purpose: ${purpose}`);
 
+    const { data: phoneProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("phone", formattedPhone)
+      .maybeSingle();
+
+    if (phoneProfile?.id) {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", phoneProfile.id);
+      const staffRoles = new Set([
+        "admin", "super_admin", "loan_officer", "credit_officer",
+        "finance_officer", "collections_officer", "auditor", "support",
+      ]);
+      if (roles?.some((r: { role: string }) => staffRoles.has(r.role))) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Office staff sign in with email and password. Phone OTP is for borrowers only.",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // Check rate limiting - max 5 OTPs per phone in 10 minutes.
     // Resends are routed through the backup provider when available.
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();

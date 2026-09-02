@@ -40,6 +40,7 @@ import {
 } from "@phinduloans/shared/components/ui/dropdown-menu";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { recordLoanPayment } from "@phinduloans/shared/services/repositories/coreWritesRepository";
+import { disburseLoan, transitionLoanByAction } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -74,8 +75,6 @@ import {
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
 import PaginationControls from "@/components/common/PaginationControls";
 import { DesktopTableWrap, MobileCardStack } from "@/components/common/ResponsiveDataViews";
-import { useAuth } from "@phinduloans/shared/hooks/useAuth";
-import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
 import { LegacyAdminPathBanner } from "@/components/admin/LegacyAdminPathBanner";
 import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
 import {
@@ -182,7 +181,6 @@ const AdminLoans = () => {
   const [disbursementReference, setDisbursementReference] = useState("");
 
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const { data: settings } = useSystemSettings();
   const { can } = usePermissions();
   const { selectedProductId, setSelectedProductId } = useLoanProductFilter();
@@ -278,13 +276,7 @@ const AdminLoans = () => {
   // Move to defaulted mutation (server-side audit + loan_events)
   const moveToDefaultedMutation = useMutation({
     mutationFn: async ({ loanId, reason }: { loanId: string; reason: string }) => {
-      const { data, error } = await (supabase.rpc as any)("admin_mark_loan_defaulted", {
-        p_loan_id: loanId,
-        p_reason: reason,
-      });
-      if (error) throw error;
-      const result = data as { success?: boolean; error?: string };
-      if (!result?.success) throw new Error(result?.error || "Failed to mark loan as defaulted");
+      await transitionLoanByAction(loanId, "default", reason);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-portfolio-loans"] });
@@ -321,62 +313,13 @@ const AdminLoans = () => {
       if (accReadErr || !sourceAcc) throw new Error("Source account not found");
       if (sourceAcc.balance < netDisbursement) throw new Error(`Insufficient balance in ${sourceAcc.account_name}. Available: K${sourceAcc.balance.toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
 
-      // Deduct from source account
-      const newBalance = sourceAcc.balance - netDisbursement;
-      const { error: balErr } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance })
-        .eq("id", disbursementSourceAccountId);
-      if (balErr) throw balErr;
-
-      // Record account transaction
-      const { error: txErr } = await supabase.from("account_transactions").insert({
-        account_id: disbursementSourceAccountId,
-        transaction_type: "disbursement",
+      await disburseLoan({
+        loanId: loan.id,
+        accountId: disbursementSourceAccountId,
         amount: netDisbursement,
-        balance_before: sourceAcc.balance,
-        balance_after: newBalance,
-        destination: loan.full_name,
-        reference_type: "loan_disbursement",
-        reference_id: loan.id,
-        notes: `Loan disbursement to ${loan.full_name} — K${netDisbursement.toLocaleString()} (Principal: K${principal.toLocaleString()}, Fees deducted: K${(principal - netDisbursement).toLocaleString()})`,
+        disbursementMethod,
+        transactionReference: disbursementReference || `DISB-${Date.now()}`,
       });
-      if (txErr) throw txErr;
-
-      // Create disbursement record (trigger will generate repayment schedule & set to active)
-      const { error: disbError } = await supabase.from("disbursements").insert({
-        loan_id: loan.id,
-        amount: netDisbursement,
-        disbursement_method: disbursementMethod,
-        status: "completed",
-        disbursed_at: new Date().toISOString(),
-        source_account_id: disbursementSourceAccountId,
-        transaction_reference: disbursementReference || `DISB-${Date.now()}`,
-      });
-      if (disbError) throw disbError;
-
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: loan.loan_term_months,
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          loan_product_id: loan.loan_product_id,
-          term_unit: loan.term_unit,
-        },
-        supabase,
-      );
-
-      // Record disbursement metadata on the loan (trigger already set status to active)
-      const { error: statusError } = await supabase
-        .from("loan_applications")
-        .update({
-          disbursed_at: new Date().toISOString(),
-          disbursed_by: user?.id,
-        })
-        .eq("id", loan.id);
-      if (statusError) throw statusError;
 
       await logAudit({
         action: "LOAN_DISBURSED",
