@@ -1,0 +1,14 @@
+---
+description: Commit and push related work as soon as a coding task is finished
+alwaysApply: true
+---
+
+# Commit when the task is done
+
+Do not wait for "commit" or "push" after finishing implementation, fixes, or wiring.
+
+1. Stage only files from that task. Skip `backend/dist`, secrets, and unrelated dirty files.
+2. Commit with a short message that states why (same style as recent history on this branch).
+3. Push the current feature branch to `origin` (`git push -u origin HEAD`).
+4. If git has no local user.name/email, set `GIT_AUTHOR_*` / `GIT_COMMITTER_*` for that command only to match the last commit. Never run `git config`.
+5. Skip commit only when there is nothing to commit, or the user said not to commit this change.
