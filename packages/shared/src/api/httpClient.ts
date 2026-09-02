@@ -30,6 +30,40 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const base = getApiBaseUrl();
+  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await buildHeaders()),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: "omit",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw parseApiError(res.status, text, res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const base = getApiBaseUrl();
+  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: await buildHeaders(),
+    credentials: "omit",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw parseApiError(res.status, text, res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
 function parseApiError(status: number, body: string, statusText: string): Error {
   try {
     const j = JSON.parse(body) as { error?: { message?: string; code?: string }; message?: string };

@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { deleteLoanDraft, listLoanDrafts } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { LOAN_PRODUCT_MODULES, type LoanProductCode } from "@phinduloans/shared/config/loanProductModules";
 
 type DraftRow = {
@@ -87,12 +88,7 @@ export default function AdminLoanDrafts() {
       if (!user?.id) return [];
       // No staff_user_id filter: RLS returns every draft visible to this role
       // (whole lending team — see migration loan_drafts_team_visibility_rls).
-      const { data, error } = await supabase
-        .from("loan_application_drafts")
-        .select("id, staff_user_id, borrower_id, product_code, form_data, created_at, updated_at")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return (data || []) as DraftRow[];
+      return listLoanDrafts();
     },
     enabled: !!user?.id,
   });
@@ -164,8 +160,7 @@ export default function AdminLoanDrafts() {
 
   const deleteMutation = useMutation({
     mutationFn: async (draftId: string) => {
-      const { error } = await supabase.from("loan_application_drafts").delete().eq("id", draftId);
-      if (error) throw error;
+      await deleteLoanDraft(draftId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: draftsQueryKey });

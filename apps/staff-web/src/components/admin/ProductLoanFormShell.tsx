@@ -22,8 +22,12 @@ import { fetchHouseProductByCode } from "@/services/repositories/houseRepository
 import {
   createLoanApplication,
   deleteLoanApplication,
+  deleteLoanDraft,
+  getLoanDraft,
+  listLoanDrafts,
   registerLoanDocuments,
   updateLoanApplication,
+  upsertLoanDraft,
 } from "@phinduloans/shared/services/repositories/coreWritesRepository";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@phinduloans/shared/components/ui/table";
@@ -254,17 +258,17 @@ export default function ProductLoanFormShell({
     if (!borrowerId || !user?.id) return;
     draftLoadedRef.current = false;
     (async () => {
-      const { data } = await supabase
-        .from("loan_application_drafts")
-        .select("id, form_data, updated_at")
-        .eq("staff_user_id", user.id)
-        .eq("borrower_id", borrowerId)
-        .eq("product_code", productCode)
-        .maybeSingle();
-      if (data?.form_data) {
-        hydrateFromDraft(data);
-        toast({ title: "Draft restored", description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}` });
-      } else {
+      try {
+        const rows = await listLoanDrafts({ borrowerId, productCode });
+        const data = rows.find((d) => d.staff_user_id === user.id) ?? null;
+        if (data?.form_data) {
+          hydrateFromDraft({ id: data.id, form_data: data.form_data, updated_at: data.updated_at });
+          toast({ title: "Draft restored", description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}` });
+        } else {
+          setDraftId(null);
+          setDraftSavedAt(null);
+        }
+      } catch {
         setDraftId(null);
         setDraftSavedAt(null);
       }
@@ -278,20 +282,19 @@ export default function ProductLoanFormShell({
     if (!draftIdParam || !user?.id) return;
     if (draftId === draftIdParam) return;
     (async () => {
-      const { data, error } = await supabase
-        .from("loan_application_drafts")
-        .select("id, form_data, updated_at, borrower_id, product_code")
-        .eq("id", draftIdParam)
-        .maybeSingle();
-      if (error || !data) return;
-      if (data.borrower_id && !borrowerId) {
-        setBorrowerId(data.borrower_id);
+      try {
+        const data = await getLoanDraft(draftIdParam);
+        if (data.borrower_id && !borrowerId) {
+          setBorrowerId(data.borrower_id);
+        }
+        hydrateFromDraft({ id: data.id, form_data: data.form_data, updated_at: data.updated_at });
+        toast({
+          title: "Draft restored",
+          description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}`,
+        });
+      } catch {
+        return;
       }
-      hydrateFromDraft({ id: data.id, form_data: data.form_data, updated_at: data.updated_at });
-      toast({
-        title: "Draft restored",
-        description: `Resumed your saved draft from ${new Date(data.updated_at).toLocaleString()}`,
-      });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftIdParam, user?.id]);
@@ -319,15 +322,7 @@ export default function ProductLoanFormShell({
         absoluteOwnerEntries,
       };
       const form_data_json = JSON.parse(JSON.stringify(form_data));
-      const { data, error } = await supabase
-        .from("loan_application_drafts")
-        .upsert(
-          { staff_user_id: user.id, borrower_id: borrowerId, product_code: productCode, form_data: form_data_json, updated_at: new Date().toISOString() },
-          { onConflict: "staff_user_id,borrower_id,product_code" }
-        )
-        .select("id")
-        .single();
-      if (error) throw error;
+      const data = await upsertLoanDraft(borrowerId, productCode, form_data_json);
       setDraftId(data.id);
       setDraftSavedAt(new Date());
       queryClient.invalidateQueries({ queryKey: ["admin-loan-drafts"] });
@@ -341,7 +336,7 @@ export default function ProductLoanFormShell({
 
   const deleteDraft = async () => {
     if (!draftId) return;
-    await supabase.from("loan_application_drafts").delete().eq("id", draftId);
+    await deleteLoanDraft(draftId);
     setDraftId(null);
     setDraftSavedAt(null);
     queryClient.invalidateQueries({ queryKey: ["admin-loan-drafts"] });

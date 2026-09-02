@@ -5,8 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
+function chatCompletionsUrl() {
+  const raw = (Deno.env.get("OPENAI_BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, "");
+  return raw.endsWith("/chat/completions") ? raw : `${raw}/chat/completions`;
+}
+const MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini";
 
 type Severity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -153,7 +156,7 @@ async function runAgentLLM(agentKey: string, data: unknown, apiKey: string): Pro
     tool_choice: { type: "function", function: { name: "report" } },
   };
 
-  const resp = await fetch(AI_GATEWAY_URL, {
+  const resp = await fetch(chatCompletionsUrl(), {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -182,8 +185,8 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) return json({ error: "LOVABLE_API_KEY is not configured" }, 500);
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) return json({ error: "OPENAI_API_KEY is not configured in Edge Function secrets" }, 500);
 
     // ── Auth: require an authenticated staff user ──
     const authHeader = req.headers.get("Authorization") ?? "";

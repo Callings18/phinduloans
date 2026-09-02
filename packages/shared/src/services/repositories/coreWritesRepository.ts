@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from "@phinduloans/shared/api/httpClient";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@phinduloans/shared/api/httpClient";
 import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
@@ -412,4 +412,47 @@ export async function createWriteOff(loanId: string, amount: number, reason: str
     return apiPost<{ ok?: boolean; data?: { id: string } }>("/api/v1/write-offs", { loanId, amount, reason });
   }
   throw new Error("Set VITE_API_URL to create write-offs through the API");
+}
+
+export type LoanDraftRow = {
+  id: string;
+  staff_user_id: string;
+  borrower_id: string | null;
+  product_code: string;
+  form_data: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function listLoanDrafts(filters?: { borrowerId?: string; productCode?: string }) {
+  if (!apiFeatureFlags.coreWrites) throw new Error("Set VITE_API_URL to list drafts through the API");
+  const q = new URLSearchParams();
+  if (filters?.borrowerId) q.set("borrowerId", filters.borrowerId);
+  if (filters?.productCode) q.set("productCode", filters.productCode);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await apiGet<{ ok?: boolean; data?: LoanDraftRow[] }>(`/api/v1/loan-drafts${suffix}`);
+  return res.data ?? [];
+}
+
+export async function getLoanDraft(draftId: string) {
+  if (!apiFeatureFlags.coreWrites) throw new Error("Set VITE_API_URL to load drafts through the API");
+  const res = await apiGet<{ ok?: boolean; data?: LoanDraftRow }>(`/api/v1/loan-drafts/${draftId}`);
+  if (!res.data) throw new Error("Draft not found");
+  return res.data;
+}
+
+export async function upsertLoanDraft(borrowerId: string, productCode: string, formData: Record<string, unknown>) {
+  if (!apiFeatureFlags.coreWrites) throw new Error("Set VITE_API_URL to save drafts through the API");
+  const res = await apiPut<{ ok?: boolean; data?: { id: string; updated_at?: string } }>("/api/v1/loan-drafts", {
+    borrowerId,
+    productCode,
+    formData,
+  });
+  if (!res.data?.id) throw new Error("Draft was not saved");
+  return res.data;
+}
+
+export async function deleteLoanDraft(draftId: string) {
+  if (!apiFeatureFlags.coreWrites) throw new Error("Set VITE_API_URL to delete drafts through the API");
+  return apiDelete<{ ok?: boolean; data?: { id: string } }>(`/api/v1/loan-drafts/${draftId}`);
 }
