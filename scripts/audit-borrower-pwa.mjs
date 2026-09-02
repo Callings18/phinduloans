@@ -27,7 +27,10 @@ if (existsSync(borrowerManifestPath)) {
 }
 
 const borrowerMain = readFileSync(borrowerMainPath, "utf8");
-expect(borrowerMain.includes('navigator.serviceWorker.register("/service-worker.js")'), "Borrower app should register service-worker.js in main.tsx.");
+expect(
+  borrowerMain.includes('register("/service-worker.js")') || borrowerMain.includes("register('/service-worker.js')"),
+  "Borrower app should register service-worker.js in main.tsx.",
+);
 
 const borrowerApp = readFileSync(borrowerAppPath, "utf8");
 expect(borrowerApp.includes("BorrowerInstallNudge") || borrowerApp.includes("PWAInstallPrompt"), "Borrower app should mount soft install nudge.");

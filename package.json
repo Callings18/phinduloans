@@ -18,6 +18,7 @@
     "build:borrower": "vite build --config apps/borrower-mobile/vite.config.ts",
     "deploy:staff": "npx wrangler@4.110.0 deploy --config wrangler.staff.jsonc",
     "deploy:borrower": "npx wrangler@4.110.0 deploy --config wrangler.borrower.jsonc",
+    "deploy:borrower:full": "node scripts/deploy-borrower.mjs",
     "preview:staff": "vite preview --config apps/staff-web/vite.config.ts",
     "preview:borrower": "vite preview --config apps/borrower-mobile/vite.config.ts",
     "lint": "eslint apps packages",

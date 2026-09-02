@@ -1,0 +1,38 @@
+name: Deploy Borrower PWA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/borrower-mobile/**"
+      - "packages/shared/**"
+      - "wrangler.borrower.jsonc"
+      - "scripts/deploy-borrower.mjs"
+      - "scripts/audit-borrower-pwa.mjs"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & deploy borrower PWA
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_BORROWER_APP_URL: https://app.phindu.com
+          VITE_OFFICE_BASE_URL: https://office.phindu.com
+          VITE_MARKETING_BASE_URL: https://phindu.com
+        run: node scripts/deploy-borrower.mjs
