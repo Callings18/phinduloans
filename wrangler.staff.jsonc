@@ -3,7 +3,7 @@
   "name": "phinduloans-staff-web",
   "compatibility_date": "2026-07-09",
   "assets": {
-    "directory": "./apps/staff-web/dist",
+    "directory": "./dist",
     "not_found_handling": "single-page-application"
   }
 }
