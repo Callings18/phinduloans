@@ -1,7 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +10,9 @@ export default defineConfig({
     host: "::",
     port: 8081,
   },
-  plugins: [react()],
+  esbuild: {
+    jsx: "automatic",
+  },
   publicDir: path.resolve(appDir, "./public"),
   resolve: {
     alias: {
@@ -23,10 +24,18 @@ export default defineConfig({
   build: {
     outDir: path.resolve(appDir, "./dist"),
     emptyOutDir: true,
-    reportCompressedSize: false,
     commonjsOptions: {
       include: [/node_modules/],
       transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          query: ["@tanstack/react-query"],
+          supabase: ["@supabase/supabase-js"],
+        },
+      },
     },
   },
 });

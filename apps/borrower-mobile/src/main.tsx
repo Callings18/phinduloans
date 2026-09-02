@@ -25,9 +25,29 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 if ("serviceWorker" in navigator) {
   if (import.meta.env.PROD) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/service-worker.js").catch((err) => {
-        console.warn("[PWA] Service worker registration failed:", err);
-      });
+      navigator.serviceWorker
+        .register("/service-worker.js")
+        .then((registration) => {
+          registration.addEventListener("updatefound", () => {
+            const installing = registration.installing;
+            if (!installing) return;
+            installing.addEventListener("statechange", () => {
+              if (installing.state === "installed" && navigator.serviceWorker.controller) {
+                console.info("[PWA] New version available — reload to update.");
+              }
+            });
+          });
+        })
+        .catch((err) => {
+          console.warn("[PWA] Service worker registration failed:", err);
+        });
+    });
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
     });
   } else {
     navigator.serviceWorker.getRegistrations().then((registrations) => {

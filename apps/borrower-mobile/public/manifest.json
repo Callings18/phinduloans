@@ -1,11 +1,14 @@
 {
-  "name": "Phindu Credit Solutions - Microfinance Platform",
+  "name": "Phindu Credit Solutions",
   "short_name": "Phindu Credit",
-  "description": "Quick and easy loan application platform for Zambians. Apply online, get funds within 24 hours.",
+  "description": "Apply for loans, track repayments, upload KYC documents, and sign contracts — all from your phone.",
   "id": "https://app.phindu.com/",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "lang": "en",
+  "dir": "ltr",
   "background_color": "#2D0818",
   "theme_color": "#6B1A3A",
   "orientation": "portrait-primary",
@@ -50,6 +53,13 @@
       "short_name": "Apply",
       "description": "Start a new loan application",
       "url": "/apply",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Payments",
+      "short_name": "Payments",
+      "description": "View repayment schedule and submit payment claims",
+      "url": "/dashboard?tab=payments",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {

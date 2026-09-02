@@ -1,15 +1,23 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * Borrower mobile shell: ships apps/borrower-mobile/dist as the native app.
+ * Borrower native shell for Google Play (TWA / Capacitor WebView).
+ * Build: npm run build && npx cap sync android
  * Optional CAPACITOR_SERVER_URL for dev (e.g. http://192.168.1.x:8081).
  */
 const devServerUrl = process.env.CAPACITOR_SERVER_URL?.trim();
 
 const config: CapacitorConfig = {
   appId: "com.phindu.loans.borrower",
-  appName: "Phindu Loans",
+  appName: "Phindu Credit",
   webDir: "dist",
+  android: {
+    allowMixedContent: false,
+    backgroundColor: "#2D0818",
+  },
+  ios: {
+    backgroundColor: "#2D0818",
+  },
   ...(devServerUrl
     ? {
         server: {

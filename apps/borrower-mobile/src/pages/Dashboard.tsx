@@ -114,7 +114,10 @@ const Dashboard = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!isLoading && !user) navigate('/auth');
+    if (!isLoading && !user) {
+      const next = `/dashboard${window.location.search || ""}`;
+      navigate(`/auth?next=${encodeURIComponent(next)}`);
+    }
     if (!isLoading && user && isStaff && !searchParams.has('view')) {
       window.location.replace(officePath('/admin'));
     }

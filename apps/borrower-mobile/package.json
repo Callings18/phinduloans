@@ -10,13 +10,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "cap:sync": "cap sync",
     "cap:android": "cap open android",
+    "cap:add:android": "cap add android",
+    "build:android": "npm run build && cap sync android",
     "build:dev": "vite build --mode development"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.0",
-    "@capacitor/cli": "^8.3.0",
-    "@capacitor/core": "^8.3.0",
-    "@capacitor/ios": "^8.3.0",
-    "@phinduloans/shared": "file:../../packages/shared"
+    "@phinduloans/shared": "*"
   }
 }

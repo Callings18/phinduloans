@@ -43,6 +43,7 @@ import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { format } from "date-fns";
 import { borrowerDashboardHrefFromLegacyProfileTab } from "@/utils/borrowerDashboardLinks";
+import { officePath } from "@phinduloans/shared/config/siteMode";
 
 interface Profile {
     id: string;
@@ -137,9 +138,9 @@ const Profile = () => {
 
     useEffect(() => {
         if (!authLoading && user && isStaff && !searchParams.has("view")) {
-            navigate("/admin", { replace: true });
+            window.location.replace(officePath("/admin"));
         }
-    }, [user, authLoading, isStaff, navigate, searchParams]);
+    }, [user, authLoading, isStaff, searchParams]);
 
     // Fetch profile
     const { data: profile, isLoading: profileLoading } = useQuery({

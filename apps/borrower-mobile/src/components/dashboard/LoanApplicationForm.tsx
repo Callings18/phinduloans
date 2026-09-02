@@ -32,6 +32,7 @@ import CollateralBorrowersSection, {
 import { useProductLoanRules } from "@phinduloans/shared/hooks/useProductLoanRules";
 import type { LoanProductCode } from "@phinduloans/shared/config/loanProductModules";
 import { asLoanProductCode, isBorrowerPortalProduct } from "@phinduloans/shared/utils/borrowerPortalIntegration";
+import { fetchActiveLoanProducts } from "@phinduloans/shared/services/repositories/loanProductsRepository";
 
 interface LoanProduct {
   id: string;
@@ -249,13 +250,8 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const { data: loanProducts } = useQuery({
     queryKey: ["loan-products-apply"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loan_products")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      return (data as LoanProduct[]).filter(isBorrowerPortalProduct);
+      const rows = await fetchActiveLoanProducts({ sort: "name", ascending: true });
+      return (rows as LoanProduct[]).filter(isBorrowerPortalProduct);
     },
   });
 
