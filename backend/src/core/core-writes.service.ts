@@ -484,6 +484,63 @@ export class CoreWritesService {
     return { ok: true, data: { id: inserted.id } };
   }
 
+  async listLoanDrafts(filters: { borrowerId?: string; productCode?: string }) {
+    const admin = this.supabase.getAdminClient();
+    let q = admin
+      .from("loan_application_drafts")
+      .select("id, staff_user_id, borrower_id, product_code, form_data, created_at, updated_at")
+      .order("updated_at", { ascending: false });
+    if (filters.borrowerId) q = q.eq("borrower_id", filters.borrowerId);
+    if (filters.productCode) q = q.eq("product_code", filters.productCode);
+    const { data, error } = await q;
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "DRAFT_LIST_FAILED", error.message);
+    return { ok: true, data: data ?? [] };
+  }
+
+  async getLoanDraft(draftId: string) {
+    const admin = this.supabase.getAdminClient();
+    const { data, error } = await admin
+      .from("loan_application_drafts")
+      .select("id, staff_user_id, borrower_id, product_code, form_data, created_at, updated_at")
+      .eq("id", draftId)
+      .maybeSingle();
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "DRAFT_LOOKUP_FAILED", error.message);
+    if (!data) apiFail(HttpStatus.NOT_FOUND, "DRAFT_NOT_FOUND", "Draft not found");
+    return { ok: true, data };
+  }
+
+  async upsertLoanDraft(
+    dto: { borrowerId: string; productCode: string; formData: Record<string, unknown> },
+    actor: AuthUser,
+  ) {
+    if (!dto.borrowerId) apiFail(HttpStatus.BAD_REQUEST, "BORROWER_REQUIRED", "Select a borrower before saving a draft");
+    if (!dto.productCode) apiFail(HttpStatus.BAD_REQUEST, "PRODUCT_REQUIRED", "Product code is required");
+    const admin = this.supabase.getAdminClient();
+    const { data, error } = await admin
+      .from("loan_application_drafts")
+      .upsert(
+        {
+          staff_user_id: actor.userId,
+          borrower_id: dto.borrowerId,
+          product_code: dto.productCode,
+          form_data: dto.formData,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "staff_user_id,borrower_id,product_code" },
+      )
+      .select("id, updated_at")
+      .single();
+    if (error || !data) apiFail(HttpStatus.BAD_REQUEST, "DRAFT_SAVE_FAILED", error?.message ?? "Could not save draft");
+    return { ok: true, data };
+  }
+
+  async deleteLoanDraft(draftId: string) {
+    const admin = this.supabase.getAdminClient();
+    const { error } = await admin.from("loan_application_drafts").delete().eq("id", draftId);
+    if (error) apiFail(HttpStatus.BAD_REQUEST, "DRAFT_DELETE_FAILED", error.message);
+    return { ok: true, data: { id: draftId } };
+  }
+
   async createWriteOff(dto: { loanId: string; amount: number; reason: string }, actor: AuthUser) {
     const reason = dto.reason.trim();
     if (!reason) apiFail(HttpStatus.BAD_REQUEST, "REASON_REQUIRED", "Write-off reason is required");

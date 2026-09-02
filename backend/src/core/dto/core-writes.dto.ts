@@ -479,3 +479,17 @@ export class CreateWriteOffDto {
   @IsString()
   reason!: string;
 }
+
+export class UpsertLoanDraftDto {
+  @ApiProperty()
+  @IsString()
+  borrowerId!: string;
+
+  @ApiProperty()
+  @IsString()
+  productCode!: string;
+
+  @ApiProperty()
+  @IsObject()
+  formData!: Record<string, unknown>;
+}

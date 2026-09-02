@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthUser } from "../auth/auth-user";
@@ -23,6 +23,7 @@ import {
   SetExpenseStatusDto,
   TopUpLoanDto,
   UpdateLoanDto,
+  UpsertLoanDraftDto,
 } from "./dto/core-writes.dto";
 import { CoreWritesService } from "./core-writes.service";
 
@@ -51,6 +52,37 @@ export class CoreWritesController {
   @ApiOperation({ summary: "Create a loan application (borrower portal or staff)" })
   createApplication(@Body() dto: CreateApplicationDto, @CurrentUser() user: AuthUser) {
     return this.core.createApplication(dto, user);
+  }
+
+  @Get("loan-drafts")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "List loan application drafts" })
+  listLoanDrafts(
+    @Query("borrowerId") borrowerId?: string,
+    @Query("productCode") productCode?: string,
+  ) {
+    return this.core.listLoanDrafts({ borrowerId, productCode });
+  }
+
+  @Get("loan-drafts/:id")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Load one loan application draft" })
+  getLoanDraft(@Param("id") id: string) {
+    return this.core.getLoanDraft(id);
+  }
+
+  @Put("loan-drafts")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Create or update a staff loan application draft" })
+  upsertLoanDraft(@Body() dto: UpsertLoanDraftDto, @CurrentUser() user: AuthUser) {
+    return this.core.upsertLoanDraft(dto, user);
+  }
+
+  @Delete("loan-drafts/:id")
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: "Delete a loan application draft" })
+  deleteLoanDraft(@Param("id") id: string) {
+    return this.core.deleteLoanDraft(id);
   }
 
   @Post("repayments/:repaymentId/record")
