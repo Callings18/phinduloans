@@ -54,6 +54,13 @@ const run = (cmd) => {
 
 run("npm run build:borrower");
 run("npm run audit:pwa");
-run("npx wrangler@4.110.0 deploy --config wrangler.borrower.jsonc");
-
-console.log("\nBorrower PWA deployed. Verify https://app.phindu.com/dashboard");
+run("node scripts/verify-borrower-apk.mjs");
+if (!process.env.CLOUDFLARE_API_TOKEN && !process.env.CF_API_TOKEN) {
+  console.warn(
+    "\nSkipping Cloudflare deploy: set CLOUDFLARE_API_TOKEN (or run `npx wrangler login`) then rerun deploy:borrower:full.\n" +
+      "Build output is ready at apps/borrower-mobile/dist — upload via Cloudflare dashboard or Lovable if needed.\n",
+  );
+} else {
+  run("npx wrangler@4.110.0 deploy --config wrangler.borrower.jsonc");
+  console.log("\nBorrower PWA deployed. Verify https://app.phindu.com/dashboard");
+}

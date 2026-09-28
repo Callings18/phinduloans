@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
+import { Button } from "@phinduloans/shared/components/ui/button";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { borrowerAppPath, officePath } from "@phinduloans/shared/config/siteMode";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Smartphone } from "lucide-react";
+import { Link } from "react-router-dom";
+import { downloadApk, isAndroidDevice } from "@phinduloans/shared/utils/appDownload";
 
 /** Absolute borrower destination — never leave app.phindu.com for marketing Site URL. */
 function goToBorrowerDestination(path: string | null) {
@@ -102,6 +105,25 @@ const Auth = () => {
                   {isLogin ? "Sign Up" : "Sign In"}
                 </button>
               </p>
+            </div>
+          </div>
+
+          <div className="mt-8 text-center space-y-3 animate-fade-in">
+            <p className="text-xs text-muted-foreground">
+              Apply online in your browser — no install required. Your data is saved to your account when you sign in.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+              <Button variant="outline" size="sm" className="rounded-full" asChild>
+                <Link to="/install">
+                  <Smartphone size={14} className="mr-1.5" />
+                  Install app (APK / PWA)
+                </Link>
+              </Button>
+              {isAndroidDevice() && (
+                <Button variant="ghost" size="sm" className="rounded-full text-primary" onClick={downloadApk}>
+                  Download APK
+                </Button>
+              )}
             </div>
           </div>
         </div>

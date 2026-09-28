@@ -1,0 +1,51 @@
+name: Build borrower APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/borrower-mobile/**"
+      - "packages/shared/**"
+      - "scripts/build-borrower-apk.mjs"
+      - "scripts/prepare-borrower-android.mjs"
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare Capacitor Android
+        run: node scripts/prepare-borrower-android.mjs
+        env:
+          CAPACITOR_SERVER_URL: https://app.phindu.com
+
+      - name: Build debug APK
+        run: node scripts/build-borrower-apk.mjs
+        env:
+          APK_VARIANT: debug
+          CAPACITOR_SERVER_URL: https://app.phindu.com
+
+      - name: Upload PhinduCredit.apk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhinduCredit-apk
+          path: apps/borrower-mobile/public/downloads/PhinduCredit.apk
+          retention-days: 30

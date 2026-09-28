@@ -5,6 +5,12 @@
 export const APK_URL = "/downloads/PhinduCredit.apk";
 export const APK_FILENAME = "PhinduCredit.apk";
 
+/** Set VITE_PLAY_STORE_URL when the Play listing is live. */
+export const PLAY_STORE_URL =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_PLAY_STORE_URL?.trim()) ||
+  "";
+
 export function isAndroidDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   return /Android/i.test(navigator.userAgent);

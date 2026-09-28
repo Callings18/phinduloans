@@ -1,7 +1,13 @@
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
 import { Download, Smartphone, Share, PlusSquare, ArrowLeft } from "lucide-react";
-import { APK_URL, downloadApk, isAndroidDevice, isIOSDevice } from "@phinduloans/shared/utils/appDownload";
+import {
+  APK_URL,
+  PLAY_STORE_URL,
+  downloadApk,
+  isAndroidDevice,
+  isIOSDevice,
+} from "@phinduloans/shared/utils/appDownload";
 import { Link } from "react-router-dom";
 import { usePwaInstallPrompt } from "@phinduloans/shared/hooks/usePwaInstallPrompt";
 import { isStandaloneDisplayMode } from "@phinduloans/shared/utils/pwaDisplayMode";
@@ -63,17 +69,34 @@ const Install = () => {
                 Download the app file and install it on your phone
                 {onAndroid ? " (recommended on Android)." : "."}
               </p>
-              <Button className="w-full" onClick={downloadApk}>
-                <Download size={16} className="mr-2" />
-                Download APK
-              </Button>
-              <a
-                href={APK_URL}
-                download
-                className="block text-xs text-center text-muted-foreground hover:text-primary"
-              >
-                Or save PhinduCredit.apk directly
-              </a>
+              {PLAY_STORE_URL ? (
+                <Button className="w-full" asChild>
+                  <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                    <Download size={16} className="mr-2" />
+                    Get it on Google Play
+                  </a>
+                </Button>
+              ) : (
+                <Button className="w-full" onClick={downloadApk}>
+                  <Download size={16} className="mr-2" />
+                  Download APK
+                </Button>
+              )}
+              {!PLAY_STORE_URL && (
+                <a
+                  href={APK_URL}
+                  download
+                  className="block text-xs text-center text-muted-foreground hover:text-primary"
+                >
+                  Or save PhinduCredit.apk directly
+                </a>
+              )}
+              {!PLAY_STORE_URL && (
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Google Play listing coming soon. After installing, sign in with the same phone number — your loans and
+                  applications stay in your account.
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -82,6 +105,9 @@ const Install = () => {
               <h2 className="font-semibold text-foreground">
                 {onIOS ? "iPhone / iPad" : "Add to Home Screen"}
               </h2>
+              {onIOS ? (
+                <p className="text-xs font-medium text-primary mb-2">iOS App Store — coming soon</p>
+              ) : null}
               {onIOS ? (
                 <ol className="text-sm text-muted-foreground space-y-2">
                   <li className="flex gap-2 items-start">

@@ -19,6 +19,9 @@
     "deploy:staff": "npx wrangler@4.110.0 deploy --config wrangler.staff.jsonc",
     "deploy:borrower": "npx wrangler@4.110.0 deploy --config wrangler.borrower.jsonc",
     "deploy:borrower:full": "node scripts/deploy-borrower.mjs",
+    "verify:borrower:apk": "node scripts/verify-borrower-apk.mjs",
+    "prepare:borrower:android": "node scripts/prepare-borrower-android.mjs",
+    "build:borrower:apk": "node scripts/build-borrower-apk.mjs",
     "preview:staff": "vite preview --config apps/staff-web/vite.config.ts",
     "preview:borrower": "vite preview --config apps/borrower-mobile/vite.config.ts",
     "lint": "eslint apps packages",
@@ -34,6 +37,7 @@
     "test:e2e:headed": "playwright test tests/e2e/smoke.spec.ts --headed",
     "audit:pwa": "node scripts/audit-borrower-pwa.mjs",
     "cap:sync": "npm --prefix apps/borrower-mobile run cap:sync",
+    "go-live:borrower": "npm run build:borrower && npm run audit:pwa && node scripts/verify-borrower-apk.mjs && npm run deploy:borrower",
     "build:dev": "vite build --mode development --config apps/staff-web/vite.config.ts && vite build --mode development --config apps/borrower-mobile/vite.config.ts"
   },
   "dependencies": {
@@ -97,6 +101,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.16",
