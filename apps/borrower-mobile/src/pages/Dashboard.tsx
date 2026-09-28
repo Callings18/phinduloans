@@ -455,7 +455,7 @@ const Dashboard = () => {
         const receiptErr = validateBorrowerReceiptFile(claimReceiptFile);
         if (receiptErr) throw new Error(receiptErr);
         const ext = claimReceiptFile.name.split(".").pop() || "bin";
-        const path = `payment-receipts/${user.id}/claim_${submitPaymentRepayment.id}_${Date.now()}.${ext}`;
+        const path = `${user.id}/payment-receipts/claim_${submitPaymentRepayment.id}_${Date.now()}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("loan-documents")
           .upload(path, claimReceiptFile, { contentType: claimReceiptFile.type, upsert: true });

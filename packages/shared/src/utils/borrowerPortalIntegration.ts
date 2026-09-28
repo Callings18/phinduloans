@@ -7,7 +7,7 @@ export function isBorrowerPortalProduct(product: {
 }): boolean {
   if (product.is_active === false) return false;
   const channels = product.channels ?? ["website", "admin"];
-  return channels.includes("website");
+  return channels.includes("website") || channels.includes("mobile_app");
 }
 
 export function loanApplicationSourceLabel(source: string | null | undefined): string {

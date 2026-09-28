@@ -1,6 +1,7 @@
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { apiGet, apiPost, getApiBaseUrl } from "@phinduloans/shared/api/httpClient";
 import { apiFeatureFlags } from "@phinduloans/shared/config/apiMode";
+import { isPaymentClaimPendingStatus } from "@phinduloans/shared/constants/paymentClaims";
 import { repaymentRemainingKwacha } from "@phinduloans/shared/utils/repaymentRemaining";
 
 export interface LoanEvent {
@@ -73,6 +74,21 @@ export async function submitPaymentClaim(
       );
     }
 
+    const { data: existingClaims, error: existingErr } = await supabase
+      .from("payment_claims")
+      .select("id, status")
+      .eq("repayment_id", repaymentId)
+      .eq("user_id", fallbackData.userId);
+    if (existingErr) throw existingErr;
+    const openClaim = (existingClaims ?? []).find((c) =>
+      isPaymentClaimPendingStatus(c.status as string),
+    );
+    if (openClaim) {
+      throw new Error(
+        "You already have a payment report awaiting review for this installment. Check Payments for status.",
+      );
+    }
+
     const { data, error } = await supabase
       .from("payment_claims")
       .insert({
@@ -87,7 +103,14 @@ export async function submitPaymentClaim(
       })
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error(
+          "You already have a payment report awaiting review for this installment. Check Payments for status.",
+        );
+      }
+      throw error;
+    }
     return data;
   }
   throw new Error(
@@ -152,11 +175,29 @@ export async function reviewPaymentClaim(input: {
     return;
   }
 
-  // Safety: claim review should go through API workflow to avoid direct-write divergence
-  // from canonical repayment posting and audit side-effects.
-  throw new Error(
-    "Payment claim review requires API workflow. Enable VITE_API_PHASE1_WORKFLOW=true and VITE_API_URL.",
-  );
+  const { data: userData } = await supabase.auth.getUser();
+  const reviewerId = userData.user?.id;
+  if (!reviewerId) throw new Error("Not authenticated");
+
+  const nextStatus =
+    input.decision === "approved"
+      ? "verified"
+      : input.decision === "rejected"
+        ? "rejected"
+        : "needs_more_info";
+
+  const { error } = await supabase
+    .from("payment_claims")
+    .update({
+      status: nextStatus,
+      review_comment: input.reviewComment ?? null,
+      decision_reason_code: input.decisionReasonCode ?? null,
+      verified_at: input.decision === "approved" ? new Date().toISOString() : null,
+      verified_by: input.decision === "approved" ? reviewerId : null,
+    })
+    .eq("id", input.claimId);
+
+  if (error) throw error;
 }
 
 export async function transitionLoanStatus(input: {

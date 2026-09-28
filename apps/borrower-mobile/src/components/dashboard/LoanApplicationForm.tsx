@@ -154,7 +154,11 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [crbConsent, setCrbConsent] = useState(false);
 
-  const { data: profile } = useQuery({
+  const {
+    data: profile,
+    isError: profileLoadError,
+    error: profileError,
+  } = useQuery({
     queryKey: ["user-profile-apply", user?.id],
     queryFn: async () => {
       if (!user) return null;
@@ -163,7 +167,7 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
         .select("id, email, full_name, phone, nrc_number, address, city, employer_name, job_title, net_income, employment_type")
         .eq("id", user.id)
         .single();
-      if (error) return null;
+      if (error) throw error;
       return data as Profile;
     },
     enabled: !!user,
@@ -540,16 +544,17 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
 
 
       // Auto-enroll borrower in the loan product's House roster (best-effort)
-      try {
-        if (productCode) {
-          await (supabase.from as any)("product_house_borrowers").upsert(
-            { product_code: productCode, borrower_id: user.id, added_by: user.id },
-            { onConflict: "product_code,borrower_id" },
+      if (productCode) {
+        const { error: houseErr } = await (supabase.from as any)("product_house_borrowers").upsert(
+          { product_code: productCode, borrower_id: user.id, added_by: user.id },
+          { onConflict: "product_code,borrower_id" },
+        );
+        if (houseErr) {
+          console.warn("House roster enrollment failed:", houseErr);
+          submitWarnings.push(
+            "House roster enrollment failed (apply SQL migration 20260928120000 if this persists). Your application was still submitted.",
           );
         }
-      } catch (houseErr) {
-        console.warn("House roster enrollment skipped:", houseErr);
-        submitWarnings.push("House roster enrollment was skipped; your application was still submitted.");
       }
 
       // Upload documents
@@ -777,6 +782,22 @@ const LoanApplicationForm = ({ initialProductId, initialAmount, initialTerm, onC
       {step === 0 && (
         <div className="space-y-4">
           <h3 className="text-xl font-semibold text-foreground">Choose a Loan Product</h3>
+          {profileLoadError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                We could not load your profile ({profileError instanceof Error ? profileError.message : "network error"}).
+                Refresh the page or complete your profile before applying.
+              </AlertDescription>
+            </Alert>
+          )}
+          {loanProducts && loanProducts.length === 0 && (
+            <Alert>
+              <AlertDescription>
+                No loan products are available for online applications right now. Please contact support or try again
+                later — your admin may need to enable the <strong>website</strong> channel on active products.
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="grid gap-4">
             {loanProducts?.map((product) => {
               const Icon = PRODUCT_ICONS[product.name] || CreditCard;

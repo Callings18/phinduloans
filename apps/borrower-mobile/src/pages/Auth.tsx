@@ -24,19 +24,27 @@ const Auth = () => {
 
   const [isLogin, setIsLogin] = useState(initialMode);
 
-  const { user, isLoading, isStaff } = useAuth();
+  const { user, isLoading, isStaff, rolesResolved, rolesError } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && user) {
+    if (!isLoading && user && rolesResolved) {
+      if (rolesError) {
+        toast({
+          title: "Could not verify account type",
+          description: "Please try again in a moment or contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
       if (isStaff) {
         window.location.replace(officePath("/admin"));
         return;
       }
       goToBorrowerDestination(safeNextPath);
     }
-  }, [user, isLoading, isStaff, safeNextPath]);
+  }, [user, isLoading, isStaff, rolesResolved, rolesError, safeNextPath, toast]);
 
   const handlePhoneAuthSuccess = () => {
     toast({
@@ -116,12 +124,12 @@ const Auth = () => {
               <Button variant="outline" size="sm" className="rounded-full" asChild>
                 <Link to="/install">
                   <Smartphone size={14} className="mr-1.5" />
-                  Install app (APK / PWA)
+                  Download Our App
                 </Link>
               </Button>
               {isAndroidDevice() && (
                 <Button variant="ghost" size="sm" className="rounded-full text-primary" onClick={downloadApk}>
-                  Download APK
+                  Download now
                 </Button>
               )}
             </div>
