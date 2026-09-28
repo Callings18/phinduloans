@@ -13,6 +13,15 @@ Last reviewed: 2026-09-28. Fixes in code + migration `20260928120000_borrower_po
 | Finance/collections cannot see app docs | Empty documents tab | Migration: extend application_documents RLS |
 | Empty product list / profile errors | Apply appears broken | UI alerts + `mobile_app` channel filter |
 
+## Additional fixes (same deploy wave)
+
+| Issue | Fix |
+|-------|-----|
+| Duplicate “I've paid” while claim pending | `canSubmitNewPaymentClaim` + pre-insert check |
+| Contract sign two-step status update | Single update sets `awaiting_disbursement` |
+| Auth redirect before roles load | `rolesResolved` / `rolesError` on Auth page |
+| QuickApply admin-only products | `isBorrowerPortalProduct` filter |
+
 ## Still verify in production config
 
 - **`VITE_API_LOAN_PRODUCTS=true`** without live API → apply shows no products. Keep **`false`** unless api-next is deployed.

@@ -4,6 +4,10 @@ Use this checklist to put **online apply**, **app.phindu.com PWA**, and **APK do
 
 ## A. Lovable / Supabase (run once in SQL Editor, in order)
 
+**Borrower ↔ admin fixes (contract sign, house roster, finance docs):** run after the list below:
+
+- `supabase/migrations/20260928120000_borrower_portal_admin_visibility_fixes.sql`
+
 Minimum for apply + payments + receipts (full scripts in repo `supabase/migrations/`):
 
 | Step | Migration file |

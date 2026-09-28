@@ -17,6 +17,7 @@ import {
   Upload,
 } from "lucide-react";
 import { fetchActiveLoanProducts } from "@phinduloans/shared/services/repositories/loanProductsRepository";
+import { isBorrowerPortalProduct } from "@phinduloans/shared/utils/borrowerPortalIntegration";
 import { calculateLoan, formatCurrency, getInterestPeriodLabel } from "@phinduloans/shared/utils/loanCalculations";
 
 interface Profile {
@@ -67,7 +68,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
     queryKey: ["loan-products-quick"],
     queryFn: async () => {
       const rows = await fetchActiveLoanProducts({ sort: "min_amount", ascending: true });
-      return rows as LoanProduct[];
+      return (rows as LoanProduct[]).filter(isBorrowerPortalProduct);
     },
     staleTime: 30000,
   });

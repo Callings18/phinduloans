@@ -11,3 +11,10 @@ export function isPaymentClaimPendingStatus(status: string | null | undefined): 
 export function isPaymentClaimApprovedStatus(status: string | null | undefined): boolean {
   return status === "verified" || status === "approved";
 }
+
+/** Borrower may open a new claim when none exists or the prior claim was rejected. */
+export function canSubmitNewPaymentClaim(status: string | null | undefined): boolean {
+  if (!status) return true;
+  if (status === "rejected") return true;
+  return !isPaymentClaimPendingStatus(status);
+}

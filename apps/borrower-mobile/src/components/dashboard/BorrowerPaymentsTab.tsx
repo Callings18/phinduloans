@@ -23,6 +23,7 @@ import {
 import {
   isPaymentClaimApprovedStatus,
   isPaymentClaimPendingStatus,
+  canSubmitNewPaymentClaim,
 } from "@phinduloans/shared/constants/paymentClaims";
 import { borrowerInstallmentLabel } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
 import {
@@ -243,7 +244,7 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         )}
                       </div>
                     )}
-                    {borrowerCanSubmitPaymentClaim(rep) && (
+                    {borrowerCanSubmitPaymentClaim(rep) && canSubmitNewPaymentClaim(claim?.status) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -346,7 +347,7 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {borrowerCanSubmitPaymentClaim(rep) && (
+                        {borrowerCanSubmitPaymentClaim(rep) && canSubmitNewPaymentClaim(claim?.status) && (
                           <Button
                             variant="outline"
                             size="sm"

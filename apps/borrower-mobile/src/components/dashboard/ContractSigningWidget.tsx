@@ -83,16 +83,6 @@ export default function ContractSigningWidget({ userId }: Props) {
     enabled: !!userId,
   });
 
-  const advanceStatusAfterSign = async (loanId: string, currentStatus: string) => {
-    if (["approved", "contract_signing"].includes(currentStatus)) {
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: "awaiting_disbursement", updated_at: new Date().toISOString() })
-        .eq("id", loanId);
-      if (error) throw error;
-    }
-  };
-
   // Sign contract mutation
   const signContractMutation = useMutation({
     mutationFn: async () => {
@@ -133,6 +123,7 @@ export default function ContractSigningWidget({ userId }: Props) {
       );
 
       // Update loan with signed contract reference (use PDF if generated, else raw signature)
+      const advanceStatus = ["approved", "contract_signing"].includes(selectedLoan.status);
       const { error: updateError } = await supabase
         .from("loan_applications")
         .update({
@@ -140,12 +131,12 @@ export default function ContractSigningWidget({ userId }: Props) {
           signed_contract_uploaded_at: new Date().toISOString(),
           borrower_signed: true,
           borrower_signed_at: new Date().toISOString(),
+          ...(advanceStatus ? { status: "awaiting_disbursement" as const } : {}),
+          updated_at: new Date().toISOString(),
         })
         .eq("id", selectedLoan.id);
 
       if (updateError) throw updateError;
-
-      await advanceStatusAfterSign(selectedLoan.id, selectedLoan.status);
 
       await logAudit({
         action: 'CONTRACT_SIGNED_BORROWER',
@@ -204,6 +195,7 @@ export default function ContractSigningWidget({ userId }: Props) {
 
       if (uploadError) throw uploadError;
 
+      const advanceStatus = ["approved", "contract_signing"].includes(selectedLoan.status);
       const { error: updateError } = await supabase
         .from("loan_applications")
         .update({
@@ -211,12 +203,12 @@ export default function ContractSigningWidget({ userId }: Props) {
           signed_contract_uploaded_at: new Date().toISOString(),
           borrower_signed: true,
           borrower_signed_at: new Date().toISOString(),
+          ...(advanceStatus ? { status: "awaiting_disbursement" as const } : {}),
+          updated_at: new Date().toISOString(),
         })
         .eq("id", selectedLoan.id);
 
       if (updateError) throw updateError;
-
-      await advanceStatusAfterSign(selectedLoan.id, selectedLoan.status);
 
       // Notify admin
       await supabase.functions.invoke("send-notification", {
