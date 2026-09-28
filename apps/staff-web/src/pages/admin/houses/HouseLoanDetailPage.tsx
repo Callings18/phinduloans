@@ -15,6 +15,7 @@ import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { downloadLoanSchedule } from "@phinduloans/shared/utils/generateLoanSchedule";
 import { recordLoanPayment } from "@/services/repositories/houseWorkflowRepository";
 import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
+import { fetchCompanyLetterhead } from "@/utils/fetchCompanyLetterhead";
 import { differenceInCalendarDays, format } from "date-fns";
 import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import LoanDetailsModal from "@/components/admin/LoanDetailsModal";
@@ -179,14 +180,7 @@ export default function HouseLoanDetailPage() {
       return;
     }
 
-    const { data: settings } = await (supabase.from("system_settings") as any)
-      .select("setting_key, setting_value")
-      .in("setting_key", ["company_name", "company_address", "company_phone"]);
-
-    const settingsMap: Record<string, string> = {};
-    settings?.forEach((s: any) => {
-      settingsMap[s.setting_key] = s.setting_value;
-    });
+    const letterhead = await fetchCompanyLetterhead();
 
     downloadLoanSchedule({
       borrowerName: loan.full_name || borrowerProfile?.full_name || "",
@@ -211,9 +205,9 @@ export default function HouseLoanDetailPage() {
         status: r.status,
         paidDate: r.paid_date || undefined,
       })),
-      companyName: settingsMap.company_name,
-      companyAddress: settingsMap.company_address,
-      companyPhone: settingsMap.company_phone,
+      companyName: letterhead.companyName,
+      companyAddress: letterhead.companyAddress,
+      companyPhone: letterhead.companyPhone,
     });
 
     toast({ title: "Repayment schedule PDF downloaded" });

@@ -62,6 +62,7 @@ import {
 } from "@phinduloans/shared/components/ui/table";
 import { format, differenceInDays, isToday, isTomorrow, isPast, addDays } from "date-fns";
 import { downloadDemandLetter } from "@/utils/generateDemandLetter";
+import { fetchCompanyLetterhead } from "@/utils/fetchCompanyLetterhead";
 import CollectionsAutomation from "@/components/admin/CollectionsAutomation";
 
 interface OverdueItem {
@@ -316,6 +317,7 @@ const AdminCollections = () => {
   const generateDemandLetterMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRepayment) throw new Error("No loan selected");
+      if (!selectedRepayment.loan) throw new Error("Loan details are missing for this overdue item.");
       const user = (await supabase.auth.getUser()).data.user;
 
       // Get overdue stats for this loan
@@ -328,9 +330,11 @@ const AdminCollections = () => {
 
       const overdueAmount = overdueData?.reduce((sum, r) => sum + Number(r.amount), 0) || 0;
       const penaltyAmount = overdueData?.reduce((sum, r) => sum + Number(r.penalty_amount || 0), 0) || 0;
-      const oldestOverdue = overdueData?.sort((a, b) => 
+      const oldestOverdue = overdueData?.sort((a, b) =>
         new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
       )[0];
+
+      const letterhead = await fetchCompanyLetterhead();
 
       // Generate PDF
       downloadDemandLetter({
@@ -346,6 +350,9 @@ const AdminCollections = () => {
         penaltyAmount: penaltyAmount,
         oldestOverdueDate: oldestOverdue?.due_date || new Date().toISOString(),
         letterType: demandLetterType,
+        companyName: letterhead.companyName,
+        companyAddress: letterhead.companyAddress,
+        companyPhone: letterhead.companyPhone,
       });
 
       // Log the demand letter

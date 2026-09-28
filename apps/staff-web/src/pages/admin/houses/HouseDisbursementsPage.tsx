@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@phinduloans/shared/components/ui/table";
 import { useHouseDisbursements, useHouseLoans } from "@/hooks/useHouseData";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { houseMarkDisbursementCompleted } from "@/services/repositories/houseWorkflowRepository";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
@@ -21,6 +22,8 @@ export default function HouseDisbursementsPage() {
   const { data: loans } = useHouseLoans(productCode);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canDisburse = can("house", "disbursement_disburse");
   const [rowAccounts, setRowAccounts] = useState<Record<string, string>>({});
 
   const { data: accounts = [] } = useQuery({
@@ -51,6 +54,7 @@ export default function HouseDisbursementsPage() {
 
   const disburseMutation = useMutation({
     mutationFn: async (disbursement: any) => {
+      if (!canDisburse) throw new Error("You do not have permission to disburse.");
       await assertBusinessDayForDisbursement();
       const accountId = rowAccounts[disbursement.id] || disbursement?.source_account_id;
       if (!accountId) {
@@ -155,14 +159,18 @@ export default function HouseDisbursementsPage() {
                         {format(new Date(d.created_at), "dd MMM yyyy")}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={disburseMutation.isPending || !chosen}
-                          onClick={() => disburseMutation.mutate(d)}
-                        >
-                          Disburse now
-                        </Button>
+                        {canDisburse ? (
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={disburseMutation.isPending || !chosen}
+                            onClick={() => disburseMutation.mutate(d)}
+                          >
+                            Disburse now
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">View only</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

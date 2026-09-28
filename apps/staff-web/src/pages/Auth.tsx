@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
@@ -11,36 +11,49 @@ import { borrowerAppPath, getSiteModeFromHostname } from "@/config/publicUrls";
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const nextParam = searchParams.get("next");
-  const safeNextPath = nextParam && nextParam.startsWith("/") ? nextParam : null;
+  const safeNextPath =
+    nextParam && nextParam.startsWith("/admin") ? nextParam : null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [staffLoading, setStaffLoading] = useState(false);
-  const { user, isLoading, isStaff, signIn, signOut } = useAuth();
+  const { user, isLoading, isStaff, rolesError, rolesResolved, signIn, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const handledRef = useRef(false);
 
   useEffect(() => {
-    // Defense-in-depth: marketing must never render staff Auth (route should ExternalRedirect).
     if (getSiteModeFromHostname() === "marketing") {
       window.location.replace(borrowerAppPath("/auth") + window.location.search);
     }
   }, []);
 
-  // After roles resolve: staff → admin. Non-staff stay on office with an error (never bounce to borrower).
   useEffect(() => {
-    if (isLoading || !user) return;
+    if (isLoading || !user || !rolesResolved || handledRef.current) return;
+
+    if (rolesError) {
+      handledRef.current = true;
+      toast({
+        title: "Could not verify staff role",
+        description: "Check your connection and try again. You were not signed out of office.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (isStaff) {
+      handledRef.current = true;
       navigate(safeNextPath || "/admin", { replace: true });
       return;
     }
-    // Logged in but not staff — do not send to app.phindu.com
+
+    handledRef.current = true;
     toast({
       title: "No staff role",
-      description: "This email has no admin/staff role. Ask a super admin to grant access in user_roles.",
+      description: "This email has no admin/staff role in user_roles. Ask a super admin to grant access.",
       variant: "destructive",
     });
     void signOut();
-  }, [user, isLoading, isStaff, navigate, safeNextPath, signOut, toast]);
+  }, [user, isLoading, isStaff, rolesError, rolesResolved, navigate, safeNextPath, signOut, toast]);
 
   const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +61,7 @@ const Auth = () => {
       toast({ title: "Missing fields", description: "Enter your email and password.", variant: "destructive" });
       return;
     }
+    handledRef.current = false;
     setStaffLoading(true);
     const { error } = await signIn(email.trim(), password);
     setStaffLoading(false);
@@ -56,7 +70,6 @@ const Auth = () => {
       return;
     }
     toast({ title: "Welcome back!", description: "Loading your staff dashboard…" });
-    // Navigation happens in useEffect once isStaff is resolved (avoids race → borrower redirect).
   };
 
   if (isLoading || (user && isStaff)) {

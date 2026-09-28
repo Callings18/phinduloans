@@ -153,7 +153,7 @@ const AdminSettings = () => {
           if (setting.key === 'company_info') setCompanyInfo(setting.value as any);
           if (setting.key === 'lending_rules') setLendingRules(setting.value as any);
           if (setting.key === 'notification_config') {
-            setNotificationConfig({ ...(setting.value as any), sms_provider: 'excitesms' });
+            setNotificationConfig(setting.value as any);
           }
         });
       }
@@ -181,7 +181,7 @@ const AdminSettings = () => {
       await saveSystemSetting('general_config', generalConfig);
       await saveSystemSetting('company_info', companyInfo);
       await saveSystemSetting('lending_rules', lendingRules);
-      await saveSystemSetting('notification_config', { ...notificationConfig, sms_provider: 'excitesms' });
+      await saveSystemSetting('notification_config', notificationConfig);
 
       // Save Payment Gateway Settings
       if (paymentSettings) {

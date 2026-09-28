@@ -8,9 +8,9 @@ import { AdminShellProvider } from "@/contexts/AdminShellContext";
 import { Button } from "@phinduloans/shared/components/ui/button";
 
 export default function AdminRoute() {
-  const { user, isLoading, isStaff, signOut } = useAuth();
+  const { user, isLoading, isStaff, rolesError, rolesResolved, signOut } = useAuth();
 
-  if (isLoading) {
+  if (isLoading || (user && !rolesResolved)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -20,6 +20,25 @@ export default function AdminRoute() {
 
   if (!user) {
     return <Navigate to="/auth?next=/admin" replace />;
+  }
+
+  if (rolesError) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <h1 className="text-xl font-bold text-foreground">Could not verify staff role</h1>
+        <p className="text-sm text-muted-foreground max-w-md">
+          Your session is active, but we could not load roles from the server. Check your connection and refresh.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+          <Button variant="outline" onClick={() => signOut()}>
+            Sign out
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (!isStaff) {

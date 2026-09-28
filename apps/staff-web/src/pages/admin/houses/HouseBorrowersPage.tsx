@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@phinduloans/shared/components/ui/dialog";
 import { useHouseBorrowers, useHouseLoans } from "@/hooks/useHouseData";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { Search, User, Plus, Phone, IdCard, MapPin, CreditCard } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
@@ -26,10 +27,13 @@ const zambianCities = [
 
 export default function HouseBorrowersPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
-  const { data: borrowers, isLoading } = useHouseBorrowers(productCode);
-  const { data: loans } = useHouseLoans(productCode);
+  const normalizedProductCode = productCode.trim().toUpperCase();
+  const { data: borrowers, isLoading } = useHouseBorrowers(normalizedProductCode);
+  const { data: loans } = useHouseLoans(normalizedProductCode);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canManageBorrowers = can("house", "borrowers_manage");
 
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -73,23 +77,24 @@ export default function HouseBorrowersPage() {
 
   // Fetch product id for onboarding
   const { data: productData } = useQuery({
-    queryKey: ["house-product-id", productCode],
+    queryKey: ["house-product-id", normalizedProductCode],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_products")
         .select("id, name")
-        .eq("product_code", productCode)
+        .eq("product_code", normalizedProductCode)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: Boolean(productCode),
+    enabled: Boolean(normalizedProductCode),
   });
 
-  const isMarketeer = productCode === "MARKETEER";
+  const isMarketeer = normalizedProductCode === "MARKETEER";
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (!canManageBorrowers) throw new Error("You do not have permission to add borrowers.");
       if (!form.full_name.trim()) throw new Error("Full name is required.");
       if (isMarketeer) {
         if (!form.phone.trim()) throw new Error("Phone number is required for Marketeer borrowers.");
@@ -104,7 +109,7 @@ export default function HouseBorrowersPage() {
           nrc_number: form.nrc_number || null,
           address: form.address || null,
           city: form.city || null,
-          product_code: productCode,
+          product_code: normalizedProductCode,
         },
       });
       if (response.error) {
@@ -115,8 +120,8 @@ export default function HouseBorrowersPage() {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["house-borrowers", productCode] });
-      queryClient.invalidateQueries({ queryKey: ["product-loan-borrowers", productCode] });
+      queryClient.invalidateQueries({ queryKey: ["house-borrowers", normalizedProductCode] });
+      queryClient.invalidateQueries({ queryKey: ["product-loan-borrowers", normalizedProductCode] });
       queryClient.invalidateQueries({ queryKey: ["admin-borrowers"] });
       toast({ title: data?.existing ? "Borrower already existed" : "Borrower added", description: data?.message || "Use the Loans tab to create a loan for this borrower." });
       setIsAddOpen(false);
@@ -135,9 +140,11 @@ export default function HouseBorrowersPage() {
           <h2 className="text-xl font-bold">Borrowers</h2>
           <p className="text-sm text-muted-foreground">{filtered.length} borrower(s) in this product house</p>
         </div>
-        <Button onClick={() => setIsAddOpen(true)} size="sm">
-          <Plus size={16} className="mr-1" /> Add Borrower
-        </Button>
+        {canManageBorrowers && (
+          <Button onClick={() => setIsAddOpen(true)} size="sm">
+            <Plus size={16} className="mr-1" /> Add Borrower
+          </Button>
+        )}
       </div>
 
       {/* Stats */}

@@ -42,6 +42,11 @@ const AdminSidebar = () => {
   const visibleItem = useCallback(
     (item: SidebarMenuItem): boolean => {
       if (item.adminOnly && !isAdmin) return false;
+      if (item.anyOf?.length) {
+        if (permsLoading) return false;
+        if (isAdmin) return true;
+        return item.anyOf.some((p) => can(p.module, p.action));
+      }
       if (!item.perm) return true;
       if (permsLoading) return false;
       if (isAdmin) return true;

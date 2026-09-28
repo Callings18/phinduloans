@@ -114,19 +114,40 @@ const AdminPayroll = () => {
       if (existingErr) throw existingErr;
       if (existing) throw new Error(`Payroll for ${getMonthName(selectedMonth)} ${selectedYear} already exists`);
 
-      // 2. Fetch active employees
+      // 2. Fetch active employees + current salary structures (structure is source of truth when employees.salary is empty)
       const { data: employees, error: empErr } = await (supabase.from("employees") as any)
         .select("id, full_name, salary, housing_allowance, transport_allowance, lunch_allowance, other_allowances, commission_percentage, user_id")
         .eq("is_active", true);
       if (empErr) throw empErr;
       if (!employees?.length) throw new Error("No active employees found");
 
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: salaryRows } = await (supabase.from as any)("employee_salary_structure")
+        .select("employee_id, basic_salary, effective_date, expiry_date")
+        .order("effective_date", { ascending: false });
+      const structureSalaryByEmployee: Record<string, number> = {};
+      for (const row of salaryRows ?? []) {
+        if (structureSalaryByEmployee[row.employee_id] != null) continue;
+        if (row.effective_date && row.effective_date > today) continue;
+        if (row.expiry_date && row.expiry_date < today) continue;
+        structureSalaryByEmployee[row.employee_id] = Number(row.basic_salary || 0);
+      }
+
+      const employeesForPayroll = (employees as any[]).map((emp) => {
+        const columnSalary = Number(emp.salary || 0);
+        const structureSalary = structureSalaryByEmployee[emp.id] || 0;
+        return {
+          ...emp,
+          salary: columnSalary > 0 ? columnSalary : structureSalary,
+        };
+      });
+
       // 3. Fetch tax config
       const taxConfig = await fetchTaxConfig();
 
       // 4. Calculate commission from loans processed (single query + in-memory split)
       const commissionByEmployee: Record<string, number> = {};
-      const commissionStaffIds = employees
+      const commissionStaffIds = employeesForPayroll
         .filter((e: any) => e.user_id && e.commission_percentage)
         .map((e: any) => e.user_id as string);
       const periodStart = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
@@ -146,7 +167,7 @@ const AdminPayroll = () => {
           .lt("approved_at", periodEnd);
         if (loansErr) throw loansErr;
 
-        for (const emp of employees as any[]) {
+        for (const emp of employeesForPayroll) {
           if (!emp.user_id || !emp.commission_percentage) continue;
           const uid = emp.user_id as string;
           const loansForEmp = (periodLoans ?? []).filter(
@@ -159,7 +180,7 @@ const AdminPayroll = () => {
       }
 
       // 5. Calculate payroll for each employee
-      const calculations: PayrollCalculation[] = employees.map((emp: any) => {
+      const calculations: PayrollCalculation[] = employeesForPayroll.map((emp: any) => {
         return calculatePayroll({
           employee: emp,
           commission: commissionByEmployee[emp.id] || 0,

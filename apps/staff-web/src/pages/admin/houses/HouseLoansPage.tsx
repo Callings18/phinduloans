@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@phinduloans/shared/components/ui/alert-dialog";
 import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Search,
   Plus,
@@ -72,6 +73,9 @@ export default function HouseLoansPage() {
   const { productCode = "" } = useParams<{ productCode: string }>();
   const { data: loans, isLoading } = useHouseLoans(productCode);
   const { data: repayments } = useHouseRepayments(productCode);
+  const { can } = usePermissions();
+  const canCreateLoan = can("house", "loans_create");
+  const canUpdateLoan = can("house", "loans_update");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -360,9 +364,11 @@ export default function HouseLoansPage() {
           <Button size="sm" variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download size={14} className="mr-1" /> Export ({filtered.length})
           </Button>
-          <Button asChild size="sm">
-            <Link to={`/admin/houses/${productCode}/loans/create`}><Plus size={16} className="mr-1" /> Create Loan</Link>
-          </Button>
+          {canCreateLoan && (
+            <Button asChild size="sm">
+              <Link to={`/admin/houses/${productCode}/loans/create`}><Plus size={16} className="mr-1" /> Create Loan</Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -533,12 +539,12 @@ export default function HouseLoansPage() {
                           <Button asChild size="sm" variant="ghost" title="View">
                             <Link to={`/admin/houses/${productCode}/loans/${l.id}`}><Eye size={14} /></Link>
                           </Button>
-                          {EDITABLE_STATUSES.has(l.status) && (
+                          {canUpdateLoan && EDITABLE_STATUSES.has(l.status) && (
                             <Button asChild size="sm" variant="ghost" title="Edit">
                               <Link to={`/admin/houses/${productCode}/loans/${l.id}/edit`}><Pencil size={14} /></Link>
                             </Button>
                           )}
-                          {DELETABLE_STATUSES.has(l.status) && (
+                          {canUpdateLoan && DELETABLE_STATUSES.has(l.status) && (
                             <Button size="sm" variant="ghost" title="Delete" onClick={() => setDeleteLoan(l)} className="text-destructive hover:text-destructive">
                               <Trash2 size={14} />
                             </Button>

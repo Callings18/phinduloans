@@ -2,21 +2,83 @@ import { Link, Navigate, Outlet, useLocation, useParams } from "react-router-dom
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useHouseProduct } from "@/hooks/useHouseData";
 import { useProductAccess } from "@/hooks/useProductAccess";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@phinduloans/shared/components/ui/card";
 import { Home, Users, CreditCard, Banknote, AlertTriangle, BarChart3, ClipboardCheck, Receipt } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const houseTabs = [
-  { key: "dashboard", label: "Dashboard", icon: Home, path: "" },
-  { key: "borrowers", label: "Borrowers", icon: Users, path: "borrowers" },
-  { key: "loans", label: "Loans", icon: CreditCard, path: "loans" },
-  { key: "review", label: "Review", icon: ClipboardCheck, path: "review" },
-  { key: "disbursements", label: "Disbursements", icon: Banknote, path: "disbursements" },
-  { key: "collections", label: "Collections", icon: AlertTriangle, path: "collections" },
-  { key: "reconciliation", label: "Reconciliation", icon: Receipt, path: "reconciliation" },
-  { key: "reports", label: "Reports", icon: BarChart3, path: "reports" },
+type HouseTab = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  path: string;
+  /** Return true if the tab should be visible for the current user. */
+  visible: (can: (module: string, action: string) => boolean) => boolean;
+};
+
+const houseTabs: HouseTab[] = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    icon: Home,
+    path: "",
+    visible: (can) => can("house", "dashboard_view"),
+  },
+  {
+    key: "borrowers",
+    label: "Borrowers",
+    icon: Users,
+    path: "borrowers",
+    visible: (can) => can("house", "borrowers_view") || can("house", "borrowers_manage"),
+  },
+  {
+    key: "loans",
+    label: "Loans",
+    icon: CreditCard,
+    path: "loans",
+    visible: (can) => can("house", "loans_view") || can("house", "loans_create") || can("house", "loans_update"),
+  },
+  {
+    key: "review",
+    label: "Review",
+    icon: ClipboardCheck,
+    path: "review",
+    visible: (can) =>
+      can("house", "review_officer_approve") ||
+      can("house", "review_finance_approve") ||
+      can("house", "review_manager_approve"),
+  },
+  {
+    key: "disbursements",
+    label: "Disbursements",
+    icon: Banknote,
+    path: "disbursements",
+    visible: (can) => can("house", "disbursement_view") || can("house", "disbursement_disburse"),
+  },
+  {
+    key: "collections",
+    label: "Collections",
+    icon: AlertTriangle,
+    path: "collections",
+    visible: (can) => can("house", "collections_view") || can("house", "collections_manage"),
+  },
+  {
+    key: "reconciliation",
+    label: "Reconciliation",
+    icon: Receipt,
+    path: "reconciliation",
+    visible: (can) => can("house", "collections_view") || can("house", "collections_manage"),
+  },
+  {
+    key: "reports",
+    label: "Reports",
+    icon: BarChart3,
+    path: "reports",
+    visible: (can) => can("house", "reports_view") || can("house", "reports_export"),
+  },
 ];
 
 export default function HouseLayout() {
@@ -24,6 +86,7 @@ export default function HouseLayout() {
   const location = useLocation();
   const { data: product, isLoading } = useHouseProduct(productCode);
   const { data: hasAccess, isLoading: accessLoading, isError: accessError } = useProductAccess(productCode);
+  const { can, isLoading: permsLoading } = usePermissions();
 
   if (!isLoading && !product) {
     return <Navigate to="/admin" replace />;
@@ -62,6 +125,8 @@ export default function HouseLayout() {
     );
   }
 
+  const visibleTabs = permsLoading ? houseTabs : houseTabs.filter((tab) => tab.visible(can));
+
   return (
     <AdminLayout>
       <div className="space-y-4">
@@ -88,7 +153,7 @@ export default function HouseLayout() {
         </div>
 
         <div className="sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto rounded-lg border border-border/60 bg-background/95 p-1 px-1 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-wrap sm:overflow-visible">
-          {houseTabs.map((tab) => {
+          {visibleTabs.map((tab) => {
             const path = tab.path ? `/admin/houses/${productCode}/${tab.path}` : `/admin/houses/${productCode}`;
             const active =
               tab.path === ""

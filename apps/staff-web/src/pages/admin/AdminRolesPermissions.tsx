@@ -51,6 +51,10 @@ const MODULE_LABELS: Record<string, { label: string; description: string }> = {
   wallets: { label: "Wallets", description: "Borrower wallet management" },
   writeoffs: { label: "Write-Offs", description: "Loan write-off processing" },
   court: { label: "Court Cases", description: "Legal case management" },
+  house: {
+    label: "Product Houses",
+    description: "Per-product house dashboards, loans, review, disbursement, and collections",
+  },
 };
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
@@ -67,6 +71,21 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   record: { label: "Record", color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
   reverse: { label: "Reverse", color: "bg-rose-500/10 text-rose-600 border-rose-500/20" },
   blacklist: { label: "Blacklist", color: "bg-red-500/10 text-red-600 border-red-500/20" },
+  dashboard_view: { label: "House Dashboard", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  borrowers_view: { label: "House Borrowers View", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  borrowers_manage: { label: "House Borrowers Manage", color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20" },
+  loans_view: { label: "House Loans View", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  loans_create: { label: "House Loans Create", color: "bg-green-500/10 text-green-600 border-green-500/20" },
+  loans_update: { label: "House Loans Edit", color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+  review_officer_approve: { label: "Officer Review", color: "bg-teal-500/10 text-teal-600 border-teal-500/20" },
+  review_finance_approve: { label: "Finance Review", color: "bg-violet-500/10 text-violet-600 border-violet-500/20" },
+  review_manager_approve: { label: "Manager Review", color: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
+  disbursement_view: { label: "House Disbursement View", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  disbursement_disburse: { label: "House Disburse", color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+  collections_view: { label: "House Collections View", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  collections_manage: { label: "House Collections Manage", color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20" },
+  reports_view: { label: "House Reports View", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  reports_export: { label: "House Reports Export", color: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
 };
 
 const ROLE_COLORS: Record<string, string> = {

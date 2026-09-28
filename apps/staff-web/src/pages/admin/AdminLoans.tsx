@@ -10,6 +10,7 @@ import { downloadLoanSchedule } from "@phinduloans/shared/utils/generateLoanSche
 import { downloadReceiptFromRpc } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import type { PaymentReceiptData } from "@phinduloans/shared/utils/handlePaymentReceipt";
 import { useSystemSettings } from "@phinduloans/shared/hooks/useSystemSettings";
+import { fetchCompanyLetterhead } from "@/utils/fetchCompanyLetterhead";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Badge } from "@phinduloans/shared/components/ui/badge";
@@ -593,14 +594,7 @@ const AdminLoans = () => {
         return;
       }
 
-      // Fetch system settings for company info
-      const { data: settings } = await (supabase
-        .from("system_settings") as any)
-        .select("setting_key, setting_value")
-        .in("setting_key", ["company_name", "company_address", "company_phone"]);
-
-      const settingsMap: Record<string, string> = {};
-      settings?.forEach((s: any) => { settingsMap[s.setting_key] = s.setting_value; });
+      const letterhead = await fetchCompanyLetterhead();
 
       downloadLoanSchedule({
         borrowerName: loan.full_name,
@@ -622,9 +616,9 @@ const AdminLoans = () => {
           status: r.status,
           paidDate: r.paid_date || undefined,
         })),
-        companyName: settingsMap.company_name,
-        companyAddress: settingsMap.company_address,
-        companyPhone: settingsMap.company_phone,
+        companyName: letterhead.companyName,
+        companyAddress: letterhead.companyAddress,
+        companyPhone: letterhead.companyPhone,
       });
 
       toast.success("Repayment schedule PDF downloaded");

@@ -201,7 +201,7 @@ function App() {
                       path="employers"
                       element={
                         <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "borrowers", action: "view" }}>
+                          <PermissionRoute adminOnly>
                             <AdminEmployers />
                           </PermissionRoute>
                         </ErrorBoundary>
@@ -258,7 +258,7 @@ function App() {
                       path="houses"
                       element={
                         <ErrorBoundary>
-                          <PermissionRoute permission={{ module: "loans", action: "view" }}>
+                          <PermissionRoute permission={{ module: "house", action: "dashboard_view" }}>
                             <AdminRouteSuspense>
                               <AdminHousesIndex />
                             </AdminRouteSuspense>

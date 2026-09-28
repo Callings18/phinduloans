@@ -93,9 +93,10 @@ export async function fetchHouseLoans(productCode: string) {
 }
 
 export async function fetchHouseBorrowers(productCode: string) {
+  const normalizedProductCode = productCode.trim().toUpperCase();
   const { data: memberships, error: membershipError } = await (supabase.from as any)("product_house_borrowers")
     .select("borrower_id")
-    .eq("product_code", productCode)
+    .eq("product_code", normalizedProductCode)
     .order("created_at", { ascending: false })
     .limit(500);
 

@@ -32,6 +32,8 @@ export function usePermissions() {
     let cancelled = false;
 
     async function load() {
+      setLoading(true);
+      setRpcError(null);
       try {
         const { data, error } = await (supabase.rpc as any)("get_my_permissions");
         if (cancelled) return;

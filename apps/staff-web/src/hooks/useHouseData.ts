@@ -16,36 +16,37 @@ import {
 
 
 export function useHouseProduct(productCode: string) {
+  const normalized = productCode.trim().toUpperCase();
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: ["house-product", productCode],
-    queryFn: () => fetchHouseProductByCode(productCode),
-    enabled: Boolean(productCode),
+    queryKey: ["house-product", normalized],
+    queryFn: () => fetchHouseProductByCode(normalized),
+    enabled: Boolean(normalized),
     staleTime: 0,
   });
 
   useEffect(() => {
-    if (!productCode) return;
+    if (!normalized) return;
     const channel = supabase
-      .channel(`house-product-live-${productCode}`)
+      .channel(`house-product-live-${normalized}`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: "loan_products",
-          filter: `product_code=eq.${productCode}`,
+          filter: `product_code=eq.${normalized}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["house-product", productCode] });
-          queryClient.invalidateQueries({ queryKey: ["product-by-code", productCode] });
+          queryClient.invalidateQueries({ queryKey: ["house-product", normalized] });
+          queryClient.invalidateQueries({ queryKey: ["product-by-code", normalized] });
         },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [productCode, queryClient]);
+  }, [normalized, queryClient]);
 
   return query;
 }
@@ -103,18 +104,11 @@ export interface AccessibleHouse {
   name: string;
 }
 
-const STAFF_ROLES = [
-  "super_admin",
-  "admin",
-  "loan_officer",
-  "credit_officer",
-  "finance_officer",
-  "collections_officer",
-];
-
 /**
- * Houses the current user can open: staff roles see every active house;
- * everyone else is filtered by their `user_product_access` grants.
+ * Houses the current user can open:
+ * - admin / super_admin → every active house
+ * - house:dashboard_view with no product grants → every active house
+ * - otherwise → filter by active `user_product_access` rows
  */
 export function useAccessibleHouses() {
   const { user, hasRole } = useAuth();
@@ -128,15 +122,18 @@ export function useAccessibleHouses() {
         .filter((m) => m.enabled)
         .map((m) => ({ productCode: m.productCode, name: m.name }));
 
-      const isStaff = STAFF_ROLES.some((r) => hasRole(r));
-      if (isStaff) return houses;
-
+      if (hasRole("super_admin") || hasRole("admin")) return houses;
       if (!user?.id) return [];
+
       const { data, error } = await (supabase.from as any)("user_product_access")
         .select("product_code")
         .eq("user_id", user.id)
         .eq("is_active", true);
       if (error) throw error;
+
+      // No product scoping → all houses (RBAC still gates routes/tabs).
+      if (!data || data.length === 0) return houses;
+
       const allowed = new Set(
         (data ?? []).map((row: { product_code: string }) => (row.product_code || "").toUpperCase()),
       );

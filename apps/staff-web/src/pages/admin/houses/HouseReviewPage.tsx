@@ -8,6 +8,7 @@ import { Textarea } from "@phinduloans/shared/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@phinduloans/shared/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@phinduloans/shared/components/ui/dialog";
 import { useHouseLoans } from "@/hooks/useHouseData";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { houseStageReview, houseSetLoanStatus } from "@/services/repositories/houseWorkflowRepository";
 import { format } from "date-fns";
@@ -18,6 +19,11 @@ export default function HouseReviewPage() {
   const { data: loans } = useHouseLoans(productCode);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canOfficerApprove = can("house", "review_officer_approve");
+  const canFinanceApprove = can("house", "review_finance_approve");
+  const canManagerApprove = can("house", "review_manager_approve");
+  const canReject = canOfficerApprove || canFinanceApprove || canManagerApprove;
 
   const [rejectLoanId, setRejectLoanId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -123,40 +129,48 @@ export default function HouseReviewPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 flex-wrap">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        disabled={stageMutation.isPending}
-                        onClick={() => stageMutation.mutate({ loanId: loan.id, stage: "loan_officer" })}
-                      >
-                        <FileText size={12} className="mr-1" /> Verify docs
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        disabled={stageMutation.isPending}
-                        onClick={() => stageMutation.mutate({ loanId: loan.id, stage: "finance" })}
-                      >
-                        Finance
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={stageMutation.isPending}
-                        onClick={() => stageMutation.mutate({ loanId: loan.id, stage: "manager" })}
-                      >
-                        <CheckCircle2 size={12} className="mr-1" /> Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-7 text-xs"
-                        onClick={() => { setRejectLoanId(loan.id); setRejectReason(""); }}
-                      >
-                        <XCircle size={12} className="mr-1" /> Reject
-                      </Button>
+                      {canOfficerApprove && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={stageMutation.isPending}
+                          onClick={() => stageMutation.mutate({ loanId: loan.id, stage: "loan_officer" })}
+                        >
+                          <FileText size={12} className="mr-1" /> Verify docs
+                        </Button>
+                      )}
+                      {canFinanceApprove && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={stageMutation.isPending}
+                          onClick={() => stageMutation.mutate({ loanId: loan.id, stage: "finance" })}
+                        >
+                          Finance
+                        </Button>
+                      )}
+                      {canManagerApprove && (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={stageMutation.isPending}
+                          onClick={() => stageMutation.mutate({ loanId: loan.id, stage: "manager" })}
+                        >
+                          <CheckCircle2 size={12} className="mr-1" /> Approve
+                        </Button>
+                      )}
+                      {canReject && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 text-xs"
+                          onClick={() => { setRejectLoanId(loan.id); setRejectReason(""); }}
+                        >
+                          <XCircle size={12} className="mr-1" /> Reject
+                        </Button>
+                      )}
                       <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
                         <Link to={`/admin/houses/${productCode}/loans/${loan.id}`}>
                           <Eye size={12} />

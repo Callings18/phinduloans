@@ -19,7 +19,6 @@ import {
   ScrollText,
   Scale,
   Ban,
-  
   Briefcase,
   Coins,
   Receipt,
@@ -27,8 +26,8 @@ import {
   Percent,
   ToggleLeft,
   FileEdit,
-  Bot,
-  Activity,
+  Package,
+  Mail,
 } from "lucide-react";
 
 /** Optional permission gate: item visible if can(module, action) or admin fallback handled in sidebar. */
@@ -39,6 +38,8 @@ export interface SidebarMenuItem {
   children?: SidebarMenuItem[];
   /** If set, require this permission (or isAdmin in sidebar). */
   perm?: { module: string; action: string };
+  /** If set, visible when any of these permissions pass. */
+  anyOf?: { module: string; action: string }[];
   /** Restrict to admin / super_admin only (e.g. settings). */
   adminOnly?: boolean;
   /** When set and VITE_BETA_MODULES contains this key, sidebar shows a Beta badge. */
@@ -58,11 +59,12 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "Lending",
     items: [
-      { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "loans", action: "view" }, betaKey: "house_routes_enabled" },
+      { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "house", action: "dashboard_view" }, betaKey: "house_routes_enabled" },
+      { icon: Package, label: "Loan products", path: "/admin/loan-products", adminOnly: true },
       { icon: FileText, label: "Applications (inbox)", path: "/admin/applications", perm: { module: "loans", action: "view" } },
       { icon: FileEdit, label: "Loan drafts", path: "/admin/loan-drafts", perm: { module: "loans", action: "view" } },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", perm: { module: "borrowers", action: "view" } },
-      { icon: Building2, label: "Employers", path: "/admin/employers", perm: { module: "borrowers", action: "view" } },
+      { icon: Building2, label: "Employers", path: "/admin/employers", adminOnly: true },
       {
         icon: CreditCard,
         label: "Loans (portfolio)",
@@ -100,16 +102,50 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "HR & payroll",
     items: [
-      { icon: Briefcase, label: "HR", path: "/admin/hr", perm: { module: "hr", action: "view" } },
-      { icon: Coins, label: "Payroll", path: "/admin/payroll", perm: { module: "payroll", action: "view" } },
-      { icon: Percent, label: "Payroll tax config", path: "/admin/payroll-tax-config", perm: { module: "payroll", action: "view" } },
+      {
+        icon: Briefcase,
+        label: "HR",
+        path: "/admin/hr",
+        anyOf: [
+          { module: "hr", action: "view" },
+          { module: "hr", action: "manage" },
+        ],
+      },
+      {
+        icon: Coins,
+        label: "Payroll",
+        path: "/admin/payroll",
+        anyOf: [
+          { module: "payroll", action: "view" },
+          { module: "payroll", action: "manage" },
+          { module: "payroll", action: "approve" },
+        ],
+      },
+      {
+        icon: Percent,
+        label: "Payroll tax config",
+        path: "/admin/payroll-tax-config",
+        anyOf: [
+          { module: "payroll", action: "view" },
+          { module: "payroll", action: "manage" },
+        ],
+      },
     ],
   },
   {
     label: "Reporting & compliance",
     items: [
-      { icon: BarChart3, label: "Reports", path: "/admin/reports", perm: { module: "reports", action: "view" } },
+      {
+        icon: BarChart3,
+        label: "Reports",
+        path: "/admin/reports",
+        anyOf: [
+          { module: "reports", action: "view" },
+          { module: "reports", action: "export" },
+        ],
+      },
       { icon: ScrollText, label: "Audit logs", path: "/admin/audit-logs", perm: { module: "audit", action: "view" } },
+      { icon: Mail, label: "Email log", path: "/admin/email-log", adminOnly: true },
     ],
   },
   {
@@ -118,7 +154,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
       { icon: FileSignature, label: "Contract templates", path: "/admin/contract-templates", perm: { module: "loans", action: "view" } },
       { icon: UserCog, label: "Staff", path: "/admin/staff", perm: { module: "settings", action: "manage" } },
       { icon: Shield, label: "Roles & permissions", path: "/admin/roles-permissions", adminOnly: true },
-      
       { icon: BookOpen, label: "User guide", path: "/admin/user-guide" },
       { icon: Settings, label: "Settings", path: "/admin/settings", adminOnly: true },
     ],
@@ -127,13 +162,6 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
     label: "Launch & operations",
     items: [
       { icon: ToggleLeft, label: "Feature flags", path: "/admin/feature-flags", adminOnly: true },
-    ],
-  },
-  {
-    label: "AI Agents",
-    items: [
-      { icon: Bot, label: "AI Agents", path: "/admin/ai-agents", adminOnly: true, betaKey: "ai_agents_enabled" },
-      { icon: Activity, label: "AI Ops Center", path: "/admin/ai-ops", adminOnly: true, betaKey: "ai_ops_center" },
     ],
   },
 ];

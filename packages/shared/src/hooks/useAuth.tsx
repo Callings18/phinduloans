@@ -32,6 +32,8 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   roles: string[];
+  rolesError: string | null;
+  rolesResolved: boolean;
   isAdmin: boolean;
   isStaff: boolean;
   hasRole: (role: string) => boolean;
@@ -57,8 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [roles, setRoles] = useState<string[]>([]);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+  const [rolesResolved, setRolesResolved] = useState(false);
 
-  const fetchUserRoles = useCallback(async (userId: string) => {
+  const fetchUserRoles = useCallback(async (userId: string): Promise<{ roles: string[]; error: string | null }> => {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -66,9 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       console.error('Error fetching user roles:', error);
-      return [];
+      return { roles: [], error: error.message ?? String(error) };
     }
-    return data.map(r => r.role);
+    return { roles: data.map(r => r.role), error: null };
   }, []);
 
   const hasRole = useCallback((role: string) => roles.includes(role), [roles]);
@@ -95,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(null);
           setUser(null);
           setRoles([]);
+          setRolesError(null);
+          setRolesResolved(false);
           setIsLoading(false);
           return;
         }
@@ -103,6 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(null);
           setUser(null);
           setRoles([]);
+          setRolesError(null);
+          setRolesResolved(false);
           setIsLoading(false);
           return;
         }
@@ -115,11 +123,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // momentarily treat an admin as a borrower (and vice versa).
           setIsLoading(true);
           setRoles([]);
+          setRolesError(null);
+          setRolesResolved(false);
           fetchUserRoles(currentSession.user.id)
-            .then(setRoles)
+            .then(({ roles: nextRoles, error }) => {
+              setRoles(nextRoles);
+              setRolesError(error);
+              setRolesResolved(true);
+            })
             .finally(() => setIsLoading(false));
         } else {
           setRoles([]);
+          setRolesError(null);
+          setRolesResolved(false);
           setIsLoading(false);
         }
       }
@@ -132,6 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         setUser(null);
         setRoles([]);
+        setRolesError(null);
+        setRolesResolved(false);
         setIsLoading(false);
         // Attempt signOut silently to clean up localStorage
         supabase.auth.signOut().catch((err) => {
@@ -144,11 +162,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
+        setRolesResolved(false);
         fetchUserRoles(currentSession.user.id)
-          .then(setRoles)
+          .then(({ roles: nextRoles, error: rolesErr }) => {
+            setRoles(nextRoles);
+            setRolesError(rolesErr);
+            setRolesResolved(true);
+          })
           .finally(() => setIsLoading(false));
       } else {
         setRoles([]);
+        setRolesError(null);
+        setRolesResolved(false);
         setIsLoading(false);
       }
     });
@@ -265,8 +290,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({
-    user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, sendOtp, signOut
-  }), [user, session, isLoading, roles, isAdmin, isStaff, hasRole, signUp, signIn, signOut]);
+    user, session, isLoading, roles, rolesError, rolesResolved, isAdmin, isStaff, hasRole, signUp, signIn, sendOtp, signOut
+  }), [user, session, isLoading, roles, rolesError, rolesResolved, isAdmin, isStaff, hasRole, signUp, signIn, signOut]);
 
   return (
     <AuthContext.Provider value={value}>
