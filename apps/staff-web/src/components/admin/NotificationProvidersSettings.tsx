@@ -379,7 +379,7 @@ export const NotificationProvidersSettings = () => {
                     <Label>SMS Provider</Label>
                     <p className="text-sm font-medium">ExciteSMS</p>
                     <p className="text-xs text-muted-foreground">
-                      SMS uses ExciteSMS only. Prefer EXCITESMS_API_TOKEN in Lovable secrets.
+                      SMS uses ExciteSMS only. Prefer EXCITESMS_API_TOKEN in Supabase secrets.
                     </p>
                   </div>
                 )}
@@ -428,7 +428,7 @@ export const NotificationProvidersSettings = () => {
                 ExciteSMS Credentials
               </CardTitle>
               <CardDescription>
-                SMS uses ExciteSMS only. Prefer EXCITESMS_API_TOKEN in Lovable secrets. Changes take effect immediately after saving.
+                SMS uses ExciteSMS only. Prefer EXCITESMS_API_TOKEN in Supabase secrets. Changes take effect immediately after saving.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -440,7 +440,7 @@ export const NotificationProvidersSettings = () => {
                   ExciteSMS (SMS)
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  Prefer setting EXCITESMS_API_TOKEN in Lovable secrets so a stale DB token cannot cause Unauthenticated errors.
+                  Prefer setting EXCITESMS_API_TOKEN in Supabase Edge Function secrets.
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

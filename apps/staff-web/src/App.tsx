@@ -53,7 +53,7 @@ const queryClient = new QueryClient();
 function useStaffWebMode() {
   const hostMode = getSiteModeFromHostname();
   const officeMode = isOfficeSiteMode() || hostMode === "office";
-  /** Lovable/local preview hosts are "dev" — keep /admin in-app so preview isn't broken by a production office redirect. */
+  /** Local/preview hosts are "dev" — keep /admin in-app so preview isn't broken by a production office redirect. */
   const serveAdminLocally = officeMode || hostMode === "dev";
   return { officeMode, serveAdminLocally };
 }

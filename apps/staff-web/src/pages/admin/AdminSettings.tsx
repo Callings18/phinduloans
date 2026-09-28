@@ -579,7 +579,7 @@ const AdminSettings = () => {
                           <SelectItem value="excitesms">ExciteSMS</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">SMS is ExciteSMS-only. Set EXCITESMS_API_TOKEN in Lovable secrets.</p>
+                      <p className="text-xs text-muted-foreground">SMS is ExciteSMS-only. Set EXCITESMS_API_TOKEN in Supabase secrets.</p>
                     </div>
                     <div className="space-y-2">
                       <Label>WhatsApp Provider</Label>
@@ -626,7 +626,7 @@ const AdminSettings = () => {
                           value={notificationConfig.excitesms_sender_id}
                           onChange={(e) => setNotificationConfig({ ...notificationConfig, excitesms_sender_id: e.target.value })}
                         />
-                        <p className="text-[10px] text-muted-foreground">Prefer EXCITESMS_API_TOKEN in Lovable secrets over a DB token.</p>
+                        <p className="text-[10px] text-muted-foreground">Prefer EXCITESMS_API_TOKEN in Supabase secrets over a DB token.</p>
                       </div>
                     </div>
                   </div>

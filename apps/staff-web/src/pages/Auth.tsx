@@ -15,7 +15,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [staffLoading, setStaffLoading] = useState(false);
-  const { user, isLoading, isStaff, signIn } = useAuth();
+  const { user, isLoading, isStaff, signIn, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -26,15 +26,21 @@ const Auth = () => {
     }
   }, []);
 
+  // After roles resolve: staff → admin. Non-staff stay on office with an error (never bounce to borrower).
   useEffect(() => {
-    if (!isLoading && user) {
-      if (isStaff) {
-        navigate(safeNextPath || "/admin");
-      } else {
-        window.location.assign(borrowerAppPath("/auth"));
-      }
+    if (isLoading || !user) return;
+    if (isStaff) {
+      navigate(safeNextPath || "/admin", { replace: true });
+      return;
     }
-  }, [user, isLoading, isStaff, navigate, safeNextPath]);
+    // Logged in but not staff — do not send to app.phindu.com
+    toast({
+      title: "No staff role",
+      description: "This email has no admin/staff role. Ask a super admin to grant access in user_roles.",
+      variant: "destructive",
+    });
+    void signOut();
+  }, [user, isLoading, isStaff, navigate, safeNextPath, signOut, toast]);
 
   const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,11 +55,11 @@ const Auth = () => {
       toast({ title: "Login failed", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Welcome back!", description: "Redirecting to admin dashboard." });
-    navigate(safeNextPath || "/admin");
+    toast({ title: "Welcome back!", description: "Loading your staff dashboard…" });
+    // Navigation happens in useEffect once isStaff is resolved (avoids race → borrower redirect).
   };
 
-  if (isLoading) {
+  if (isLoading || (user && isStaff)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -91,7 +97,7 @@ const Auth = () => {
           </Button>
         </form>
         <div className="text-center mt-6 space-y-2">
-          <Button variant="ghost" asChild><a href="/">← Back to Home</a></Button>
+          <Button variant="ghost" asChild><a href="https://phindu.com/">← Back to Website</a></Button>
           <p className="text-sm text-muted-foreground"><a href={borrowerAppPath("/auth")} className="text-primary hover:underline">Open borrower app</a></p>
         </div>
       </div>

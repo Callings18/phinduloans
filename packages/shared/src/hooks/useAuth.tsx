@@ -113,6 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentSession?.user) {
           // Keep loading until roles are resolved so route guards don't
           // momentarily treat an admin as a borrower (and vice versa).
+          setIsLoading(true);
+          setRoles([]);
           fetchUserRoles(currentSession.user.id)
             .then(setRoles)
             .finally(() => setIsLoading(false));
