@@ -147,11 +147,16 @@ const Navbar = () => {
                 <>
                   <Button variant="ghost" asChild>
                     {officeMode ? (
-                      <Link to="/auth">Login</Link>
+                      <Link to="/auth">Staff Login</Link>
                     ) : (
                       <a href={loginHref}>Login</a>
                     )}
                   </Button>
+                  {!officeMode && (
+                    <Button variant="outline" asChild>
+                      <a href={officePath("/auth")}>Staff</a>
+                    </Button>
+                  )}
                   <Button variant="hero" asChild>
                     <a href={borrowerAppPath("/auth?mode=signup")}>Get Started</a>
                   </Button>
@@ -221,11 +226,16 @@ const Navbar = () => {
                     <>
                       <Button variant="ghost" asChild>
                         {officeMode ? (
-                          <Link to="/auth" onClick={() => setIsOpen(false)}>Login</Link>
+                          <Link to="/auth" onClick={() => setIsOpen(false)}>Staff Login</Link>
                         ) : (
                           <a href={loginHref} onClick={() => setIsOpen(false)}>Login</a>
                         )}
                       </Button>
+                      {!officeMode && (
+                        <Button variant="outline" asChild>
+                          <a href={officePath("/auth")} onClick={() => setIsOpen(false)}>Staff Login</a>
+                        </Button>
+                      )}
                       <Button variant="hero" asChild>
                         <a href={borrowerAppPath("/auth?mode=signup")} onClick={() => setIsOpen(false)}>Get Started</a>
                       </Button>

@@ -31,13 +31,32 @@ export function officePath(path: string): string {
   return `${getOfficeBaseUrl()}${normalized}`;
 }
 
-/** Staff-web build flag: marketing (default) or office. */
+/**
+ * Office ERP mode.
+ * Prefer bake-time `VITE_SITE_MODE=office` when marketing and office are separate
+ * deploys. Also detect `office.phindu.com` at runtime so one Cloudflare worker can
+ * safely serve both marketing + office without redirect loops.
+ */
 export function isOfficeSiteMode(): boolean {
-  return (import.meta.env.VITE_SITE_MODE || "").toLowerCase() === "office";
+  if ((import.meta.env.VITE_SITE_MODE || "").toLowerCase() === "office") return true;
+  if (typeof window !== "undefined") {
+    return getSiteModeFromHostname() === "office";
+  }
+  return false;
 }
 
 export function getExpectedModeForStaffWebBuild(): SiteMode {
-  return isOfficeSiteMode() ? "office" : "marketing";
+  // When VITE_SITE_MODE is unset, staff-web is dual-host (marketing + office).
+  const baked = (import.meta.env.VITE_SITE_MODE || "").toLowerCase();
+  if (baked === "office") return "office";
+  if (baked === "marketing") return "marketing";
+  return getSiteModeFromHostname() === "office" ? "office" : "marketing";
+}
+
+/** True when this staff-web build is allowed to serve both phindu.com and office.phindu.com. */
+export function isStaffWebDualHostBuild(): boolean {
+  const baked = (import.meta.env.VITE_SITE_MODE || "").toLowerCase();
+  return baked !== "office" && baked !== "marketing";
 }
 
 export function getSiteModeFromHostname(hostname?: string): SiteMode | "dev" {

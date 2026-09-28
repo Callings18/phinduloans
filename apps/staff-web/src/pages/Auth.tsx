@@ -67,7 +67,9 @@ const Auth = () => {
         <div className="text-center mb-8">
           <Sparkles className="mx-auto mb-4 text-primary" size={32} />
           <h1 className="text-2xl font-bold">Staff Sign In</h1>
-          <p className="text-muted-foreground mt-2 text-sm">Borrowers should use the mobile app.</p>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Staff email &amp; password only. Borrowers use SMS OTP on the mobile app.
+          </p>
         </div>
         <form onSubmit={handleStaffLogin} className="space-y-5">
           <div className="space-y-2">

@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import AdminRoute from "./components/admin/AdminRoute";
 import PermissionRoute from "./components/admin/PermissionRoute";
 import ErrorBoundary from "@phinduloans/shared/components/common/ErrorBoundary";
-import FloatingAssistant from "./components/assistant/FloatingAssistant";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@phinduloans/shared/components/ui/toaster";
 import { Toaster as Sonner } from "@phinduloans/shared/components/ui/sonner";
@@ -50,9 +49,14 @@ import { borrowerAppPath, getOfficeBaseUrl, getSiteModeFromHostname, isOfficeSit
 import ExternalRedirect from "./components/common/ExternalRedirect";
 
 const queryClient = new QueryClient();
-const officeMode = isOfficeSiteMode();
-/** Lovable/local preview hosts are "dev" — keep /admin in-app so preview isn't broken by a production office redirect. */
-const serveAdminLocally = officeMode || getSiteModeFromHostname() === "dev";
+/** Hostname-aware so one Cloudflare worker can serve marketing + office correctly. */
+function useStaffWebMode() {
+  const hostMode = getSiteModeFromHostname();
+  const officeMode = isOfficeSiteMode() || hostMode === "office";
+  /** Lovable/local preview hosts are "dev" — keep /admin in-app so preview isn't broken by a production office redirect. */
+  const serveAdminLocally = officeMode || hostMode === "dev";
+  return { officeMode, serveAdminLocally };
+}
 const officeAdminUrl = `${getOfficeBaseUrl()}/admin`;
 
 /** Marketing /auth|/login → absolute borrower app URL, preserving query string. */
@@ -99,6 +103,8 @@ function AdminRouteSuspense({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const { officeMode, serveAdminLocally } = useStaffWebMode();
+
   return (
     <ThemeProvider>
       <ErrorBoundary>
@@ -118,7 +124,7 @@ function App() {
                   <Route path="/terms" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Terms /></ErrorBoundary>} />
                   <Route path="/loan-products" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><LoanProducts /></ErrorBoundary>} />
                   <Route path="/contact" element={officeMode ? <Navigate to="/admin" replace /> : <ErrorBoundary><Contact /></ErrorBoundary>} />
-                  {/* Staff Auth only on office; marketing Login → borrower app */}
+                  {/* Staff email/password Auth only on office; marketing Login → borrower SMS OTP */}
                   <Route
                     path="/auth"
                     element={
@@ -644,7 +650,6 @@ function App() {
                   )}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-                {officeMode ? <FloatingAssistant /> : null}
               </BrowserRouter>
             </TooltipProvider>
           </AuthProvider>

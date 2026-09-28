@@ -11,13 +11,25 @@ import App from "./App.tsx";
 import "@phinduloans/shared/index.css";
 import {
   ensureCorrectHost,
+  getBorrowerAppUrl,
   getExpectedModeForStaffWebBuild,
+  getSiteModeFromHostname,
+  isStaffWebDualHostBuild,
   redirectBorrowerPathsOffMarketing,
 } from "@phinduloans/shared/config/siteMode";
 
 // Marketing host must never keep borrowers on /dashboard or auth-hash completions.
 redirectBorrowerPathsOffMarketing();
-ensureCorrectHost(getExpectedModeForStaffWebBuild());
+
+// Dual-host Cloudflare worker (phindu.com + office.phindu.com): never bounce between
+// marketing/office based on a baked VITE_SITE_MODE — that caused office → marketing → app loops.
+if (isStaffWebDualHostBuild()) {
+  if (typeof window !== "undefined" && getSiteModeFromHostname() === "borrower") {
+    window.location.replace(getBorrowerAppUrl() + window.location.pathname + window.location.search);
+  }
+} else {
+  ensureCorrectHost(getExpectedModeForStaffWebBuild());
+}
 
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
