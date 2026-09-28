@@ -36,11 +36,22 @@ const AdminFeatureFlags = () => {
 
   const grouped = useMemo(() => {
     const map = new Map<string, FeatureFlagRow[]>();
-    (flags ?? []).forEach((f) => {
-      const arr = map.get(f.category) ?? [];
-      arr.push(f);
-      map.set(f.category, arr);
-    });
+    (flags ?? [])
+      .filter((f) => {
+        const key = (f.flag_key || "").toLowerCase();
+        const label = (f.flag_label || "").toLowerCase();
+        const category = (f.category || "").toLowerCase();
+        // Client does not want AI modules — hide related kill-switches from the panel.
+        if (key.includes("ai_") || key.includes("ai-") || key.includes("copilot")) return false;
+        if (label.includes("ai agent") || label.includes("ai ops") || label.includes("copilot")) return false;
+        if (category === "ai" || category.includes("ai agent")) return false;
+        return true;
+      })
+      .forEach((f) => {
+        const arr = map.get(f.category) ?? [];
+        arr.push(f);
+        map.set(f.category, arr);
+      });
     return Array.from(map.entries());
   }, [flags]);
 

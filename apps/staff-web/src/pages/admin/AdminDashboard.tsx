@@ -21,8 +21,6 @@ import {
   Calendar,
   AlertTriangle,
   User,
-  Wrench,
-  FlaskConical,
   Loader2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -32,7 +30,7 @@ import { format, differenceInDays, startOfDay } from "date-fns";
 import { useAdminDashboardStats, useAdminUpcomingPayments } from "@/hooks/useAdminDashboardStats";
 import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
-import { anyBetaModuleActive, isBetaModule } from "@phinduloans/shared/config/featureRollout";
+import { isBetaModule } from "@phinduloans/shared/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
 
 export type AdminDashboardContentProps = {
@@ -45,9 +43,6 @@ export type AdminDashboardContentProps = {
 
 export function AdminDashboardContent({ loanProductId, title, productFilterSlot, backLink, afterContent }: AdminDashboardContentProps) {
   const navigate = useNavigate();
-  const developerWhatsappLink =
-    import.meta.env.VITE_DEV_SUPPORT_WHATSAPP ||
-    "https://wa.me/260000000000?text=Hello%20Developer%2C%20I%20need%20help%20with%20the%20admin%20system.";
 
   const { data: stats, isLoading: statsLoading, isError: statsLoadError } = useAdminDashboardStats(loanProductId);
   const {
@@ -137,7 +132,12 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-1">
             {backLink}
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+              <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px] uppercase tracking-wide">
+                Pilot
+              </Badge>
+            </div>
             <p className="text-muted-foreground flex items-center gap-2 text-sm">
               <Calendar size={14} />
               {format(new Date(), "EEEE, MMMM d, yyyy")}
@@ -154,79 +154,6 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
             </Button>
           </div>
         </div>
-
-        <Card className="border-warning/40 bg-warning/10">
-          <CardContent className="py-2 px-0">
-            <div className="marquee-wrap">
-              <div className="marquee-track">
-                <div className="inline-flex items-center gap-3 px-4">
-                  <Badge className="bg-warning/20 text-warning border-warning/30 border">
-                    <Wrench size={12} className="mr-1" />
-                    Development Notice
-                  </Badge>
-                  <span className="text-sm text-foreground">
-                    Some admin features may be unstable during ongoing development.
-                  </span>
-                  <a
-                    href={developerWhatsappLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm text-primary font-medium hover:underline"
-                  >
-                    Need help? Contact developer on WhatsApp
-                  </a>
-                </div>
-                <div className="inline-flex items-center gap-3 px-4" aria-hidden="true">
-                  <Badge className="bg-warning/20 text-warning border-warning/30 border">
-                    <Wrench size={12} className="mr-1" />
-                    Development Notice
-                  </Badge>
-                  <span className="text-sm text-foreground">
-                    Some admin features may be unstable during ongoing development.
-                  </span>
-                  <a
-                    href={developerWhatsappLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm text-primary font-medium hover:underline"
-                  >
-                    Need help? Contact developer on WhatsApp
-                  </a>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {anyBetaModuleActive() ? (
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="py-2 px-0">
-              <div className="marquee-wrap">
-                <div className="marquee-track">
-                  <div className="inline-flex items-center gap-3 px-4">
-                    <Badge className="bg-primary/15 text-primary border-primary/30 border">
-                      <FlaskConical size={12} className="mr-1" />
-                      Beta features on
-                    </Badge>
-                    <span className="text-sm text-foreground">
-                      Modules listed with a Beta label are still under testing. Set VITE_BETA_MODULES in .env to control
-                      which items show the badge.
-                    </span>
-                  </div>
-                  <div className="inline-flex items-center gap-3 px-4" aria-hidden="true">
-                    <Badge className="bg-primary/15 text-primary border-primary/30 border">
-                      <FlaskConical size={12} className="mr-1" />
-                      Beta features on
-                    </Badge>
-                    <span className="text-sm text-foreground">
-                      Modules listed with a Beta label are still under testing.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
 
         <QuickActions />
 

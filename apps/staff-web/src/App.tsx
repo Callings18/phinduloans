@@ -70,9 +70,6 @@ const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
 const AdminHR = lazy(() => import("./pages/admin/AdminHR"));
 const AdminPayroll = lazy(() => import("./pages/admin/AdminPayroll"));
 const AdminPayrollTaxConfig = lazy(() => import("./pages/admin/AdminPayrollTaxConfig"));
-const AdminAIAgents = lazy(() => import("./pages/admin/AdminAIAgents"));
-const AdminAIAgentDetail = lazy(() => import("./pages/admin/AdminAIAgentDetail"));
-const AdminAIOpsCenter = lazy(() => import("./pages/admin/AdminAIOpsCenter"));
 const AdminHousesIndex = lazy(() => import("./pages/admin/houses/AdminHousesIndex"));
 const HouseLayout = lazy(() => import("./components/admin/house/HouseLayout"));
 const HouseDashboardPage = lazy(() => import("./pages/admin/houses/HouseDashboardPage"));
@@ -601,42 +598,6 @@ function App() {
                         <ErrorBoundary>
                           <PermissionRoute adminOnly>
                             <AdminFeatureFlags />
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="ai-agents"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminRouteSuspense>
-                              <AdminAIAgents />
-                            </AdminRouteSuspense>
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="ai-agents/:agentKey"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminRouteSuspense>
-                              <AdminAIAgentDetail />
-                            </AdminRouteSuspense>
-                          </PermissionRoute>
-                        </ErrorBoundary>
-                      }
-                    />
-                    <Route
-                      path="ai-ops"
-                      element={
-                        <ErrorBoundary>
-                          <PermissionRoute adminOnly>
-                            <AdminRouteSuspense>
-                              <AdminAIOpsCenter />
-                            </AdminRouteSuspense>
                           </PermissionRoute>
                         </ErrorBoundary>
                       }

@@ -346,7 +346,7 @@ const guideSections: GuideSection[] = [
       },
       {
         title: "Getting Help",
-        content: `For technical support:\n\n• Contact the development team at **tech@phindu.com**.\n• For urgent issues, call the support hotline.\n• Use the **Phindu AI** chatbot (bottom-right corner) for quick answers.\n• Check the Audit Logs if something seems off — it tracks everything.\n\n**For feature requests:** Document the requirement and submit to the Super Admin who will coordinate with the development team.`,
+        content: `For technical support:\n\n• Contact support at **tech@phindu.com**.\n• For urgent issues, call the support hotline.\n• Check the Audit Logs if something seems off — it tracks everything.\n\n**For feature requests:** Document the requirement and submit to the Super Admin.`,
       },
     ],
   },
@@ -508,7 +508,7 @@ const AdminUserGuide = () => {
               Phindu Credit Management System — User Guide v{VERSION} — Last updated: {LAST_UPDATED}
             </p>
             <p className="mt-1">
-              For feature requests or corrections, contact the development team.
+              For feature requests or corrections, contact your Super Admin.
             </p>
           </CardContent>
         </Card>
