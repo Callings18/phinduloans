@@ -1,5 +1,6 @@
 // App root component
-import React, { Suspense, lazy } from "react";
+import React, { Suspense } from "react";
+import { lazyWithRetry } from "@phinduloans/shared/utils/chunkLoadRecovery";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import AdminRoute from "./components/admin/AdminRoute";
 import PermissionRoute from "./components/admin/PermissionRoute";
@@ -65,25 +66,25 @@ function MarketingBorrowerAuthRedirect() {
   return <ExternalRedirect to={borrowerAppPath(`/auth${search}`)} />;
 }
 
-const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
-const AdminAccounts = lazy(() => import("./pages/admin/AdminAccounts"));
-const AdminHR = lazy(() => import("./pages/admin/AdminHR"));
-const AdminPayroll = lazy(() => import("./pages/admin/AdminPayroll"));
-const AdminPayrollTaxConfig = lazy(() => import("./pages/admin/AdminPayrollTaxConfig"));
-const AdminHousesIndex = lazy(() => import("./pages/admin/houses/AdminHousesIndex"));
-const HouseLayout = lazy(() => import("./components/admin/house/HouseLayout"));
-const HouseDashboardPage = lazy(() => import("./pages/admin/houses/HouseDashboardPage"));
-const HouseBorrowersPage = lazy(() => import("./pages/admin/houses/HouseBorrowersPage"));
-const HouseBorrowerDetailPage = lazy(() => import("./pages/admin/houses/HouseBorrowerDetailPage"));
-const HouseLoansPage = lazy(() => import("./pages/admin/houses/HouseLoansPage"));
-const HouseLoanCreatePage = lazy(() => import("./pages/admin/houses/HouseLoanCreatePage"));
-const HouseLoanEditPage = lazy(() => import("./pages/admin/houses/HouseLoanEditPage"));
-const HouseLoanDetailPage = lazy(() => import("./pages/admin/houses/HouseLoanDetailPage"));
-const HouseReviewPage = lazy(() => import("./pages/admin/houses/HouseReviewPage"));
-const HouseDisbursementsPage = lazy(() => import("./pages/admin/houses/HouseDisbursementsPage"));
-const HouseCollectionsPage = lazy(() => import("./pages/admin/houses/HouseCollectionsPage"));
-const HouseReportsPage = lazy(() => import("./pages/admin/houses/HouseReportsPage"));
-const HouseReconciliationPage = lazy(() => import("./pages/admin/houses/HouseReconciliationPage"));
+const AdminReports = lazyWithRetry(() => import("./pages/admin/AdminReports"));
+const AdminAccounts = lazyWithRetry(() => import("./pages/admin/AdminAccounts"));
+const AdminHR = lazyWithRetry(() => import("./pages/admin/AdminHR"));
+const AdminPayroll = lazyWithRetry(() => import("./pages/admin/AdminPayroll"));
+const AdminPayrollTaxConfig = lazyWithRetry(() => import("./pages/admin/AdminPayrollTaxConfig"));
+const AdminHousesIndex = lazyWithRetry(() => import("./pages/admin/houses/AdminHousesIndex"));
+const HouseLayout = lazyWithRetry(() => import("./components/admin/house/HouseLayout"));
+const HouseDashboardPage = lazyWithRetry(() => import("./pages/admin/houses/HouseDashboardPage"));
+const HouseBorrowersPage = lazyWithRetry(() => import("./pages/admin/houses/HouseBorrowersPage"));
+const HouseBorrowerDetailPage = lazyWithRetry(() => import("./pages/admin/houses/HouseBorrowerDetailPage"));
+const HouseLoansPage = lazyWithRetry(() => import("./pages/admin/houses/HouseLoansPage"));
+const HouseLoanCreatePage = lazyWithRetry(() => import("./pages/admin/houses/HouseLoanCreatePage"));
+const HouseLoanEditPage = lazyWithRetry(() => import("./pages/admin/houses/HouseLoanEditPage"));
+const HouseLoanDetailPage = lazyWithRetry(() => import("./pages/admin/houses/HouseLoanDetailPage"));
+const HouseReviewPage = lazyWithRetry(() => import("./pages/admin/houses/HouseReviewPage"));
+const HouseDisbursementsPage = lazyWithRetry(() => import("./pages/admin/houses/HouseDisbursementsPage"));
+const HouseCollectionsPage = lazyWithRetry(() => import("./pages/admin/houses/HouseCollectionsPage"));
+const HouseReportsPage = lazyWithRetry(() => import("./pages/admin/houses/HouseReportsPage"));
+const HouseReconciliationPage = lazyWithRetry(() => import("./pages/admin/houses/HouseReconciliationPage"));
 
 function AdminRouteSuspense({ children }: { children: React.ReactNode }) {
   return (

@@ -1,5 +1,5 @@
-const CACHE_NAME = 'phindu-credit-v4';
-const STATIC_CACHE = 'phindu-credit-static-v4';
+const CACHE_NAME = 'phindu-credit-v5';
+const STATIC_CACHE = 'phindu-credit-static-v5';
 
 const PRECACHE_URLS = [
   '/',
@@ -66,11 +66,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Hashed build assets: network-first so deploys never serve stale JS chunks from cache.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      fetch(request).catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw new Error('offline');
+      }),
+    );
+    return;
+  }
+
   if (
-    url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/icons/') ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css') ||
     url.pathname.endsWith('.woff2')
   ) {
     event.respondWith(

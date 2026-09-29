@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@phin
 import { Button } from '@phinduloans/shared/components/ui/button';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { handleError } from "@phinduloans/shared/utils/errorHandler";
+import { isChunkLoadError, tryRecoverFromChunkLoadError } from "@phinduloans/shared/utils/chunkLoadRecovery";
 
 interface Props {
   children: ReactNode;
@@ -37,6 +38,9 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (tryRecoverFromChunkLoadError(error)) {
+      return;
+    }
     // Log error to console in development (Vite)
     if (import.meta.env.DEV) {
       console.error('ErrorBoundary caught an error:', error, errorInfo);
@@ -128,11 +132,16 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
+  const chunkStale = error ? isChunkLoadError(error) : false;
+
   const handleGoHome = () => {
     window.location.href = '/';
   };
 
   const handleRefresh = () => {
+    if (chunkStale) {
+      sessionStorage.removeItem("phindu-chunk-reload-attempted");
+    }
     window.location.reload();
   };
 
@@ -147,7 +156,9 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
             <div>
               <CardTitle className="text-destructive">Something went wrong</CardTitle>
               <CardDescription>
-                We encountered an unexpected error. Please try again.
+                {chunkStale
+                  ? "A new version of the app was published. Reload to load the latest files."
+                  : "We encountered an unexpected error. Please try again."}
               </CardDescription>
             </div>
           </div>

@@ -10,7 +10,9 @@ import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "@phinduloans/shared/index.css";
 import { ensureCorrectHost } from "@phinduloans/shared/config/siteMode";
+import { setupChunkLoadRecovery } from "@phinduloans/shared/utils/chunkLoadRecovery";
 
+setupChunkLoadRecovery();
 ensureCorrectHost("borrower");
 
 if (import.meta.env.VITE_SENTRY_DSN) {

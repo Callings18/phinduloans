@@ -9,6 +9,9 @@ import "@fontsource/outfit/700.css";
 import "@fontsource/outfit/800.css";
 import App from "./App.tsx";
 import "@phinduloans/shared/index.css";
+import { setupChunkLoadRecovery } from "@phinduloans/shared/utils/chunkLoadRecovery";
+
+setupChunkLoadRecovery();
 import {
   ensureCorrectHost,
   getBorrowerAppUrl,
