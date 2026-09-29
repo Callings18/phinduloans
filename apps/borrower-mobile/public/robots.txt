@@ -1,14 +1,8 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# Borrower portal — keep APK paths out of search indexing (reduces Safe Browsing coupling to login URLs).
 User-agent: *
 Allow: /
+Disallow: /downloads/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /downloads/

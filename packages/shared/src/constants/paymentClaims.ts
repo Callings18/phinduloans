@@ -18,3 +18,19 @@ export function canSubmitNewPaymentClaim(status: string | null | undefined): boo
   if (status === "rejected") return true;
   return !isPaymentClaimPendingStatus(status);
 }
+
+/** Staff asked for more proof — borrower should update the same claim, not create a duplicate. */
+export function isPaymentClaimNeedsMoreInfoStatus(status: string | null | undefined): boolean {
+  return status === "needs_more_info";
+}
+
+/** Whether the borrower can use “I've paid” / update flow for this installment's latest claim. */
+export function getBorrowerPaymentClaimAction(
+  status: string | null | undefined,
+): "create" | "update" | null {
+  if (!status) return "create";
+  if (status === "rejected") return "create";
+  if (isPaymentClaimNeedsMoreInfoStatus(status)) return "update";
+  if (isPaymentClaimPendingStatus(status)) return null;
+  return "create";
+}

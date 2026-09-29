@@ -740,6 +740,7 @@ const Dashboard = () => {
                     userId={user.id}
                     loans={loans}
                     repayments={repayments}
+                    paymentClaims={paymentClaims}
                     loanEvents={borrowerLoanEvents}
                     onDownloadStatement={downloadStatement}
                     onDownloadStatementCsv={downloadStatementCsv}

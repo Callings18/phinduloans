@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
 import { Smartphone, Download } from "lucide-react";
-import { downloadApk, isAndroidDevice } from "@phinduloans/shared/utils/appDownload";
 
 /**
  * Legacy hard-wall UI — no longer mounted on dashboard/apply (web-first).
@@ -28,16 +27,11 @@ export function InstallAppRequired() {
             <Button variant="hero" className="w-full" asChild>
               <Link to="/dashboard">Continue on web</Link>
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => downloadApk()}
-            >
-              <Download size={18} className="mr-2" />
-              {isAndroidDevice() ? "Download App (APK)" : "Download APK"}
-            </Button>
-            <Button variant="ghost" className="w-full" asChild>
-              <Link to="/install">More install options</Link>
+            <Button variant="outline" className="w-full" asChild>
+              <Link to="/install">
+                <Download size={18} className="mr-2" />
+                Optional install options
+              </Link>
             </Button>
           </div>
         </CardContent>

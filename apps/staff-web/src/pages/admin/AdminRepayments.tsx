@@ -66,7 +66,7 @@ import BulkActions, { defaultRepaymentActions } from "@/components/common/BulkAc
 import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import PaginationControls from "@/components/common/PaginationControls";
 import { DesktopTableWrap, MobileCardStack } from "@/components/common/ResponsiveDataViews";
-import { fetchAdminPaymentClaims, reviewPaymentClaim } from "@phinduloans/shared/services/repositories/workflowRepository";
+import { fetchAdminOpenPaymentClaims, reviewPaymentClaim } from "@phinduloans/shared/services/repositories/workflowRepository";
 
 interface Repayment {
   id: string;
@@ -193,7 +193,7 @@ const AdminRepayments = () => {
   const { data: paymentClaims = [] } = useQuery({
     queryKey: ["admin-payment-claims"],
     queryFn: async () => {
-      const data = await fetchAdminPaymentClaims("pending_review");
+      const data = await fetchAdminOpenPaymentClaims();
       return (data || []) as unknown as PaymentClaim[];
     },
   });

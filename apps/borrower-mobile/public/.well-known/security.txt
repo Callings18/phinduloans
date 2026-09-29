@@ -1,0 +1,5 @@
+Contact: mailto:info@phinducredit.co.zm
+Expires: 2027-09-29T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://app.phindu.com/.well-known/security.txt
+Policy: https://phindu.com

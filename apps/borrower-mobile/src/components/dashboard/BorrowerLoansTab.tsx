@@ -39,6 +39,7 @@ import {
 } from "@phinduloans/shared/utils/borrowerRepaymentDisplay";
 import type { BorrowerDashboardLoan } from "@phinduloans/shared/types/borrowerDashboard";
 import { getCanonicalStatusLabel, getCanonicalStatusBadgeClasses } from "@phinduloans/shared/constants/loanStatusLabels";
+import { getBorrowerPaymentClaimAction } from "@phinduloans/shared/constants/paymentClaims";
 
 function loanFrequencySource(loan: BorrowerDashboardLoan) {
   const p = loan.loan_products;
@@ -77,6 +78,7 @@ interface Props {
   userId: string;
   loans: BorrowerDashboardLoan[];
   repayments: any[];
+  paymentClaims?: Array<{ repayment_id: string; status?: string | null }>;
   loadError?: boolean;
   loanEvents?: Array<{
     id: string;
@@ -98,6 +100,7 @@ export default function BorrowerLoansTab({
   userId,
   loans,
   repayments,
+  paymentClaims = [],
   loadError = false,
   loanEvents = [],
   onDownloadStatement,
@@ -108,6 +111,13 @@ export default function BorrowerLoansTab({
   onApply,
 }: Props) {
   const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
+
+  const claimsByRepaymentId = new Map<string, { status?: string | null }>();
+  paymentClaims.forEach((claim) => {
+    if (!claimsByRepaymentId.has(claim.repayment_id)) {
+      claimsByRepaymentId.set(claim.repayment_id, claim);
+    }
+  });
 
   const activeLoans = loans.filter((l) => ["active", "disbursed"].includes(l.status));
   const pendingApps = loans.filter((l) => ["pending", "under_review", "approved", "contract_signing", "awaiting_disbursement"].includes(l.status));
@@ -234,7 +244,11 @@ export default function BorrowerLoansTab({
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {borrowerCanSubmitPaymentClaim(rep) && (
+                            {(() => {
+                              const claim = claimsByRepaymentId.get(rep.id);
+                              const claimAction = getBorrowerPaymentClaimAction(claim?.status);
+                              if (!borrowerCanSubmitPaymentClaim(rep) || !claimAction) return null;
+                              return (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -243,9 +257,10 @@ export default function BorrowerLoansTab({
                                 onClick={() => onSubmitPayment(rep)}
                               >
                                 <Banknote size={10} className="mr-0.5" />
-                                I've paid
+                                {claimAction === "update" ? "Update payment" : "I've paid"}
                               </Button>
-                            )}
+                              );
+                            })()}
                             <Badge className={`${status.color} border text-[10px] px-1.5 py-0`}>
                               <StatusIcon size={8} className="mr-0.5" />
                               {status.label}

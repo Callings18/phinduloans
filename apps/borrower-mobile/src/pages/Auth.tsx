@@ -1,13 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
-import { Button } from "@phinduloans/shared/components/ui/button";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { borrowerAppPath, officePath } from "@phinduloans/shared/config/siteMode";
-import { Sparkles, Smartphone } from "lucide-react";
-import { Link } from "react-router-dom";
-import { downloadApk, isAndroidDevice } from "@phinduloans/shared/utils/appDownload";
+import { Sparkles } from "lucide-react";
 
 /** Absolute borrower destination — never leave app.phindu.com for marketing Site URL. */
 function goToBorrowerDestination(path: string | null) {
@@ -116,23 +113,23 @@ const Auth = () => {
             </div>
           </div>
 
-          <div className="mt-8 text-center space-y-3 animate-fade-in">
-            <p className="text-xs text-muted-foreground">
-              Apply online in your browser — no install required. Your data is saved to your account when you sign in.
+          <div className="mt-8 text-center space-y-2 animate-fade-in">
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+              Official borrower portal for{" "}
+              <strong className="text-foreground font-medium">Phindu Credit Solutions</strong> (Zambia).
+              Sign in here in your browser — no app install required. Your account data is stored securely when
+              you verify your phone number.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-              <Button variant="outline" size="sm" className="rounded-full" asChild>
-                <Link to="/install">
-                  <Smartphone size={14} className="mr-1.5" />
-                  Download Our App
-                </Link>
-              </Button>
-              {isAndroidDevice() && (
-                <Button variant="ghost" size="sm" className="rounded-full text-primary" onClick={downloadApk}>
-                  Download now
-                </Button>
-              )}
-            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Need help? Contact{" "}
+              <a
+                href="mailto:info@phinducredit.co.zm"
+                className="text-primary hover:underline"
+                rel="noopener noreferrer"
+              >
+                info@phinducredit.co.zm
+              </a>
+            </p>
           </div>
         </div>
       </div>

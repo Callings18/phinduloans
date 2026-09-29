@@ -11,7 +11,11 @@ import {
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { usePwaInstallPrompt } from "@phinduloans/shared/hooks/usePwaInstallPrompt";
 import { isStandaloneDisplayMode } from "@phinduloans/shared/utils/pwaDisplayMode";
-import { downloadApk, isAndroidDevice } from "@phinduloans/shared/utils/appDownload";
+import {
+  isAndroidDevice,
+  openBorrowerInstallPage,
+  PLAY_STORE_URL,
+} from "@phinduloans/shared/utils/appDownload";
 import { Link } from "react-router-dom";
 
 const SNOOZE_KEY = "pwa-install-snooze-until";
@@ -77,44 +81,39 @@ export const PWAInstallPrompt = ({ enabled = true }: PWAInstallPromptProps) => {
   }, [deferredPrompt, enabled]);
 
   const handleInstall = async () => {
-    // Prefer APK download (web→APK pipeline). Fall back to PWA on non-Android.
-    if (isAndroidDevice()) {
-      downloadApk();
-      toast({
-        title: "Downloading app",
-        description:
-          "PhinduCredit.apk is downloading. Open it from your downloads to install.",
-      });
+    if (PLAY_STORE_URL && isAndroidDevice()) {
+      window.open(PLAY_STORE_URL, "_blank", "noopener,noreferrer");
       setShowPrompt(false);
-      if (intervalRef.current) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      return;
+    }
+    if (deferredPrompt) {
+      const choice = await promptInstall();
+      if (choice?.outcome === "accepted") {
+        toast({
+          title: "App installing",
+          description: "Phindu Credit is being added to your home screen.",
+        });
+        setShowPrompt(false);
+        if (intervalRef.current) {
+          window.clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } else {
+        localStorage.setItem(SNOOZE_KEY, String(Date.now() + CLOSE_SNOOZE_MS));
+        setShowPrompt(false);
       }
       return;
     }
-    if (!deferredPrompt) {
-      toast({
-        title: "Use your browser menu",
-        description:
-          "Open your browser menu (⋮) and tap 'Install app' or 'Add to Home Screen'. Or open More options for the APK link.",
-      });
+    if (isAndroidDevice() || isLikelyIOS) {
+      openBorrowerInstallPage();
+      setShowPrompt(false);
       return;
     }
-    const choice = await promptInstall();
-    if (choice?.outcome === "accepted") {
-      toast({
-        title: "App installing",
-        description: "Phindu Loans is being added to your home screen.",
-      });
-      setShowPrompt(false);
-      if (intervalRef.current) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    } else {
-      localStorage.setItem(SNOOZE_KEY, String(Date.now() + CLOSE_SNOOZE_MS));
-      setShowPrompt(false);
-    }
+    toast({
+      title: "Use your browser menu",
+      description:
+        "Open your browser menu (⋮) and tap Install app or Add to Home Screen.",
+    });
   };
 
   const handleClose = () => {
@@ -169,10 +168,10 @@ export const PWAInstallPrompt = ({ enabled = true }: PWAInstallPromptProps) => {
             <div className="flex-1 space-y-3 min-w-0">
               <div>
                 <h3 className="font-semibold text-foreground mb-1">
-                  Install the Phindu Loans app
+                  Add Phindu to your home screen
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Optional — you can keep using the full web app. Install for faster access and reminders.
+                  Optional shortcut — the full web app works without installing anything.
                 </p>
               </div>
 
@@ -200,7 +199,11 @@ export const PWAInstallPrompt = ({ enabled = true }: PWAInstallPromptProps) => {
                   className="flex-1 min-w-[140px]"
                 >
                   <Download size={16} className="mr-2" />
-                  {isAndroidDevice() ? "Download App (APK)" : "Install App"}
+                  {PLAY_STORE_URL && isAndroidDevice()
+                    ? "Open Google Play"
+                    : deferredPrompt
+                      ? "Install web app"
+                      : "Install options"}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

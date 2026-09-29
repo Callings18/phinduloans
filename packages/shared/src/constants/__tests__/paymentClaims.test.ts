@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canSubmitNewPaymentClaim,
+  getBorrowerPaymentClaimAction,
   isPaymentClaimPendingStatus,
 } from "../paymentClaims";
 
@@ -16,5 +17,10 @@ describe("paymentClaims", () => {
 
   it("allows first claim when no status", () => {
     expect(canSubmitNewPaymentClaim(undefined)).toBe(true);
+  });
+
+  it("allows update flow when staff requested more info", () => {
+    expect(getBorrowerPaymentClaimAction("needs_more_info")).toBe("update");
+    expect(canSubmitNewPaymentClaim("needs_more_info")).toBe(false);
   });
 });

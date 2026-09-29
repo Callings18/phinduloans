@@ -21,6 +21,9 @@ Last reviewed: 2026-09-28. Fixes in code + migration `20260928120000_borrower_po
 | Contract sign two-step status update | Single update sets `awaiting_disbursement` |
 | Auth redirect before roles load | `rolesResolved` / `rolesError` on Auth page |
 | QuickApply admin-only products | `isBorrowerPortalProduct` filter |
+| `needs_more_info` claim — no resubmit button | Update same claim → `pending_review`; RLS policy + “Send updated info” |
+| My Loans tab duplicate “I've paid” | Claim status guard (same as Payments tab) |
+| Admin misses `needs_more_info` claims | `fetchAdminOpenPaymentClaims` on Repayments |
 
 ## Still verify in production config
 

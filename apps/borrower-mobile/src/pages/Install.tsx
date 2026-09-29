@@ -1,6 +1,6 @@
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
-import { Download, Smartphone, Share, PlusSquare, ArrowLeft } from "lucide-react";
+import { Download, Smartphone, Share, PlusSquare, ArrowLeft, Globe } from "lucide-react";
 import {
   APK_URL,
   PLAY_STORE_URL,
@@ -14,8 +14,8 @@ import { isStandaloneDisplayMode } from "@phinduloans/shared/utils/pwaDisplayMod
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 
 /**
- * Borrower-only install / download page (APK + optional PWA).
- * Web app remains fully usable without installing.
+ * Optional install page only — never linked from /auth with APK downloads.
+ * Web sign-in at /auth is the primary path for all Chrome users.
  */
 const Install = () => {
   const onAndroid = isAndroidDevice();
@@ -55,75 +55,58 @@ const Install = () => {
           <div className="inline-flex w-16 h-16 rounded-2xl bg-primary/15 items-center justify-center mb-4">
             <Smartphone className="text-primary" size={28} />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Install Phindu Loans</h1>
-          <p className="text-muted-foreground">
-            Optional — you can keep using the full web app in your browser. Install for faster access and notifications.
+          <h1 className="text-3xl font-bold text-foreground mb-2">Optional app shortcuts</h1>
+          <p className="text-muted-foreground max-w-lg mx-auto">
+            Phindu Credit Solutions — official borrower portal at{" "}
+            <strong className="text-foreground">app.phindu.com</strong>. You do not need to install
+            anything to apply or repay; use your browser anytime.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 mb-8">
-          <Card className="border-primary/30">
-            <CardContent className="p-5 space-y-3">
-              <h2 className="font-semibold text-foreground">Android APK</h2>
-              <p className="text-sm text-muted-foreground">
-                Download the app file and install it on your phone
-                {onAndroid ? " (recommended on Android)." : "."}
-              </p>
-              {PLAY_STORE_URL ? (
-                <Button className="w-full" asChild>
-                  <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
-                    <Download size={16} className="mr-2" />
-                    Get it on Google Play
-                  </a>
-                </Button>
-              ) : (
-                <Button className="w-full" onClick={downloadApk}>
-                  <Download size={16} className="mr-2" />
-                  Download APK
-                </Button>
-              )}
-              {!PLAY_STORE_URL && (
-                <a
-                  href={APK_URL}
-                  download
-                  className="block text-xs text-center text-muted-foreground hover:text-primary"
-                >
-                  Or save PhinduCredit.apk directly
-                </a>
-              )}
-              {!PLAY_STORE_URL && (
-                <p className="text-[11px] text-muted-foreground leading-snug">
-                  Google Play listing coming soon. After installing, sign in with the same phone number — your loans and
-                  applications stay in your account.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+        <Card className="border-primary/30 mb-6">
+          <CardContent className="p-5 space-y-3">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <Globe size={18} className="text-primary" />
+              Recommended: use the web app
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Sign in with your phone number at{" "}
+              <Link to="/auth" className="text-primary underline">
+                app.phindu.com/auth
+              </Link>
+              . Same account on any device.
+            </p>
+            <Button variant="hero" className="w-full" asChild>
+              <Link to="/dashboard">Continue on web</Link>
+            </Button>
+          </CardContent>
+        </Card>
 
+        <div className="grid gap-4 md:grid-cols-2 mb-8">
           <Card>
             <CardContent className="p-5 space-y-3">
               <h2 className="font-semibold text-foreground">
-                {onIOS ? "iPhone / iPad" : "Add to Home Screen"}
+                {onIOS ? "iPhone / iPad (Safari)" : "Add to Home Screen"}
               </h2>
               {onIOS ? (
-                <p className="text-xs font-medium text-primary mb-2">iOS App Store — coming soon</p>
-              ) : null}
-              {onIOS ? (
-                <ol className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex gap-2 items-start">
-                    <Share className="shrink-0 mt-0.5 text-primary" size={14} />
-                    <span>Tap Share in Safari</span>
-                  </li>
-                  <li className="flex gap-2 items-start">
-                    <PlusSquare className="shrink-0 mt-0.5 text-primary" size={14} />
-                    <span>Choose Add to Home Screen</span>
-                  </li>
-                </ol>
+                <>
+                  <p className="text-xs text-muted-foreground">Native App Store listing — coming soon.</p>
+                  <ol className="text-sm text-muted-foreground space-y-2">
+                    <li className="flex gap-2 items-start">
+                      <Share className="shrink-0 mt-0.5 text-primary" size={14} />
+                      <span>Tap Share in Safari</span>
+                    </li>
+                    <li className="flex gap-2 items-start">
+                      <PlusSquare className="shrink-0 mt-0.5 text-primary" size={14} />
+                      <span>Choose Add to Home Screen</span>
+                    </li>
+                  </ol>
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   {standalone
-                    ? "You are already using the installed app."
-                    : "Install as a web app for offline-friendly loading and shortcuts."}
+                    ? "You are already using the installed web app."
+                    : "Install as a shortcut — works like an app icon without downloading files."}
                 </p>
               )}
               {!standalone && !onIOS && (
@@ -134,12 +117,46 @@ const Install = () => {
               )}
             </CardContent>
           </Card>
-        </div>
 
-        <div className="text-center">
-          <Button variant="hero" asChild>
-            <Link to="/dashboard">Continue on web</Link>
-          </Button>
+          <Card className="md:order-last">
+            <CardContent className="p-5 space-y-3">
+              <h2 className="font-semibold text-foreground">Android package (optional)</h2>
+              <p className="text-sm text-muted-foreground">
+                Only download from this page if you trust Phindu Credit Solutions. Package:{" "}
+                <code className="text-xs">com.phindu.loans.borrower</code>.
+                {onAndroid ? " Prefer Google Play when available." : ""}
+              </p>
+              {PLAY_STORE_URL ? (
+                <Button className="w-full" asChild>
+                  <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                    <Download size={16} className="mr-2" />
+                    Get it on Google Play
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" className="w-full" onClick={downloadApk}>
+                  <Download size={16} className="mr-2" />
+                  Download official APK
+                </Button>
+              )}
+              {!PLAY_STORE_URL && (
+                <a
+                  href={APK_URL}
+                  download="PhinduCredit.apk"
+                  rel="noopener noreferrer nofollow"
+                  className="block text-xs text-center text-muted-foreground hover:text-primary"
+                >
+                  Direct file: PhinduCredit.apk
+                </a>
+              )}
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Questions?{" "}
+                <a href="mailto:info@phinducredit.co.zm" className="text-primary hover:underline">
+                  info@phinducredit.co.zm
+                </a>
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

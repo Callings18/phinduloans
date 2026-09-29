@@ -43,14 +43,45 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: existing, error: existingErr } = await supabaseAdmin
       .from("payment_claims")
-      .select("id")
+      .select("id, status")
       .eq("repayment_id", repaymentId)
       .eq("user_id", auth.userId)
       .in("status", ["pending", "pending_review", "needs_more_info"])
       .limit(1);
     if (existingErr) throw existingErr;
-    if ((existing ?? []).length > 0) {
+    const openClaim = (existing ?? [])[0];
+    if (openClaim && openClaim.status !== "needs_more_info") {
       throw new HttpError(409, "DUPLICATE_PENDING_CLAIM", "A pending claim already exists for this repayment");
+    }
+
+    if (openClaim?.status === "needs_more_info") {
+      const { data: updated, error: updateErr } = await supabaseAdmin
+        .from("payment_claims")
+        .update({
+          amount: body.amount,
+          reference: body.reference,
+          receipt_url: body.receiptUrl ?? null,
+          status: "pending_review",
+          review_comment: null,
+          decision_reason_code: null,
+          verified_at: null,
+          verified_by: null,
+        })
+        .eq("id", openClaim.id)
+        .select("id, loan_id, repayment_id, amount, reference, status, created_at")
+        .single();
+      if (updateErr) throw updateErr;
+
+      await appendLoanEvent({
+        loanId: repayment.loan_id,
+        eventType: "payment_claim_resubmitted",
+        performedBy: auth.userId,
+        previousValues: { requestId, claimId: openClaim.id },
+        newValues: { amount: body.amount, reference: body.reference },
+        visibility: "both",
+      });
+
+      return NextResponse.json({ ok: true, data: updated });
     }
 
     const insertPayload = {

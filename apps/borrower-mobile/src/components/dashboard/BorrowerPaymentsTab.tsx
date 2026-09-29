@@ -23,7 +23,7 @@ import {
 import {
   isPaymentClaimApprovedStatus,
   isPaymentClaimPendingStatus,
-  canSubmitNewPaymentClaim,
+  getBorrowerPaymentClaimAction,
 } from "@phinduloans/shared/constants/paymentClaims";
 import { borrowerInstallmentLabel } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
 import {
@@ -244,7 +244,10 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         )}
                       </div>
                     )}
-                    {borrowerCanSubmitPaymentClaim(rep) && canSubmitNewPaymentClaim(claim?.status) && (
+                    {(() => {
+                      const claimAction = getBorrowerPaymentClaimAction(claim?.status);
+                      if (!borrowerCanSubmitPaymentClaim(rep) || !claimAction) return null;
+                      return (
                       <Button
                         variant="outline"
                         size="sm"
@@ -253,9 +256,10 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         onClick={() => onSubmitPayment(rep)}
                       >
                         <Banknote size={14} className="mr-1.5" />
-                        I've paid
+                        {claimAction === "update" ? "Send updated info" : "I've paid"}
                       </Button>
-                    )}
+                      );
+                    })()}
                     {rep.status === "paid" && (
                       <Button
                         variant="outline"
@@ -347,7 +351,10 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {borrowerCanSubmitPaymentClaim(rep) && canSubmitNewPaymentClaim(claim?.status) && (
+                        {(() => {
+                          const claimAction = getBorrowerPaymentClaimAction(claim?.status);
+                          if (!borrowerCanSubmitPaymentClaim(rep) || !claimAction) return null;
+                          return (
                           <Button
                             variant="outline"
                             size="sm"
@@ -355,9 +362,10 @@ export default function BorrowerPaymentsTab({ repayments, loans, paymentClaims, 
                             onClick={() => onSubmitPayment(rep)}
                           >
                             <Banknote size={14} className="mr-1.5" />
-                            I've paid
+                            {claimAction === "update" ? "Send updated info" : "I've paid"}
                           </Button>
-                        )}
+                          );
+                        })()}
                         {rep.status === "paid" && (
                           <Button
                             variant="outline"

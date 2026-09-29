@@ -98,7 +98,7 @@ After deploy:
 npm run audit:pwa
 ```
 
-Manual: Chrome → app.phindu.com → Install app; Android APK from `/install`.
+Manual: Chrome → app.phindu.com → Install app; Android APK only from `/install` (never on `/auth`). If Chrome shows **Dangerous site**, see `docs/CHROME_SAFE_BROWSING_RECOVERY.md`.
 
 ## E. Smoke test (10 minutes)
 

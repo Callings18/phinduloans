@@ -84,6 +84,25 @@ export async function submitPaymentClaim(
       isPaymentClaimPendingStatus(c.status as string),
     );
     if (openClaim) {
+      if (openClaim.status === "needs_more_info") {
+        const { data: updated, error: updateErr } = await supabase
+          .from("payment_claims")
+          .update({
+            amount: payload.amount,
+            reference: payload.reference,
+            receipt_url: payload.receiptUrl ?? null,
+            status: "pending_review",
+            review_comment: null,
+            decision_reason_code: null,
+            verified_at: null,
+            verified_by: null,
+          })
+          .eq("id", openClaim.id)
+          .select()
+          .single();
+        if (updateErr) throw updateErr;
+        return updated;
+      }
       throw new Error(
         "You already have a payment report awaiting review for this installment. Check Payments for status.",
       );
@@ -140,6 +159,8 @@ export async function fetchBorrowerLoanEvents(loanId: string): Promise<LoanEvent
   return (data as unknown as LoanEvent[]) ?? [];
 }
 
+const ADMIN_OPEN_PAYMENT_CLAIM_STATUSES = ["pending", "pending_review", "needs_more_info"] as const;
+
 export async function fetchAdminPaymentClaims(status = "pending_review") {
   if (apiFeatureFlags.phase1Workflow) {
     const res = await apiGet<{ ok?: boolean; data?: unknown[] }>(
@@ -152,6 +173,37 @@ export async function fetchAdminPaymentClaims(status = "pending_review") {
     .from("payment_claims")
     .select("*")
     .eq("status", status)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** All borrower claims awaiting staff action (verify, record, or request more info). */
+export async function fetchAdminOpenPaymentClaims() {
+  if (apiFeatureFlags.phase1Workflow) {
+    const responses = await Promise.all(
+      ADMIN_OPEN_PAYMENT_CLAIM_STATUSES.map((status) =>
+        apiGet<{ ok?: boolean; data?: unknown[] }>(
+          `/api/v1/admin/payment-claims?status=${encodeURIComponent(status)}`,
+        ),
+      ),
+    );
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const res of responses) {
+      for (const row of (res?.data ?? []) as Record<string, unknown>[]) {
+        const id = row.id as string | undefined;
+        if (id) byId.set(id, row);
+      }
+    }
+    return [...byId.values()].sort((a, b) =>
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("payment_claims")
+    .select("*")
+    .in("status", [...ADMIN_OPEN_PAYMENT_CLAIM_STATUSES])
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];

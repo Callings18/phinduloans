@@ -159,3 +159,12 @@ CREATE POLICY "Admins can verify/reject documents"
     OR public.has_role(auth.uid(), 'finance_officer'::app_role)
     OR public.has_role(auth.uid(), 'collections_officer'::app_role)
   );
+
+-- 4) Borrower may resubmit payment proof after staff requests more info
+DROP POLICY IF EXISTS "Borrowers can resubmit payment claims needing info" ON public.payment_claims;
+CREATE POLICY "Borrowers can resubmit payment claims needing info"
+  ON public.payment_claims
+  FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = user_id AND status = 'needs_more_info')
+  WITH CHECK (auth.uid() = user_id AND status = 'pending_review');
