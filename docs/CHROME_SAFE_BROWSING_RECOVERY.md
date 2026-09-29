@@ -22,10 +22,17 @@ Confirm live:
 3. Verify via DNS (recommended) or HTML file.
 4. Go to **Security & Manual Actions** → **Security issues** (or Safe Browsing report if shown).
 5. Fix any listed problems, then click **Request review**.
-6. Describe changes, for example:
-   - Removed software download prompts from login/signup URLs.
-   - Borrower flows are web-first; APK only on `/install` with company identification.
-   - Official contact: info@phinducredit.co.zm
+6. Paste this in **Request review** (edit if needed):
+
+```
+We operate the legitimate Zambia lender portal Phindu Credit Solutions at https://app.phindu.com.
+
+Issue addressed: We removed all APK / “download app” prompts from login and signup URLs (/auth). Borrowers sign in with phone OTP in the browser only. Optional Android packages are offered only on https://app.phindu.com/install with company name, package com.phindu.loans.borrower, and contact info@phinducredit.co.zm. We added security.txt and do not distribute software from credential pages.
+
+Please re-scan and remove the social engineering / unwanted software classification for app.phindu.com.
+```
+
+**Auto-deploy:** Pushes to `main` that touch `apps/borrower-mobile` or `packages/shared` run `.github/workflows/deploy-borrower.yml` when `CLOUDFLARE_API_TOKEN` is set in GitHub repo secrets.
 
 Reviews often take **2–7 days**. Until Google clears the flag, some mobile Chrome users may still see the warning.
 
