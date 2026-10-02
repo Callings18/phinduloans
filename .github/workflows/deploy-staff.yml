@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build & deploy staff web (office + marketing)
+      - name: Build & deploy staff web (office)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -34,6 +34,5 @@ jobs:
           VITE_BORROWER_APP_URL: https://app.phindu.com
           VITE_OFFICE_BASE_URL: https://office.phindu.com
           VITE_MARKETING_BASE_URL: https://phindu.com
-        run: |
-          npm run build:staff
-          npx wrangler@4.110.0 deploy --config wrangler.staff.jsonc
+          STAFF_SITE_MODE: office
+        run: node scripts/deploy-staff.mjs

@@ -19,6 +19,8 @@
     "deploy:staff": "npx wrangler@4.110.0 deploy --config wrangler.staff.jsonc",
     "deploy:borrower": "npx wrangler@4.110.0 deploy --config wrangler.borrower.jsonc",
     "deploy:borrower:full": "node scripts/deploy-borrower.mjs",
+    "deploy:staff:full": "node scripts/deploy-staff.mjs",
+    "deploy:production": "node scripts/deploy-production.mjs",
     "verify:borrower:apk": "node scripts/verify-borrower-apk.mjs",
     "prepare:borrower:android": "node scripts/prepare-borrower-android.mjs",
     "build:borrower:apk": "node scripts/build-borrower-apk.mjs",
