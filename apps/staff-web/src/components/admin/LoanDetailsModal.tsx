@@ -1799,17 +1799,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
         );
       }
 
-      // Best-effort cleanup of dependent rows that may not cascade.
-      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
-      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
-      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
-      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
-
-      const { error } = await supabase
-        .from("loan_applications")
-        .delete()
-        .eq("id", loan.id);
-      if (error) throw error;
+      const { deleteLoanApplication } = await import(
+        "@phinduloans/shared/services/repositories/loanDeleteRepository"
+      );
+      await deleteLoanApplication(loan.id, loan.status);
 
       await logAudit({
         action: "DELETE_LOAN_APPLICATION",

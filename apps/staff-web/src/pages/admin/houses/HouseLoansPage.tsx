@@ -38,8 +38,8 @@ import {
 } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { toast } from "sonner";
+import { deleteLoanApplication } from "@phinduloans/shared/services/repositories/loanDeleteRepository";
 
 const DELETABLE_STATUSES = new Set([
   "pending",
@@ -96,15 +96,7 @@ export default function HouseLoansPage() {
   const deleteMutation = useMutation({
     mutationFn: async (loan: any) => {
       if (!loan) throw new Error("No loan selected");
-      if (!DELETABLE_STATUSES.has(loan.status)) {
-        throw new Error(`Cannot delete a loan in status "${loan.status}".`);
-      }
-      await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
-      await supabase.from("disbursements").delete().eq("loan_id", loan.id);
-      await supabase.from("loan_status_transitions").delete().eq("loan_id", loan.id);
-      await supabase.from("loan_events").delete().eq("loan_id", loan.id);
-      const { error } = await supabase.from("loan_applications").delete().eq("id", loan.id);
-      if (error) throw error;
+      await deleteLoanApplication(loan.id, loan.status);
     },
     onSuccess: () => {
       toast.success("Loan deleted");
