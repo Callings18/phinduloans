@@ -32,6 +32,8 @@ import { useRealtimeInvalidate } from "@/hooks/useRealtimeInvalidate";
 import { useLoanProductFilter } from "@/hooks/useLoanProductFilter";
 import { isBetaModule } from "@phinduloans/shared/config/featureRollout";
 import { BetaBadge } from "@/components/admin/BetaBadge";
+import SmsPackageUsageCard from "@/components/admin/SmsPackageUsageCard";
+import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 
 export type AdminDashboardContentProps = {
   loanProductId: string | null;
@@ -43,6 +45,7 @@ export type AdminDashboardContentProps = {
 
 export function AdminDashboardContent({ loanProductId, title, productFilterSlot, backLink, afterContent }: AdminDashboardContentProps) {
   const navigate = useNavigate();
+  const { isStaff } = useAuth();
 
   const { data: stats, isLoading: statsLoading, isError: statsLoadError } = useAdminDashboardStats(loanProductId);
   const {
@@ -156,6 +159,8 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
         </div>
 
         <QuickActions />
+
+        {isStaff && !loanProductId ? <SmsPackageUsageCard compact /> : null}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="border-border/50 bg-card/80">

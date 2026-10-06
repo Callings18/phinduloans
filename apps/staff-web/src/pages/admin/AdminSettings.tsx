@@ -33,6 +33,7 @@ import NotificationQueueMonitor from "@/components/admin/NotificationQueueMonito
 
 import { NotificationProvidersSettings } from "@/components/admin/NotificationProvidersSettings";
 import ProviderTestSendCard from "@/components/admin/ProviderTestSendCard";
+import SmsPackageUsageCard from "@/components/admin/SmsPackageUsageCard";
 import CalendarSettings from "@/components/admin/CalendarSettings";
 import { CalendarDays } from "lucide-react";
 
@@ -637,6 +638,7 @@ const AdminSettings = () => {
 
           {/* SMS Notification Settings */}
           <TabsContent value="sms" className="space-y-6">
+            <SmsPackageUsageCard />
             <NotificationProvidersSettings />
             <ProviderTestSendCard />
           </TabsContent>

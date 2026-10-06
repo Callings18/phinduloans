@@ -31,3 +31,13 @@ Ensure **`process-notification-queue`** runs on a schedule (Lovable Cloud → Fu
 - Send OTP from borrower auth.
 - Check `notification_logs` / queue for `failed` rows and provider response.
 - Supabase → Edge Functions → Logs for `excitesms` / `401` / `535`.
+
+## 6. SMS package usage in Phindu (office app)
+
+**Admin → Settings → SMS** (and a summary on the main dashboard):
+
+1. Set **package size** (e.g. `2000`) and **package start** when you top up ExciteSMS.
+2. **Used / remaining** is calculated from Phindu sends in `notification_logs` (OTP + notifications).
+3. Optional **Check Excite balance** calls edge function `excite-sms-balance` if Excite exposes a balance API for your key.
+
+Apply migration `20261006133000_sms_package_usage.sql` (or `npx supabase db push`) and deploy `excite-sms-balance`.
