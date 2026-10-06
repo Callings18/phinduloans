@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { LOAN_PRODUCT_MODULES, type LoanProductModuleDefinition } from "@phinduloans/shared/config/loanProductModules";
+import { invalidateLoanProductQueries } from "@/lib/invalidateLoanProductQueries";
 
 export interface DynamicLoanProductModule extends Omit<LoanProductModuleDefinition, "betaKey"> {
   betaKey: string;
@@ -15,9 +17,28 @@ export interface DynamicLoanProductModule extends Omit<LoanProductModuleDefiniti
  * automatically gets its own house dashboard at `/admin/houses/<product_code>`.
  */
 export function useLoanProductModules() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("loan-product-modules-dynamic")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_products" },
+        () => {
+          invalidateLoanProductQueries(queryClient);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["loan-product-modules-dynamic"],
-    staleTime: 60_000,
+    staleTime: 0,
     queryFn: async (): Promise<DynamicLoanProductModule[]> => {
       const { data, error } = await supabase
         .from("loan_products")
@@ -25,11 +46,9 @@ export function useLoanProductModules() {
         .order("name", { ascending: true });
       if (error) throw error;
 
-      const staticByCode = new Map(LOAN_PRODUCT_MODULES.map((m) => [m.code as string, m]));
       const seen = new Set<string>();
       const merged: DynamicLoanProductModule[] = [];
 
-      // Add hard-coded modules first (preserves order + special handlers)
       for (const m of LOAN_PRODUCT_MODULES) {
         merged.push({
           ...m,
@@ -40,7 +59,6 @@ export function useLoanProductModules() {
         seen.add(m.code);
       }
 
-      // Add custom products with a product_code that isn't already a hard-coded house
       for (const p of data ?? []) {
         const code = (p.product_code || "").toUpperCase().trim();
         if (!code) continue;

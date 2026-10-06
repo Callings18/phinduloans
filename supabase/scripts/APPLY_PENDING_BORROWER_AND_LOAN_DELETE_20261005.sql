@@ -270,3 +270,23 @@ CREATE POLICY "Staff can delete applications in early stages"
 
 -- Verify:
 SELECT proname FROM pg_proc WHERE proname = 'admin_purge_loan_application';
+
+-- ========== 20261006120000_loan_products_select_for_house_staff.sql ==========
+
+DROP POLICY IF EXISTS "loan_products_select_policy" ON public.loan_products;
+
+CREATE POLICY "loan_products_select_policy"
+  ON public.loan_products FOR SELECT TO authenticated
+  USING (
+    public.has_permission(auth.uid(), 'products', 'view')
+    OR public.has_permission(auth.uid(), 'products', 'edit')
+    OR public.has_role(auth.uid(), 'user'::public.app_role)
+    OR public.has_role(auth.uid(), 'employer'::public.app_role)
+    OR public.has_role(auth.uid(), 'super_admin'::public.app_role)
+    OR public.has_role(auth.uid(), 'admin'::public.app_role)
+    OR public.has_role(auth.uid(), 'loan_officer'::public.app_role)
+    OR public.has_role(auth.uid(), 'credit_officer'::public.app_role)
+    OR public.has_role(auth.uid(), 'finance_officer'::public.app_role)
+    OR public.has_role(auth.uid(), 'collections_officer'::public.app_role)
+    OR public.has_permission(auth.uid(), 'house', 'dashboard_view')
+  );

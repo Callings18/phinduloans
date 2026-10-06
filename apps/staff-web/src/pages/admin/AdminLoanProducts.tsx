@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { usePermissions } from "@/hooks/usePermissions";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
+import {
+  invalidateLoanProductQueries,
+  normalizeLoanProductCode,
+} from "@/lib/invalidateLoanProductQueries";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Label } from "@phinduloans/shared/components/ui/label";
@@ -435,7 +439,7 @@ const AdminLoanProducts = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["loan-products"] });
+      invalidateLoanProductQueries(queryClient);
       toast({ title: "Loan product created successfully" });
       setIsDialogOpen(false);
       resetForm();
@@ -467,7 +471,7 @@ const AdminLoanProducts = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["loan-products"] });
+      invalidateLoanProductQueries(queryClient);
       toast({ title: "Loan product updated successfully" });
       setIsDialogOpen(false);
       setEditingProduct(null);
@@ -520,7 +524,7 @@ const AdminLoanProducts = () => {
       }
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["loan-products"] });
+      invalidateLoanProductQueries(queryClient);
       setDeleteConfirmProduct(null);
       if (result?.archived) {
         toast({
@@ -614,7 +618,7 @@ const AdminLoanProducts = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["loan-products"] });
+      invalidateLoanProductQueries(queryClient);
       toast({ title: "Product cloned successfully", description: "The copy is set to inactive by default." });
     },
     onError: async (error: Error) => {
@@ -717,10 +721,21 @@ const AdminLoanProducts = () => {
   };
 
   const handleSubmit = () => {
+    const productCode = normalizeLoanProductCode(formData.product_code);
+    if (formData.is_active && !productCode && !editingProduct) {
+      toast({
+        title: "Product code required",
+        description:
+          "Active products need a product code (e.g. SALARY_ADVANCE) to appear under Product Houses.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const productData = {
       name: formData.name,
       description: formData.description || null,
-      product_code: formData.product_code || null,
+      product_code: productCode,
       channels: formData.channels,
       status: formData.status,
       min_amount: formData.min_amount,

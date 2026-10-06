@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@phinduloans/shared/components/ui/textarea";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { invalidateLoanProductQueries } from "@/lib/invalidateLoanProductQueries";
 import {
   Percent,
   Scale,
@@ -306,7 +307,7 @@ function EditProductConfigDialog({
     qc.invalidateQueries({ queryKey: ["house-product-config", productCode] });
     qc.invalidateQueries({ queryKey: ["house-product", productCode] });
     qc.invalidateQueries({ queryKey: ["product-by-code", productCode] });
-    qc.invalidateQueries({ queryKey: ["loan-products"] });
+    invalidateLoanProductQueries(qc);
     onOpenChange(false);
   };
 
