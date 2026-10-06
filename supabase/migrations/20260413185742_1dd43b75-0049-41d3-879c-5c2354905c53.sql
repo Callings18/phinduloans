@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.employee_salary_structure (
 
 ALTER TABLE public.employee_salary_structure ENABLE ROW LEVEL SECURITY;
 
+DROP TRIGGER IF EXISTS update_employee_salary_structure_updated_at ON public.employee_salary_structure;
 CREATE TRIGGER update_employee_salary_structure_updated_at
   BEFORE UPDATE ON public.employee_salary_structure
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

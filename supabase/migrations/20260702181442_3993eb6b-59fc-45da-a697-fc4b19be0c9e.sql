@@ -6,6 +6,7 @@ FOR SELECT
 USING (public.is_staff(auth.uid()));
 
 -- Allow document owners to delete their own loan documents
+DROP POLICY IF EXISTS "Users can delete their own documents" ON storage.objects;
 CREATE POLICY "Users can delete their own documents"
 ON storage.objects
 FOR DELETE

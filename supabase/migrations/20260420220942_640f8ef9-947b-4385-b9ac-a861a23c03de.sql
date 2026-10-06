@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS public.uat_signoffs (
 
 ALTER TABLE public.uat_signoffs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can view UAT signoffs" ON public.uat_signoffs;
 CREATE POLICY "Staff can view UAT signoffs"
 ON public.uat_signoffs FOR SELECT TO authenticated
 USING (
@@ -81,6 +82,7 @@ USING (
   OR public.has_role(auth.uid(), 'auditor'::app_role)
 );
 
+DROP POLICY IF EXISTS "Admins can insert UAT signoffs" ON public.uat_signoffs;
 CREATE POLICY "Admins can insert UAT signoffs"
 ON public.uat_signoffs FOR INSERT TO authenticated
 WITH CHECK (
@@ -88,6 +90,7 @@ WITH CHECK (
   OR public.has_role(auth.uid(), 'super_admin'::app_role)
 );
 
+DROP POLICY IF EXISTS "Admins can update UAT signoffs" ON public.uat_signoffs;
 CREATE POLICY "Admins can update UAT signoffs"
 ON public.uat_signoffs FOR UPDATE TO authenticated
 USING (
@@ -95,10 +98,12 @@ USING (
   OR public.has_role(auth.uid(), 'super_admin'::app_role)
 );
 
+DROP POLICY IF EXISTS "Super admins can delete UAT signoffs" ON public.uat_signoffs;
 CREATE POLICY "Super admins can delete UAT signoffs"
 ON public.uat_signoffs FOR DELETE TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'::app_role));
 
+DROP TRIGGER IF EXISTS update_uat_signoffs_updated_at ON public.uat_signoffs;
 CREATE TRIGGER update_uat_signoffs_updated_at
 BEFORE UPDATE ON public.uat_signoffs
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -118,22 +123,27 @@ CREATE TABLE IF NOT EXISTS public.feature_flags (
 
 ALTER TABLE public.feature_flags ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone authenticated can read feature flags" ON public.feature_flags;
 CREATE POLICY "Anyone authenticated can read feature flags"
 ON public.feature_flags FOR SELECT TO authenticated
 USING (true);
 
+DROP POLICY IF EXISTS "Super admins can insert feature flags" ON public.feature_flags;
 CREATE POLICY "Super admins can insert feature flags"
 ON public.feature_flags FOR INSERT TO authenticated
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'::app_role));
 
+DROP POLICY IF EXISTS "Super admins can update feature flags" ON public.feature_flags;
 CREATE POLICY "Super admins can update feature flags"
 ON public.feature_flags FOR UPDATE TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'::app_role));
 
+DROP POLICY IF EXISTS "Super admins can delete feature flags" ON public.feature_flags;
 CREATE POLICY "Super admins can delete feature flags"
 ON public.feature_flags FOR DELETE TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'::app_role));
 
+DROP TRIGGER IF EXISTS update_feature_flags_updated_at ON public.feature_flags;
 CREATE TRIGGER update_feature_flags_updated_at
 BEFORE UPDATE ON public.feature_flags
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

@@ -21,6 +21,7 @@
     "deploy:borrower:full": "node scripts/deploy-borrower.mjs",
     "deploy:staff:full": "node scripts/deploy-staff.mjs",
     "deploy:production": "node scripts/deploy-production.mjs",
+    "supabase:bootstrap": "node scripts/supabase-bootstrap.mjs",
     "purge:phindu-cache": "node scripts/purge-phindu-cache.mjs",
     "verify:borrower:apk": "node scripts/verify-borrower-apk.mjs",
     "prepare:borrower:android": "node scripts/prepare-borrower-android.mjs",

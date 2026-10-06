@@ -20,22 +20,26 @@ CREATE TABLE public.loan_products (
 ALTER TABLE public.loan_products ENABLE ROW LEVEL SECURITY;
 
 -- Everyone can view active loan products
+DROP POLICY IF EXISTS "Anyone can view active loan products" ON public.loan_products;
 CREATE POLICY "Anyone can view active loan products"
 ON public.loan_products
 FOR SELECT
 USING (is_active = true OR has_role(auth.uid(), 'admin'::app_role));
 
 -- Admins can manage loan products
+DROP POLICY IF EXISTS "Admins can insert loan products" ON public.loan_products;
 CREATE POLICY "Admins can insert loan products"
 ON public.loan_products
 FOR INSERT
 WITH CHECK (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can update loan products" ON public.loan_products;
 CREATE POLICY "Admins can update loan products"
 ON public.loan_products
 FOR UPDATE
 USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can delete loan products" ON public.loan_products;
 CREATE POLICY "Admins can delete loan products"
 ON public.loan_products
 FOR DELETE
@@ -46,6 +50,7 @@ ALTER TABLE public.loan_applications
 ADD COLUMN loan_product_id uuid REFERENCES public.loan_products(id);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_loan_products_updated_at ON public.loan_products;
 CREATE TRIGGER update_loan_products_updated_at
 BEFORE UPDATE ON public.loan_products
 FOR EACH ROW

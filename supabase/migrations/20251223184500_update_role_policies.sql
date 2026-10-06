@@ -1,5 +1,6 @@
 -- 1. Update user_roles policies to allow Super Admins and Admins to manage roles
 DROP POLICY IF EXISTS "Admins can manage all roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins and Super Admins can manage all roles" ON public.user_roles;
 CREATE POLICY "Admins and Super Admins can manage all roles"
   ON public.user_roles FOR ALL
   TO authenticated
@@ -10,6 +11,7 @@ CREATE POLICY "Admins and Super Admins can manage all roles"
 
 -- 2. Allow staff to view roles (needed for the staff list)
 DROP POLICY IF EXISTS "Anyone can view roles" ON public.user_roles; -- In case it existed
+DROP POLICY IF EXISTS "Staff can view roles" ON public.user_roles;
 CREATE POLICY "Staff can view roles"
   ON public.user_roles FOR SELECT
   TO authenticated

@@ -150,25 +150,28 @@ CREATE POLICY "Admins can view push subscriptions" ON public.push_subscriptions
   FOR SELECT USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'super_admin'::app_role));
 
 -- Create indexes for performance
-CREATE INDEX idx_wallet_accounts_user_id ON public.wallet_accounts(user_id);
-CREATE INDEX idx_wallet_transactions_wallet_id ON public.wallet_transactions(wallet_id);
-CREATE INDEX idx_court_cases_loan_id ON public.court_cases(loan_id);
-CREATE INDEX idx_court_cases_status ON public.court_cases(status);
-CREATE INDEX idx_court_case_events_case_id ON public.court_case_events(court_case_id);
-CREATE INDEX idx_payment_splits_repayment_id ON public.payment_splits(repayment_id);
-CREATE INDEX idx_push_subscriptions_user_id ON public.push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_accounts_user_id ON public.wallet_accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet_id ON public.wallet_transactions(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_court_cases_loan_id ON public.court_cases(loan_id);
+CREATE INDEX IF NOT EXISTS idx_court_cases_status ON public.court_cases(status);
+CREATE INDEX IF NOT EXISTS idx_court_case_events_case_id ON public.court_case_events(court_case_id);
+CREATE INDEX IF NOT EXISTS idx_payment_splits_repayment_id ON public.payment_splits(repayment_id);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON public.push_subscriptions(user_id);
 
 -- Create trigger for updated_at on wallet_accounts
+DROP TRIGGER IF EXISTS update_wallet_accounts_updated_at ON public.wallet_accounts;
 CREATE TRIGGER update_wallet_accounts_updated_at
   BEFORE UPDATE ON public.wallet_accounts
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Create trigger for updated_at on court_cases
+DROP TRIGGER IF EXISTS update_court_cases_updated_at ON public.court_cases;
 CREATE TRIGGER update_court_cases_updated_at
   BEFORE UPDATE ON public.court_cases
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Create trigger for updated_at on push_subscriptions
+DROP TRIGGER IF EXISTS update_push_subscriptions_updated_at ON public.push_subscriptions;
 CREATE TRIGGER update_push_subscriptions_updated_at
   BEFORE UPDATE ON public.push_subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

@@ -20,10 +20,12 @@ CREATE TABLE public.pmic_config (
 ALTER TABLE public.pmic_config ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for pmic_config
+DROP POLICY IF EXISTS "Admins can manage PMIC config" ON public.pmic_config;
 CREATE POLICY "Admins can manage PMIC config"
 ON public.pmic_config FOR ALL
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Staff can view PMIC config" ON public.pmic_config;
 CREATE POLICY "Staff can view PMIC config"
 ON public.pmic_config FOR SELECT
 USING (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'finance_officer'));
@@ -50,14 +52,17 @@ CREATE TABLE public.pmic_employers (
 ALTER TABLE public.pmic_employers ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for pmic_employers
+DROP POLICY IF EXISTS "Admins can manage PMIC employers" ON public.pmic_employers;
 CREATE POLICY "Admins can manage PMIC employers"
 ON public.pmic_employers FOR ALL
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Staff can view PMIC employers" ON public.pmic_employers;
 CREATE POLICY "Staff can view PMIC employers"
 ON public.pmic_employers FOR SELECT
 USING (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'finance_officer') OR has_role(auth.uid(), 'credit_officer'));
 
+DROP POLICY IF EXISTS "Loan officers can insert PMIC employers" ON public.pmic_employers;
 CREATE POLICY "Loan officers can insert PMIC employers"
 ON public.pmic_employers FOR INSERT
 WITH CHECK (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
@@ -85,18 +90,22 @@ CREATE TABLE public.pmic_borrower_enrollments (
 ALTER TABLE public.pmic_borrower_enrollments ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for pmic_borrower_enrollments
+DROP POLICY IF EXISTS "Admins can manage PMIC enrollments" ON public.pmic_borrower_enrollments;
 CREATE POLICY "Admins can manage PMIC enrollments"
 ON public.pmic_borrower_enrollments FOR ALL
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Staff can view PMIC enrollments" ON public.pmic_borrower_enrollments;
 CREATE POLICY "Staff can view PMIC enrollments"
 ON public.pmic_borrower_enrollments FOR SELECT
 USING (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'finance_officer') OR has_role(auth.uid(), 'credit_officer'));
 
+DROP POLICY IF EXISTS "Loan officers can insert PMIC enrollments" ON public.pmic_borrower_enrollments;
 CREATE POLICY "Loan officers can insert PMIC enrollments"
 ON public.pmic_borrower_enrollments FOR INSERT
 WITH CHECK (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Loan officers can update PMIC enrollments" ON public.pmic_borrower_enrollments;
 CREATE POLICY "Loan officers can update PMIC enrollments"
 ON public.pmic_borrower_enrollments FOR UPDATE
 USING (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
@@ -125,14 +134,17 @@ CREATE TABLE public.pmic_payroll_submissions (
 ALTER TABLE public.pmic_payroll_submissions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for pmic_payroll_submissions
+DROP POLICY IF EXISTS "Admins can manage PMIC submissions" ON public.pmic_payroll_submissions;
 CREATE POLICY "Admins can manage PMIC submissions"
 ON public.pmic_payroll_submissions FOR ALL
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Staff can view PMIC submissions" ON public.pmic_payroll_submissions;
 CREATE POLICY "Staff can view PMIC submissions"
 ON public.pmic_payroll_submissions FOR SELECT
 USING (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Staff can insert draft PMIC submissions" ON public.pmic_payroll_submissions;
 CREATE POLICY "Staff can insert draft PMIC submissions"
 ON public.pmic_payroll_submissions FOR INSERT
 WITH CHECK (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'finance_officer') OR has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
@@ -156,10 +168,12 @@ CREATE TABLE public.pmic_exceptions (
 ALTER TABLE public.pmic_exceptions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for pmic_exceptions
+DROP POLICY IF EXISTS "Admins can manage PMIC exceptions" ON public.pmic_exceptions;
 CREATE POLICY "Admins can manage PMIC exceptions"
 ON public.pmic_exceptions FOR ALL
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Staff can view PMIC exceptions" ON public.pmic_exceptions;
 CREATE POLICY "Staff can view PMIC exceptions"
 ON public.pmic_exceptions FOR SELECT
 USING (has_role(auth.uid(), 'loan_officer') OR has_role(auth.uid(), 'finance_officer') OR has_role(auth.uid(), 'collections_officer'));
@@ -184,22 +198,27 @@ INSERT INTO public.pmic_config (
 );
 
 -- Create updated_at triggers
+DROP TRIGGER IF EXISTS update_pmic_config_updated_at ON public.pmic_config;
 CREATE TRIGGER update_pmic_config_updated_at
 BEFORE UPDATE ON public.pmic_config
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_pmic_employers_updated_at ON public.pmic_employers;
 CREATE TRIGGER update_pmic_employers_updated_at
 BEFORE UPDATE ON public.pmic_employers
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_pmic_borrower_enrollments_updated_at ON public.pmic_borrower_enrollments;
 CREATE TRIGGER update_pmic_borrower_enrollments_updated_at
 BEFORE UPDATE ON public.pmic_borrower_enrollments
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_pmic_payroll_submissions_updated_at ON public.pmic_payroll_submissions;
 CREATE TRIGGER update_pmic_payroll_submissions_updated_at
 BEFORE UPDATE ON public.pmic_payroll_submissions
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_pmic_exceptions_updated_at ON public.pmic_exceptions;
 CREATE TRIGGER update_pmic_exceptions_updated_at
 BEFORE UPDATE ON public.pmic_exceptions
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

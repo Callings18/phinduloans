@@ -28,18 +28,23 @@ CREATE TABLE IF NOT EXISTS public.loan_notes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.loan_notes
+  ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'internal';
+
 CREATE INDEX IF NOT EXISTS idx_loan_notes_loan_id ON public.loan_notes(loan_id);
 CREATE INDEX IF NOT EXISTS idx_loan_notes_created_at ON public.loan_notes(created_at);
 
 ALTER TABLE public.loan_notes ENABLE ROW LEVEL SECURITY;
 
 -- Staff (any role in user_roles) can read all notes; borrowers can read only borrower_visible for their loans
+DROP POLICY IF EXISTS "Staff can view all loan notes" ON public.loan_notes;
 CREATE POLICY "Staff can view all loan notes"
   ON public.loan_notes FOR SELECT TO authenticated
   USING (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Borrowers can view borrower_visible notes for their loans" ON public.loan_notes;
 CREATE POLICY "Borrowers can view borrower_visible notes for their loans"
   ON public.loan_notes FOR SELECT TO authenticated
   USING (
@@ -51,18 +56,21 @@ CREATE POLICY "Borrowers can view borrower_visible notes for their loans"
   );
 
 -- Only staff can insert/update/delete (use permission or role check)
+DROP POLICY IF EXISTS "Staff can insert loan notes" ON public.loan_notes;
 CREATE POLICY "Staff can insert loan notes"
   ON public.loan_notes FOR INSERT TO authenticated
   WITH CHECK (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Staff can update loan notes" ON public.loan_notes;
 CREATE POLICY "Staff can update loan notes"
   ON public.loan_notes FOR UPDATE TO authenticated
   USING (
     EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Staff can delete loan notes" ON public.loan_notes;
 CREATE POLICY "Staff can delete loan notes"
   ON public.loan_notes FOR DELETE TO authenticated
   USING (

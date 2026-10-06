@@ -31,21 +31,24 @@ CREATE TABLE IF NOT EXISTS public.application_documents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_app_docs_application ON public.application_documents(application_id);
-CREATE INDEX idx_app_docs_borrower ON public.application_documents(borrower_id);
-CREATE INDEX idx_app_docs_type ON public.application_documents(doc_type);
-CREATE INDEX idx_app_docs_status ON public.application_documents(status);
+CREATE INDEX IF NOT EXISTS idx_app_docs_application ON public.application_documents(application_id);
+CREATE INDEX IF NOT EXISTS idx_app_docs_borrower ON public.application_documents(borrower_id);
+CREATE INDEX IF NOT EXISTS idx_app_docs_type ON public.application_documents(doc_type);
+CREATE INDEX IF NOT EXISTS idx_app_docs_status ON public.application_documents(status);
 
 ALTER TABLE public.application_documents ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Borrowers can view own documents" ON public.application_documents;
 CREATE POLICY "Borrowers can view own documents"
 ON public.application_documents FOR SELECT
 USING (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Borrowers can upload documents" ON public.application_documents;
 CREATE POLICY "Borrowers can upload documents"
 ON public.application_documents FOR INSERT
 WITH CHECK (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Admins can view all documents" ON public.application_documents;
 CREATE POLICY "Admins can view all documents"
 ON public.application_documents FOR SELECT
 USING (
@@ -55,6 +58,7 @@ USING (
     public.has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Admins can verify/reject documents" ON public.application_documents;
 CREATE POLICY "Admins can verify/reject documents"
 ON public.application_documents FOR UPDATE
 USING (
@@ -64,6 +68,7 @@ USING (
     public.has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Admins can upload documents for borrowers" ON public.application_documents;
 CREATE POLICY "Admins can upload documents for borrowers"
 ON public.application_documents FOR INSERT
 WITH CHECK (
@@ -71,6 +76,7 @@ WITH CHECK (
     public.has_role(auth.uid(), 'super_admin')
 );
 
+DROP TRIGGER IF EXISTS update_application_documents_updated_at ON public.application_documents;
 CREATE TRIGGER update_application_documents_updated_at
 BEFORE UPDATE ON public.application_documents
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -179,15 +185,17 @@ CREATE TABLE IF NOT EXISTS public.borrower_document_vault (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_vault_borrower ON public.borrower_document_vault(borrower_id);
-CREATE INDEX idx_vault_type ON public.borrower_document_vault(doc_type);
+CREATE INDEX IF NOT EXISTS idx_vault_borrower ON public.borrower_document_vault(borrower_id);
+CREATE INDEX IF NOT EXISTS idx_vault_type ON public.borrower_document_vault(doc_type);
 
 ALTER TABLE public.borrower_document_vault ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Borrowers can manage their vault" ON public.borrower_document_vault;
 CREATE POLICY "Borrowers can manage their vault"
 ON public.borrower_document_vault FOR ALL
 USING (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Admins can view all vaults" ON public.borrower_document_vault;
 CREATE POLICY "Admins can view all vaults"
 ON public.borrower_document_vault FOR SELECT
 USING (
@@ -195,6 +203,7 @@ USING (
     public.has_role(auth.uid(), 'super_admin')
 );
 
+DROP TRIGGER IF EXISTS update_borrower_document_vault_updated_at ON public.borrower_document_vault;
 CREATE TRIGGER update_borrower_document_vault_updated_at
 BEFORE UPDATE ON public.borrower_document_vault
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

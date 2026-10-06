@@ -1,5 +1,6 @@
 
 -- Allow staff to INSERT into borrower_document_vault on behalf of borrowers
+DROP POLICY IF EXISTS "Staff can insert vault documents" ON public.borrower_document_vault;
 CREATE POLICY "Staff can insert vault documents"
 ON public.borrower_document_vault
 FOR INSERT
@@ -11,6 +12,7 @@ WITH CHECK (
 );
 
 -- Allow staff to INSERT into borrower_kyc_info on behalf of borrowers
+DROP POLICY IF EXISTS "Staff can insert kyc info" ON public.borrower_kyc_info;
 CREATE POLICY "Staff can insert kyc info"
 ON public.borrower_kyc_info
 FOR INSERT
@@ -22,6 +24,7 @@ WITH CHECK (
 );
 
 -- Allow staff to INSERT references on behalf of borrowers
+DROP POLICY IF EXISTS "Staff can insert references" ON public.borrower_references;
 CREATE POLICY "Staff can insert references"
 ON public.borrower_references
 FOR INSERT
@@ -33,6 +36,7 @@ WITH CHECK (
 );
 
 -- Allow staff to UPDATE references
+DROP POLICY IF EXISTS "Staff can update references" ON public.borrower_references;
 CREATE POLICY "Staff can update references"
 ON public.borrower_references
 FOR UPDATE
@@ -43,6 +47,7 @@ USING (
 );
 
 -- Allow staff to DELETE references
+DROP POLICY IF EXISTS "Staff can delete references" ON public.borrower_references;
 CREATE POLICY "Staff can delete references"
 ON public.borrower_references
 FOR DELETE

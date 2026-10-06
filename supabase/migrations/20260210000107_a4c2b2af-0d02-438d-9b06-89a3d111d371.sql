@@ -20,14 +20,17 @@ create index if not exists idx_payment_claims_status on public.payment_claims(st
 
 alter table public.payment_claims enable row level security;
 
+DROP POLICY IF EXISTS "Borrowers can insert own payment claims" ON public.payment_claims;
 create policy "Borrowers can insert own payment claims"
   on public.payment_claims for insert
   with check (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Borrowers can read own payment claims" ON public.payment_claims;
 create policy "Borrowers can read own payment claims"
   on public.payment_claims for select
   using (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Staff can read all payment claims" ON public.payment_claims;
 create policy "Staff can read all payment claims"
   on public.payment_claims for select
   using (
@@ -38,6 +41,7 @@ create policy "Staff can read all payment claims"
     or public.has_role(auth.uid(), 'collections_officer'::app_role)
   );
 
+DROP POLICY IF EXISTS "Staff can update payment claims" ON public.payment_claims;
 create policy "Staff can update payment claims"
   on public.payment_claims for update
   using (

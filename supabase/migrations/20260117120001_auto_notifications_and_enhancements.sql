@@ -36,13 +36,18 @@ COMMENT ON TABLE loan_collateral_images IS 'Stores additional collateral images 
 -- 2. CONTRACT TEMPLATE DOCX UPLOAD SUPPORT
 -- ============================================================================
 
--- Add file_url column to contract templates (for DOCX uploads)
-ALTER TABLE contract_templates 
-  ADD COLUMN IF NOT EXISTS file_url TEXT,
-  ADD COLUMN IF NOT EXISTS file_type TEXT DEFAULT 'text' CHECK (file_type IN ('text', 'docx'));
-
-COMMENT ON COLUMN contract_templates.file_url IS 'URL to uploaded DOCX template file';
-COMMENT ON COLUMN contract_templates.file_type IS 'Type of template: text (plain text) or docx (uploaded file)';
+-- Add file_url column when contract_templates exists (table created in later migration on fresh installs)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'contract_templates'
+  ) THEN
+    ALTER TABLE contract_templates
+      ADD COLUMN IF NOT EXISTS file_url TEXT,
+      ADD COLUMN IF NOT EXISTS file_type TEXT DEFAULT 'text' CHECK (file_type IN ('text', 'docx'));
+  END IF;
+END $$;
 
 -- ============================================================================
 -- 3. AUTOMATIC NOTIFICATION TRIGGERS
@@ -372,7 +377,15 @@ CREATE TRIGGER trigger_notify_payment_received
 -- ============================================================================
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON loan_collateral_images TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON contract_templates TO authenticated;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'contract_templates'
+  ) THEN
+    GRANT SELECT, INSERT, UPDATE ON contract_templates TO authenticated;
+  END IF;
+END $$;
 
 COMMENT ON FUNCTION notify_loan_status_change IS 'Automatically sends notifications when loan status changes (approved, rejected, completed)';
 COMMENT ON FUNCTION notify_disbursement IS 'Automatically sends notifications when loan is disbursed';

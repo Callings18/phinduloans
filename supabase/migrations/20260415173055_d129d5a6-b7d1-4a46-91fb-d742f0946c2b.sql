@@ -1,5 +1,6 @@
 
 -- Allow staff roles to update repayments (not just admin)
+DROP POLICY IF EXISTS "Staff can update repayments" ON public.loan_repayments;
 CREATE POLICY "Staff can update repayments"
 ON public.loan_repayments
 FOR UPDATE

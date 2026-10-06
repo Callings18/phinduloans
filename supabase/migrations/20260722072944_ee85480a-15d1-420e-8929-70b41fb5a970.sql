@@ -1,5 +1,6 @@
 
 DROP POLICY IF EXISTS "Authenticated activity can be audited" ON public.audit_logs;
+DROP POLICY IF EXISTS "Users can insert their own audit entries" ON public.audit_logs;
 CREATE POLICY "Users can insert their own audit entries"
   ON public.audit_logs
   FOR INSERT

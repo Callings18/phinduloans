@@ -1,17 +1,21 @@
 -- otp_codes uses phone column, not user_id - allow authenticated insert/select/delete
+DROP POLICY IF EXISTS "Anyone can read OTP codes" ON public.otp_codes;
 CREATE POLICY "Anyone can read OTP codes"
   ON public.otp_codes FOR SELECT TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Anyone can insert OTP codes" ON public.otp_codes;
 CREATE POLICY "Anyone can insert OTP codes"
   ON public.otp_codes FOR INSERT TO authenticated
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Anyone can delete OTP codes" ON public.otp_codes;
 CREATE POLICY "Anyone can delete OTP codes"
   ON public.otp_codes FOR DELETE TO authenticated
   USING (true);
 
 -- loan_status_transitions needs INSERT policy for staff
+DROP POLICY IF EXISTS "Staff can insert loan status transitions" ON public.loan_status_transitions;
 CREATE POLICY "Staff can insert loan status transitions"
   ON public.loan_status_transitions FOR INSERT TO authenticated
   WITH CHECK (
@@ -24,12 +28,14 @@ CREATE POLICY "Staff can insert loan status transitions"
 
 -- Tighten audit_logs INSERT
 DROP POLICY IF EXISTS "System can insert audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Authenticated can insert audit logs" ON public.audit_logs;
 CREATE POLICY "Authenticated can insert audit logs"
   ON public.audit_logs FOR INSERT TO authenticated
   WITH CHECK (true);
 
 -- Tighten notification_logs INSERT
 DROP POLICY IF EXISTS "System can insert notification logs" ON public.notification_logs;
+DROP POLICY IF EXISTS "Authenticated can insert notification logs" ON public.notification_logs;
 CREATE POLICY "Authenticated can insert notification logs"
   ON public.notification_logs FOR INSERT TO authenticated
   WITH CHECK (true);

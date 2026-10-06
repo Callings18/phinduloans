@@ -36,6 +36,7 @@ CREATE POLICY "Staff manage own drafts"
     OR public.has_role(auth.uid(), 'super_admin'::app_role)
   );
 
+DROP TRIGGER IF EXISTS update_loan_app_drafts_updated_at ON public.loan_application_drafts;
 CREATE TRIGGER update_loan_app_drafts_updated_at
   BEFORE UPDATE ON public.loan_application_drafts
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

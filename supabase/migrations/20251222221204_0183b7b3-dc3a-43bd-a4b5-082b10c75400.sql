@@ -1,4 +1,5 @@
 -- Allow users to upload their own documents
+DROP POLICY IF EXISTS "Users can upload their own documents" ON storage.objects;
 CREATE POLICY "Users can upload their own documents"
 ON storage.objects
 FOR INSERT
@@ -8,6 +9,7 @@ WITH CHECK (
 );
 
 -- Allow users to update their own documents  
+DROP POLICY IF EXISTS "Users can update their own documents" ON storage.objects;
 CREATE POLICY "Users can update their own documents"
 ON storage.objects
 FOR UPDATE
@@ -17,6 +19,7 @@ USING (
 );
 
 -- Allow users to view their own documents
+DROP POLICY IF EXISTS "Users can view their own documents" ON storage.objects;
 CREATE POLICY "Users can view their own documents"
 ON storage.objects
 FOR SELECT

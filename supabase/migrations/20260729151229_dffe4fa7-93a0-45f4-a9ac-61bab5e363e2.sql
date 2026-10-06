@@ -1,5 +1,6 @@
 -- 1. audit_logs: restrict client-side inserts to staff only
 DROP POLICY IF EXISTS "Users can insert their own audit entries" ON public.audit_logs;
+DROP POLICY IF EXISTS "Staff can insert their own audit entries" ON public.audit_logs;
 CREATE POLICY "Staff can insert their own audit entries"
   ON public.audit_logs
   FOR INSERT

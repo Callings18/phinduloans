@@ -14,12 +14,14 @@ CREATE TABLE IF NOT EXISTS public.brevo_whatsapp_templates (
 ALTER TABLE public.brevo_whatsapp_templates ENABLE ROW LEVEL SECURITY;
 
 -- Only admins can manage templates
+DROP POLICY IF EXISTS "Admins can manage whatsapp templates" ON public.brevo_whatsapp_templates;
 CREATE POLICY "Admins can manage whatsapp templates"
   ON public.brevo_whatsapp_templates
   FOR ALL
   USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'super_admin'));
 
 -- Add trigger for updated_at
+DROP TRIGGER IF EXISTS update_brevo_whatsapp_templates_updated_at ON public.brevo_whatsapp_templates;
 CREATE TRIGGER update_brevo_whatsapp_templates_updated_at
   BEFORE UPDATE ON public.brevo_whatsapp_templates
   FOR EACH ROW

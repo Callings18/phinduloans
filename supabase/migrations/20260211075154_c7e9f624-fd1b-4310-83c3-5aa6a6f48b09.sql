@@ -2,7 +2,7 @@
 -- ============================================================
 -- PAYROLL RECORDS: monthly payroll runs per employee
 -- ============================================================
-CREATE TABLE public.payroll_records (
+CREATE TABLE IF NOT EXISTS public.payroll_records (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   employee_id uuid NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
   
@@ -57,21 +57,25 @@ CREATE TABLE public.payroll_records (
 ALTER TABLE public.payroll_records ENABLE ROW LEVEL SECURITY;
 
 -- RLS: Admins full access
+DROP POLICY IF EXISTS "Admins can manage payroll records" ON public.payroll_records;
 CREATE POLICY "Admins can manage payroll records"
   ON public.payroll_records FOR ALL TO authenticated
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'))
   WITH CHECK (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
 -- RLS: Finance officers can view
+DROP POLICY IF EXISTS "Finance can view payroll records" ON public.payroll_records;
 CREATE POLICY "Finance can view payroll records"
   ON public.payroll_records FOR SELECT TO authenticated
   USING (has_role(auth.uid(), 'finance_officer'));
 
 -- RLS: Finance can insert/update draft payroll
+DROP POLICY IF EXISTS "Finance can manage draft payroll" ON public.payroll_records;
 CREATE POLICY "Finance can manage draft payroll"
   ON public.payroll_records FOR INSERT TO authenticated
   WITH CHECK (has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Finance can update draft payroll" ON public.payroll_records;
 CREATE POLICY "Finance can update draft payroll"
   ON public.payroll_records FOR UPDATE TO authenticated
   USING (has_role(auth.uid(), 'finance_officer') AND status = 'draft');
@@ -104,11 +108,13 @@ CREATE TABLE public.payroll_tax_config (
 
 ALTER TABLE public.payroll_tax_config ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins can manage tax config" ON public.payroll_tax_config;
 CREATE POLICY "Admins can manage tax config"
   ON public.payroll_tax_config FOR ALL TO authenticated
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'))
   WITH CHECK (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Staff can view tax config" ON public.payroll_tax_config;
 CREATE POLICY "Staff can view tax config"
   ON public.payroll_tax_config FOR SELECT TO authenticated
   USING (has_role(auth.uid(), 'finance_officer') OR has_role(auth.uid(), 'loan_officer'));
@@ -156,19 +162,23 @@ CREATE TABLE public.payroll_runs (
 
 ALTER TABLE public.payroll_runs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins can manage payroll runs" ON public.payroll_runs;
 CREATE POLICY "Admins can manage payroll runs"
   ON public.payroll_runs FOR ALL TO authenticated
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'))
   WITH CHECK (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Finance can view payroll runs" ON public.payroll_runs;
 CREATE POLICY "Finance can view payroll runs"
   ON public.payroll_runs FOR SELECT TO authenticated
   USING (has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Finance can insert payroll runs" ON public.payroll_runs;
 CREATE POLICY "Finance can insert payroll runs"
   ON public.payroll_runs FOR INSERT TO authenticated
   WITH CHECK (has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Finance can update draft payroll runs" ON public.payroll_runs;
 CREATE POLICY "Finance can update draft payroll runs"
   ON public.payroll_runs FOR UPDATE TO authenticated
   USING (has_role(auth.uid(), 'finance_officer') AND status = 'draft');
@@ -201,14 +211,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
+DROP TRIGGER IF EXISTS update_payroll_records_updated_at ON public.payroll_records;
 CREATE TRIGGER update_payroll_records_updated_at
   BEFORE UPDATE ON public.payroll_records
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_payroll_tax_config_updated_at ON public.payroll_tax_config;
 CREATE TRIGGER update_payroll_tax_config_updated_at
   BEFORE UPDATE ON public.payroll_tax_config
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_payroll_runs_updated_at ON public.payroll_runs;
 CREATE TRIGGER update_payroll_runs_updated_at
   BEFORE UPDATE ON public.payroll_runs
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

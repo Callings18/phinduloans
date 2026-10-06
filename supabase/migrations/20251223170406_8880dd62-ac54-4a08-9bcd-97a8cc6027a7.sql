@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.collection_activities (
 ALTER TABLE public.collection_activities ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for collection_activities
+DROP POLICY IF EXISTS "Staff can view collection activities" ON public.collection_activities;
 CREATE POLICY "Staff can view collection activities" 
   ON public.collection_activities FOR SELECT 
   TO authenticated
@@ -27,6 +28,7 @@ CREATE POLICY "Staff can view collection activities"
     public.has_role(auth.uid(), 'loan_officer')
   );
 
+DROP POLICY IF EXISTS "Staff can insert collection activities" ON public.collection_activities;
 CREATE POLICY "Staff can insert collection activities" 
   ON public.collection_activities FOR INSERT 
   TO authenticated
@@ -37,6 +39,7 @@ CREATE POLICY "Staff can insert collection activities"
     public.has_role(auth.uid(), 'loan_officer')
   );
 
+DROP POLICY IF EXISTS "Staff can update collection activities" ON public.collection_activities;
 CREATE POLICY "Staff can update collection activities" 
   ON public.collection_activities FOR UPDATE 
   TO authenticated

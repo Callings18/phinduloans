@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.collection_assignments (
 ALTER TABLE public.collection_assignments ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for collection_assignments
+DROP POLICY IF EXISTS "Staff can view collection assignments" ON public.collection_assignments;
 CREATE POLICY "Staff can view collection assignments"
 ON public.collection_assignments
 FOR SELECT
@@ -37,6 +38,7 @@ USING (
   collector_id = auth.uid()
 );
 
+DROP POLICY IF EXISTS "Staff can insert collection assignments" ON public.collection_assignments;
 CREATE POLICY "Staff can insert collection assignments"
 ON public.collection_assignments
 FOR INSERT
@@ -46,6 +48,7 @@ WITH CHECK (
   has_role(auth.uid(), 'collections_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can update collection assignments" ON public.collection_assignments;
 CREATE POLICY "Staff can update collection assignments"
 ON public.collection_assignments
 FOR UPDATE
@@ -56,6 +59,7 @@ USING (
   collector_id = auth.uid()
 );
 
+DROP POLICY IF EXISTS "Admins can delete collection assignments" ON public.collection_assignments;
 CREATE POLICY "Admins can delete collection assignments"
 ON public.collection_assignments
 FOR DELETE
@@ -87,6 +91,7 @@ CREATE TABLE IF NOT EXISTS public.demand_letters (
 ALTER TABLE public.demand_letters ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for demand_letters
+DROP POLICY IF EXISTS "Staff can view demand letters" ON public.demand_letters;
 CREATE POLICY "Staff can view demand letters"
 ON public.demand_letters
 FOR SELECT
@@ -97,6 +102,7 @@ USING (
   has_role(auth.uid(), 'loan_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can insert demand letters" ON public.demand_letters;
 CREATE POLICY "Staff can insert demand letters"
 ON public.demand_letters
 FOR INSERT
@@ -106,6 +112,7 @@ WITH CHECK (
   has_role(auth.uid(), 'collections_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can update demand letters" ON public.demand_letters;
 CREATE POLICY "Staff can update demand letters"
 ON public.demand_letters
 FOR UPDATE
@@ -116,6 +123,7 @@ USING (
 );
 
 -- Add trigger for updated_at
+DROP TRIGGER IF EXISTS update_collection_assignments_updated_at ON public.collection_assignments;
 CREATE TRIGGER update_collection_assignments_updated_at
 BEFORE UPDATE ON public.collection_assignments
 FOR EACH ROW

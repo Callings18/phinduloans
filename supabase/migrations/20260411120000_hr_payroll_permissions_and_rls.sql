@@ -43,6 +43,7 @@ DROP POLICY IF EXISTS "Admins can manage employees" ON public.employees;
 DROP POLICY IF EXISTS "HR staff can view employees" ON public.employees;
 DROP POLICY IF EXISTS "Employees can view their own record" ON public.employees;
 
+DROP POLICY IF EXISTS "employees_select" ON public.employees;
 CREATE POLICY "employees_select"
   ON public.employees FOR SELECT TO authenticated
   USING (
@@ -57,6 +58,7 @@ CREATE POLICY "employees_select"
     OR public.has_permission(auth.uid(), 'payroll', 'approve')
   );
 
+DROP POLICY IF EXISTS "employees_insert" ON public.employees;
 CREATE POLICY "employees_insert"
   ON public.employees FOR INSERT TO authenticated
   WITH CHECK (
@@ -65,6 +67,7 @@ CREATE POLICY "employees_insert"
     OR public.has_permission(auth.uid(), 'hr', 'manage')
   );
 
+DROP POLICY IF EXISTS "employees_update" ON public.employees;
 CREATE POLICY "employees_update"
   ON public.employees FOR UPDATE TO authenticated
   USING (
@@ -78,6 +81,7 @@ CREATE POLICY "employees_update"
     OR public.has_permission(auth.uid(), 'hr', 'manage')
   );
 
+DROP POLICY IF EXISTS "employees_delete" ON public.employees;
 CREATE POLICY "employees_delete"
   ON public.employees FOR DELETE TO authenticated
   USING (
@@ -90,6 +94,7 @@ CREATE POLICY "employees_delete"
 DROP POLICY IF EXISTS "Admins can manage salary structures" ON public.employee_salary_structure;
 DROP POLICY IF EXISTS "Finance staff can view salary structures" ON public.employee_salary_structure;
 
+DROP POLICY IF EXISTS "employee_salary_structure_select" ON public.employee_salary_structure;
 CREATE POLICY "employee_salary_structure_select"
   ON public.employee_salary_structure FOR SELECT TO authenticated
   USING (
@@ -103,6 +108,7 @@ CREATE POLICY "employee_salary_structure_select"
     OR public.has_permission(auth.uid(), 'payroll', 'approve')
   );
 
+DROP POLICY IF EXISTS "employee_salary_structure_write" ON public.employee_salary_structure;
 CREATE POLICY "employee_salary_structure_write"
   ON public.employee_salary_structure FOR INSERT TO authenticated
   WITH CHECK (
@@ -111,6 +117,7 @@ CREATE POLICY "employee_salary_structure_write"
     OR public.has_permission(auth.uid(), 'hr', 'manage')
   );
 
+DROP POLICY IF EXISTS "employee_salary_structure_update" ON public.employee_salary_structure;
 CREATE POLICY "employee_salary_structure_update"
   ON public.employee_salary_structure FOR UPDATE TO authenticated
   USING (
@@ -124,6 +131,7 @@ CREATE POLICY "employee_salary_structure_update"
     OR public.has_permission(auth.uid(), 'hr', 'manage')
   );
 
+DROP POLICY IF EXISTS "employee_salary_structure_delete" ON public.employee_salary_structure;
 CREATE POLICY "employee_salary_structure_delete"
   ON public.employee_salary_structure FOR DELETE TO authenticated
   USING (
@@ -136,6 +144,7 @@ CREATE POLICY "employee_salary_structure_delete"
 DROP POLICY IF EXISTS "Admins can manage tax config" ON public.payroll_tax_config;
 DROP POLICY IF EXISTS "Staff can view tax config" ON public.payroll_tax_config;
 
+DROP POLICY IF EXISTS "payroll_tax_config_select" ON public.payroll_tax_config;
 CREATE POLICY "payroll_tax_config_select"
   ON public.payroll_tax_config FOR SELECT TO authenticated
   USING (
@@ -149,6 +158,7 @@ CREATE POLICY "payroll_tax_config_select"
     OR public.has_permission(auth.uid(), 'hr', 'manage')
   );
 
+DROP POLICY IF EXISTS "payroll_tax_config_write" ON public.payroll_tax_config;
 CREATE POLICY "payroll_tax_config_write"
   ON public.payroll_tax_config FOR INSERT TO authenticated
   WITH CHECK (
@@ -157,6 +167,7 @@ CREATE POLICY "payroll_tax_config_write"
     OR public.has_permission(auth.uid(), 'payroll', 'manage')
   );
 
+DROP POLICY IF EXISTS "payroll_tax_config_update" ON public.payroll_tax_config;
 CREATE POLICY "payroll_tax_config_update"
   ON public.payroll_tax_config FOR UPDATE TO authenticated
   USING (
@@ -170,6 +181,7 @@ CREATE POLICY "payroll_tax_config_update"
     OR public.has_permission(auth.uid(), 'payroll', 'manage')
   );
 
+DROP POLICY IF EXISTS "payroll_tax_config_delete" ON public.payroll_tax_config;
 CREATE POLICY "payroll_tax_config_delete"
   ON public.payroll_tax_config FOR DELETE TO authenticated
   USING (
@@ -184,6 +196,7 @@ DROP POLICY IF EXISTS "Finance can view payroll runs" ON public.payroll_runs;
 DROP POLICY IF EXISTS "Finance can insert payroll runs" ON public.payroll_runs;
 DROP POLICY IF EXISTS "Finance can update draft payroll runs" ON public.payroll_runs;
 
+DROP POLICY IF EXISTS "payroll_runs_select" ON public.payroll_runs;
 CREATE POLICY "payroll_runs_select"
   ON public.payroll_runs FOR SELECT TO authenticated
   USING (
@@ -195,6 +208,7 @@ CREATE POLICY "payroll_runs_select"
     OR public.has_permission(auth.uid(), 'payroll', 'approve')
   );
 
+DROP POLICY IF EXISTS "payroll_runs_insert" ON public.payroll_runs;
 CREATE POLICY "payroll_runs_insert"
   ON public.payroll_runs FOR INSERT TO authenticated
   WITH CHECK (
@@ -204,6 +218,7 @@ CREATE POLICY "payroll_runs_insert"
     OR public.has_permission(auth.uid(), 'payroll', 'manage')
   );
 
+DROP POLICY IF EXISTS "payroll_runs_update" ON public.payroll_runs;
 CREATE POLICY "payroll_runs_update"
   ON public.payroll_runs FOR UPDATE TO authenticated
   USING (
@@ -221,6 +236,7 @@ CREATE POLICY "payroll_runs_update"
     OR public.has_permission(auth.uid(), 'payroll', 'approve')
   );
 
+DROP POLICY IF EXISTS "payroll_runs_delete" ON public.payroll_runs;
 CREATE POLICY "payroll_runs_delete"
   ON public.payroll_runs FOR DELETE TO authenticated
   USING (
@@ -237,6 +253,7 @@ DROP POLICY IF EXISTS "Finance can update draft payroll" ON public.payroll_recor
 DROP POLICY IF EXISTS "Admins and finance can manage payroll records" ON public.payroll_records;
 DROP POLICY IF EXISTS "Employees can view their own payroll records" ON public.payroll_records;
 
+DROP POLICY IF EXISTS "payroll_records_own_select" ON public.payroll_records;
 CREATE POLICY "payroll_records_own_select"
   ON public.payroll_records FOR SELECT TO authenticated
   USING (
@@ -246,6 +263,7 @@ CREATE POLICY "payroll_records_own_select"
     )
   );
 
+DROP POLICY IF EXISTS "payroll_records_staff_select" ON public.payroll_records;
 CREATE POLICY "payroll_records_staff_select"
   ON public.payroll_records FOR SELECT TO authenticated
   USING (
@@ -257,6 +275,7 @@ CREATE POLICY "payroll_records_staff_select"
     OR public.has_permission(auth.uid(), 'payroll', 'approve')
   );
 
+DROP POLICY IF EXISTS "payroll_records_insert" ON public.payroll_records;
 CREATE POLICY "payroll_records_insert"
   ON public.payroll_records FOR INSERT TO authenticated
   WITH CHECK (
@@ -266,6 +285,7 @@ CREATE POLICY "payroll_records_insert"
     OR public.has_permission(auth.uid(), 'payroll', 'manage')
   );
 
+DROP POLICY IF EXISTS "payroll_records_update" ON public.payroll_records;
 CREATE POLICY "payroll_records_update"
   ON public.payroll_records FOR UPDATE TO authenticated
   USING (
@@ -283,6 +303,7 @@ CREATE POLICY "payroll_records_update"
     OR public.has_permission(auth.uid(), 'payroll', 'approve')
   );
 
+DROP POLICY IF EXISTS "payroll_records_delete" ON public.payroll_records;
 CREATE POLICY "payroll_records_delete"
   ON public.payroll_records FOR DELETE TO authenticated
   USING (

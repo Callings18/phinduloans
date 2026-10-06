@@ -29,11 +29,13 @@ GRANT ALL ON public.ai_agents TO service_role;
 
 ALTER TABLE public.ai_agents ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can view agents" ON public.ai_agents;
 CREATE POLICY "Staff can view agents"
   ON public.ai_agents FOR SELECT
   TO authenticated
   USING (public.is_staff(auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can manage agents" ON public.ai_agents;
 CREATE POLICY "Admins can manage agents"
   ON public.ai_agents FOR ALL
   TO authenticated
@@ -60,13 +62,14 @@ CREATE TABLE public.ai_agent_runs (
   CONSTRAINT ai_agent_runs_trigger_chk CHECK (trigger IN ('manual','scheduled'))
 );
 
-CREATE INDEX idx_ai_agent_runs_agent_key_created ON public.ai_agent_runs (agent_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_agent_runs_agent_key_created ON public.ai_agent_runs (agent_key, created_at DESC);
 
 GRANT SELECT ON public.ai_agent_runs TO authenticated;
 GRANT ALL ON public.ai_agent_runs TO service_role;
 
 ALTER TABLE public.ai_agent_runs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can view agent runs" ON public.ai_agent_runs;
 CREATE POLICY "Staff can view agent runs"
   ON public.ai_agent_runs FOR SELECT
   TO authenticated
@@ -95,19 +98,21 @@ CREATE TABLE public.ai_agent_findings (
   CONSTRAINT ai_agent_findings_status_chk CHECK (status IN ('open','acknowledged','resolved','dismissed'))
 );
 
-CREATE INDEX idx_ai_agent_findings_agent_key_created ON public.ai_agent_findings (agent_key, created_at DESC);
-CREATE INDEX idx_ai_agent_findings_status ON public.ai_agent_findings (status);
+CREATE INDEX IF NOT EXISTS idx_ai_agent_findings_agent_key_created ON public.ai_agent_findings (agent_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_agent_findings_status ON public.ai_agent_findings (status);
 
 GRANT SELECT, UPDATE ON public.ai_agent_findings TO authenticated;
 GRANT ALL ON public.ai_agent_findings TO service_role;
 
 ALTER TABLE public.ai_agent_findings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can view findings" ON public.ai_agent_findings;
 CREATE POLICY "Staff can view findings"
   ON public.ai_agent_findings FOR SELECT
   TO authenticated
   USING (public.is_staff(auth.uid()));
 
+DROP POLICY IF EXISTS "Staff can update finding status" ON public.ai_agent_findings;
 CREATE POLICY "Staff can update finding status"
   ON public.ai_agent_findings FOR UPDATE
   TO authenticated
@@ -128,14 +133,15 @@ CREATE TABLE public.system_telemetry (
   CONSTRAINT system_telemetry_severity_chk CHECK (severity IN ('info','low','medium','high','critical'))
 );
 
-CREATE INDEX idx_system_telemetry_created ON public.system_telemetry (created_at DESC);
-CREATE INDEX idx_system_telemetry_event_type ON public.system_telemetry (event_type);
+CREATE INDEX IF NOT EXISTS idx_system_telemetry_created ON public.system_telemetry (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_telemetry_event_type ON public.system_telemetry (event_type);
 
 GRANT SELECT ON public.system_telemetry TO authenticated;
 GRANT ALL ON public.system_telemetry TO service_role;
 
 ALTER TABLE public.system_telemetry ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can view telemetry" ON public.system_telemetry;
 CREATE POLICY "Staff can view telemetry"
   ON public.system_telemetry FOR SELECT
   TO authenticated
@@ -144,10 +150,12 @@ CREATE POLICY "Staff can view telemetry"
 -- ---------------------------------------------------------
 -- updated_at triggers (reuse existing helper)
 -- ---------------------------------------------------------
+DROP TRIGGER IF EXISTS update_ai_agents_updated_at ON public.ai_agents;
 CREATE TRIGGER update_ai_agents_updated_at
   BEFORE UPDATE ON public.ai_agents
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_ai_agent_findings_updated_at ON public.ai_agent_findings;
 CREATE TRIGGER update_ai_agent_findings_updated_at
   BEFORE UPDATE ON public.ai_agent_findings
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

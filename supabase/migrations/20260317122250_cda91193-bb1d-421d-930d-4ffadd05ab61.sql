@@ -36,6 +36,7 @@ CREATE TABLE public.loan_events (
 ALTER TABLE public.loan_events ENABLE ROW LEVEL SECURITY;
 
 -- Staff can view loan events
+DROP POLICY IF EXISTS "Staff can view loan events" ON public.loan_events;
 CREATE POLICY "Staff can view loan events"
 ON public.loan_events
 FOR SELECT
@@ -51,6 +52,7 @@ USING (
 );
 
 -- Staff can insert loan events
+DROP POLICY IF EXISTS "Staff can insert loan events" ON public.loan_events;
 CREATE POLICY "Staff can insert loan events"
 ON public.loan_events
 FOR INSERT
@@ -64,6 +66,7 @@ WITH CHECK (
 );
 
 -- Borrowers can view events on their own loans
+DROP POLICY IF EXISTS "Borrowers can view own loan events" ON public.loan_events;
 CREATE POLICY "Borrowers can view own loan events"
 ON public.loan_events
 FOR SELECT
@@ -76,6 +79,6 @@ USING (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_loan_events_loan_id ON public.loan_events(loan_id);
-CREATE INDEX idx_loan_events_event_type ON public.loan_events(event_type);
-CREATE INDEX idx_loan_events_new_loan_id ON public.loan_events(new_loan_id);
+CREATE INDEX IF NOT EXISTS idx_loan_events_loan_id ON public.loan_events(loan_id);
+CREATE INDEX IF NOT EXISTS idx_loan_events_event_type ON public.loan_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_loan_events_new_loan_id ON public.loan_events(new_loan_id);

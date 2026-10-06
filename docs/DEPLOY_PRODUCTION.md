@@ -24,7 +24,7 @@ GitHub Actions (if secrets are set): **Deploy Borrower PWA**, **Deploy Staff Web
 
 1. Hard refresh once on admin tabs (`Ctrl+Shift+R`) — or rely on auto-reload for stale JS chunks (see commit `cb49568`).
 2. **Cloudflare** → Purge cache for `office.phindu.com` / `app.phindu.com` if users still see old hashed assets.
-3. Lovable: run any pending SQL in `supabase/migrations/`.
+3. Supabase: `npx supabase link --project-ref seobilifwyxhtjvsgqpc` then `npx supabase db push --yes` (see `SUPABASE_OPS.md`).
 
 ## “Failed to fetch dynamically imported module”
 

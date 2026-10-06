@@ -115,13 +115,14 @@ CREATE POLICY "Admins can delete guarantees" ON public.guarantees
   );
 
 -- Create indexes for performance
-CREATE INDEX idx_crb_requests_borrower ON public.crb_requests(borrower_id);
-CREATE INDEX idx_crb_requests_loan ON public.crb_requests(loan_application_id);
-CREATE INDEX idx_crb_requests_nrc ON public.crb_requests(nrc_number);
-CREATE INDEX idx_guarantees_loan ON public.guarantees(loan_id);
-CREATE INDEX idx_guarantees_status ON public.guarantees(status);
+CREATE INDEX IF NOT EXISTS idx_crb_requests_borrower ON public.crb_requests(borrower_id);
+CREATE INDEX IF NOT EXISTS idx_crb_requests_loan ON public.crb_requests(loan_application_id);
+CREATE INDEX IF NOT EXISTS idx_crb_requests_nrc ON public.crb_requests(nrc_number);
+CREATE INDEX IF NOT EXISTS idx_guarantees_loan ON public.guarantees(loan_id);
+CREATE INDEX IF NOT EXISTS idx_guarantees_status ON public.guarantees(status);
 
 -- Add trigger for guarantees updated_at
+DROP TRIGGER IF EXISTS update_guarantees_updated_at ON public.guarantees;
 CREATE TRIGGER update_guarantees_updated_at
   BEFORE UPDATE ON public.guarantees
   FOR EACH ROW

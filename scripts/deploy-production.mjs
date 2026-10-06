@@ -26,5 +26,5 @@ if (process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN) {
 }
 
 console.log(
-  "\nProduction deploy finished. Run pending SQL on Supabase yqrfheavftgybhcafzpt if migrations were not applied.\n",
+  "\nProduction deploy finished. Apply pending SQL: npx supabase db push --yes (project seobilifwyxhtjvsgqpc).\n",
 );

@@ -6,8 +6,8 @@
 ALTER TABLE disbursements
 ADD COLUMN IF NOT EXISTS source_account_id UUID REFERENCES accounts(id);
 
--- Add destination_account_id to repayments table (for recording which account received the payment)
-ALTER TABLE repayments
+-- Add destination_account_id to loan_repayments table (for recording which account received the payment)
+ALTER TABLE loan_repayments
 ADD COLUMN IF NOT EXISTS destination_account_id UUID REFERENCES accounts(id);
 
 -- Ensure expenses already have account_id (should exist, but making sure)
@@ -15,12 +15,12 @@ ADD COLUMN IF NOT EXISTS destination_account_id UUID REFERENCES accounts(id);
 
 -- Add indexes for performance
 CREATE INDEX IF NOT EXISTS idx_disbursements_source_account ON disbursements(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_repayments_destination_account ON repayments(destination_account_id);
+CREATE INDEX IF NOT EXISTS idx_loan_repayments_destination_account ON loan_repayments(destination_account_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_account ON expenses(account_id);
 
 -- Add comments for documentation
 COMMENT ON COLUMN disbursements.source_account_id IS 'The account from which funds were disbursed';
-COMMENT ON COLUMN repayments.destination_account_id IS 'The account to which the repayment was deposited';
+COMMENT ON COLUMN loan_repayments.destination_account_id IS 'The account to which the repayment was deposited';
 
 -- Create view for account cash flow analysis
 CREATE OR REPLACE VIEW account_cash_flow AS
@@ -29,8 +29,8 @@ SELECT
   a.account_name,
   a.account_type,
   a.balance AS current_balance,
-  -- Inflows (repayments deposited)
-  COALESCE(SUM(CASE WHEN r.destination_account_id = a.id THEN r.amount ELSE 0 END), 0) AS total_repayments_received,
+  -- Inflows (loan_repayments deposited)
+  COALESCE(SUM(CASE WHEN r.destination_account_id = a.id THEN r.amount ELSE 0 END), 0) AS total_loan_repayments_received,
   -- Outflows (disbursements and expenses)
   COALESCE(SUM(CASE WHEN d.source_account_id = a.id THEN d.amount ELSE 0 END), 0) AS total_disbursements_sent,
   COALESCE(SUM(CASE WHEN e.account_id = a.id THEN e.amount ELSE 0 END), 0) AS total_expenses_paid,
@@ -39,7 +39,7 @@ SELECT
   (COALESCE(SUM(CASE WHEN d.source_account_id = a.id THEN d.amount ELSE 0 END), 0) +
    COALESCE(SUM(CASE WHEN e.account_id = a.id THEN e.amount ELSE 0 END), 0)) AS net_cash_flow
 FROM accounts a
-LEFT JOIN repayments r ON r.destination_account_id = a.id AND r.status = 'paid'
+LEFT JOIN loan_repayments r ON r.destination_account_id = a.id AND r.status = 'paid'
 LEFT JOIN disbursements d ON d.source_account_id = a.id AND d.status = 'completed'
 LEFT JOIN expenses e ON e.account_id = a.id AND e.status = 'paid'
 WHERE a.is_active = true
@@ -131,7 +131,7 @@ DECLARE
 BEGIN
   -- Only process if destination_account_id is set and status is paid
   IF NEW.destination_account_id IS NOT NULL AND NEW.status = 'paid' THEN
-    -- For new paid repayments or status changes to paid
+    -- For new paid loan_repayments or status changes to paid
     IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND OLD.status != 'paid') THEN
       -- Calculate the actual payment amount
       payment_amount := COALESCE(NEW.principal_paid, NEW.amount);
@@ -170,9 +170,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger for automatic account updates on repayment
-DROP TRIGGER IF NOT EXISTS auto_update_account_repayment ON repayments;
+DROP TRIGGER IF EXISTS auto_update_account_repayment ON loan_repayments;
 CREATE TRIGGER auto_update_account_repayment
-  AFTER INSERT OR UPDATE ON repayments
+  AFTER INSERT OR UPDATE ON loan_repayments
   FOR EACH ROW
   EXECUTE FUNCTION update_account_on_repayment();
 
@@ -225,7 +225,7 @@ CREATE TRIGGER auto_update_account_expense
   EXECUTE FUNCTION update_account_on_expense();
 
 -- Add helpful comments
-COMMENT ON VIEW account_cash_flow IS 'Shows cash flow analysis for each account including inflows (repayments) and outflows (disbursements, expenses)';
+COMMENT ON VIEW account_cash_flow IS 'Shows cash flow analysis for each account including inflows (loan_repayments) and outflows (disbursements, expenses)';
 COMMENT ON FUNCTION check_account_balance_before_disbursement() IS 'Validates that the source account has sufficient balance before allowing a disbursement';
 COMMENT ON FUNCTION update_account_on_disbursement() IS 'Automatically deducts disbursement amount from source account and records transaction';
 COMMENT ON FUNCTION update_account_on_repayment() IS 'Automatically adds repayment amount to destination account and records transaction';

@@ -1,5 +1,6 @@
 
 -- 1. Allow loan_officer to read system_settings (operational keys only)
+DROP POLICY IF EXISTS "Loan officers can read operational settings" ON public.system_settings;
 CREATE POLICY "Loan officers can read operational settings"
   ON public.system_settings FOR SELECT
   USING (
@@ -11,6 +12,7 @@ CREATE POLICY "Loan officers can read operational settings"
   );
 
 -- 2. Allow loan_officer to read contract_templates table
+DROP POLICY IF EXISTS "Loan officers can view contract templates" ON public.contract_templates;
 CREATE POLICY "Loan officers can view contract templates"
   ON public.contract_templates FOR SELECT
   USING (
@@ -18,6 +20,7 @@ CREATE POLICY "Loan officers can view contract templates"
   );
 
 -- 3. Allow loan_officer to view all disbursements
+DROP POLICY IF EXISTS "Staff can view all disbursements" ON public.disbursements;
 CREATE POLICY "Staff can view all disbursements"
   ON public.disbursements FOR SELECT
   USING (
@@ -28,6 +31,7 @@ CREATE POLICY "Staff can view all disbursements"
   );
 
 -- 4. Allow loan_officer to view all repayments
+DROP POLICY IF EXISTS "Staff can view all repayments" ON public.loan_repayments;
 CREATE POLICY "Staff can view all repayments"
   ON public.loan_repayments FOR SELECT
   USING (

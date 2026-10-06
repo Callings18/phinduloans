@@ -146,77 +146,93 @@ AS $$
 $$;
 
 -- Profiles policies
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
 CREATE POLICY "Admins can view all profiles"
   ON public.profiles FOR SELECT
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
 -- User roles policies
+DROP POLICY IF EXISTS "Users can view their own roles" ON public.user_roles;
 CREATE POLICY "Users can view their own roles"
   ON public.user_roles FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can manage all roles" ON public.user_roles;
 CREATE POLICY "Admins can manage all roles"
   ON public.user_roles FOR ALL
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
 -- Employers policies
+DROP POLICY IF EXISTS "Anyone can view verified employers" ON public.employers;
 CREATE POLICY "Anyone can view verified employers"
   ON public.employers FOR SELECT
   USING (is_verified = true);
 
+DROP POLICY IF EXISTS "Admins can manage employers" ON public.employers;
 CREATE POLICY "Admins can manage employers"
   ON public.employers FOR ALL
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
 -- Loan applications policies
+DROP POLICY IF EXISTS "Users can view their own applications" ON public.loan_applications;
 CREATE POLICY "Users can view their own applications"
   ON public.loan_applications FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create applications" ON public.loan_applications;
 CREATE POLICY "Users can create applications"
   ON public.loan_applications FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their pending applications" ON public.loan_applications;
 CREATE POLICY "Users can update their pending applications"
   ON public.loan_applications FOR UPDATE
   USING (auth.uid() = user_id AND status = 'pending');
 
+DROP POLICY IF EXISTS "Admins can view all applications" ON public.loan_applications;
 CREATE POLICY "Admins can view all applications"
   ON public.loan_applications FOR SELECT
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Admins can update all applications" ON public.loan_applications;
 CREATE POLICY "Admins can update all applications"
   ON public.loan_applications FOR UPDATE
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
 -- Loan repayments policies
+DROP POLICY IF EXISTS "Users can view their own repayments" ON public.loan_repayments;
 CREATE POLICY "Users can view their own repayments"
   ON public.loan_repayments FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can manage repayments" ON public.loan_repayments;
 CREATE POLICY "Admins can manage repayments"
   ON public.loan_repayments FOR ALL
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
 -- Disbursements policies
+DROP POLICY IF EXISTS "Users can view their loan disbursements" ON public.disbursements;
 CREATE POLICY "Users can view their loan disbursements"
   ON public.disbursements FOR SELECT
   USING (EXISTS (
@@ -224,6 +240,7 @@ CREATE POLICY "Users can view their loan disbursements"
     WHERE la.id = loan_id AND la.user_id = auth.uid()
   ));
 
+DROP POLICY IF EXISTS "Admins can manage disbursements" ON public.disbursements;
 CREATE POLICY "Admins can manage disbursements"
   ON public.disbursements FOR ALL
   TO authenticated
@@ -238,18 +255,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_loan_applications_updated_at ON public.loan_applications;
 CREATE TRIGGER update_loan_applications_updated_at
   BEFORE UPDATE ON public.loan_applications
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_loan_repayments_updated_at ON public.loan_repayments;
 CREATE TRIGGER update_loan_repayments_updated_at
   BEFORE UPDATE ON public.loan_repayments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_employers_updated_at ON public.employers;
 CREATE TRIGGER update_employers_updated_at
   BEFORE UPDATE ON public.employers
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -272,6 +293,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

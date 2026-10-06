@@ -57,45 +57,55 @@ ALTER TABLE public.account_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 
 -- Accounts policies
+DROP POLICY IF EXISTS "Staff can view accounts" ON public.accounts;
 CREATE POLICY "Staff can view accounts"
 ON public.accounts FOR SELECT
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Admins can manage accounts" ON public.accounts;
 CREATE POLICY "Admins can manage accounts"
 ON public.accounts FOR ALL
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
 -- Account transactions policies
+DROP POLICY IF EXISTS "Staff can view transactions" ON public.account_transactions;
 CREATE POLICY "Staff can view transactions"
 ON public.account_transactions FOR SELECT
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Staff can insert transactions" ON public.account_transactions;
 CREATE POLICY "Staff can insert transactions"
 ON public.account_transactions FOR INSERT
 WITH CHECK (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
 -- Expenses policies
+DROP POLICY IF EXISTS "Staff can view expenses" ON public.expenses;
 CREATE POLICY "Staff can view expenses"
 ON public.expenses FOR SELECT
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer') OR has_role(auth.uid(), 'loan_officer'));
 
+DROP POLICY IF EXISTS "Staff can insert expenses" ON public.expenses;
 CREATE POLICY "Staff can insert expenses"
 ON public.expenses FOR INSERT
 WITH CHECK (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Staff can update expenses" ON public.expenses;
 CREATE POLICY "Staff can update expenses"
 ON public.expenses FOR UPDATE
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Admins can delete expenses" ON public.expenses;
 CREATE POLICY "Admins can delete expenses"
 ON public.expenses FOR DELETE
 USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
 -- Create updated_at triggers
+DROP TRIGGER IF EXISTS update_accounts_updated_at ON public.accounts;
 CREATE TRIGGER update_accounts_updated_at
 BEFORE UPDATE ON public.accounts
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_expenses_updated_at ON public.expenses;
 CREATE TRIGGER update_expenses_updated_at
 BEFORE UPDATE ON public.expenses
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

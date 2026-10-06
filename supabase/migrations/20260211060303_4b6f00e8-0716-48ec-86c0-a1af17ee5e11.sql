@@ -41,19 +41,23 @@ CREATE TABLE public.borrower_kyc_info (
 ALTER TABLE public.borrower_kyc_info ENABLE ROW LEVEL SECURITY;
 
 -- Borrowers can manage their own KYC info
+DROP POLICY IF EXISTS "Borrowers can insert own kyc info" ON public.borrower_kyc_info;
 CREATE POLICY "Borrowers can insert own kyc info"
 ON public.borrower_kyc_info FOR INSERT TO authenticated
 WITH CHECK (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Borrowers can select own kyc info" ON public.borrower_kyc_info;
 CREATE POLICY "Borrowers can select own kyc info"
 ON public.borrower_kyc_info FOR SELECT TO authenticated
 USING (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Borrowers can update own kyc info" ON public.borrower_kyc_info;
 CREATE POLICY "Borrowers can update own kyc info"
 ON public.borrower_kyc_info FOR UPDATE TO authenticated
 USING (auth.uid() = borrower_id);
 
 -- Staff can view and manage all
+DROP POLICY IF EXISTS "Staff can view all kyc info" ON public.borrower_kyc_info;
 CREATE POLICY "Staff can view all kyc info"
 ON public.borrower_kyc_info FOR SELECT TO authenticated
 USING (
@@ -63,6 +67,7 @@ USING (
   has_role(auth.uid(), 'credit_officer'::app_role)
 );
 
+DROP POLICY IF EXISTS "Staff can update all kyc info" ON public.borrower_kyc_info;
 CREATE POLICY "Staff can update all kyc info"
 ON public.borrower_kyc_info FOR UPDATE TO authenticated
 USING (
@@ -72,6 +77,7 @@ USING (
 );
 
 -- Trigger for updated_at
+DROP TRIGGER IF EXISTS update_borrower_kyc_info_updated_at ON public.borrower_kyc_info;
 CREATE TRIGGER update_borrower_kyc_info_updated_at
 BEFORE UPDATE ON public.borrower_kyc_info
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -100,23 +106,28 @@ CREATE TABLE public.borrower_references (
 ALTER TABLE public.borrower_references ENABLE ROW LEVEL SECURITY;
 
 -- Borrowers can manage their own references
+DROP POLICY IF EXISTS "Borrowers can insert own references" ON public.borrower_references;
 CREATE POLICY "Borrowers can insert own references"
 ON public.borrower_references FOR INSERT TO authenticated
 WITH CHECK (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Borrowers can select own references" ON public.borrower_references;
 CREATE POLICY "Borrowers can select own references"
 ON public.borrower_references FOR SELECT TO authenticated
 USING (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Borrowers can update own references" ON public.borrower_references;
 CREATE POLICY "Borrowers can update own references"
 ON public.borrower_references FOR UPDATE TO authenticated
 USING (auth.uid() = borrower_id);
 
+DROP POLICY IF EXISTS "Borrowers can delete own references" ON public.borrower_references;
 CREATE POLICY "Borrowers can delete own references"
 ON public.borrower_references FOR DELETE TO authenticated
 USING (auth.uid() = borrower_id);
 
 -- Staff can view and manage all references
+DROP POLICY IF EXISTS "Staff can view all references" ON public.borrower_references;
 CREATE POLICY "Staff can view all references"
 ON public.borrower_references FOR SELECT TO authenticated
 USING (
@@ -126,6 +137,7 @@ USING (
   has_role(auth.uid(), 'credit_officer'::app_role)
 );
 
+DROP POLICY IF EXISTS "Staff can update all references" ON public.borrower_references;
 CREATE POLICY "Staff can update all references"
 ON public.borrower_references FOR UPDATE TO authenticated
 USING (

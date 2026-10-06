@@ -1,4 +1,5 @@
 -- Add policy to allow admins and staff to create loan applications for any user
+DROP POLICY IF EXISTS "Admins can create loan applications" ON public.loan_applications;
 CREATE POLICY "Admins can create loan applications" 
 ON public.loan_applications 
 FOR INSERT 

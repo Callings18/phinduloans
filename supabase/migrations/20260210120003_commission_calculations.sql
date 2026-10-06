@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_commission_calculations_period ON public.commissi
 
 ALTER TABLE public.commission_calculations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins can manage commission_calculations" ON public.commission_calculations;
 CREATE POLICY "Admins can manage commission_calculations"
   ON public.commission_calculations FOR ALL TO authenticated
   USING (

@@ -134,8 +134,8 @@ ADD COLUMN IF NOT EXISTS signed_contract_url TEXT;
 -- 4. PARTIAL PAYMENT SYSTEM
 -- ==============================================
 
--- Add fields to repayments table for partial/split payments
-ALTER TABLE repayments
+-- Add fields to loan_repayments table for partial/split payments
+ALTER TABLE loan_repayments
 ADD COLUMN IF NOT EXISTS is_partial_payment BOOLEAN DEFAULT false,
 ADD COLUMN IF NOT EXISTS remaining_amount DECIMAL(15, 2),
 ADD COLUMN IF NOT EXISTS installment_number INTEGER,
@@ -144,7 +144,7 @@ ADD COLUMN IF NOT EXISTS payment_source VARCHAR(50) DEFAULT 'direct'; -- 'direct
 -- Create payment_splits table for tracking split payments
 CREATE TABLE IF NOT EXISTS payment_splits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  repayment_id UUID NOT NULL REFERENCES repayments(id) ON DELETE CASCADE,
+  repayment_id UUID NOT NULL REFERENCES loan_repayments(id) ON DELETE CASCADE,
   split_number INTEGER NOT NULL,
   amount DECIMAL(15, 2) NOT NULL,
   payment_method VARCHAR(50) NOT NULL,
@@ -201,10 +201,12 @@ ALTER TABLE court_case_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_splits ENABLE ROW LEVEL SECURITY;
 
 -- Wallet RLS Policies
+DROP POLICY IF EXISTS "Users can view their own wallet" ON wallet_accounts;
 CREATE POLICY "Users can view their own wallet"
   ON wallet_accounts FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can view all wallets" ON wallet_accounts;
 CREATE POLICY "Admins can view all wallets"
   ON wallet_accounts FOR ALL
   USING (
@@ -216,6 +218,7 @@ CREATE POLICY "Admins can view all wallets"
   );
 
 -- Wallet Transactions RLS
+DROP POLICY IF EXISTS "Users can view their own transactions" ON wallet_transactions;
 CREATE POLICY "Users can view their own transactions"
   ON wallet_transactions FOR SELECT
   USING (
@@ -226,6 +229,7 @@ CREATE POLICY "Users can view their own transactions"
     )
   );
 
+DROP POLICY IF EXISTS "Admins can view all transactions" ON wallet_transactions;
 CREATE POLICY "Admins can view all transactions"
   ON wallet_transactions FOR ALL
   USING (
@@ -237,14 +241,17 @@ CREATE POLICY "Admins can view all transactions"
   );
 
 -- Withdrawal Requests RLS
+DROP POLICY IF EXISTS "Users can view their own withdrawal requests" ON wallet_withdrawal_requests;
 CREATE POLICY "Users can view their own withdrawal requests"
   ON wallet_withdrawal_requests FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own withdrawal requests" ON wallet_withdrawal_requests;
 CREATE POLICY "Users can create their own withdrawal requests"
   ON wallet_withdrawal_requests FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can manage all withdrawal requests" ON wallet_withdrawal_requests;
 CREATE POLICY "Admins can manage all withdrawal requests"
   ON wallet_withdrawal_requests FOR ALL
   USING (
@@ -256,38 +263,42 @@ CREATE POLICY "Admins can manage all withdrawal requests"
   );
 
 -- Court Cases RLS (Admin only)
+DROP POLICY IF EXISTS "Admins can manage court cases" ON court_cases;
 CREATE POLICY "Admins can manage court cases"
   ON court_cases FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM user_roles
       WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role IN ('admin', 'super_admin', 'legal_officer')
+      AND user_roles.role IN ('admin', 'super_admin', 'collections_officer')
     )
   );
 
+DROP POLICY IF EXISTS "Admins can manage court case events" ON court_case_events;
 CREATE POLICY "Admins can manage court case events"
   ON court_case_events FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM user_roles
       WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role IN ('admin', 'super_admin', 'legal_officer')
+      AND user_roles.role IN ('admin', 'super_admin', 'collections_officer')
     )
   );
 
 -- Payment Splits RLS
+DROP POLICY IF EXISTS "Users can view their own payment splits" ON payment_splits;
 CREATE POLICY "Users can view their own payment splits"
   ON payment_splits FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM repayments
-      JOIN loan_applications ON repayments.loan_id = loan_applications.id
-      WHERE repayments.id = payment_splits.repayment_id
+      SELECT 1 FROM loan_repayments
+      JOIN loan_applications ON loan_repayments.loan_id = loan_applications.id
+      WHERE loan_repayments.id = payment_splits.repayment_id
       AND loan_applications.user_id = auth.uid()
     )
   );
 
+DROP POLICY IF EXISTS "Admins can manage all payment splits" ON payment_splits;
 CREATE POLICY "Admins can manage all payment splits"
   ON payment_splits FOR ALL
   USING (
@@ -311,16 +322,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS wallet_accounts_updated_at ON wallet_accounts;
 CREATE TRIGGER wallet_accounts_updated_at
   BEFORE UPDATE ON wallet_accounts
   FOR EACH ROW
   EXECUTE FUNCTION update_wallet_updated_at();
 
+DROP TRIGGER IF EXISTS wallet_withdrawal_requests_updated_at ON wallet_withdrawal_requests;
 CREATE TRIGGER wallet_withdrawal_requests_updated_at
   BEFORE UPDATE ON wallet_withdrawal_requests
   FOR EACH ROW
   EXECUTE FUNCTION update_wallet_updated_at();
 
+DROP TRIGGER IF EXISTS court_cases_updated_at ON court_cases;
 CREATE TRIGGER court_cases_updated_at
   BEFORE UPDATE ON court_cases
   FOR EACH ROW

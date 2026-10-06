@@ -2,6 +2,8 @@
 -- Returns per-officer (by assigned_to) metrics for a period
 -- Date: 2026-02-10
 
+DROP FUNCTION IF EXISTS public.officer_loan_stats(DATE, DATE);
+
 CREATE OR REPLACE FUNCTION public.officer_loan_stats(p_period_start DATE, p_period_end DATE)
 RETURNS TABLE (
   officer_id UUID,
@@ -83,6 +85,8 @@ $$;
 COMMENT ON FUNCTION public.officer_loan_stats(DATE, DATE) IS 'Per-officer loan stats for a date range (by assigned_to): applications, approved, rejected, disbursed, approval rate, default rate, avg loan size, portfolio outstanding';
 
 -- PAR (portfolio at risk): overdue balance / total outstanding
+DROP FUNCTION IF EXISTS public.portfolio_at_risk(DATE);
+
 CREATE OR REPLACE FUNCTION public.portfolio_at_risk(p_as_of_date DATE DEFAULT CURRENT_DATE)
 RETURNS TABLE (
   total_outstanding NUMERIC,

@@ -39,6 +39,7 @@ DROP POLICY IF EXISTS "Admin manage roles" ON public.user_roles;
 
 -- Re-create with privilege escalation prevention
 -- INSERT: admins can assign roles but NOT super_admin
+DROP POLICY IF EXISTS "Admins can insert user roles" ON public.user_roles;
 CREATE POLICY "Admins can insert user roles"
 ON public.user_roles
 FOR INSERT
@@ -49,6 +50,7 @@ WITH CHECK (
 );
 
 -- UPDATE: admins can update roles but cannot set role to super_admin
+DROP POLICY IF EXISTS "Admins can update user roles" ON public.user_roles;
 CREATE POLICY "Admins can update user roles"
 ON public.user_roles
 FOR UPDATE
@@ -63,6 +65,7 @@ WITH CHECK (
 );
 
 -- DELETE: admins can delete roles but not super_admin roles
+DROP POLICY IF EXISTS "Admins can delete user roles" ON public.user_roles;
 CREATE POLICY "Admins can delete user roles"
 ON public.user_roles
 FOR DELETE

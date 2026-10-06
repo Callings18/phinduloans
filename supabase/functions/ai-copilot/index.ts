@@ -16,8 +16,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
+function resolveAiConfig() {
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  if (openaiKey) {
+    return {
+      apiKey: openaiKey,
+      gatewayUrl: Deno.env.get("AI_GATEWAY_URL") ?? "https://api.openai.com/v1/chat/completions",
+      model: Deno.env.get("AI_MODEL") ?? "gpt-4o-mini",
+    };
+  }
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (lovableKey) {
+    return {
+      apiKey: lovableKey,
+      gatewayUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
+      model: Deno.env.get("AI_MODEL") ?? "google/gemini-3-flash-preview",
+    };
+  }
+  return null;
+}
 
 type AgentKey = "phindu" | "guardian" | "senior_engineer";
 
@@ -119,8 +136,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) return streamMessage("AI is not configured. Please contact your administrator.", 200);
+    const aiConfig = resolveAiConfig();
+    if (!aiConfig) return streamMessage("AI is not configured. Please contact your administrator.", 200);
 
     const body = await req.json().catch(() => ({}));
     const agent: AgentKey = ["phindu", "guardian", "senior_engineer"].includes(body.agent)
@@ -169,14 +186,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const resp = await fetch(AI_GATEWAY_URL, {
+    const resp = await fetch(aiConfig.gatewayUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: aiConfig.model,
         messages: [...systemMessages, ...messages],
         stream: true,
       }),

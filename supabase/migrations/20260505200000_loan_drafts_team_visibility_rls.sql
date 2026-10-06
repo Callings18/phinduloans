@@ -16,6 +16,7 @@
 DROP POLICY IF EXISTS "Staff manage own drafts" ON public.loan_application_drafts;
 
 -- SELECT: full draft list for everyone on the lending team (not borrowers/employers).
+DROP POLICY IF EXISTS "Lending staff read all drafts" ON public.loan_application_drafts;
 CREATE POLICY "Lending staff read all drafts"
   ON public.loan_application_drafts
   FOR SELECT
@@ -31,6 +32,7 @@ CREATE POLICY "Lending staff read all drafts"
     OR public.has_role(auth.uid(), 'support'::public.app_role)
   );
 
+DROP POLICY IF EXISTS "Staff insert own draft" ON public.loan_application_drafts;
 CREATE POLICY "Staff insert own draft"
   ON public.loan_application_drafts
   FOR INSERT
@@ -41,6 +43,7 @@ CREATE POLICY "Staff insert own draft"
     OR public.has_role(auth.uid(), 'super_admin'::public.app_role)
   );
 
+DROP POLICY IF EXISTS "Staff update own draft or admin" ON public.loan_application_drafts;
 CREATE POLICY "Staff update own draft or admin"
   ON public.loan_application_drafts
   FOR UPDATE
@@ -56,6 +59,7 @@ CREATE POLICY "Staff update own draft or admin"
     OR public.has_role(auth.uid(), 'super_admin'::public.app_role)
   );
 
+DROP POLICY IF EXISTS "Staff delete own draft or admin" ON public.loan_application_drafts;
 CREATE POLICY "Staff delete own draft or admin"
   ON public.loan_application_drafts
   FOR DELETE

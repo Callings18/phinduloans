@@ -45,24 +45,30 @@ ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.role_permissions ENABLE ROW LEVEL SECURITY;
 
 -- Anyone authenticated can read roles/permissions (for UI)
+DROP POLICY IF EXISTS "Authenticated can read roles" ON public.roles;
 CREATE POLICY "Authenticated can read roles"
   ON public.roles FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Authenticated can read permissions" ON public.permissions;
 CREATE POLICY "Authenticated can read permissions"
   ON public.permissions FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Authenticated can read role_permissions" ON public.role_permissions;
 CREATE POLICY "Authenticated can read role_permissions"
   ON public.role_permissions FOR SELECT TO authenticated USING (true);
 
 -- Only super_admin/admin can manage (optional; add when needed)
+DROP POLICY IF EXISTS "Admins can manage roles" ON public.roles;
 CREATE POLICY "Admins can manage roles"
   ON public.roles FOR ALL TO authenticated
   USING (public.has_role(auth.uid(), 'super_admin'::app_role) OR public.has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage permissions" ON public.permissions;
 CREATE POLICY "Admins can manage permissions"
   ON public.permissions FOR ALL TO authenticated
   USING (public.has_role(auth.uid(), 'super_admin'::app_role) OR public.has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage role_permissions" ON public.role_permissions;
 CREATE POLICY "Admins can manage role_permissions"
   ON public.role_permissions FOR ALL TO authenticated
   USING (public.has_role(auth.uid(), 'super_admin'::app_role) OR public.has_role(auth.uid(), 'admin'::app_role));
@@ -198,6 +204,7 @@ WHERE r.code = 'support'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- Trigger for roles updated_at
+DROP TRIGGER IF EXISTS update_roles_updated_at ON public.roles;
 CREATE TRIGGER update_roles_updated_at
   BEFORE UPDATE ON public.roles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

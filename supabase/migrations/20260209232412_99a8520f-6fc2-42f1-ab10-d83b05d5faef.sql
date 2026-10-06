@@ -243,6 +243,7 @@ END; $$;
 -- 5. Restrict loan deletes
 -- =============================================================================
 DROP POLICY IF EXISTS "Admins can delete applications" ON public.loan_applications;
+DROP POLICY IF EXISTS "Staff can delete applications in early stages" ON public.loan_applications;
 CREATE POLICY "Staff can delete applications in early stages"
   ON public.loan_applications FOR DELETE
   USING (

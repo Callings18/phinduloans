@@ -4,8 +4,8 @@
  *
  * Requires (one of):
  *   DATABASE_URL=postgresql://...  (direct psql — add `pg` dependency locally)
- *   SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF=yqrfheavftgybhcafzpt
- *     (token from `npx supabase login` or dashboard; MFA must be satisfied for Lovable projects)
+ *   SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF=seobilifwyxhtjvsgqpc
+ *     (token from `npx supabase login` or dashboard)
  *
  * Usage:
  *   node scripts/apply-supabase-sql.mjs supabase/scripts/APPLY_PENDING_BORROWER_AND_LOAN_DELETE_20261005.sql
@@ -16,7 +16,7 @@ import path from "path";
 const projectRef =
   process.env.SUPABASE_PROJECT_REF ||
   process.env.VITE_SUPABASE_PROJECT_ID ||
-  "yqrfheavftgybhcafzpt";
+  "seobilifwyxhtjvsgqpc";
 const token = process.env.SUPABASE_ACCESS_TOKEN;
 const sqlPath = process.argv[2];
 

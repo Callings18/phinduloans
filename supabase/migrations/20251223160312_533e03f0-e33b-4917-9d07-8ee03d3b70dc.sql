@@ -1,4 +1,5 @@
 -- 1. Allow Admins and Staff to manage all profiles
+DROP POLICY IF EXISTS "Admins and Staff can manage all profiles" ON public.profiles;
 CREATE POLICY "Admins and Staff can manage all profiles"
   ON public.profiles FOR ALL
   TO authenticated
@@ -11,6 +12,7 @@ CREATE POLICY "Admins and Staff can manage all profiles"
 -- 2. Update loan_applications policies to include staff roles for visibility
 DROP POLICY IF EXISTS "Admins can view all applications" ON public.loan_applications;
 
+DROP POLICY IF EXISTS "Staff and Admins can view all applications" ON public.loan_applications;
 CREATE POLICY "Staff and Admins can view all applications"
   ON public.loan_applications FOR SELECT
   TO authenticated
@@ -24,6 +26,7 @@ CREATE POLICY "Staff and Admins can view all applications"
 
 DROP POLICY IF EXISTS "Admins can update all applications" ON public.loan_applications;
 
+DROP POLICY IF EXISTS "Staff and Admins can update all applications" ON public.loan_applications;
 CREATE POLICY "Staff and Admins can update all applications"
   ON public.loan_applications FOR UPDATE
   TO authenticated

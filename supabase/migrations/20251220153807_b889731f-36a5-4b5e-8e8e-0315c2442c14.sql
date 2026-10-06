@@ -14,27 +14,32 @@ CREATE TABLE public.payment_gateway_settings (
 ALTER TABLE public.payment_gateway_settings ENABLE ROW LEVEL SECURITY;
 
 -- Only admins can access payment settings
+DROP POLICY IF EXISTS "Admins can view payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Admins can view payment settings"
   ON public.payment_gateway_settings
   FOR SELECT
   USING (has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Admins can insert payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Admins can insert payment settings"
   ON public.payment_gateway_settings
   FOR INSERT
   WITH CHECK (has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Admins can update payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Admins can update payment settings"
   ON public.payment_gateway_settings
   FOR UPDATE
   USING (has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Admins can delete payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Admins can delete payment settings"
   ON public.payment_gateway_settings
   FOR DELETE
   USING (has_role(auth.uid(), 'admin'));
 
 -- Trigger for updated_at
+DROP TRIGGER IF EXISTS update_payment_gateway_settings_updated_at ON public.payment_gateway_settings;
 CREATE TRIGGER update_payment_gateway_settings_updated_at
   BEFORE UPDATE ON public.payment_gateway_settings
   FOR EACH ROW

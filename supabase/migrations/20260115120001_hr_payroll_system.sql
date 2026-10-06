@@ -105,13 +105,19 @@ CREATE TABLE IF NOT EXISTS public.employee_salary_structure (
   
   -- Net Salary (calculated)
   net_salary NUMERIC(12, 2) GENERATED ALWAYS AS (
-    gross_salary - 
-    COALESCE(napsa_employee_contribution, 0) - 
-    COALESCE(nhima_contribution, 0) - 
-    COALESCE(union_dues, 0) - 
-    COALESCE(loan_deductions, 0) - 
-    COALESCE(other_deductions, 0) - 
-    COALESCE(paye_amount, 0) + 
+    basic_salary +
+    COALESCE(housing_allowance, 0) +
+    COALESCE(transport_allowance, 0) +
+    COALESCE(meal_allowance, 0) +
+    COALESCE(medical_allowance, 0) +
+    COALESCE(communication_allowance, 0) +
+    COALESCE(other_allowances, 0) -
+    COALESCE(napsa_employee_contribution, 0) -
+    COALESCE(nhima_contribution, 0) -
+    COALESCE(union_dues, 0) -
+    COALESCE(loan_deductions, 0) -
+    COALESCE(other_deductions, 0) -
+    COALESCE(paye_amount, 0) +
     COALESCE(tax_relief, 0)
   ) STORED,
   
@@ -275,37 +281,45 @@ ALTER TABLE public.employee_leave ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employee_leave_balances ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for employees
+DROP POLICY IF EXISTS "Admins can manage employees" ON public.employees;
 CREATE POLICY "Admins can manage employees"
   ON public.employees FOR ALL
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "HR staff can view employees" ON public.employees;
 CREATE POLICY "HR staff can view employees"
   ON public.employees FOR SELECT
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Employees can view their own record" ON public.employees;
 CREATE POLICY "Employees can view their own record"
   ON public.employees FOR SELECT
   USING (auth.uid() = user_id);
 
 -- RLS Policies for salary structure
+DROP POLICY IF EXISTS "Admins can manage salary structures" ON public.employee_salary_structure;
 CREATE POLICY "Admins can manage salary structures"
   ON public.employee_salary_structure FOR ALL
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Finance staff can view salary structures" ON public.employee_salary_structure;
 CREATE POLICY "Finance staff can view salary structures"
   ON public.employee_salary_structure FOR SELECT
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
 -- RLS Policies for payroll periods
+DROP POLICY IF EXISTS "Admins and finance can manage payroll periods" ON public.payroll_periods;
 CREATE POLICY "Admins and finance can manage payroll periods"
   ON public.payroll_periods FOR ALL
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
 -- RLS Policies for payroll records
+DROP POLICY IF EXISTS "Admins and finance can manage payroll records" ON public.payroll_records;
 CREATE POLICY "Admins and finance can manage payroll records"
   ON public.payroll_records FOR ALL
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'finance_officer'));
 
+DROP POLICY IF EXISTS "Employees can view their own payroll records" ON public.payroll_records;
 CREATE POLICY "Employees can view their own payroll records"
   ON public.payroll_records FOR SELECT
   USING (
@@ -317,10 +331,12 @@ CREATE POLICY "Employees can view their own payroll records"
   );
 
 -- RLS Policies for leave
+DROP POLICY IF EXISTS "Admins can manage all leave" ON public.employee_leave;
 CREATE POLICY "Admins can manage all leave"
   ON public.employee_leave FOR ALL
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Employees can view their own leave" ON public.employee_leave;
 CREATE POLICY "Employees can view their own leave"
   ON public.employee_leave FOR SELECT
   USING (
@@ -332,10 +348,12 @@ CREATE POLICY "Employees can view their own leave"
   );
 
 -- RLS Policies for leave balances
+DROP POLICY IF EXISTS "Admins can manage leave balances" ON public.employee_leave_balances;
 CREATE POLICY "Admins can manage leave balances"
   ON public.employee_leave_balances FOR ALL
   USING (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'super_admin'));
 
+DROP POLICY IF EXISTS "Employees can view their own leave balances" ON public.employee_leave_balances;
 CREATE POLICY "Employees can view their own leave balances"
   ON public.employee_leave_balances FOR SELECT
   USING (
@@ -347,26 +365,32 @@ CREATE POLICY "Employees can view their own leave balances"
   );
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_employees_updated_at ON public.employees;
 CREATE TRIGGER update_employees_updated_at
   BEFORE UPDATE ON public.employees
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_employee_salary_structure_updated_at ON public.employee_salary_structure;
 CREATE TRIGGER update_employee_salary_structure_updated_at
   BEFORE UPDATE ON public.employee_salary_structure
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_payroll_periods_updated_at ON public.payroll_periods;
 CREATE TRIGGER update_payroll_periods_updated_at
   BEFORE UPDATE ON public.payroll_periods
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_payroll_records_updated_at ON public.payroll_records;
 CREATE TRIGGER update_payroll_records_updated_at
   BEFORE UPDATE ON public.payroll_records
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_employee_leave_updated_at ON public.employee_leave;
 CREATE TRIGGER update_employee_leave_updated_at
   BEFORE UPDATE ON public.employee_leave
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_employee_leave_balances_updated_at ON public.employee_leave_balances;
 CREATE TRIGGER update_employee_leave_balances_updated_at
   BEFORE UPDATE ON public.employee_leave_balances
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

@@ -19,6 +19,7 @@ CREATE TABLE public.product_document_requirements (
 
 ALTER TABLE public.product_document_requirements ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff can read product document requirements" ON public.product_document_requirements;
 CREATE POLICY "Staff can read product document requirements"
   ON public.product_document_requirements FOR SELECT TO authenticated
   USING (
@@ -29,6 +30,7 @@ CREATE POLICY "Staff can read product document requirements"
     OR public.has_role(auth.uid(), 'finance_officer'::app_role)
   );
 
+DROP POLICY IF EXISTS "Admins can manage product document requirements" ON public.product_document_requirements;
 CREATE POLICY "Admins can manage product document requirements"
   ON public.product_document_requirements FOR ALL TO authenticated
   USING (
@@ -40,6 +42,7 @@ CREATE POLICY "Admins can manage product document requirements"
     OR public.has_role(auth.uid(), 'super_admin'::app_role)
   );
 
+DROP TRIGGER IF EXISTS update_product_doc_req_updated_at ON public.product_document_requirements;
 CREATE TRIGGER update_product_doc_req_updated_at
   BEFORE UPDATE ON public.product_document_requirements
   FOR EACH ROW

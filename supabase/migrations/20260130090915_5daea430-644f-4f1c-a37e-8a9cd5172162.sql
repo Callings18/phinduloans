@@ -12,33 +12,37 @@ CREATE TABLE public.otp_codes (
 );
 
 -- Create index for phone number lookups
-CREATE INDEX idx_otp_codes_phone ON public.otp_codes (phone);
+CREATE INDEX IF NOT EXISTS idx_otp_codes_phone ON public.otp_codes (phone);
 
 -- Create index for cleanup of expired codes
-CREATE INDEX idx_otp_codes_expires_at ON public.otp_codes (expires_at);
+CREATE INDEX IF NOT EXISTS idx_otp_codes_expires_at ON public.otp_codes (expires_at);
 
 -- Enable RLS
 ALTER TABLE public.otp_codes ENABLE ROW LEVEL SECURITY;
 
 -- Allow insert from service role and anonymous (for signup flow)
+DROP POLICY IF EXISTS "Allow OTP creation" ON public.otp_codes;
 CREATE POLICY "Allow OTP creation" 
 ON public.otp_codes 
 FOR INSERT 
 WITH CHECK (true);
 
 -- Allow select for verification (service role will handle this)
+DROP POLICY IF EXISTS "Allow OTP verification" ON public.otp_codes;
 CREATE POLICY "Allow OTP verification" 
 ON public.otp_codes 
 FOR SELECT 
 USING (true);
 
 -- Allow update for marking as verified
+DROP POLICY IF EXISTS "Allow OTP update" ON public.otp_codes;
 CREATE POLICY "Allow OTP update" 
 ON public.otp_codes 
 FOR UPDATE 
 USING (true);
 
 -- Allow delete for cleanup
+DROP POLICY IF EXISTS "Allow OTP deletion" ON public.otp_codes;
 CREATE POLICY "Allow OTP deletion" 
 ON public.otp_codes 
 FOR DELETE 

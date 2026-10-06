@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS public.collection_activities (
 -- Enable RLS
 ALTER TABLE public.collection_activities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Collections Officers and Admins can manage collection activities" ON public.collection_activities;
+DROP POLICY IF EXISTS "Collections Officers and Admins can manage collection activities" ON public.collection_activities;
+DROP POLICY IF EXISTS "Collections Officers and Admins can manage collection activities" ON public.collection_activities;
 CREATE POLICY "Collections Officers and Admins can manage collection activities"
   ON public.collection_activities FOR ALL
   USING (
@@ -23,6 +26,7 @@ CREATE POLICY "Collections Officers and Admins can manage collection activities"
     public.has_role(auth.uid(), 'super_admin')
   );
 
+DROP POLICY IF EXISTS "Relevant staff can view collection activities" ON public.collection_activities;
 CREATE POLICY "Relevant staff can view collection activities"
   ON public.collection_activities FOR SELECT
   USING (

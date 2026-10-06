@@ -6,6 +6,7 @@ DROP POLICY IF EXISTS "Admins can delete roles" ON public.user_roles;
 -- 2. notification_logs: restrict INSERT to staff roles + service role only
 DROP POLICY IF EXISTS "Authenticated can insert notification logs" ON public.notification_logs;
 
+DROP POLICY IF EXISTS "Staff can insert notification logs" ON public.notification_logs;
 CREATE POLICY "Staff can insert notification logs"
 ON public.notification_logs
 FOR INSERT
@@ -27,18 +28,21 @@ DROP POLICY IF EXISTS "Admins can insert payment settings" ON public.payment_gat
 DROP POLICY IF EXISTS "Admins can update payment settings" ON public.payment_gateway_settings;
 DROP POLICY IF EXISTS "Admins can delete payment settings" ON public.payment_gateway_settings;
 
+DROP POLICY IF EXISTS "Super admins can view payment settings with secrets" ON public.payment_gateway_settings;
 CREATE POLICY "Super admins can view payment settings with secrets"
 ON public.payment_gateway_settings
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'::public.app_role));
 
+DROP POLICY IF EXISTS "Super admins can insert payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Super admins can insert payment settings"
 ON public.payment_gateway_settings
 FOR INSERT
 TO authenticated
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'::public.app_role));
 
+DROP POLICY IF EXISTS "Super admins can update payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Super admins can update payment settings"
 ON public.payment_gateway_settings
 FOR UPDATE
@@ -46,6 +50,7 @@ TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'::public.app_role))
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'::public.app_role));
 
+DROP POLICY IF EXISTS "Super admins can delete payment settings" ON public.payment_gateway_settings;
 CREATE POLICY "Super admins can delete payment settings"
 ON public.payment_gateway_settings
 FOR DELETE

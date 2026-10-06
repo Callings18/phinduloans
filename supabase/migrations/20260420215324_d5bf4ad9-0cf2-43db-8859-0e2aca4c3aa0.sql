@@ -17,14 +17,17 @@ CREATE INDEX IF NOT EXISTS idx_consent_logs_consent_type ON public.consent_logs(
 
 ALTER TABLE public.consent_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own consent logs" ON public.consent_logs;
 CREATE POLICY "Users can view own consent logs"
 ON public.consent_logs FOR SELECT
 USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own consent logs" ON public.consent_logs;
 CREATE POLICY "Users can insert own consent logs"
 ON public.consent_logs FOR INSERT
 WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Admins can view all consent logs" ON public.consent_logs;
 CREATE POLICY "Admins can view all consent logs"
 ON public.consent_logs FOR SELECT
 USING (

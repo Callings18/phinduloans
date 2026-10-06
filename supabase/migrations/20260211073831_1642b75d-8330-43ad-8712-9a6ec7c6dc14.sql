@@ -24,6 +24,7 @@ DROP POLICY IF EXISTS "Staff can create loan notes" ON public.loan_notes;
 ALTER TABLE public.loan_notes ENABLE ROW LEVEL SECURITY;
 
 -- Staff can read all loan notes
+DROP POLICY IF EXISTS "Staff can view all loan notes" ON public.loan_notes;
 CREATE POLICY "Staff can view all loan notes"
   ON public.loan_notes FOR SELECT
   TO authenticated
@@ -39,6 +40,7 @@ CREATE POLICY "Staff can view all loan notes"
   );
 
 -- Staff can insert notes
+DROP POLICY IF EXISTS "Staff can insert loan notes" ON public.loan_notes;
 CREATE POLICY "Staff can insert loan notes"
   ON public.loan_notes FOR INSERT
   TO authenticated
@@ -56,6 +58,7 @@ CREATE POLICY "Staff can insert loan notes"
   );
 
 -- Borrowers can only see notes marked visible_to_borrower on their own loans
+DROP POLICY IF EXISTS "Borrowers can view visible notes on their loans" ON public.loan_notes;
 CREATE POLICY "Borrowers can view visible notes on their loans"
   ON public.loan_notes FOR SELECT
   TO authenticated

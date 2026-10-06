@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.document_checklists (
 ALTER TABLE public.document_checklists ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for document_checklists
+DROP POLICY IF EXISTS "Users can view their own document checklist" ON public.document_checklists;
 CREATE POLICY "Users can view their own document checklist"
 ON public.document_checklists
 FOR SELECT
@@ -34,6 +35,7 @@ USING (
   has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can insert document checklist items" ON public.document_checklists;
 CREATE POLICY "Staff can insert document checklist items"
 ON public.document_checklists
 FOR INSERT
@@ -44,6 +46,7 @@ WITH CHECK (
   has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can update document checklist" ON public.document_checklists;
 CREATE POLICY "Staff can update document checklist"
 ON public.document_checklists
 FOR UPDATE
@@ -54,6 +57,7 @@ USING (
   has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Admins can delete document checklist items" ON public.document_checklists;
 CREATE POLICY "Admins can delete document checklist items"
 ON public.document_checklists
 FOR DELETE
@@ -92,6 +96,7 @@ CREATE TABLE IF NOT EXISTS public.loan_guarantors (
 ALTER TABLE public.loan_guarantors ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for loan_guarantors
+DROP POLICY IF EXISTS "Users can view guarantors on their loans" ON public.loan_guarantors;
 CREATE POLICY "Users can view guarantors on their loans"
 ON public.loan_guarantors
 FOR SELECT
@@ -106,6 +111,7 @@ USING (
   has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can insert guarantors" ON public.loan_guarantors;
 CREATE POLICY "Staff can insert guarantors"
 ON public.loan_guarantors
 FOR INSERT
@@ -115,6 +121,7 @@ WITH CHECK (
   has_role(auth.uid(), 'loan_officer')
 );
 
+DROP POLICY IF EXISTS "Staff can update guarantors" ON public.loan_guarantors;
 CREATE POLICY "Staff can update guarantors"
 ON public.loan_guarantors
 FOR UPDATE
@@ -125,6 +132,7 @@ USING (
   has_role(auth.uid(), 'credit_officer')
 );
 
+DROP POLICY IF EXISTS "Admins can delete guarantors" ON public.loan_guarantors;
 CREATE POLICY "Admins can delete guarantors"
 ON public.loan_guarantors
 FOR DELETE
@@ -134,11 +142,13 @@ USING (
 );
 
 -- Add triggers for updated_at
+DROP TRIGGER IF EXISTS update_document_checklists_updated_at ON public.document_checklists;
 CREATE TRIGGER update_document_checklists_updated_at
 BEFORE UPDATE ON public.document_checklists
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_loan_guarantors_updated_at ON public.loan_guarantors;
 CREATE TRIGGER update_loan_guarantors_updated_at
 BEFORE UPDATE ON public.loan_guarantors
 FOR EACH ROW
@@ -164,6 +174,7 @@ CREATE TABLE IF NOT EXISTS public.loan_writeoffs (
 ALTER TABLE public.loan_writeoffs ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for loan_writeoffs
+DROP POLICY IF EXISTS "Staff can view writeoffs" ON public.loan_writeoffs;
 CREATE POLICY "Staff can view writeoffs"
 ON public.loan_writeoffs
 FOR SELECT
@@ -173,6 +184,7 @@ USING (
   has_role(auth.uid(), 'finance_officer')
 );
 
+DROP POLICY IF EXISTS "Admins can manage writeoffs" ON public.loan_writeoffs;
 CREATE POLICY "Admins can manage writeoffs"
 ON public.loan_writeoffs
 FOR ALL
@@ -182,6 +194,7 @@ USING (
 );
 
 -- Add trigger for updated_at
+DROP TRIGGER IF EXISTS update_loan_writeoffs_updated_at ON public.loan_writeoffs;
 CREATE TRIGGER update_loan_writeoffs_updated_at
 BEFORE UPDATE ON public.loan_writeoffs
 FOR EACH ROW

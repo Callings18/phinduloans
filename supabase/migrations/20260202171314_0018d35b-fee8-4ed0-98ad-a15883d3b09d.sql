@@ -203,8 +203,4 @@ DROP POLICY IF EXISTS "Allow authenticated users to upload loan documents" ON st
 DROP POLICY IF EXISTS "Allow users to view own loan documents" ON storage.objects;
 DROP POLICY IF EXISTS "Allow staff to view all loan documents" ON storage.objects;
 
--- Delete any objects in the bucket (if any)
-DELETE FROM storage.objects WHERE bucket_id = 'loan_documents';
-
--- Remove the bucket itself
-DELETE FROM storage.buckets WHERE id = 'loan_documents';
+-- Hosted Supabase blocks direct DELETE on storage tables; drop unused bucket in Dashboard if needed.

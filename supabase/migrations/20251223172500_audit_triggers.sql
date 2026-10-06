@@ -22,6 +22,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger for loan_applications updates
+DROP TRIGGER IF EXISTS trigger_log_loan_updates ON public.loan_applications;
 CREATE TRIGGER trigger_log_loan_updates
 AFTER UPDATE ON public.loan_applications
 FOR EACH ROW
@@ -50,7 +51,8 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger for repayments
+DROP TRIGGER IF EXISTS trigger_log_repayment_insert ON public.loan_repayments;
 CREATE TRIGGER trigger_log_repayment_insert
-AFTER INSERT ON public.repayments
+AFTER INSERT ON public.loan_repayments
 FOR EACH ROW
 EXECUTE FUNCTION public.log_repayment_activity();

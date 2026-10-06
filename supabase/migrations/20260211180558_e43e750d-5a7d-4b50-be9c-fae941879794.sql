@@ -1,4 +1,5 @@
 -- Allow admins and staff to update borrower_document_vault (approve/reject)
+DROP POLICY IF EXISTS "Staff can update vault documents" ON public.borrower_document_vault;
 CREATE POLICY "Staff can update vault documents"
 ON public.borrower_document_vault
 FOR UPDATE
@@ -10,6 +11,7 @@ USING (
 );
 
 -- Also allow loan officers and credit officers to view vault documents
+DROP POLICY IF EXISTS "Staff can view all vaults" ON public.borrower_document_vault;
 CREATE POLICY "Staff can view all vaults"
 ON public.borrower_document_vault
 FOR SELECT

@@ -14,6 +14,7 @@ DROP POLICY IF EXISTS "Allow OTP deletion" ON public.otp_codes;
 DROP POLICY IF EXISTS "Everyone can read system settings" ON public.system_settings;
 
 -- Allow public to read only non-sensitive configuration keys
+DROP POLICY IF EXISTS "Public can read non-sensitive settings" ON public.system_settings;
 CREATE POLICY "Public can read non-sensitive settings" 
 ON public.system_settings 
 FOR SELECT 
@@ -22,6 +23,7 @@ USING (
 );
 
 -- Staff/Admin can read all settings including API keys
+DROP POLICY IF EXISTS "Staff can read all settings" ON public.system_settings;
 CREATE POLICY "Staff can read all settings" 
 ON public.system_settings 
 FOR SELECT 

@@ -1,6 +1,7 @@
 
 -- 1) Employers: restrict SELECT to authenticated users only
 DROP POLICY IF EXISTS "Anyone can view verified employers" ON public.employers;
+DROP POLICY IF EXISTS "Authenticated users can view verified employers" ON public.employers;
 CREATE POLICY "Authenticated users can view verified employers"
 ON public.employers
 FOR SELECT

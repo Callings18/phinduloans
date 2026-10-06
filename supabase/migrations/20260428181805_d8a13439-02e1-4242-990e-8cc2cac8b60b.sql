@@ -24,12 +24,14 @@ CREATE INDEX IF NOT EXISTS idx_notification_inbox_user_unread
 ALTER TABLE public.notification_inbox ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own inbox
+DROP POLICY IF EXISTS "Users view own inbox" ON public.notification_inbox;
 CREATE POLICY "Users view own inbox"
   ON public.notification_inbox FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
 
 -- Users can mark their own messages as read / unread
+DROP POLICY IF EXISTS "Users update own inbox" ON public.notification_inbox;
 CREATE POLICY "Users update own inbox"
   ON public.notification_inbox FOR UPDATE
   TO authenticated
@@ -37,12 +39,14 @@ CREATE POLICY "Users update own inbox"
   WITH CHECK (auth.uid() = user_id);
 
 -- Users can delete their own messages
+DROP POLICY IF EXISTS "Users delete own inbox" ON public.notification_inbox;
 CREATE POLICY "Users delete own inbox"
   ON public.notification_inbox FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
 
 -- Staff can insert for any user (triggers/edge functions use security definer or service role)
+DROP POLICY IF EXISTS "Staff insert inbox" ON public.notification_inbox;
 CREATE POLICY "Staff insert inbox"
   ON public.notification_inbox FOR INSERT
   TO authenticated
@@ -56,6 +60,7 @@ CREATE POLICY "Staff insert inbox"
   );
 
 -- Staff can view all inboxes (for support)
+DROP POLICY IF EXISTS "Staff view all inbox" ON public.notification_inbox;
 CREATE POLICY "Staff view all inbox"
   ON public.notification_inbox FOR SELECT
   TO authenticated
@@ -65,6 +70,7 @@ CREATE POLICY "Staff view all inbox"
   );
 
 -- updated_at trigger
+DROP TRIGGER IF EXISTS trg_notification_inbox_updated_at ON public.notification_inbox;
 CREATE TRIGGER trg_notification_inbox_updated_at
   BEFORE UPDATE ON public.notification_inbox
   FOR EACH ROW
