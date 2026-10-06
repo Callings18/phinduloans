@@ -10,7 +10,9 @@ export function isChunkLoadError(error: unknown): boolean {
     /Failed to fetch dynamically imported module/i.test(msg) ||
     /Importing a module script failed/i.test(msg) ||
     /Loading chunk [\d]+ failed/i.test(msg) ||
-    /error loading dynamically imported module/i.test(msg)
+    /error loading dynamically imported module/i.test(msg) ||
+    // React.lazy when a dynamic import resolves without a module namespace (stale deploy / bad chunk).
+    /Cannot read properties of undefined \(reading 'default'\)/i.test(msg)
   );
 }
 
@@ -62,7 +64,21 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 ): LazyExoticComponent<T> {
   return lazy(async () => {
     try {
-      return await importer();
+      const mod = await importer();
+      if (!mod?.default) {
+        const err = new Error(
+          mod
+            ? "Dynamic route module loaded but has no default export"
+            : "Dynamic route module failed to load (empty module)",
+        );
+        if (tryRecoverFromChunkLoadError(err)) {
+          return new Promise(() => {
+            /* reload in progress */
+          });
+        }
+        throw err;
+      }
+      return mod;
     } catch (error) {
       if (tryRecoverFromChunkLoadError(error)) {
         return new Promise(() => {

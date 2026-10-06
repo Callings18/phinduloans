@@ -9,7 +9,7 @@ import { useAccessibleHouses } from "@/hooks/useHouseData";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 
 export default function AdminHousesIndex() {
-  const { data: houses, isLoading } = useAccessibleHouses();
+  const { data: houses, isLoading, isError, error } = useAccessibleHouses();
   const { isAdmin } = useAuth();
 
   return (
@@ -30,7 +30,14 @@ export default function AdminHousesIndex() {
           }
         />
 
-        {isLoading ? (
+        {isError ? (
+          <Card className="border-destructive/40">
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              <p className="text-destructive font-medium mb-1">Could not load product houses</p>
+              <p>{error instanceof Error ? error.message : "Please refresh or try again."}</p>
+            </CardContent>
+          </Card>
+        ) : isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="animate-spin mr-2" size={18} /> Loading houses…
           </div>

@@ -46,6 +46,7 @@ import AdminUserGuide from "./pages/admin/AdminUserGuide";
 import AdminRolesPermissions from "./pages/admin/AdminRolesPermissions";
 import AdminCRBQueue from "./pages/admin/AdminCRBQueue";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
+import AdminHousesIndex from "./pages/admin/houses/AdminHousesIndex";
 import { borrowerAppPath, getOfficeBaseUrl, getSiteModeFromHostname, isOfficeSiteMode } from "./config/publicUrls";
 import ExternalRedirect from "./components/common/ExternalRedirect";
 
@@ -71,7 +72,6 @@ const AdminAccounts = lazyWithRetry(() => import("./pages/admin/AdminAccounts"))
 const AdminHR = lazyWithRetry(() => import("./pages/admin/AdminHR"));
 const AdminPayroll = lazyWithRetry(() => import("./pages/admin/AdminPayroll"));
 const AdminPayrollTaxConfig = lazyWithRetry(() => import("./pages/admin/AdminPayrollTaxConfig"));
-const AdminHousesIndex = lazyWithRetry(() => import("./pages/admin/houses/AdminHousesIndex"));
 const HouseLayout = lazyWithRetry(() => import("./components/admin/house/HouseLayout"));
 const HouseDashboardPage = lazyWithRetry(() => import("./pages/admin/houses/HouseDashboardPage"));
 const HouseBorrowersPage = lazyWithRetry(() => import("./pages/admin/houses/HouseBorrowersPage"));

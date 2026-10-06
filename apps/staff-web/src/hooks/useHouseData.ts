@@ -112,11 +112,12 @@ export interface AccessibleHouse {
  */
 export function useAccessibleHouses() {
   const { user, hasRole } = useAuth();
-  const { data: modules, isLoading: modulesLoading } = useLoanProductModules();
+  const modulesQuery = useLoanProductModules();
+  const { data: modules, isLoading: modulesLoading, isError: modulesError, error: modulesErr } = modulesQuery;
 
   const query = useQuery({
     queryKey: ["accessible-houses", user?.id, (modules ?? []).map((m) => m.productCode).join(",")],
-    enabled: Boolean(user?.id) && !modulesLoading,
+    enabled: Boolean(user?.id) && !modulesLoading && !modulesError,
     queryFn: async (): Promise<AccessibleHouse[]> => {
       const houses: AccessibleHouse[] = (modules ?? [])
         .filter((m) => m.enabled)
@@ -141,7 +142,12 @@ export function useAccessibleHouses() {
     },
   });
 
-  return query;
+  return {
+    ...query,
+    isLoading: modulesLoading || query.isLoading || query.isFetching,
+    isError: modulesError || query.isError,
+    error: query.error ?? modulesErr,
+  };
 }
 
 /**
