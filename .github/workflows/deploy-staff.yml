@@ -8,6 +8,8 @@ on:
       - "packages/shared/**"
       - "wrangler.staff.jsonc"
       - "wrangler.jsonc"
+      - "scripts/deploy-staff.mjs"
+      - "package.json"
   workflow_dispatch:
 
 jobs:
