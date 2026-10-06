@@ -13,4 +13,18 @@ const run = (cmd) => {
 run("node scripts/deploy-borrower.mjs");
 run("node scripts/deploy-staff.mjs");
 
-console.log("\nProduction deploy scripts finished. Purge Cloudflare cache if users still see old JS chunks.\n");
+if (process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN) {
+  try {
+    run("node scripts/purge-phindu-cache.mjs");
+  } catch {
+    console.warn("\nCache purge failed — purge manually in Cloudflare if users see stale JS.\n");
+  }
+} else {
+  console.warn(
+    "\nTip: set CLOUDFLARE_API_TOKEN to auto-purge phindu.com cache after deploy.\n",
+  );
+}
+
+console.log(
+  "\nProduction deploy finished. Run pending SQL on Supabase yqrfheavftgybhcafzpt if migrations were not applied.\n",
+);

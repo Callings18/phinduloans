@@ -1,5 +1,7 @@
 # Production deploy (quick)
 
+Architecture (Cloudflare static + Supabase backend): see [`ENTERPRISE_HOSTING.md`](./ENTERPRISE_HOSTING.md).
+
 After merging to `main`, ship all three surfaces:
 
 | Surface | Command | URL |
