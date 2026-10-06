@@ -1793,16 +1793,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const deleteLoanMutation = useMutation({
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
-      if (!DELETABLE_STATUSES.has(loan.status)) {
-        throw new Error(
-          `Cannot delete a loan in status "${loan.status}". Undo disbursement first.`,
-        );
-      }
+      const privilegedDelete = isAdmin && !DELETABLE_STATUSES.has(loan.status);
 
       const { deleteLoanApplication } = await import(
         "@phinduloans/shared/services/repositories/loanDeleteRepository"
       );
-      await deleteLoanApplication(loan.id, loan.status);
+      await deleteLoanApplication(loan.id, loan.status, {
+        allowPrivilegedDelete: privilegedDelete,
+      });
 
       await logAudit({
         action: "DELETE_LOAN_APPLICATION",
@@ -2277,7 +2275,7 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                       </Button>
                     )}
                     {/* Delete loan (admin-only, pre-disbursement) */}
-                    {isAdmin && DELETABLE_STATUSES.has(loan.status) && (
+                    {isAdmin && (
                       <Button size="sm" variant="destructive" onClick={() => setIsDeleteLoanOpen(true)}>
                         <Trash2 size={14} className="mr-1" /> Delete Loan
                       </Button>
@@ -3386,12 +3384,16 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <p>
-                  This permanently deletes the loan application and any draft schedule, transitions and events.
-                  Use this only for pre-disbursement loans (pending, under review, approved, rejected, etc.).
+                  This permanently deletes the loan application, schedule, repayments, disbursements, and related records.
+                  {loan && DELETABLE_STATUSES.has(loan.status)
+                    ? " Safe for pre-disbursement statuses."
+                    : " This loan is already live on the books — only use if it must be removed from the system."}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  For disbursed loans, use <strong>Undo Disbursement</strong> first.
-                </p>
+                {loan && !DELETABLE_STATUSES.has(loan.status) && (
+                  <p className="text-xs text-destructive font-medium">
+                    Active/disbursed delete cannot be undone. Prefer write-off for normal portfolio cleanup when possible.
+                  </p>
+                )}
                 <Textarea
                   placeholder="Reason (optional, kept in audit log)"
                   value={deleteReason}

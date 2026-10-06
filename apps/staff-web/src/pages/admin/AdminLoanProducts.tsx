@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
 import {
   invalidateLoanProductQueries,
@@ -244,7 +245,7 @@ const defaultFormData = {
   enforcement_fee_percent: 10,
   enforcement_fee_type: "percentage" as string,  // NEW: fixed/percentage
   penalty_frequency: "monthly",
-  is_active: true,
+  is_active: false,
   requirements: "",
   required_documents: [] as { document_type: string; document_name: string; is_mandatory: boolean; display_order: number }[],
   employment_types: ["employed", "self_employed", "contract"],
@@ -310,10 +311,21 @@ interface PreviewCalculation {
   termMonths: number;
 }
 
+function suggestProductCodeFromName(name: string): string {
+  const code = name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return code.slice(0, 48);
+}
+
 const AdminLoanProducts = () => {
   const { can } = usePermissions();
-  const canEditProducts = can("products", "update") || can("products", "edit");
-  const canDeleteProducts = can("products", "delete");
+  const { isAdmin } = useAuth();
+  const canEditProducts =
+    isAdmin || can("products", "create") || can("products", "update") || can("products", "edit");
+  const canDeleteProducts = isAdmin || can("products", "delete");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -721,7 +733,15 @@ const AdminLoanProducts = () => {
   };
 
   const handleSubmit = () => {
-    const productCode = normalizeLoanProductCode(formData.product_code);
+    if (!formData.name.trim()) {
+      toast({ title: "Product name required", variant: "destructive" });
+      return;
+    }
+
+    let productCode = normalizeLoanProductCode(formData.product_code);
+    if (!productCode && formData.name.trim()) {
+      productCode = normalizeLoanProductCode(suggestProductCodeFromName(formData.name));
+    }
     if (formData.is_active && !productCode && !editingProduct) {
       toast({
         title: "Product code required",
@@ -884,15 +904,24 @@ const AdminLoanProducts = () => {
               </DialogHeader>
               {/* V1.0.1: Simplified single-page form with essential fields only */}
               <div className="space-y-6 pt-4">
-                {/* Row 1: Name & Interest Type */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                {/* Row 1: Name, code & Interest Type */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2 md:col-span-1">
                     <Label>Product Name *</Label>
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="e.g., Salary Advance, Payroll Loan"
+                      placeholder="e.g., Weekly Cash Loan"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Product code</Label>
+                    <Input
+                      value={formData.product_code}
+                      onChange={(e) => setFormData({ ...formData, product_code: e.target.value.toUpperCase() })}
+                      placeholder="WEEKLY_7PCT (auto if blank)"
+                    />
+                    <p className="text-[10px] text-muted-foreground">Required before activating; powers Product Houses URL.</p>
                   </div>
                   <div className="space-y-2">
                     <Label>Interest Type *</Label>
@@ -912,7 +941,7 @@ const AdminLoanProducts = () => {
                 </div>
 
                 {/* Row 2: Amount & Term */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label>Min Amount (K) *</Label>
                     <Input
@@ -930,12 +959,52 @@ const AdminLoanProducts = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Max Term (months) *</Label>
+                    <Label>Term unit *</Label>
+                    <Select
+                      value={formData.term_unit}
+                      onValueChange={(v) => setFormData({ ...formData, term_unit: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="days">Days</SelectItem>
+                        <SelectItem value="weeks">Weeks</SelectItem>
+                        <SelectItem value="months">Months</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Max term ({formData.term_unit}) *</Label>
                     <Input
                       type="number"
+                      min={1}
                       value={formData.max_term_months}
                       onChange={(e) => setFormData({ ...formData, max_term_months: Number(e.target.value) })}
                     />
+                    <p className="text-[10px] text-muted-foreground">Weekly 7% example: unit = weeks, max = 1, rate 7, period = per week.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Repayment frequency</Label>
+                    <Select
+                      value={formData.repayment_frequency}
+                      onValueChange={(v) => setFormData({ ...formData, repayment_frequency: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-3 pt-6">
+                    <Switch
+                      checked={formData.is_active}
+                      onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked, status: checked ? "active" : "inactive" })}
+                    />
+                    <Label className="font-normal">Active (visible to staff & borrowers when published)</Label>
                   </div>
                 </div>
 
@@ -1377,7 +1446,7 @@ const AdminLoanProducts = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {product.status !== "archived" && (
+                          {product.status !== "archived" && canEditProducts && (
                             <Switch
                               checked={product.is_active}
                               onCheckedChange={() => toggleActive(product)}

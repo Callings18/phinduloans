@@ -20,10 +20,14 @@ export function isDeletableLoanStatus(status: string | null | undefined): boolea
 /**
  * Remove a loan application and dependent rows (uses DB RPC when available).
  */
-export async function deleteLoanApplication(loanId: string, status: string) {
-  if (!isDeletableLoanStatus(status)) {
+export async function deleteLoanApplication(
+  loanId: string,
+  status: string,
+  options?: { allowPrivilegedDelete?: boolean },
+) {
+  if (!options?.allowPrivilegedDelete && !isDeletableLoanStatus(status)) {
     throw new Error(
-      `Cannot delete a loan in status "${status}". Undo disbursement first or contact super admin.`,
+      `Cannot delete a loan in status "${status}". Undo disbursement first or use admin delete.`,
     );
   }
 
