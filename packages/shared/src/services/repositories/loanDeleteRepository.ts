@@ -40,8 +40,13 @@ export async function deleteLoanApplication(
   )("admin_purge_loan_application", { p_loan_id: loanId });
 
   if (error) {
-    if ((error as { code?: string }).code === "42883") {
-      return deleteLoanApplicationFallback(loanId, status);
+    if (isMissingPurgeRpcError(error)) {
+      if (options?.allowPrivilegedDelete || isDeletableLoanStatus(status)) {
+        return deleteLoanApplicationFallback(loanId, status, options);
+      }
+      throw new Error(
+        "Loan delete is not set up on the database yet. Ask an engineer to run supabase/scripts/APPLY_admin_purge_loan_rpc.sql in Supabase SQL Editor, then try again.",
+      );
     }
     throw error;
   }
@@ -52,9 +57,20 @@ export async function deleteLoanApplication(
   }
 }
 
-/** Legacy path if migration not applied yet. */
-async function deleteLoanApplicationFallback(loanId: string, status: string) {
-  if (!isDeletableLoanStatus(status)) {
+function isMissingPurgeRpcError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string };
+  if (e.code === "42883" || e.code === "PGRST202") return true;
+  const msg = e.message ?? "";
+  return msg.includes("admin_purge_loan_application") || msg.includes("schema cache");
+}
+
+/** Legacy path if migration not applied yet (pre-disbursement only). */
+async function deleteLoanApplicationFallback(
+  loanId: string,
+  status: string,
+  options?: { allowPrivilegedDelete?: boolean },
+) {
+  if (!options?.allowPrivilegedDelete && !isDeletableLoanStatus(status)) {
     throw new Error(`Cannot delete a loan in status "${status}".`);
   }
   const byLoanId = [
