@@ -46,7 +46,8 @@ function getBorrowerDashboardUrl(): string {
 // server-side email filter, so we walk pages until we find the match or
 // run out of pages.
 async function findAuthUserByPhoneOrEmail(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   formattedPhone: string,
   syntheticEmail: string,
 ) {
