@@ -68,7 +68,7 @@ const QuickApply = ({ userId, profile, kycVerified = false, hasActiveLoan = fals
     queryKey: ["loan-products-quick"],
     queryFn: async () => {
       const rows = await fetchActiveLoanProducts({ sort: "min_amount", ascending: true });
-      return (rows as LoanProduct[]).filter(isBorrowerPortalProduct);
+      return (rows as LoanProduct[]).filter((p) => isBorrowerPortalProduct(p as unknown as { channels?: string[]; is_active?: boolean }));
     },
     staleTime: 30000,
   });
