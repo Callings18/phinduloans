@@ -1,5 +1,7 @@
 -- Install admin loan purge RPC (fixes office "Could not find function admin_purge_loan_application").
--- Run once in Supabase SQL Editor on project seobilifwyxhtjvsgqpc.
+-- Run once in Supabase SQL Editor on the project your office app uses.
+-- office.phindu.com (Mar 2026) still points at yqrfheavftgybhcafzpt — apply there for live deletes.
+-- Also run on seobilifwyxhtjvsgqpc if/when GitHub secrets cut over to the owned project.
 
 CREATE OR REPLACE FUNCTION public.admin_purge_loan_application(p_loan_id uuid)
 RETURNS jsonb

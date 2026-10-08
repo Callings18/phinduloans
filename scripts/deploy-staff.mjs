@@ -34,8 +34,12 @@ function loadDotEnv(file) {
 
 loadDotEnv(envPath);
 
+/** Owned production project (see docs/SUPABASE_OPS.md). URL is public; anon key must match this ref. */
+const DEFAULT_SUPABASE_URL = "https://seobilifwyxhtjvsgqpc.supabase.co";
+
 const required = {
-  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL,
+  VITE_SUPABASE_URL:
+    process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL,
   VITE_SUPABASE_PUBLISHABLE_KEY:
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY,
 };

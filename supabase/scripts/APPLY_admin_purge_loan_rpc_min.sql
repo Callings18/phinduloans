@@ -1,3 +1,6 @@
+-- Production office (office.phindu.com) uses Supabase project yqrfheavftgybhcafzpt until GitHub secrets are updated.
+-- Run this entire file in that project's SQL Editor, then hard-refresh the office app.
+
 CREATE OR REPLACE FUNCTION public.admin_purge_loan_application(p_loan_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql

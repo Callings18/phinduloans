@@ -37,10 +37,15 @@ Update repository secrets to point at **owned** Supabase:
 
 ## Migrating live data from old Lovable project
 
-The legacy project ref `yqrfheavftgybhcafzpt` is not in your Supabase CLI account. To keep production loans/borrowers:
+**Step-by-step:** `docs/SUPABASE_CUTOVER_CHECKLIST.md`  
+**Lovable export + support ticket (auth UUIDs + `loan-documents`):** `docs/LOVABLE_CUTOVER_HANDOVER.md`  
+**GitHub secrets (after `gh auth login`):** `node scripts/supabase-cutover-secrets.mjs`
 
-1. Obtain a **database backup** or **service-role export** from whoever administers that project, **or** transfer the project into your org via Supabase support.
-2. Restore into `seobilifwyxhtjvsgqpc` (or use logical replication / pg_dump).
-3. Update GitHub secrets and local `.env`, redeploy workers, purge Cloudflare cache.
+The legacy project ref `yqrfheavftgybhcafzpt` is Lovable-hosted. Supported path:
 
-Do **not** point `app.phindu.com` / `office.phindu.com` at an empty DB until cutover is intentional.
+1. Lovable **Cloud → Advanced → Export data**.
+2. Lovable **support**: migrate auth users (same UUIDs) and **`loan-documents`** storage to `seobilifwyxhtjvsgqpc`.
+3. `db push` + purge RPC script + function deploy + `reschedule_cron_jobs_seobil.sql`.
+4. Update GitHub secrets and local `.env`, redeploy workers, purge Cloudflare cache.
+
+Do **not** point `app.phindu.com` / `office.phindu.com` at an empty DB until cutover is intentional. Do **not** Lovable-disconnect until Phase F verification in the checklist passes.

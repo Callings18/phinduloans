@@ -25,3 +25,7 @@ dist-ssr
 
 # Playwright / test artifacts
 test-results/
+
+# Lovable cutover dumps (local only)
+.data-cutover/
+*.backup
