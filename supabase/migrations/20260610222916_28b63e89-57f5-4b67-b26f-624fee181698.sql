@@ -17,19 +17,33 @@ AS $$
   )
 $$;
 
--- Secure Realtime channel subscriptions: only internal staff may receive Realtime messages.
-ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
+-- Secure Realtime channel subscriptions (requires owner on realtime.messages).
+-- Supabase CLI db push may lack ownership; apply via Dashboard SQL if this block is skipped.
+DO $realtime$
+BEGIN
+  ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Staff can receive realtime messages" ON realtime.messages;
-CREATE POLICY "Staff can receive realtime messages"
-ON realtime.messages
-FOR SELECT
-TO authenticated
-USING (public.is_staff(auth.uid()));
+  DROP POLICY IF EXISTS "Staff can receive realtime messages" ON realtime.messages;
+  CREATE POLICY "Staff can receive realtime messages"
+    ON realtime.messages
+    FOR SELECT
+    TO authenticated
+    USING (public.is_staff(auth.uid()));
 
-DROP POLICY IF EXISTS "Staff can send realtime messages" ON realtime.messages;
-CREATE POLICY "Staff can send realtime messages"
-ON realtime.messages
-FOR INSERT
-TO authenticated
-WITH CHECK (public.is_staff(auth.uid()));
+  DROP POLICY IF EXISTS "Staff can send realtime messages" ON realtime.messages;
+  CREATE POLICY "Staff can send realtime messages"
+    ON realtime.messages
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (public.is_staff(auth.uid()));
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping realtime.messages RLS (insufficient privileges on hosted Supabase)';
+  WHEN OTHERS THEN
+    IF SQLERRM LIKE '%must be owner%' THEN
+      RAISE NOTICE 'Skipping realtime.messages RLS (not table owner)';
+    ELSE
+      RAISE;
+    END IF;
+END;
+$realtime$;

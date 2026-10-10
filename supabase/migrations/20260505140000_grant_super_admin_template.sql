@@ -95,7 +95,7 @@ COMMENT ON FUNCTION public.grant_super_admin_to(text, text, text) IS
 -- Quick lookup: who matches a partial name? Useful before granting.
 --   SELECT * FROM public.find_user_for_role('Ireen');
 CREATE OR REPLACE FUNCTION public.find_user_for_role(p_query text)
-RETURNS TABLE(user_id uuid, full_name text, email text, phone text, nrc_number text, current_role text)
+RETURNS TABLE(user_id uuid, full_name text, email text, phone text, nrc_number text, role_name text)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
@@ -107,7 +107,7 @@ AS $$
     p.email,
     p.phone,
     p.nrc_number,
-    COALESCE(ur.role::text, 'user') AS current_role
+    COALESCE(ur.role::text, 'user') AS role_name
   FROM public.profiles p
   LEFT JOIN public.user_roles ur ON ur.user_id = p.id
   WHERE p.full_name ILIKE '%' || p_query || '%'

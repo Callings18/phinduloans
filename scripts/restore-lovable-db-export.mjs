@@ -53,12 +53,11 @@ function findPgRestore() {
   throw new Error("pg_restore not found. Extract .tools/pg-tar/pgsql/bin from pg-binaries.zip.");
 }
 
-function runPgRestore(pgRestore, dbUrl, schemas, dryRun, { disableTriggers = false } = {}) {
+function runPgRestore(pgRestore, dbUrl, schemas, dryRun, { replicationRole = false } = {}) {
   const args = [
     "--no-owner",
     "--no-acl",
     "--data-only",
-    ...(disableTriggers ? ["--disable-triggers"] : []),
     "--verbose",
     ...schemas.flatMap((s) => ["--schema", s]),
     ...(dryRun ? ["--list"] : ["--dbname", dbUrl]),
@@ -69,7 +68,13 @@ function runPgRestore(pgRestore, dbUrl, schemas, dryRun, { disableTriggers = fal
     return 0;
   }
   console.log("Restoring schemas:", schemas.join(", "));
-  const r = spawnSync(pgRestore, args, { stdio: "inherit", env: process.env });
+  const env = { ...process.env };
+  if (replicationRole) {
+    // Supabase pooler rejects pg_restore --disable-triggers (system FK triggers).
+    // replica role skips user triggers and FK checks for the session.
+    env.PGOPTIONS = "-c session_replication_role=replica";
+  }
+  const r = spawnSync(pgRestore, args, { stdio: "inherit", env });
   return r.status ?? 1;
 }
 
@@ -91,8 +96,8 @@ function main() {
     ? [["public"], ["storage"]]
     : [["auth"], ["public"], ["storage"]];
   for (const schemas of order) {
-    const disableTriggers = schemas[0] === "auth";
-    const code = runPgRestore(pgRestore, dbUrl, schemas, dryRun, { disableTriggers });
+    const replicationRole = schemas[0] === "auth" || schemas[0] === "public";
+    const code = runPgRestore(pgRestore, dbUrl, schemas, dryRun, { replicationRole });
     if (code !== 0) {
       console.error("pg_restore failed for", schemas.join(","), "exit", code);
       process.exit(code);

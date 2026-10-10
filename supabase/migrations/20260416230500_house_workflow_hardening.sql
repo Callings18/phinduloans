@@ -98,7 +98,7 @@ DECLARE
   v_uid UUID := auth.uid();
   v_loan_id UUID;
   v_loan_status public.loan_status;
-  v_disbursement_status public.disbursement_status;
+  v_disbursement_status TEXT;
 BEGIN
   SELECT lp.product_code, d.loan_id, d.status, la.status
   INTO v_product_code, v_loan_id, v_disbursement_status, v_loan_status

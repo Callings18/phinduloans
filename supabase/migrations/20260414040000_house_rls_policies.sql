@@ -53,5 +53,5 @@ CREATE POLICY "house_product_scope_application_documents_select"
   ON public.application_documents
   FOR SELECT
   USING (
-    public.has_product_access(auth.uid(), public.loan_product_code_for_loan(loan_application_id))
+    public.has_product_access(auth.uid(), public.loan_product_code_for_loan(application_id))
   );
