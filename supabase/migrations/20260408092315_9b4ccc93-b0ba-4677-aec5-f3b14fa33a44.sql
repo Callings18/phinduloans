@@ -66,10 +66,15 @@ DECLARE
   tbl TEXT;
 BEGIN
   FOR tbl IN
-    SELECT table_name FROM information_schema.columns
-    WHERE table_schema = 'public' AND column_name = 'updated_at'
-    AND table_name NOT IN ('schema_migrations')
-    GROUP BY table_name
+    SELECT c.table_name
+    FROM information_schema.columns c
+    JOIN information_schema.tables t
+      ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+    WHERE c.table_schema = 'public'
+      AND c.column_name = 'updated_at'
+      AND t.table_type = 'BASE TABLE'
+      AND c.table_name NOT IN ('schema_migrations')
+    GROUP BY c.table_name
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS update_%s_updated_at ON public.%I', tbl, tbl);
     EXECUTE format('CREATE TRIGGER update_%s_updated_at BEFORE UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()', tbl, tbl);

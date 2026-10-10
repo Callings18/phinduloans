@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS public.payroll_records (
 
 ALTER TABLE public.payroll_records ENABLE ROW LEVEL SECURITY;
 
+-- HR v1 table (20260115120001) may exist without status; extend before RLS policies.
+ALTER TABLE public.payroll_records
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'draft';
+
 -- RLS: Admins full access
 DROP POLICY IF EXISTS "Admins can manage payroll records" ON public.payroll_records;
 CREATE POLICY "Admins can manage payroll records"

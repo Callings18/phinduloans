@@ -7,23 +7,52 @@ INSERT INTO public.permissions (module, action, description) VALUES
   ('payroll', 'approve', 'Approve payroll runs and mark as paid')
 ON CONFLICT (module, action) DO NOTHING;
 
--- 2) Map to roles (super_admin / admin: all permissions)
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM public.roles r
-JOIN public.permissions p ON p.module IN ('hr', 'payroll') AND p.action IN ('view', 'manage', 'approve')
-WHERE r.code IN ('super_admin', 'admin')
-ON CONFLICT (role_id, permission_id) DO NOTHING;
+-- 2) Map to roles (supports role_id or role_name RBAC shapes)
+DO $map$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'role_permissions' AND column_name = 'role_id'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'roles' AND column_name = 'code'
+  ) THEN
+    INSERT INTO public.role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM public.roles r
+    JOIN public.permissions p ON p.module IN ('hr', 'payroll') AND p.action IN ('view', 'manage', 'approve')
+    WHERE r.code IN ('super_admin', 'admin')
+    ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- finance_officer: full payroll + hr view (read employees for payroll context)
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM public.roles r
-JOIN public.permissions p
-  ON (p.module = 'payroll' AND p.action IN ('view', 'manage', 'approve'))
-  OR (p.module = 'hr' AND p.action = 'view')
-WHERE r.code = 'finance_officer'
-ON CONFLICT (role_id, permission_id) DO NOTHING;
+    INSERT INTO public.role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM public.roles r
+    JOIN public.permissions p
+      ON (p.module = 'payroll' AND p.action IN ('view', 'manage', 'approve'))
+      OR (p.module = 'hr' AND p.action = 'view')
+    WHERE r.code = 'finance_officer'
+    ON CONFLICT (role_id, permission_id) DO NOTHING;
+  ELSIF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'role_permissions' AND column_name = 'role_name'
+  ) THEN
+    INSERT INTO public.role_permissions (role_name, permission_id)
+    SELECT r.name, p.id
+    FROM public.roles r
+    JOIN public.permissions p ON p.module IN ('hr', 'payroll') AND p.action IN ('view', 'manage', 'approve')
+    WHERE r.name IN ('super_admin', 'admin')
+    ON CONFLICT (role_name, permission_id) DO NOTHING;
+
+    INSERT INTO public.role_permissions (role_name, permission_id)
+    SELECT r.name, p.id
+    FROM public.roles r
+    JOIN public.permissions p
+      ON (p.module = 'payroll' AND p.action IN ('view', 'manage', 'approve'))
+      OR (p.module = 'hr' AND p.action = 'view')
+    WHERE r.name = 'finance_officer'
+    ON CONFLICT (role_name, permission_id) DO NOTHING;
+  END IF;
+END $map$;
 
 -- 3) Tax engine defaults (general rows)
 INSERT INTO public.payroll_tax_config (config_type, label, ceiling_amount, effective_from, notes, is_active)

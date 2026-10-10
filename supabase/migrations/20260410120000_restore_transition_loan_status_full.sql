@@ -2,6 +2,8 @@
 -- plus lifecycle actions (disburse, activate, complete, default). Replaces the
 -- simplified 20260408205053 version that dropped verify_documents/finance_approve.
 
+DROP FUNCTION IF EXISTS public.transition_loan_status(uuid, text, text);
+
 CREATE OR REPLACE FUNCTION public.transition_loan_status(
   p_loan_id uuid,
   p_action text,
