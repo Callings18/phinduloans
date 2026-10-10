@@ -29,3 +29,5 @@ test-results/
 # Lovable cutover dumps (local only)
 .data-cutover/
 *.backup
+.env.cutover.local
+.tools/

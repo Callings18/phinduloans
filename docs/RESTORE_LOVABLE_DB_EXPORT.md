@@ -17,7 +17,26 @@ Staged copy: `.data-cutover/loan-kindly-flow_261008.backup` (gitignored).
 
 ---
 
-## 2. Install `pg_restore` (one-time on Windows)
+## 2. Inspect dump (done locally)
+
+```powershell
+# Portable client (no admin install): extract bin/ from EDB zip into .tools/pg-tar/pgsql/bin
+& .tools\pg-tar\pgsql\bin\pg_restore.exe -l .data-cutover\loan-kindly-flow_261008.backup > .data-cutover\restore.toc.txt
+```
+
+**Oct 2026 export includes:**
+
+| Schema | Notable contents |
+|--------|------------------|
+| `auth` | **`TABLE DATA auth users`** (+ identities, sessions, …) |
+| `public` | loans, borrowers, repayments, settings, HR, … |
+| `storage` | bucket/object **metadata** only (files still need bucket copy) |
+
+If the dump includes `auth.users`, you may **not** need a separate Lovable auth migration — but hosted Supabase restricts some `auth` restore operations; verify counts after restore.
+
+---
+
+## 3. Install `pg_restore` (one-time on Windows)
 
 The Supabase CLI npm package does not run on this machine; use PostgreSQL client tools:
 
@@ -33,7 +52,7 @@ pg_restore --version
 
 ---
 
-## 3. Inspect what is inside the dump
+## 4. Inspect what is inside the dump
 
 ```powershell
 pg_restore -l ".data-cutover\loan-kindly-flow_261008.backup" > .data-cutover\restore.toc.txt
@@ -49,25 +68,23 @@ Check `.data-cutover\restore.toc.txt` for:
 
 ---
 
-## 4. Database password (seobil)
+## 5. Database password and connection (seobil)
 
-Supabase Dashboard → **Phindu Loans** → **Project Settings → Database**:
+**Password:** Dashboard → Database → Settings → reset if needed. Store only in **`.env.cutover.local`** (gitignored):
 
-- **Direct connection** host: `db.seobilifwyxhtjvsgqpc.supabase.co`
-- Port **5432**, database `postgres`, user `postgres`
-- Reset/copy the **database password** if needed.
-
-Connection URI (replace password):
-
-```text
-postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+```env
+DATABASE_URL=postgresql://postgres.seobilifwyxhtjvsgqpc:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
-Use the **Session pooler** or **Direct** URI from the dashboard (region may differ). For `pg_restore`, **direct 5432** is most reliable.
+**IPv4:** On many networks, `db.seobilifwyxhtjvsgqpc.supabase.co` resolves to **IPv6 only**. Use the **session pooler** URI above (IPv4), or enable Supabase **IPv4 add-on** for direct `pg_restore`.
 
 ---
 
-## 5. Restore strategies
+## 6. Restore strategies
+
+**Prerequisite:** `supabase db push --yes` on `seobilifwyxhtjvsgqpc` must succeed so `public` tables/columns match the dump. If push fails, fix migrations before loading data.
+
+**Automated helper:** `node scripts/restore-lovable-db-export.mjs --public-only` (reads `DATABASE_URL` from `.env.cutover.local`).
 
 ### Option A — Replace seobil contents (typical cutover)
 
@@ -123,7 +140,7 @@ Expect errors if objects already exist; use `--clean --if-exists` only when you 
 
 ---
 
-## 6. After database restore
+## 7. After database restore
 
 1. **Storage:** import `loan-documents` objects (Lovable support ticket) — DB rows point at paths in that bucket.
 2. **Edge functions + secrets + cron:** `docs/LOVABLE_CUTOVER_HANDOVER.md`
@@ -132,7 +149,7 @@ Expect errors if objects already exist; use `--clean --if-exists` only when you 
 
 ---
 
-## 7. Security
+## 8. Security
 
 - Never commit `.backup` files or database passwords.
 - Delete local dumps after successful cutover if policy requires.
