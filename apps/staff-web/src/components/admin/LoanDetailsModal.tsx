@@ -121,7 +121,7 @@ const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
   contract_signing: ["pending", "approved", "awaiting_disbursement", "rejected"],
   awaiting_disbursement: ["pending", "approved", "contract_signing", "rejected"],
   disbursed: ["active", "approved"], // "approved" used by Undo Disbursement
-  active: ["defaulted"], // "completed" is auto-set when fully paid
+  active: ["defaulted", "approved"], // "approved" = undo disbursement
   completed: [],
   defaulted: ["active"],
   rejected: ["pending", "under_review"],
@@ -1775,7 +1775,14 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       onOpenChange(false);
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to undo disbursement");
+      const msg = String(error.message || "");
+      if (msg.includes("Invalid loan_applications status transition")) {
+        toast.error(
+          "Undo blocked by status rules on the database. Ask an engineer to apply migration 20261013120000 (active → approved for undo disbursement).",
+        );
+        return;
+      }
+      toast.error(msg || "Failed to undo disbursement");
     },
   });
 

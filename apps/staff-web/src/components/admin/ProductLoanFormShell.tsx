@@ -32,6 +32,7 @@ import CollateralBorrowersSection, {
   validateCollateralBorrowers,
 } from "@/components/loans/CollateralBorrowersSection";
 import { normalizeDocKey, equivalentDocKeys } from "@phinduloans/shared/constants/borrowerKycDocs";
+import { mapSupabaseError } from "@phinduloans/shared/utils/mapSupabaseError";
 
 /** A document available for reuse from the borrower's history (vault or a completed loan). */
 type HistoricalDoc = {
@@ -1241,8 +1242,9 @@ export default function ProductLoanFormShell({
       navigate(successRedirectPath);
     },
     onError: (error: Error) => {
-      setLastError(error.message || "Loan creation failed.");
-      toast({ title: "Unable to create loan", description: error.message, variant: "destructive" });
+      const description = mapSupabaseError(error, "Loan creation failed.");
+      setLastError(description);
+      toast({ title: "Unable to create loan", description, variant: "destructive" });
     },
   });
 

@@ -35,7 +35,14 @@ export function mapSupabaseError(err: unknown, fallback = "Something went wrong.
   if (code === "23505" || lower.includes("unique constraint") || lower.includes("duplicate key")) {
     // Trigger: block_duplicate_active_loan (Option C: blocks on user_id, NRC, or phone match)
     if (lower.includes("borrower already has an open loan")) {
-      return "You already have an existing loan application or active loan under this identity (NRC/phone). Please complete or close it before applying again.";
+      const idMatch = raw.match(/existing_id=([0-9a-f-]{36})/i);
+      const statusMatch = raw.match(/status=([a-z_]+)/i);
+      const ref = idMatch ? ` Open loan ID: ${idMatch[1]}.` : "";
+      const st = statusMatch ? ` Status: ${statusMatch[1]}.` : "";
+      return (
+        `This borrower already has an open loan on the books.${st}${ref} ` +
+        "Open that loan → Undo Disbursement (if no payments recorded) or Delete Loan (admin), then create again in the correct product house."
+      );
     }
     if (lower.includes("loan_applications_open_nrc_phone_uniq")) {
       return "You already have an existing loan application or active loan under this identity (NRC/phone). Please complete or close it before applying again.";

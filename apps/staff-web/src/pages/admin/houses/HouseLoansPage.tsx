@@ -25,6 +25,7 @@ import {
 } from "@phinduloans/shared/components/ui/alert-dialog";
 import { useHouseLoans, useHouseRepayments } from "@/hooks/useHouseData";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import {
   Search,
   Plus,
@@ -74,8 +75,10 @@ export default function HouseLoansPage() {
   const { data: loans, isLoading } = useHouseLoans(productCode);
   const { data: repayments } = useHouseRepayments(productCode);
   const { can } = usePermissions();
+  const { isAdmin } = useAuth();
   const canCreateLoan = can("house", "loans_create");
   const canUpdateLoan = can("house", "loans_update");
+  const canPrivilegedDelete = isAdmin || can("loans", "delete");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -96,7 +99,9 @@ export default function HouseLoansPage() {
   const deleteMutation = useMutation({
     mutationFn: async (loan: any) => {
       if (!loan) throw new Error("No loan selected");
-      await deleteLoanApplication(loan.id, loan.status);
+      await deleteLoanApplication(loan.id, loan.status, {
+        allowPrivilegedDelete: canPrivilegedDelete && !DELETABLE_STATUSES.has(loan.status),
+      });
     },
     onSuccess: () => {
       toast.success("Loan deleted");
@@ -536,7 +541,7 @@ export default function HouseLoansPage() {
                               <Link to={`/admin/houses/${productCode}/loans/${l.id}/edit`}><Pencil size={14} /></Link>
                             </Button>
                           )}
-                          {canUpdateLoan && DELETABLE_STATUSES.has(l.status) && (
+                          {canUpdateLoan && (DELETABLE_STATUSES.has(l.status) || canPrivilegedDelete) && (
                             <Button size="sm" variant="ghost" title="Delete" onClick={() => setDeleteLoan(l)} className="text-destructive hover:text-destructive">
                               <Trash2 size={14} />
                             </Button>
