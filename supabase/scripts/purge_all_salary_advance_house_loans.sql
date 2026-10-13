@@ -1,5 +1,5 @@
 -- One-off: remove ALL loans in the borrower Salary Advance house (wrong product).
--- Run in Supabase SQL Editor on the LIVE project (Lovable/yqrf) as postgres.
+-- Run on seobil (cutover target) before flip; on yqrf only if still live there.
 -- STEP 1: preview counts. STEP 2: uncomment and run the DO block after confirming.
 
 -- ========== STEP 1: PREVIEW ==========

@@ -12,7 +12,7 @@ Production **stays on Lovable** (`yqrfheavftgybhcafzpt`) until you deliberately 
 ## Complete track B (backend ready)
 
 1. **Schema:** `supabase db push --yes` (fix any failing migrations; see `repair_payroll_records_status.sql`).
-2. **Data:** `.env.cutover.local` + `truncate_public_before_data_restore.sql` → `node scripts/restore-lovable-db-export.mjs --public-only` (+ storage metadata pass if needed).
+2. **Data:** `.env.cutover.local` → `node scripts/cutover-restore-ordered.mjs` (preferred) or legacy `restore-lovable-db-export.mjs`; then `node scripts/cutover-restore-storage.mjs` for `storage.objects` metadata; `node scripts/cutover-verify.mjs` for counts.
 3. **RPC:** `APPLY_admin_purge_loan_rpc.sql` on seobil.
 4. **Functions + secrets + cron:** `docs/LOVABLE_CUTOVER_HANDOVER.md`.
 5. **Storage files:** Lovable support / manual copy into `loan-documents` on seobil (same paths).
