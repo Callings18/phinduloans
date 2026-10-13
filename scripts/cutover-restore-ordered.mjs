@@ -26,14 +26,12 @@ const PHASE1_TABLES = [
   "accounts",
   "profiles",
   "system_settings",
-  "loan_products",
 ];
 
 const PHASE2_TABLES = ["loan_applications"];
 
 const PHASE3_TABLES = [
   "loan_repayments",
-  "disbursements",
   "application_documents",
   "user_roles",
   "role_permissions",
@@ -122,6 +120,18 @@ SELECT
   run(psql, [process.env.DATABASE_URL, "-c", sql]);
 }
 
+function restoreDisbursementsAndLedger() {
+  console.log("\n=== Phase 4: disbursements + ledger (drop idempotency indexes) ===");
+  run(psql, [
+    process.env.DATABASE_URL,
+    "-c",
+    "DROP INDEX IF EXISTS public.ux_disbursements_completed_txn_reference; DROP INDEX IF EXISTS public.ux_account_transactions_disbursement_reference;",
+  ]);
+  dropUserTriggers("disbursements");
+  restoreTables(["disbursements", "account_transactions"], { allowFail: true });
+  psqlFile("supabase/scripts/restore_disbursements_cutover.sql");
+}
+
 function main() {
   loadCutoverEnv();
   if (!existsSync(backup)) throw new Error("Missing backup: " + backup);
@@ -132,27 +142,31 @@ function main() {
   console.log("=== Counts (before) ===");
   counts();
 
-  if (!skipTruncate) {
-    psqlFile("supabase/scripts/truncate_public_before_data_restore.sql");
-    psqlFile("supabase/scripts/prepare_public_for_data_restore.sql");
+  try {
+    if (!skipTruncate) {
+      psqlFile("supabase/scripts/truncate_public_before_data_restore.sql");
+      psqlFile("supabase/scripts/prepare_public_for_data_restore.sql");
+    }
+
+    restoreTables(PHASE1_TABLES);
+    restoreTables(PHASE2_TABLES, { allowFail: true });
+    restoreSchemaPublic({ allowFail: true });
+
+    console.log("\n=== Phase 3: repayments (drop triggers) ===");
+    dropUserTriggers("loan_repayments");
+    restoreTables(PHASE3_TABLES, { allowFail: true });
+
+    restoreSchemaPublic({ allowFail: true });
+    restoreDisbursementsAndLedger();
+  } finally {
+    psqlFile("supabase/scripts/restore_public_triggers_after_data_restore.sql");
   }
-
-  restoreTables([...new Set(PHASE1_TABLES)]);
-  restoreTables(PHASE2_TABLES, { allowFail: true });
-  restoreSchemaPublic({ allowFail: true });
-
-  console.log("\n=== Phase 3: repayments / disbursements (drop triggers) ===");
-  dropUserTriggers("loan_repayments");
-  dropUserTriggers("disbursements");
-  restoreTables(PHASE3_TABLES, { allowFail: true });
-
-  restoreSchemaPublic({ allowFail: true });
-
-  psqlFile("supabase/scripts/restore_public_triggers_after_data_restore.sql");
 
   console.log("\n=== Counts (after) ===");
   counts();
-  console.log("\nDone. Compare loan_applications / profiles to Lovable export; re-run with --skip-truncate for another fill pass if needed.");
+  console.log(
+    "\nDone. Export has 73 loan_applications; profiles may be < auth.users until orphan users are expected.",
+  );
 }
 
 try {
