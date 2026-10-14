@@ -22,54 +22,88 @@ type Stat = { value: string; label: string; icon: LucideIcon };
 
 const FUNDED_STATUSES = ["approved", "disbursed", "active", "completed", "defaulted"];
 
+function formatDisbursedKwacha(totalDisbursed: number): string {
+  if (totalDisbursed >= 1_000_000) {
+    return `K${(totalDisbursed / 1_000_000).toFixed(1)}M+`;
+  }
+  if (totalDisbursed >= 1_000) {
+    return `K${(totalDisbursed / 1_000).toFixed(0)}K+`;
+  }
+  return `K${Math.round(totalDisbursed)}+`;
+}
+
+function statsFromLandingRpc(row: {
+  total_disbursed?: number;
+  loans_given?: number;
+  returning_borrowers?: number;
+  profile_count?: number;
+  approval_rate?: number;
+}): Stat[] {
+  const totalDisbursed = Number(row.total_disbursed ?? 0);
+  const loansGiven = Number(row.loans_given ?? 0);
+  const returningBorrowers = Number(row.returning_borrowers ?? 0);
+  const profileCount = Number(row.profile_count ?? 0);
+  const approvalRate = Number(row.approval_rate ?? 98);
+
+  return [
+    { value: formatDisbursedKwacha(totalDisbursed), label: "Loans Disbursed", icon: Banknote },
+    { value: `${loansGiven.toLocaleString()}+`, label: "Loans Given", icon: FileCheck },
+    { value: `${returningBorrowers.toLocaleString()}+`, label: "Returning Borrowers", icon: Repeat },
+    { value: `${profileCount.toLocaleString()}+`, label: "Happy Customers", icon: Users },
+    { value: `${approvalRate}%`, label: "Approval Rate", icon: TrendingUp },
+    { value: "24hrs", label: "Avg. Approval Time", icon: Clock },
+  ];
+}
+
+/** Legacy path when RPC migration is not applied yet (RLS usually returns empty for anon). */
+async function fetchLandingStatsLegacy(): Promise<Stat[]> {
+  const [disbursements, applications, profiles] = await Promise.all([
+    supabase.from("disbursements").select("amount").eq("status", "completed"),
+    supabase.from("loan_applications").select("status, user_id"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+  ]);
+
+  const totalDisbursed = disbursements.data?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
+  const apps = applications.data ?? [];
+  const totalApps = apps.length;
+  const fundedApps = apps.filter((l) => FUNDED_STATUSES.includes(l.status));
+  const approvedApps = fundedApps.length;
+  const approvalRate = totalApps > 0 ? Math.round((approvedApps / totalApps) * 100) : 98;
+
+  const loansPerUser = new Map<string, number>();
+  for (const l of fundedApps) {
+    if (!l.user_id) continue;
+    loansPerUser.set(l.user_id, (loansPerUser.get(l.user_id) || 0) + 1);
+  }
+  let returningBorrowers = 0;
+  loansPerUser.forEach((count) => {
+    if (count >= 2) returningBorrowers += 1;
+  });
+
+  return statsFromLandingRpc({
+    total_disbursed: totalDisbursed,
+    loans_given: approvedApps,
+    returning_borrowers: returningBorrowers,
+    profile_count: profiles.count ?? 0,
+    approval_rate: approvalRate,
+  });
+}
+
 const HeroSection = () => {
   const queryClient = useQueryClient();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["landing-stats"],
     queryFn: async (): Promise<Stat[]> => {
-      const [disbursements, applications, profiles] = await Promise.all([
-        supabase.from("disbursements").select("amount").eq("status", "completed"),
-        supabase.from("loan_applications").select("status, user_id"),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
-      ]);
+      const { data, error } = await (
+        supabase.rpc as (fn: "get_public_landing_stats") => ReturnType<typeof supabase.rpc>
+      )("get_public_landing_stats");
 
-      const totalDisbursed = disbursements.data?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
-      const apps = applications.data ?? [];
-      const totalApps = apps.length;
-      const fundedApps = apps.filter((l) => FUNDED_STATUSES.includes(l.status));
-      const approvedApps = fundedApps.length;
-      const approvalRate = totalApps > 0 ? Math.round((approvedApps / totalApps) * 100) : 98;
-
-      // Returning borrowers: distinct users with 2+ funded loans.
-      const loansPerUser = new Map<string, number>();
-      for (const l of fundedApps) {
-        if (!l.user_id) continue;
-        loansPerUser.set(l.user_id, (loansPerUser.get(l.user_id) || 0) + 1);
-      }
-      let returningBorrowers = 0;
-      loansPerUser.forEach((count) => {
-        if (count >= 2) returningBorrowers += 1;
-      });
-
-      // Format total disbursed.
-      let formattedDisbursed = "K0";
-      if (totalDisbursed >= 1_000_000) {
-        formattedDisbursed = `K${(totalDisbursed / 1_000_000).toFixed(1)}M+`;
-      } else if (totalDisbursed >= 1_000) {
-        formattedDisbursed = `K${(totalDisbursed / 1_000).toFixed(0)}K+`;
-      } else {
-        formattedDisbursed = `K${totalDisbursed}+`;
+      if (!error && data && typeof data === "object") {
+        return statsFromLandingRpc(data as Record<string, number>);
       }
 
-      return [
-        { value: formattedDisbursed, label: "Loans Disbursed", icon: Banknote },
-        { value: `${approvedApps.toLocaleString()}+`, label: "Loans Given", icon: FileCheck },
-        { value: `${returningBorrowers.toLocaleString()}+`, label: "Returning Borrowers", icon: Repeat },
-        { value: `${(profiles.count || 0).toLocaleString()}+`, label: "Happy Customers", icon: Users },
-        { value: `${approvalRate}%`, label: "Approval Rate", icon: TrendingUp },
-        { value: "24hrs", label: "Avg. Approval Time", icon: Clock },
-      ];
+      return fetchLandingStatsLegacy();
     },
     staleTime: 1000 * 30,
   });
