@@ -12,6 +12,7 @@
     "dev": "vite --config apps/staff-web/vite.config.ts",
     "dev:staff": "vite --config apps/staff-web/vite.config.ts",
     "dev:borrower": "vite --config apps/borrower-mobile/vite.config.ts",
+    "dev:borrower:stable": "npm run build:borrower && vite preview --config apps/borrower-mobile/vite.config.ts --host --port 8081",
     "build": "vite build --config apps/staff-web/vite.config.ts",
     "build:all": "npm run build:staff && npm run build:borrower",
     "build:staff": "vite build --config apps/staff-web/vite.config.ts",
