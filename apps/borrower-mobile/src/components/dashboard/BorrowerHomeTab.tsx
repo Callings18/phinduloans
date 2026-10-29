@@ -2,7 +2,6 @@ import { Card, CardContent } from "@phinduloans/shared/components/ui/card";
 import { Progress } from "@phinduloans/shared/components/ui/progress";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import {
-  ArrowDownLeft,
   Banknote,
   CheckCircle2,
   Eye,
@@ -12,6 +11,10 @@ import {
   FileText,
   Activity,
   Clock,
+  Calendar,
+  BarChart3,
+  Headphones,
+  CreditCard,
 } from "lucide-react";
 import { format, startOfDay } from "date-fns";
 import {
@@ -105,8 +108,6 @@ export default function BorrowerHomeTab({
   const overallProgress = totalRepaymentDue > 0 ? Math.round((totalPaid / totalRepaymentDue) * 100) : 0;
   const fullName = profile?.full_name?.trim() || "Customer";
   const firstName = fullName.split(" ")[0] || "Customer";
-  const initials = fullName.slice(0, 1).toUpperCase();
-  const walletBalance = Math.max(totalPaid, 0);
   const nextPaymentAmount = nextPayment ? borrowerRepaymentTotalDue(nextPayment) : 0;
   const totalDisbursed = loans
     .filter((loan) => ["disbursed", "active", "completed"].includes(loan.status))
@@ -222,77 +223,129 @@ export default function BorrowerHomeTab({
   })();
   const NextStepIcon = nextStep.icon;
 
+  const hour = new Date().getHours();
+  const timeGreeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const outstandingBalance =
+    activeLoans.length > 0
+      ? Math.max(0, Math.round((totalRepaymentDue - totalPaid) * 100) / 100)
+      : 0;
+
+  const formatKwacha = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
     <div className="space-y-4">
-      <Card className="overflow-hidden border border-border/60 gradient-card shadow-elevated text-card-foreground">
-        <CardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/20 border border-primary/30 text-primary-foreground flex items-center justify-center font-semibold">
-                {initials}
-              </div>
-              <div>
-                <p className="text-sm/4 text-muted-foreground">Hello, {fullName}</p>
-                <p className="text-base font-semibold">Welcome back</p>
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">{format(new Date(), "MMM d, yyyy")}</p>
-          </div>
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-foreground">
+          {timeGreeting}, {firstName}
+        </h2>
+        <p className="text-sm text-muted-foreground">Here&apos;s your loan summary</p>
+      </div>
 
-          <div className="text-center space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Repayments posted (paid)</p>
-            <p className="text-3xl font-bold">K{walletBalance.toLocaleString()}</p>
-            <p className="text-[10px] text-muted-foreground px-2">
-              Total you have already paid toward installments. For disbursements and outstanding balance, see the card below.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl"
-              onClick={() => onTabChange("payments")}
-            >
-              <Banknote size={16} className="mr-1" /> Make Payment
-            </Button>
-            <Button
-              className="h-10 gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl"
-              onClick={() => onTabChange("apply")}
-            >
-              <TrendingUp size={16} className="mr-1" /> Apply Loan
-            </Button>
-          </div>
-
-          <div className="rounded-2xl bg-secondary/70 border border-border/60 p-3">
-            <p className="text-xs text-muted-foreground mb-2">Disbursements & balance</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold border border-primary/30">
-                ZMW
-              </span>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                Disbursed: K{totalDisbursed.toLocaleString()}
-              </span>
-              {disbursementDestination ? (
-                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                  Destination: {disbursementDestination}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => (onOpenKycDocuments ? onOpenKycDocuments() : onTabChange("profile"))}
-                >
-                  Add payout details
-                </button>
-              )}
-            </div>
-            {!hasBankDetails && !hasMobileMoney && (
-              <p className="text-[11px] text-warning mt-2">
-                Add mobile money or bank details in Profile so admin can disburse to your preferred destination.
+      <Card className="overflow-hidden border-0 shadow-glow gradient-primary text-primary-foreground">
+        <CardContent className="p-5 space-y-4">
+          <div>
+            <p className="text-sm text-primary-foreground/80">Outstanding balance</p>
+            {activeLoans.length > 0 ? (
+              <p className="text-3xl sm:text-4xl font-bold tracking-tight mt-1">
+                K {formatKwacha(outstandingBalance)}
+              </p>
+            ) : (
+              <p className="text-base font-medium mt-2 text-primary-foreground/90">
+                No active loan — apply when you&apos;re ready.
               </p>
             )}
           </div>
+
+          {activeLoans.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background/95 text-foreground p-3">
+                <p className="text-xs text-muted-foreground">Next payment</p>
+                <p className="text-lg font-bold text-primary">
+                  {nextPayment ? `K ${formatKwacha(nextPaymentAmount)}` : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-background/95 text-foreground p-3 flex flex-col justify-center">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" aria-hidden /> Due date
+                </p>
+                <p className="text-sm font-semibold mt-0.5">
+                  {nextPayment ? format(new Date(nextPayment.due_date), "dd MMM yyyy") : "No upcoming"}
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-2 gap-3">
+        {(
+          [
+            {
+              label: "My loan",
+              hint: "View loan details",
+              icon: FileText,
+              action: () => onTabChange("loans"),
+            },
+            {
+              label: "Repayments",
+              hint: "Make a payment",
+              icon: CreditCard,
+              action: () => onTabChange("payments"),
+            },
+            {
+              label: "Statements",
+              hint: "View statements",
+              icon: BarChart3,
+              action: () => onTabChange("loans"),
+            },
+            {
+              label: "Support",
+              hint: "Get help",
+              icon: Headphones,
+              action: () => onTabChange("profile"),
+            },
+          ] as const
+        ).map((tile) => (
+          <button
+            key={tile.label}
+            type="button"
+            onClick={tile.action}
+            className="rounded-2xl border border-border/60 bg-card p-4 text-left hover:border-primary/40 transition-colors"
+          >
+            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2">
+              <tile.icon size={20} aria-hidden />
+            </div>
+            <p className="text-sm font-semibold text-foreground">{tile.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{tile.hint}</p>
+          </button>
+        ))}
+      </div>
+
+      {activeLoans.length > 0 && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+          Repay on time — keep up with your payments to maintain a good credit record.
+        </div>
+      )}
+
+      {(disbursementDestination || totalDisbursed > 0) && (
+        <div className="rounded-2xl bg-secondary/50 border border-border/60 p-3 text-xs text-muted-foreground">
+          {totalDisbursed > 0 && <span>Total disbursed: K{totalDisbursed.toLocaleString()}. </span>}
+          {disbursementDestination ? (
+            <span>Payout: {disbursementDestination}</span>
+          ) : (
+            <button
+              type="button"
+              className="text-primary underline underline-offset-2"
+              onClick={() => (onOpenKycDocuments ? onOpenKycDocuments() : onTabChange("profile"))}
+            >
+              Add payout details
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Resume application banner */}
       {hasDraft && onResumeDraft && activeLoans.length === 0 && (
@@ -369,41 +422,6 @@ export default function BorrowerHomeTab({
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="border border-border/60 bg-card">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-4 gap-3 text-center">
-            <button className="space-y-1" onClick={() => onTabChange("loans")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-primary/30 bg-primary/10 flex items-center justify-center text-primary">
-                <ArrowDownLeft size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">Disbursements</p>
-            </button>
-            <button className="space-y-1" onClick={() => onTabChange("payments")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-accent/30 bg-accent/10 flex items-center justify-center text-accent">
-                <Banknote size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">Repay</p>
-            </button>
-            <button
-              className="space-y-1"
-              onClick={() => (onOpenKycDocuments ? onOpenKycDocuments() : onTabChange("profile"))}
-              type="button"
-            >
-              <div className="h-12 w-12 mx-auto rounded-full border border-info/30 bg-info/10 flex items-center justify-center text-info">
-                <ShieldAlert size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">KYC & Wallet</p>
-            </button>
-            <button className="space-y-1" onClick={() => onTabChange("apply")} type="button">
-              <div className="h-12 w-12 mx-auto rounded-full border border-warning/30 bg-warning/10 flex items-center justify-center text-warning">
-                <Sparkles size={18} />
-              </div>
-              <p className="text-xs text-muted-foreground">New Loan</p>
-            </button>
-          </div>
         </CardContent>
       </Card>
 

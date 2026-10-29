@@ -43,7 +43,7 @@ import BorrowerPaymentsTab from "@/components/dashboard/BorrowerPaymentsTab";
 import BorrowerProfileTab from "@/components/dashboard/BorrowerProfileTab";
 import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 
-const phinduLogo = "/icons/icon-512.png";
+const phinduLogo = "/branding/phindu-logo-white.png";
 import ThemeToggle from "@phinduloans/shared/components/common/ThemeToggle";
 import NotificationCenter from "@phinduloans/shared/components/common/NotificationCenter";
 import {
