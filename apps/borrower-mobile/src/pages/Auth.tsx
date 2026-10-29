@@ -5,6 +5,9 @@ import { BorrowerAuthShell } from "@/components/auth/BorrowerAuthShell";
 import { useAuth } from "@phinduloans/shared/hooks/useAuth";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
 import { borrowerAppPath, officePath } from "@phinduloans/shared/config/siteMode";
+import { BORROWER_GOOGLE_SIGNUP_CONSENT_KEY } from "@phinduloans/shared/config/borrowerOAuth";
+import { recordBorrowerTermsConsent } from "@phinduloans/shared/utils/borrowerConsent";
+import { BorrowerGoogleAuthSection } from "@/components/auth/BorrowerGoogleAuthButton";
 
 /** Absolute borrower destination — never leave app.phindu.com for marketing Site URL. */
 function goToBorrowerDestination(path: string | null) {
@@ -23,6 +26,17 @@ const Auth = () => {
   const { user, isLoading, isStaff, rolesResolved, rolesError } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user || !rolesResolved) return;
+    const pendingConsent = sessionStorage.getItem(BORROWER_GOOGLE_SIGNUP_CONSENT_KEY);
+    if (pendingConsent === "1") {
+      sessionStorage.removeItem(BORROWER_GOOGLE_SIGNUP_CONSENT_KEY);
+      void recordBorrowerTermsConsent(user.id).then(({ error }) => {
+        if (error) console.warn("Google signup consent log failed:", error.message);
+      });
+    }
+  }, [user, rolesResolved]);
 
   useEffect(() => {
     if (!isLoading && user && rolesResolved) {
@@ -80,8 +94,9 @@ const Auth = () => {
         </p>
       }
     >
-      <div className="animate-slide-up">
+      <div className="animate-slide-up space-y-0">
         <PhoneAuthForm purpose={isLogin ? "login" : "signup"} onSuccess={handlePhoneAuthSuccess} />
+        <BorrowerGoogleAuthSection purpose={isLogin ? "login" : "signup"} nextPath={safeNextPath} />
       </div>
     </BorrowerAuthShell>
   );
