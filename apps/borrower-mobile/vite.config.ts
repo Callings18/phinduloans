@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
@@ -5,9 +6,16 @@ import react from "@vitejs/plugin-react-swc";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(appDir, "../..");
+const viteCacheDir = path.join(
+  process.env.LOCALAPPDATA || os.tmpdir(),
+  "PhinduLoans",
+  "vite-cache",
+  "borrower",
+);
 
 export default defineConfig({
   root: appDir,
+  cacheDir: viteCacheDir,
   plugins: [react()],
   server: {
     host: "::",
