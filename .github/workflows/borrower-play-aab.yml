@@ -1,0 +1,46 @@
+name: Build borrower AAB (Play Store)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  play-aab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare Capacitor Android
+        run: node scripts/prepare-borrower-android.mjs
+        env:
+          CAPACITOR_SERVER_URL: https://app.phindu.com
+
+      - name: Build signed release AAB
+        run: node scripts/build-borrower-aab.mjs
+        env:
+          CAPACITOR_SERVER_URL: https://app.phindu.com
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhinduCredit-release-aab
+          path: apps/borrower-mobile/dist/play-store/PhinduCredit-release.aab
+          retention-days: 90

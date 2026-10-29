@@ -357,7 +357,7 @@ const createContractPDFFromTemplate = (content: string, loan: LoanData): jsPDF =
     doc.text(text, x, y);
   };
 
-  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  // Header — Phindu brand (see pdfTheme.ts)
   doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageWidth, 40, 'F');
   
@@ -511,7 +511,7 @@ const createDefaultContractPDF = async (loan: LoanData, options?: SignatureOptio
     yPos += 5;
   };
 
-  // Header - App theme color (burgundy/maroon: RGB 107, 26, 58)
+  // Header — Phindu brand (see pdfTheme.ts)
   doc.setFillColor(...PDF_THEME.header);
   doc.rect(0, 0, pageWidth, 40, 'F');
   

@@ -26,6 +26,7 @@
     "verify:borrower:apk": "node scripts/verify-borrower-apk.mjs",
     "prepare:borrower:android": "node scripts/prepare-borrower-android.mjs",
     "build:borrower:apk": "node scripts/build-borrower-apk.mjs",
+    "build:borrower:aab": "node scripts/build-borrower-aab.mjs",
     "preview:staff": "vite preview --config apps/staff-web/vite.config.ts",
     "preview:borrower": "vite preview --config apps/borrower-mobile/vite.config.ts",
     "lint": "eslint apps packages",

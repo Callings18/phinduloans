@@ -109,12 +109,9 @@ Manual: Chrome → app.phindu.com → Install app; Android APK only from `/insta
 5. `https://phindu.com` Login → lands on `app.phindu.com/auth`.
 6. Re-login on APK with same phone → same loans visible.
 
-## F. Google Play (parallel, not same-day)
+## F. Google Play
 
-1. Signed **AAB** from Android Studio (`bundleRelease`).
-2. Play Console listing + privacy policy URL.
-3. Update `public/.well-known/assetlinks.json` with Play signing SHA-256.
-4. Set `VITE_PLAY_STORE_URL` and redeploy borrower app.
+See **`docs/GOOGLE_PLAY_RELEASE.md`** (keystore secrets, workflow **Build borrower AAB**, `npm run build:borrower:aab`).
 
 ## G. iOS
 
