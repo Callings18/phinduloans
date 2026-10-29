@@ -1,17 +1,25 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react-swc";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(appDir, "../..");
 
 export default defineConfig({
   root: appDir,
+  plugins: [react()],
   server: {
     host: "::",
     port: 8081,
-  },
-  esbuild: {
-    jsx: "automatic",
+    // OneDrive / cloud-synced folders on Windows often break native file watchers and reads.
+    watch: {
+      usePolling: true,
+      interval: 1000,
+    },
+    fs: {
+      allow: [repoRoot],
+    },
   },
   publicDir: path.resolve(appDir, "./public"),
   resolve: {
