@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Label } from "@phinduloans/shared/components/ui/label";
@@ -35,17 +35,32 @@ type AuthPurpose = "signup" | "login";
 interface PhoneAuthFormProps {
   purpose: AuthPurpose;
   onSuccess: (userId?: string) => void;
+  oauthSlot?: (ctx: { termsAccepted: boolean }) => ReactNode;
 }
 
 function SignupStepHeader({ step }: { step: 1 | 2 }) {
   return (
-    <div className="mb-6 space-y-2">
+    <div className="mb-6 space-y-3">
       <p className="text-xs font-medium text-muted-foreground">
         Step {step} of 2 · {step === 1 ? "Your details" : "Verify your phone"}
       </p>
-      <div className="flex gap-2">
-        <div className={`h-1.5 flex-1 rounded-full ${step >= 1 ? "bg-primary" : "bg-muted"}`} />
-        <div className={`h-1.5 flex-1 rounded-full ${step >= 2 ? "bg-primary" : "bg-muted"}`} />
+      <div className="flex items-center gap-2">
+        {[1, 2].map((n) => (
+          <div key={n} className="flex items-center gap-2 flex-1 last:flex-none">
+            <div
+              className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 ${
+                step >= n
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-muted-foreground/30 text-muted-foreground bg-muted/30"
+              }`}
+            >
+              {n}
+            </div>
+            {n === 1 && (
+              <div className={`h-0.5 flex-1 rounded-full ${step >= 2 ? "bg-primary" : "bg-muted"}`} aria-hidden />
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -94,7 +109,7 @@ function ZambiaPhoneField({
   );
 }
 
-export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
+export const PhoneAuthForm = ({ purpose, onSuccess, oauthSlot }: PhoneAuthFormProps) => {
   const [mode, setMode] = useState<AuthMode>(purpose === "signup" ? "signup_details" : "phone_login");
   const [phoneLocal, setPhoneLocal] = useState("");
   const [nrcNumber, setNrcNumber] = useState("");
@@ -358,6 +373,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
               </span>
             )}
           </Button>
+          {oauthSlot?.({ termsAccepted: acceptTerms })}
         </div>
       </div>
     );
@@ -394,6 +410,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess }: PhoneAuthFormProps) => {
               </span>
             )}
           </Button>
+          {oauthSlot?.({ termsAccepted: true })}
         </div>
       </div>
     );

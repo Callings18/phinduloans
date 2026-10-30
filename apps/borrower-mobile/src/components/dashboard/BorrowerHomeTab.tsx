@@ -15,6 +15,8 @@ import {
   BarChart3,
   Headphones,
   CreditCard,
+  ChevronRight,
+  Smartphone,
 } from "lucide-react";
 import { format, startOfDay } from "date-fns";
 import {
@@ -236,16 +238,24 @@ export default function BorrowerHomeTab({
     n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold text-foreground">
-          {timeGreeting}, {firstName}
+        <h2 className="text-xl font-semibold text-foreground">
+          {timeGreeting}, {firstName} <span aria-hidden>👋</span>
         </h2>
         <p className="text-sm text-muted-foreground">Here&apos;s your loan summary</p>
       </div>
 
-      <Card className="overflow-hidden border-0 shadow-glow gradient-primary text-primary-foreground">
+      <Card className="overflow-hidden border-0 shadow-lg gradient-primary text-primary-foreground rounded-2xl">
         <CardContent className="p-5 space-y-4">
+          <button
+            type="button"
+            onClick={() => onTabChange("loans")}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <span className="text-sm font-medium text-primary-foreground/90">Loan overview</span>
+            <ChevronRight className="h-5 w-5 text-primary-foreground/80" aria-hidden />
+          </button>
           <div>
             <p className="text-sm text-primary-foreground/80">Outstanding balance</p>
             {activeLoans.length > 0 ? (
@@ -313,7 +323,7 @@ export default function BorrowerHomeTab({
             key={tile.label}
             type="button"
             onClick={tile.action}
-            className="rounded-2xl border border-border/60 bg-card p-4 text-left hover:border-primary/40 transition-colors"
+            className="rounded-2xl border border-border/40 bg-card p-4 text-left shadow-sm hover:border-primary/30 hover:shadow-md transition-all"
           >
             <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2">
               <tile.icon size={20} aria-hidden />
@@ -325,8 +335,9 @@ export default function BorrowerHomeTab({
       </div>
 
       {activeLoans.length > 0 && (
-        <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-          Repay on time — keep up with your payments to maintain a good credit record.
+        <div className="rounded-2xl border border-violet-200/80 bg-violet-50 dark:bg-primary/5 dark:border-primary/20 px-4 py-3 text-sm text-muted-foreground flex gap-3 items-start">
+          <Smartphone className="h-5 w-5 text-primary shrink-0 mt-0.5" aria-hidden />
+          <p>Repay on time — keep up with your payments to maintain a good credit record.</p>
         </div>
       )}
 
@@ -368,7 +379,7 @@ export default function BorrowerHomeTab({
         <PaymentReminder repayments={repayments} />
       )}
 
-      <Card className="border-primary/30 bg-primary/5 shadow-card">
+      <Card className="border-primary/30 bg-primary/5 shadow-card hidden md:block">
         <CardContent className="p-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0">

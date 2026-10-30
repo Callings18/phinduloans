@@ -71,11 +71,9 @@ const Auth = () => {
   return (
     <BorrowerAuthShell
       title={isLogin ? "Welcome Back" : "Create Your Account"}
-      subtitle={
-        isLogin
-          ? "Sign in securely to your account"
-          : "Register with your mobile number and NRC"
-      }
+      subtitle={isLogin ? "Sign in securely to your account" : ""}
+      showBack={!isLogin}
+      onBack={() => navigate("/auth", { replace: true })}
       footer={
         <p className="text-muted-foreground text-sm">
           {isLogin ? "New to Phindu?" : "Already registered?"}{" "}
@@ -94,9 +92,19 @@ const Auth = () => {
         </p>
       }
     >
-      <div className="animate-slide-up space-y-0">
-        <PhoneAuthForm purpose={isLogin ? "login" : "signup"} onSuccess={handlePhoneAuthSuccess} />
-        <BorrowerGoogleAuthSection purpose={isLogin ? "login" : "signup"} nextPath={safeNextPath} />
+      <div className="animate-slide-up">
+        <PhoneAuthForm
+          purpose={isLogin ? "login" : "signup"}
+          onSuccess={handlePhoneAuthSuccess}
+          oauthSlot={({ termsAccepted }) => (
+            <BorrowerGoogleAuthSection
+              embedded
+              purpose={isLogin ? "login" : "signup"}
+              nextPath={safeNextPath}
+              externalTermsAccepted={isLogin ? true : termsAccepted}
+            />
+          )}
+        />
       </div>
     </BorrowerAuthShell>
   );

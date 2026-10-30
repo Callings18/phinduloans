@@ -16,6 +16,10 @@ import {
 type BorrowerGoogleAuthButtonProps = {
   purpose: "login" | "signup";
   nextPath?: string | null;
+  /** Renders inside auth card (mockup layout). */
+  embedded?: boolean;
+  /** Signup: terms checkbox lives on phone form (single consent row). */
+  externalTermsAccepted?: boolean;
 };
 
 function GoogleMark({ className }: { className?: string }) {
@@ -41,7 +45,12 @@ function GoogleMark({ className }: { className?: string }) {
   );
 }
 
-export function BorrowerGoogleAuthSection({ purpose, nextPath }: BorrowerGoogleAuthButtonProps) {
+export function BorrowerGoogleAuthSection({
+  purpose,
+  nextPath,
+  embedded = false,
+  externalTermsAccepted,
+}: BorrowerGoogleAuthButtonProps) {
   if (!isBorrowerGoogleOAuthEnabled()) {
     return null;
   }
@@ -49,10 +58,11 @@ export function BorrowerGoogleAuthSection({ purpose, nextPath }: BorrowerGoogleA
   const [isLoading, setIsLoading] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
+  const termsOk = purpose === "login" || (externalTermsAccepted ?? acceptTerms);
 
   const handleGoogle = async () => {
-    if (purpose === "signup" && !acceptTerms) {
-      setTermsError("Accept the Terms of Service and Privacy Policy to continue with Google");
+    if (purpose === "signup" && !termsOk) {
+      setTermsError("Accept the Terms of Service and Privacy Policy above to continue with Google");
       return;
     }
     setTermsError(null);
@@ -79,7 +89,7 @@ export function BorrowerGoogleAuthSection({ purpose, nextPath }: BorrowerGoogleA
   };
 
   return (
-    <div className="space-y-4 mt-6">
+    <div className={embedded ? "space-y-4 pt-2" : "space-y-4 mt-6"}>
       <div className="relative flex items-center gap-3">
         <div className="h-px flex-1 bg-border" aria-hidden />
         <span className="text-[10px] font-medium tracking-widest text-muted-foreground uppercase">
@@ -88,7 +98,7 @@ export function BorrowerGoogleAuthSection({ purpose, nextPath }: BorrowerGoogleA
         <div className="h-px flex-1 bg-border" aria-hidden />
       </div>
 
-      {purpose === "signup" && (
+      {purpose === "signup" && !embedded && (
         <div className="space-y-2">
           <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 p-3">
             <Checkbox
@@ -133,7 +143,7 @@ export function BorrowerGoogleAuthSection({ purpose, nextPath }: BorrowerGoogleA
         type="button"
         variant="outline"
         className="w-full h-12 rounded-xl bg-background font-medium"
-        disabled={isLoading || (purpose === "signup" && !acceptTerms)}
+        disabled={isLoading || (purpose === "signup" && !termsOk)}
         onClick={() => void handleGoogle()}
       >
         {isLoading ? (

@@ -43,7 +43,8 @@ import BorrowerPaymentsTab from "@/components/dashboard/BorrowerPaymentsTab";
 import BorrowerProfileTab from "@/components/dashboard/BorrowerProfileTab";
 import LoanApplicationForm from "@/components/dashboard/LoanApplicationForm";
 
-const phinduLogo = "/branding/phindu-logo-white.png";
+const phinduLogoLight = "/branding/phindu-logo.png";
+const phinduLogoDark = "/branding/phindu-logo-white.png";
 import ThemeToggle from "@phinduloans/shared/components/common/ThemeToggle";
 import NotificationCenter from "@phinduloans/shared/components/common/NotificationCenter";
 import {
@@ -61,6 +62,8 @@ import {
 } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
 import { officePath } from "@phinduloans/shared/config/siteMode";
 
+import BorrowerBottomNav from "@/components/dashboard/BorrowerBottomNav";
+import { BorrowerBrandLockup } from "@/components/common/BorrowerBrandLockup";
 import type { BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
 export type { BorrowerTab };
 
@@ -574,8 +577,19 @@ const Dashboard = () => {
     profile: "My Profile",
   };
 
+  const profileInitials = (profile?.full_name || "U")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join("");
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
+    <div className="min-h-screen bg-background text-foreground flex relative">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden md:hidden">
+        <div className="absolute -top-20 -right-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute bottom-32 -left-10 h-48 w-48 rounded-full bg-violet-200/40 blur-3xl" />
+      </div>
       <BorrowerKycSheet userId={user.id} open={borrowerKycOpen} onOpenChange={handleBorrowerKycOpenChange} />
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside
@@ -586,7 +600,7 @@ const Dashboard = () => {
       >
         {/* Logo */}
         <div className="flex items-center h-16 px-4 border-b border-border shrink-0">
-          <img src={phinduLogo} alt="Phindu" className={cn("transition-all", sidebarCollapsed ? "h-7" : "h-8")} />
+          <img src={phinduLogoDark} alt="Phindu" className={cn("transition-all", sidebarCollapsed ? "h-7" : "h-8")} />
         </div>
 
         {/* Nav Items */}
@@ -634,7 +648,7 @@ const Dashboard = () => {
       {/* ── Main Area ───────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-lg">
+        <header className="sticky top-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur-lg">
           <div className="flex h-16 items-center justify-between gap-2 px-3 sm:px-6">
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
               <button
@@ -645,7 +659,10 @@ const Dashboard = () => {
               >
                 <Menu size={20} />
               </button>
-              <div className="min-w-0">
+              <div className="min-w-0 md:hidden">
+                <BorrowerBrandLockup variant="header" theme="light" />
+              </div>
+              <div className="min-w-0 hidden md:block">
                 <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
                   {showApplicationForm ? "Apply for Loan" : tabTitle[activeTab]}
                 </h1>
@@ -655,7 +672,9 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-              <ThemeToggle variant="minimal" />
+              <div className="hidden md:block">
+                <ThemeToggle variant="minimal" />
+              </div>
               <NotificationCenter />
               {isStaff && (
                 <Button size="sm" variant="outline" className="h-9 shrink-0 px-2 text-xs sm:px-3" asChild>
@@ -666,9 +685,9 @@ const Dashboard = () => {
                   </a>
                 </Button>
               )}
-              <div className="ml-1 hidden items-center gap-2 border-l border-border pl-2 sm:flex">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full gradient-primary text-sm font-semibold text-primary-foreground">
-                  {(profile?.full_name || "U").charAt(0).toUpperCase()}
+              <div className="ml-1 flex items-center gap-2 border-l border-border pl-2">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-semibold text-primary-foreground">
+                  {profileInitials}
                 </div>
                 <span className="hidden max-w-[8rem] truncate text-sm font-medium text-foreground lg:inline">
                   {profile?.full_name || "User"}
@@ -678,27 +697,12 @@ const Dashboard = () => {
           </div>
         </header>
 
-        {/* Mobile Bottom Nav */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden">
-          <div className="flex h-14 items-center justify-around px-1">
-            {sidebarItems.map((item) => {
-              const isActive = showApplicationForm ? item.id === "apply" : activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleTabChange(item.id)}
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-0.5 flex-1 py-1 transition-colors",
-                    isActive ? "text-primary" : "text-muted-foreground"
-                  )}
-                >
-                  <item.icon size={18} strokeWidth={isActive ? 2.5 : 1.5} />
-                  <span className="text-[10px] font-medium">{item.label.split(" ")[0]}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+        <div className="md:hidden">
+          <BorrowerBottomNav
+            activeTab={showApplicationForm ? "apply" : activeTab}
+            onTabChange={handleTabChange}
+          />
+        </div>
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6">
@@ -780,7 +784,7 @@ const Dashboard = () => {
         <SheetContent side="left" className="flex w-[min(100vw-1rem,20rem)] flex-col gap-0 p-0 sm:max-w-xs">
           <SheetHeader className="space-y-0 border-b border-border px-4 py-4 text-left">
             <SheetTitle className="sr-only">Dashboard navigation</SheetTitle>
-            <img src={phinduLogo} alt="Phindu" className="h-9 w-auto object-contain" />
+            <img src={phinduLogoLight} alt="Phindu" className="h-9 w-auto object-contain" />
           </SheetHeader>
           <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dashboard sections">
             {sidebarItems.map((item) => {
