@@ -221,6 +221,8 @@ interface EarlySettlement {
 export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const { user, isAdmin } = useAuth();
   const { can } = usePermissions();
+  const canUndoDisbursement =
+    isAdmin || can("disbursement", "manage") || can("disbursement", "approve") || can("house", "disbursement_disburse");
   const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
   const [activeTab, setActiveTab] = useState("overview");
@@ -1693,76 +1695,32 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
 
-      // Find the disbursement to refund the source account
-      const { data: disbursementRecord } = await supabase
-        .from("disbursements")
-        .select("*, source_account_id, amount")
-        .eq("loan_id", loan.id)
-        .maybeSingle();
-
-      // Refund source account if applicable
-      if (disbursementRecord?.source_account_id) {
-        const { data: sourceAccount } = await supabase
-          .from("accounts")
-          .select("id, balance, account_name")
-          .eq("id", disbursementRecord.source_account_id)
-          .single();
-
-        if (sourceAccount) {
-          const refundAmount = Number(disbursementRecord.amount);
-          const newBalance = sourceAccount.balance + refundAmount;
-          const { error: undoAccErr } = await supabase
-            .from("accounts")
-            .update({ balance: newBalance, updated_at: new Date().toISOString() })
-            .eq("id", sourceAccount.id);
-          if (undoAccErr) throw undoAccErr;
-
-          // Record refund transaction
-          const { error: undoTxErr } = await supabase.from("account_transactions").insert({
-            account_id: sourceAccount.id,
-            transaction_type: "refund",
-            amount: refundAmount,
-            balance_before: sourceAccount.balance,
-            balance_after: newBalance,
-            reference_type: "disbursement_reversal",
-            reference_id: loan.id,
-            source: "Disbursement Reversal",
-            destination: sourceAccount.account_name,
-            notes: `Undo disbursement for ${loan.full_name} — K${refundAmount.toLocaleString()} refunded`,
-            created_by: user?.id,
-          });
-          if (undoTxErr) throw undoTxErr;
-        }
-      }
-
-      // Delete disbursement record
-      const { error: delDisbErr } = await supabase
-        .from("disbursements")
-        .delete()
-        .eq("loan_id", loan.id);
-      if (delDisbErr) throw delDisbErr;
-
-      // Delete all repayments
-      const { error: delRepErr } = await supabase
-        .from("loan_repayments")
-        .delete()
-        .eq("loan_id", loan.id);
-      if (delRepErr) throw delRepErr;
-
-      // Revert loan status to approved
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: "approved" })
-        .eq("id", loan.id);
-
+      const { data, error } = await supabase.rpc("admin_undo_loan_disbursement", {
+        p_loan_id: loan.id,
+      });
       if (error) throw error;
 
-      await logAudit({
-        action: "UNDO_DISBURSEMENT",
-        entity_type: "loan_application",
-        entity_id: loan.id,
-        details: { refunded_amount: disbursementRecord?.amount, source_account_id: disbursementRecord?.source_account_id },
-      });
+      const result = (data ?? {}) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      };
+      if (!result.ok) {
+        const code = result.error ?? "UNDO_FAILED";
+        if (code === "PAYMENTS_RECORDED") {
+          throw new Error(result.message ?? "Reverse recorded payments before undoing disbursement.");
+        }
+        if (code === "FORBIDDEN") {
+          throw new Error(result.message ?? "You do not have permission to undo disbursements.");
+        }
+        if (result.message?.includes("Invalid loan_applications status transition") || code === "UNDO_FAILED") {
+          throw new Error(
+            result.message ??
+              "Database blocked the status change. Apply migrations 20261013120000 and 20261101140000 on Supabase.",
+          );
+        }
+        throw new Error(result.message ?? code);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -2356,7 +2314,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                             <Plus size={14} className="mr-1" /> Top Up
                           </Button>
                         )}
-                        {(loan.status === "disbursed" || loan.status === "active") && paidRepayments.length === 0 && (
+                        {canUndoDisbursement &&
+                          (loan.status === "disbursed" || loan.status === "active") &&
+                          !hasAnyPaymentRecorded && (
                           <Button size="sm" variant="destructive" onClick={() => setIsUndoDisbursementOpen(true)}>
                             <Undo2 size={14} className="mr-1" /> Undo Disbursement
                           </Button>
@@ -3352,7 +3312,11 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
             <AlertDialogTitle className="text-destructive">Undo Disbursement</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
-                <p>This will delete the disbursement record and all repayment schedules. The loan will be reverted to "Approved" status. This action cannot be undone.</p>
+                <p>
+                  This reverses a <strong>mistaken disbursement</strong> (refunds the source account, removes the schedule, sets status back to{" "}
+                  <strong>Approved</strong>). This is <strong>not</strong> a write-off — use{" "}
+                  <strong>Recovery → Write-offs</strong> only for unrecoverable debt.
+                </p>
                 {hasAnyPaymentRecorded && (
                   <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive text-sm font-medium">
                     Blocked: payments totalling K{totalPaidIncludingPartial.toLocaleString()} have already been recorded on this loan.
