@@ -33,6 +33,13 @@ if (process.env.CAPACITOR_BUNDLE_LOCAL === "1") {
 
 run("npx cap sync android", appDir);
 
+// Regenerate native launcher/adaptive icons from the Phindu brand asset. Without
+// this step, `cap add android` leaves Capacitor's template icon in the APK.
+run(
+  "npx capacitor-assets generate --android --assetPath resources --androidProject android",
+  appDir,
+);
+
 console.log(`
 Next steps (Android Studio or CLI):
   cd apps/borrower-mobile/android

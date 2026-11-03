@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 
 export type SmsPackageConfig = {
@@ -53,7 +54,17 @@ export function useSmsPackageConfig() {
 }
 
 export function useSmsUsageStats(packageStartAt: string | null | undefined) {
+  const queryClient = useQueryClient();
   const since = packageStartAt || "1970-01-01T00:00:00.000Z";
+  useEffect(() => {
+    const channel = supabase
+      .channel("sms-usage-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_logs", filter: "type=eq.sms" }, () => {
+        void queryClient.invalidateQueries({ queryKey: ["sms-usage-stats"] });
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [queryClient]);
   return useQuery({
     queryKey: ["sms-usage-stats", since],
     queryFn: async (): Promise<SmsUsageStats> => {
@@ -71,7 +82,9 @@ export function useSmsUsageStats(packageStartAt: string | null | undefined) {
         sms_units_used: Number(row?.sms_units_used ?? 0),
       };
     },
-    refetchInterval: 60_000,
+    // Realtime updates immediately; polling remains a recovery path if a
+    // browser sleeps or the Realtime socket reconnects.
+    refetchInterval: 5 * 60_000,
   });
 }
 

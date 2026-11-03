@@ -202,29 +202,37 @@ export default function ApprovalWorkflowTab({ loan }: ApprovalWorkflowTabProps) 
         updateData.recommended_at = now;
         updateData.approval_stage = "recommended";
       } else if (stageKey === "approval") {
-        updateData.approved_by = user.id;
-        updateData.approved_at = now;
-        updateData.reviewed_by = user.id;
-        updateData.reviewed_at = now;
-        updateData.approval_stage = "approved";
-        updateData.status = "approved";
+        const { data, error } = await supabase.rpc("transition_loan_status", {
+          p_loan_id: loan.id,
+          p_action: "approve",
+          p_reason: null,
+        });
+        if (error) throw error;
+        if (data && typeof data === "object") {
+          const result = data as { ok?: boolean; success?: boolean; error?: string };
+          if (result.ok === false || result.success === false) {
+            throw new Error(result.error || "Loan approval failed");
+          }
+        }
       } else if (stageKey === "disbursement") {
-        updateData.disbursed_by = user.id;
-        updateData.disbursed_at = now;
-        updateData.approval_stage = "disbursed";
+        throw new Error("Complete disbursement from the Disbursements page so the transfer and audit are recorded together.");
       }
 
-      const { error } = await supabase
-        .from("loan_applications")
-        .update(updateData)
-        .eq("id", loan.id);
-      if (error) throw error;
+      if (stageKey !== "approval" && stageKey !== "disbursement") {
+        const { error } = await supabase
+          .from("loan_applications")
+          .update(updateData)
+          .eq("id", loan.id);
+        if (error) throw error;
+      }
 
-      await logAudit({
-        action: `WORKFLOW_${stageKey.toUpperCase()}`,
-        entity_type: "loan_application",
-        entity_id: loan.id,
-      });
+      if (stageKey !== "approval") {
+        await logAudit({
+          action: `WORKFLOW_${stageKey.toUpperCase()}`,
+          entity_type: "loan_application",
+          entity_id: loan.id,
+        });
+      }
 
       return stageKey;
     },

@@ -2,6 +2,14 @@ name: Build borrower APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/borrower-mobile/**"
+      - "packages/shared/**"
+      - "scripts/build-borrower-apk.mjs"
+      - "scripts/prepare-borrower-android.mjs"
+      - ".github/workflows/borrower-apk.yml"
   push:
     branches: [main]
     paths:
