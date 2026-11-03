@@ -9,6 +9,7 @@ on:
       - "packages/shared/**"
       - "scripts/build-borrower-apk.mjs"
       - "scripts/prepare-borrower-android.mjs"
+      - ".github/workflows/borrower-apk.yml"
 
 jobs:
   android-apk:
@@ -27,7 +28,9 @@ jobs:
           java-version: "17"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - name: Install dependencies
         run: npm ci
