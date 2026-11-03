@@ -35,6 +35,15 @@ function formatPhoneNumber(phone: string): string {
   }
 }
 
+/** Existing borrower records may use E.164, 260…, or local 0… formatting. */
+function phoneLookupCandidates(phone: string): string[] {
+  const e164 = formatPhoneNumber(phone);
+  const digits = e164.replace(/\D/g, "");
+  const candidates = [e164, digits];
+  if (digits.startsWith("260") && digits.length === 12) candidates.push(`0${digits.slice(3)}`);
+  return [...new Set(candidates)];
+}
+
 /** Borrower PWA dashboard — used for magic-link redirectTo when in-app token exchange is unavailable. */
 function getBorrowerDashboardUrl(): string {
   const base = (Deno.env.get("BORROWER_APP_URL") || "https://app.phindu.com").replace(/\/+$/, "");
@@ -102,7 +111,7 @@ serve(async (req) => {
     await supabase
       .from("otp_codes")
       .delete()
-      .eq("phone", formattedPhone)
+      .in("phone", phoneLookupCandidates(formattedPhone))
       .eq("purpose", purpose)
       .is("verified_at", null)
       .lt("expires_at", new Date().toISOString());
@@ -111,7 +120,7 @@ serve(async (req) => {
     const { data: otpRecords, error: fetchError } = await supabase
       .from("otp_codes")
       .select("*")
-      .eq("phone", formattedPhone)
+      .in("phone", phoneLookupCandidates(formattedPhone))
       .eq("purpose", purpose)
       .is("verified_at", null)
       .order("created_at", { ascending: false })
@@ -172,7 +181,7 @@ serve(async (req) => {
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id, email")
-        .eq("phone", formattedPhone)
+        .in("phone", phoneLookupCandidates(formattedPhone))
         .maybeSingle();
 
       let userId: string;
@@ -267,7 +276,7 @@ serve(async (req) => {
       const { data: profile } = await supabase
         .from("profiles")
         .select("id, email")
-        .eq("phone", formattedPhone)
+        .in("phone", phoneLookupCandidates(formattedPhone))
         .maybeSingle();
 
       let loginEmail = profile?.email ?? null;

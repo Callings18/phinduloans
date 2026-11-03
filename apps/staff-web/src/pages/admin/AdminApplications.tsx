@@ -623,6 +623,9 @@ const AdminApplications = () => {
   const disburseMutation = useMutation({
     mutationFn: async (data: any) => {
       if (!selectedApp) throw new Error("No application selected");
+      if (!selectedApp.borrower_signed || !selectedApp.admin_signed) {
+        throw new Error("Cannot disburse until both the borrower and admin have signed the contract.");
+      }
       await assertBusinessDayForDisbursement();
       const sourceAccount = fundingAccounts.find((a) => a.id === data.source_account_id);
       if (!sourceAccount) throw new Error("Source account not found");
@@ -967,9 +970,21 @@ const AdminApplications = () => {
         })
         .eq("id", applicationId);
       if (updateError) throw updateError;
+      return { applicationId, fileName, signedAt: now };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      setSelectedApp((current: any) =>
+        current?.id === result.applicationId
+          ? {
+              ...current,
+              signed_contract_url: result.fileName,
+              borrower_signed: true,
+              borrower_signed_at: result.signedAt,
+              signed_contract_uploaded_at: result.signedAt,
+            }
+          : current,
+      );
       setSignedContractFile(null);
       toast({ title: "Signed contract uploaded" });
     },
@@ -979,16 +994,19 @@ const AdminApplications = () => {
   });
 
   const adminSignContractMutation = useMutation({
-    mutationFn: async ({ applicationId, borrowerSignedAt }: { applicationId: string; borrowerSignedAt?: string | null }) => {
+    mutationFn: async ({ applicationId }: { applicationId: string }) => {
+      if (!selectedApp?.borrower_signed) {
+        throw new Error("The borrower must sign the contract before you can countersign it.");
+      }
+      if (!canApproveApplication) throw new Error("You do not have permission to sign loan contracts.");
+      if (!user?.id) throw new Error("Not authenticated");
       const now = new Date().toISOString();
       const { error } = await supabase
         .from("loan_applications")
         .update({
           admin_signed: true,
           admin_signed_at: now,
-          admin_signed_by: user?.id ?? null,
-          borrower_signed: true,
-          borrower_signed_at: borrowerSignedAt || now,
+          admin_signed_by: user.id,
         })
         .eq("id", applicationId);
       if (error) throw error;
@@ -998,8 +1016,13 @@ const AdminApplications = () => {
         entity_id: applicationId,
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      setSelectedApp((current: any) =>
+        current?.id === variables.applicationId
+          ? { ...current, admin_signed: true, admin_signed_at: new Date().toISOString(), admin_signed_by: user?.id ?? current.admin_signed_by }
+          : current,
+      );
       toast({ title: "Contract signed by admin – ready for disbursement" });
     },
     onError: (error) => {
@@ -1177,7 +1200,10 @@ const AdminApplications = () => {
 
   const handleDisburse = () => {
     if (!selectedApp) return;
-    // V1.0.1: No dual-signature gate — just validate disbursement form
+    if (!selectedApp.borrower_signed || !selectedApp.admin_signed) {
+      toast({ title: "Both borrower and admin signatures are required before disbursement", variant: "destructive" });
+      return;
+    }
     if (!disbursement.source_account_id) {
       toast({ title: "Please select a funding account", variant: "destructive" });
       return;
@@ -1198,13 +1224,6 @@ const AdminApplications = () => {
     }
     disburseMutation.mutate(disbursement);
   };
-
-  const isBorrowerSigned = selectedApp ? (selectedApp.borrower_signed || !!selectedApp.signed_contract_url) : false;
-  const isFullySigned = !!selectedApp && isBorrowerSigned && !!selectedApp.admin_signed;
-  const isDisbursed = selectedApp?.status === "disbursed";
-  const contractMessageNotSigned = isDisbursed
-    ? "This loan was disbursed without a fully signed contract. Please upload the signed contract by both parties and verify signatures to ensure compliance. This loan cannot be marked as completed until the contract is fully signed."
-    : "No disbursement until both parties have signed. The loan will not be active until the contract is fully signed.";
 
   const filteredApps = applications?.filter((app: any) => {
     const query = searchQuery.toLowerCase().trim();
@@ -2309,6 +2328,9 @@ const AdminApplications = () => {
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileText size={18} /> Contract
                     </CardTitle>
+                    <CardDescription>
+                      Upload the borrower-signed copy, then countersign it before disbursement.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {selectedApp.signed_contract_url ? (
@@ -2350,6 +2372,26 @@ const AdminApplications = () => {
                         {uploadSignedContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <Upload size={14} className="mr-1" />}
                         Upload
                       </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={selectedApp.borrower_signed ? "bg-success/10 text-success border-success/30" : "bg-muted/40 text-muted-foreground"}>
+                        Borrower {selectedApp.borrower_signed ? "signed" : "signature needed"}
+                      </Badge>
+                      {selectedApp.admin_signed ? (
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                          Admin signed
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!selectedApp.borrower_signed || !canApproveApplication || adminSignContractMutation.isPending}
+                          onClick={() => adminSignContractMutation.mutate({ applicationId: selectedApp.id })}
+                        >
+                          {adminSignContractMutation.isPending ? <Loader2 className="animate-spin mr-1" size={14} /> : <CheckCircle size={14} className="mr-1" />}
+                          Countersign contract
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

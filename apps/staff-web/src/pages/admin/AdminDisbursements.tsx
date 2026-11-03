@@ -242,10 +242,8 @@ const AdminDisbursements = () => {
         throw new Error("Disbursement blocked: borrower KYC is incomplete. Verify NRC Front, NRC Back, and Selfie first.");
       }
 
-      // V1.0.1: Simplified flow - contract check only requires uploaded PDF or approval signatures
-      const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
-      if (!hasContract) {
-        throw new Error("Cannot disburse: Please upload a signed contract or approve the loan first from the Applications page.");
+      if (!loan.borrower_signed || !loan.admin_signed) {
+        throw new Error("Cannot disburse until both the borrower and admin have signed the contract.");
       }
 
       if (!formData.source_account_id) {
@@ -512,23 +510,22 @@ const AdminDisbursements = () => {
                         <SelectItem value="none" disabled>No approved loans available</SelectItem>
                       ) : (
                         approvedLoans?.map((loan) => {
-                          const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
-                          const isAwaitingDisbursement = loan.status === "awaiting_disbursement";
+                          const hasContract = loan.borrower_signed && loan.admin_signed;
                           
                           return (
                             <SelectItem key={loan.id} value={loan.id}>
                               <div className="flex items-center gap-2">
-                                {isAwaitingDisbursement || hasContract ? (
+                                {hasContract ? (
                                   <CheckCircle size={14} className="text-success" />
                                 ) : (
                                   <Clock size={14} className="text-warning" />
                                 )}
                                 <span>{loan.full_name} - K{Number(loan.loan_amount).toLocaleString()}</span>
-                                {(isAwaitingDisbursement || hasContract) && (
+                                {hasContract && (
                                   <span className="text-xs text-success">(Ready)</span>
                                 )}
-                                {!hasContract && !isAwaitingDisbursement && (
-                                  <span className="text-xs text-warning">(No contract)</span>
+                                {!hasContract && (
+                                  <span className="text-xs text-warning">(Signatures required)</span>
                                 )}
                               </div>
                             </SelectItem>
@@ -542,7 +539,7 @@ const AdminDisbursements = () => {
                   {selectedLoan && (() => {
                     const loan = approvedLoans?.find(l => l.id === selectedLoan);
                     if (!loan) return null;
-                    const hasContract = loan.signed_contract_url || loan.borrower_signed || loan.admin_signed;
+                    const hasContract = loan.borrower_signed && loan.admin_signed;
                     
                     if (!hasContract) {
                       return (
@@ -550,9 +547,9 @@ const AdminDisbursements = () => {
                           <div className="flex items-start gap-2">
                             <Clock size={16} className="text-warning mt-0.5" />
                             <div>
-                              <p className="text-sm font-medium text-warning">No Contract Found</p>
+                              <p className="text-sm font-medium text-warning">Contract Signatures Required</p>
                               <p className="text-xs text-muted-foreground">
-                                Please upload a signed contract or approve the loan from the Applications page first.
+                                Both the borrower and admin must sign the contract before disbursement.
                               </p>
                             </div>
                           </div>

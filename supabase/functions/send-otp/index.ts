@@ -39,6 +39,15 @@ function formatPhoneNumber(phone: string): string {
   return `+260${formatted}`;
 }
 
+/** Existing borrower records may use E.164, 260…, or local 0… formatting. */
+function phoneLookupCandidates(phone: string): string[] {
+  const e164 = formatPhoneNumber(phone);
+  const digits = e164.replace(/\D/g, "");
+  const candidates = [e164, digits];
+  if (digits.startsWith("260") && digits.length === 12) candidates.push(`0${digits.slice(3)}`);
+  return [...new Set(candidates)];
+}
+
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -80,10 +89,12 @@ async function getSmsSettings(supabase: ReturnType<typeof createClient>): Promis
   const config = configData?.value || {};
   const rawApiUrl = providers.excitesms_api_url || config.excitesms_api_url || Deno.env.get("EXCITESMS_API_URL") || "https://gateway.excitesms.com/api/v3";
   // Prefer Supabase Edge secret first so a stale AdminSettings token cannot force Unauthenticated.
+  // Keep saved dashboard credentials first: stale Edge secrets previously
+  // overrode the working token operators had configured in Admin Settings.
   const primaryApiToken = pickToken(
-    Deno.env.get("EXCITESMS_API_TOKEN"),
     providers.excitesms_api_token,
     config.excitesms_api_token,
+    Deno.env.get("EXCITESMS_API_TOKEN"),
   );
   const secondaryApiToken = pickToken(
     Deno.env.get("EXCITESMS_SECONDARY_API_TOKEN"),
@@ -282,7 +293,7 @@ serve(async (req) => {
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("phone", formattedPhone)
+        .in("phone", phoneLookupCandidates(formattedPhone))
         .maybeSingle();
 
       if (!existingProfile) {
