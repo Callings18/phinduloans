@@ -109,6 +109,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.3.0",
+    "@capacitor/assets": "^4.0.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@eslint/js": "^9.32.0",
