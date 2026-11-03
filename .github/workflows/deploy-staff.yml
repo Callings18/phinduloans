@@ -10,6 +10,7 @@ on:
       - "wrangler.jsonc"
       - "scripts/deploy-staff.mjs"
       - "package.json"
+      - ".github/workflows/deploy-staff.yml"
   workflow_dispatch:
 
 jobs:
