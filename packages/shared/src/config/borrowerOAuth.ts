@@ -1,7 +1,8 @@
 import { getBorrowerAppUrl } from "@phinduloans/shared/config/siteMode";
 
 /**
- * Google OAuth UI is shown only when explicitly enabled at build time.
+ * Google OAuth is activated only when explicitly enabled at build time. The
+ * borrower UI keeps the option visible as disabled until this is configured.
  * Turn on after Supabase Auth → Providers → Google is configured with valid
  * redirect URLs (e.g. https://app.phindu.com/auth).
  */

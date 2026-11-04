@@ -54,9 +54,7 @@ export function BorrowerGoogleAuthSection({
   const [isLoading, setIsLoading] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
-  if (!isBorrowerGoogleOAuthEnabled()) {
-    return null;
-  }
+  const googleOAuthEnabled = isBorrowerGoogleOAuthEnabled();
 
   const termsOk = purpose === "login" || (externalTermsAccepted ?? acceptTerms);
 
@@ -143,8 +141,9 @@ export function BorrowerGoogleAuthSection({
         type="button"
         variant="outline"
         className="w-full h-12 rounded-xl bg-background font-medium"
-        disabled={isLoading || (purpose === "signup" && !termsOk)}
+        disabled={!googleOAuthEnabled || isLoading || (purpose === "signup" && !termsOk)}
         onClick={() => void handleGoogle()}
+        aria-describedby={!googleOAuthEnabled ? "google-coming-soon" : undefined}
       >
         {isLoading ? (
           <span className="flex items-center gap-2">
@@ -158,6 +157,11 @@ export function BorrowerGoogleAuthSection({
           </span>
         )}
       </Button>
+      {!googleOAuthEnabled && (
+        <p id="google-coming-soon" className="text-center text-xs text-muted-foreground">
+          Coming soon
+        </p>
+      )}
     </div>
   );
 }
