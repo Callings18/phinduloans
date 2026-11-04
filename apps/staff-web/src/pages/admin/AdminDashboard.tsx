@@ -200,8 +200,6 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
 
         <QuickActions />
 
-        {isStaff && !loanProductId ? <SmsPackageUsageCard compact /> : null}
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="border-border/50 bg-card/80">
             <CardHeader className="pb-2">
@@ -602,6 +600,8 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
         </div>
 
         <ProductMixChart />
+
+        {isStaff && !loanProductId ? <SmsPackageUsageCard compact /> : null}
 
         {afterContent}
       </div>
