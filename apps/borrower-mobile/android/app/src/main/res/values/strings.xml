@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Phindu Credit</string>
+    <string name="title_activity_main">Phindu Credit</string>
+    <string name="package_name">com.phindu.loans.borrower</string>
+    <string name="custom_url_scheme">com.phindu.loans.borrower</string>
+</resources>

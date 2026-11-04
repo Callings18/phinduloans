@@ -78,12 +78,8 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     queryKey: ["admin-operational-risk"],
     queryFn: async () => {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const [disbursements, disbursementTransactions, pendingClaims, staleKycDocs] = await Promise.all([
+      const [disbursements, pendingClaims, staleKycDocs] = await Promise.all([
         supabase.from("disbursements").select("id, amount, status"),
-        supabase
-          .from("account_transactions")
-          .select("id, amount, transaction_type, reference_type")
-          .eq("transaction_type", "disbursement"),
         supabase.from("payment_claims").select("id, created_at, status").eq("status", "pending_review"),
         supabase
           .from("borrower_document_vault")
@@ -92,20 +88,51 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
           .lt("uploaded_at", since),
       ]);
       if (disbursements.error) throw disbursements.error;
-      if (disbursementTransactions.error) throw disbursementTransactions.error;
       if (pendingClaims.error) throw pendingClaims.error;
       if (staleKycDocs.error) throw staleKycDocs.error;
 
       const completedDisbursements = (disbursements.data || []).filter((d) => d.status === "completed");
-      const completedTotal = completedDisbursements.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-      const accountTxTotal = (disbursementTransactions.data || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const completedIds = completedDisbursements.map((d) => d.id);
+      const ledgerResult = completedIds.length
+        ? await supabase
+            .from("account_transactions")
+            .select("amount, reference_id")
+            .eq("transaction_type", "disbursement")
+            .eq("reference_type", "disbursement")
+            .in("reference_id", completedIds)
+        : { data: [], error: null };
+      if (ledgerResult.error) throw ledgerResult.error;
+
+      // Compare each current completed disbursement to its own immutable ledger
+      // reference. Historical rows for applications, reversals and legacy
+      // records must not be mixed into today's disbursement total.
+      const ledgerByDisbursement = new Map<string, number>();
+      for (const transaction of ledgerResult.data || []) {
+        if (!transaction.reference_id) continue;
+        ledgerByDisbursement.set(
+          transaction.reference_id,
+          (ledgerByDisbursement.get(transaction.reference_id) || 0) + Number(transaction.amount || 0),
+        );
+      }
+      const missingLedger = completedDisbursements.filter((d) => !ledgerByDisbursement.has(d.id));
+      const mismatchedLedger = completedDisbursements.filter((d) => {
+        const ledgerAmount = ledgerByDisbursement.get(d.id);
+        return ledgerAmount !== undefined && Math.abs(ledgerAmount - Number(d.amount || 0)) > 0.01;
+      });
+      const ledgerGap = completedDisbursements.reduce(
+        (sum, d) => sum + Number(d.amount || 0) - (ledgerByDisbursement.get(d.id) || 0),
+        0,
+      );
 
       return {
         pendingDisbursements: (disbursements.data || []).filter((d) => d.status === "pending").length,
         failedDisbursements: (disbursements.data || []).filter((d) => d.status === "failed").length,
         stalePaymentClaims: (pendingClaims.data || []).filter((c) => differenceInDays(new Date(), new Date(c.created_at)) >= 1).length,
         staleKycDocs: staleKycDocs.data?.length || 0,
-        disbursementGap: Math.round((completedTotal - accountTxTotal) * 100) / 100,
+        disbursementGap: Math.round(ledgerGap * 100) / 100,
+        missingLedgerCount: missingLedger.length,
+        missingLedgerAmount: Math.round(missingLedger.reduce((sum, d) => sum + Number(d.amount || 0), 0) * 100) / 100,
+        mismatchedLedgerCount: mismatchedLedger.length,
       };
     },
   });
@@ -213,7 +240,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
               ) : (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Disbursement ledger balanced</span>
+                    <span className="text-muted-foreground">Disbursement ledger reconciliation</span>
                     <Badge
                       variant="outline"
                       className={
@@ -222,11 +249,18 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                           : "bg-destructive/20 text-destructive border-destructive/30"
                       }
                     >
-                      {Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01
+                      {Math.abs(operationalRisk?.disbursementGap ?? 0) < 0.01 &&
+                      (operationalRisk?.missingLedgerCount ?? 0) === 0 &&
+                      (operationalRisk?.mismatchedLedgerCount ?? 0) === 0
                         ? "PASS"
-                        : `GAP K${Math.abs(operationalRisk?.disbursementGap ?? 0).toLocaleString()}`}
+                        : `REVIEW K${Math.abs(operationalRisk?.disbursementGap ?? 0).toLocaleString()}`}
                     </Badge>
                   </div>
+                  {(operationalRisk?.missingLedgerCount ?? 0) > 0 || (operationalRisk?.mismatchedLedgerCount ?? 0) > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {operationalRisk?.missingLedgerCount ?? 0} missing ledger rows (K{(operationalRisk?.missingLedgerAmount ?? 0).toLocaleString()}); {operationalRisk?.mismatchedLedgerCount ?? 0} amount mismatches.
+                    </p>
+                  ) : null}
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">No failed disbursements outstanding</span>
                     <Badge variant="outline">{(operationalRisk?.failedDisbursements ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>

@@ -165,7 +165,7 @@ const AdminSidebar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  title={item.label}
+                  title={`${item.status ? `${item.status} · ` : ""}${item.label}`}
                   className={cn(
                     "flex items-center justify-center p-3 rounded-xl transition-all duration-200",
                     isActive
@@ -226,6 +226,7 @@ const AdminSidebar = () => {
                               <span className="font-medium text-sm inline-flex items-center flex-wrap gap-x-1">
                                 {item.label}
                                 {item.betaKey && isBetaModule(item.betaKey) ? <BetaBadge /> : null}
+                                {item.status ? <span className={cn("ml-1 inline-flex rounded border px-1.5 py-0.5 text-[9px] font-bold leading-none", item.status === "New" ? "border-primary/30 bg-primary/10 text-primary" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600")}>{item.status}</span> : null}
                               </span>
                             </Link>
                             <CollapsibleTrigger asChild>
@@ -283,6 +284,7 @@ const AdminSidebar = () => {
                       <span className="font-medium text-sm inline-flex items-center flex-wrap gap-x-1">
                         {item.label}
                         {item.betaKey && isBetaModule(item.betaKey) ? <BetaBadge /> : null}
+                        {item.status ? <span className={cn("ml-1 inline-flex rounded border px-1.5 py-0.5 text-[9px] font-bold leading-none", item.status === "New" ? "border-primary/30 bg-primary/10 text-primary" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600")}>{item.status}</span> : null}
                       </span>
                     </Link>
                   );

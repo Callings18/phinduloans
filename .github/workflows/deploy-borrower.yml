@@ -28,8 +28,8 @@ jobs:
 
       - name: Build borrower PWA
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: https://seobilifwyxhtjvsgqpc.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_XCivuEj5jQ96iYtn1jV_2A_ieIDSnC9
           VITE_BORROWER_APP_URL: https://app.phindu.com
           VITE_OFFICE_BASE_URL: https://office.phindu.com
           VITE_MARKETING_BASE_URL: https://phindu.com
@@ -47,8 +47,16 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
+      - name: Check Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is required to deploy app.phindu.com."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -70,14 +78,3 @@ jobs:
 
       - name: Deploy summary
         run: echo "Borrower PWA deployed — verify https://app.phindu.com/auth"
-
-  deploy-skipped:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
-    steps:
-      - name: Cloudflare deploy skipped
-        run: |
-          echo "::warning::Borrower build succeeded but app.phindu.com was NOT updated."
-          echo "Download artifact **borrower-pwa-dist** from this workflow run, or add CLOUDFLARE_API_TOKEN and re-run deploy."
-          echo "Local preview: npm run borrower:ui → http://localhost:8081/auth"

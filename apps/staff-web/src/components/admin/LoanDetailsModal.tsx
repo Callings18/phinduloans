@@ -112,23 +112,6 @@ import LoanDocumentsCard from "./LoanDocumentsCard";
 import EditPendingLoanDialog from "./EditPendingLoanDialog";
 import { FolderOpen } from "lucide-react";
 
-/** Allowed next stages per current status (Move to). Admins get full control,
- *  including reversals (e.g., approved → pending) for pre-disbursement loans. */
-const ALLOWED_NEXT_STATUSES: Record<string, string[]> = {
-  pending: ["under_review", "approved", "rejected"],
-  under_review: ["pending", "approved", "rejected", "crb_failed", "pmic_pending"],
-  approved: ["pending", "under_review", "contract_signing", "awaiting_disbursement", "rejected"],
-  contract_signing: ["pending", "approved", "awaiting_disbursement", "rejected"],
-  awaiting_disbursement: ["pending", "approved", "contract_signing", "rejected"],
-  disbursed: ["active", "approved"], // "approved" used by Undo Disbursement
-  active: ["defaulted", "approved"], // "approved" = undo disbursement
-  completed: [],
-  defaulted: ["active"],
-  rejected: ["pending", "under_review"],
-  crb_failed: ["pending", "under_review", "approved", "rejected"],
-  pmic_pending: ["pending", "under_review", "approved", "rejected"],
-};
-
 interface Loan {
   id: string;
   user_id: string;
@@ -223,7 +206,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
   const { can } = usePermissions();
   const canUndoDisbursement =
     isAdmin || can("disbursement", "manage") || can("disbursement", "approve") || can("house", "disbursement_disburse");
-  const canApprove = can("loans", "approve");
   const canFinanceApprove = can("loans", "finance_approve");
   const [activeTab, setActiveTab] = useState("overview");
   const [isEditPendingOpen, setIsEditPendingOpen] = useState(false);
@@ -901,6 +883,12 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
       if (!disburseSourceAccountId) throw new Error("Select a source account");
+      if (!isFullySigned) {
+        throw new Error("Cannot disburse until both the borrower and admin have signed the contract.");
+      }
+      if (!["approved", "contract_signing", "awaiting_disbursement"].includes(loan.status)) {
+        throw new Error(`Cannot disburse a loan in the ${loan.status} status.`);
+      }
 
       // Fetch product fees
       let processingFeePercent = 0, insurancePercent = 0, enforcementPercent = 0, vatPercent = 0, platformPercent = 0;
@@ -931,89 +919,53 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
 
       if (netDisbursement <= 0) throw new Error("Net disbursement is zero or negative after fees");
 
-      // Fresh balance check
-      const { data: freshAccount, error: accErr } = await supabase
+      // Read the account name for the success message. The RPC locks the account
+      // and performs the authoritative balance check while completing the transfer.
+      const { data: sourceAccount, error: accErr } = await supabase
         .from("accounts")
-        .select("id, account_name, balance")
+        .select("id, account_name")
         .eq("id", disburseSourceAccountId)
         .single();
-      if (accErr || !freshAccount) throw new Error("Source account not found");
-      if (Number(freshAccount.balance) < netDisbursement) {
-        throw new Error(`Insufficient balance in ${freshAccount.account_name}. Available: K${Number(freshAccount.balance).toLocaleString()}, Required: K${netDisbursement.toLocaleString()}`);
-      }
+      if (accErr || !sourceAccount) throw new Error("Source account not found");
 
-      // Deduct from source account
-      const newBalance = Number(freshAccount.balance) - netDisbursement;
-      const { error: accUpdateErr } = await supabase
-        .from("accounts")
-        .update({ balance: newBalance, updated_at: new Date().toISOString() })
-        .eq("id", freshAccount.id);
-      if (accUpdateErr) throw accUpdateErr;
-
-      // Record transaction
-      const { error: txErr } = await supabase.from("account_transactions").insert({
-        account_id: freshAccount.id,
-        transaction_type: "disbursement",
-        amount: netDisbursement,
-        balance_before: Number(freshAccount.balance),
-        balance_after: newBalance,
-        reference_type: "loan_disbursement",
-        reference_id: loan.id,
-        source: freshAccount.account_name,
-        destination: `${loan.full_name} (Loan Disbursement)`,
-        notes: `Principal K${principal.toLocaleString()}, Fees K${totalFees.toLocaleString()}, Net K${netDisbursement.toLocaleString()}`,
-        created_by: user?.id,
-      });
-      if (txErr) throw txErr;
-
-      // Record disbursement
-      const { error: disbErr } = await supabase.from("disbursements").insert({
+      // Create a pending instruction, then let complete_disbursement atomically
+      // debit the account, write the ledger, update loan status, and audit the action.
+      const { data: insertedDisbursement, error: disbErr } = await supabase.from("disbursements").insert({
         loan_id: loan.id,
         amount: netDisbursement,
         disbursement_method: disburseMethod,
-        source_account_id: freshAccount.id,
+        source_account_id: sourceAccount.id,
         transaction_reference: disburseTransactionRef || null,
-        status: "completed",
-        disbursed_at: new Date().toISOString(),
-      });
+        status: "pending",
+      }).select("id").single();
       if (disbErr) throw disbErr;
 
-      await createRepaymentScheduleForLoan(
-        {
-          id: loan.id,
-          user_id: loan.user_id,
-          loan_term_months: loan.loan_term_months,
-          total_repayment: loan.total_repayment,
-          monthly_payment: loan.monthly_payment,
-          loan_product_id: loan.loan_product_id,
-          term_unit: (loan as any).term_unit,
-        },
-        supabase,
-      );
-
-      // Record disbursement metadata (trigger already set status to active via generate_repayment_schedule)
-      const { error: loanErr } = await supabase
-        .from("loan_applications")
-        .update({
-          disbursed_by: user?.id,
-          disbursed_at: new Date().toISOString(),
-        })
-        .eq("id", loan.id);
-      if (loanErr) throw loanErr;
-
-      await logAudit({
-        action: "LOAN_DISBURSED",
-        entity_type: "loan_application",
-        entity_id: loan.id,
-        details: {
-          net_disbursement: netDisbursement,
-          total_fees: totalFees,
-          source_account: freshAccount.account_name,
-          method: disburseMethod,
-        },
+      const { data: rpcData, error: rpcError } = await supabase.rpc("complete_disbursement", {
+        p_disbursement_id: insertedDisbursement.id,
+        p_account_id: sourceAccount.id,
+        p_transaction_reference: disburseTransactionRef || null,
       });
+      const rpcResult = rpcData as { success?: boolean; error?: string } | null;
+      if (rpcError) {
+        // A PostgreSQL error code confirms the transaction rolled back. An
+        // error without a code may be a lost response after commit, so preserve
+        // the pending row and avoid risking deletion of a completed transfer.
+        if ("code" in rpcError && typeof rpcError.code === "string") {
+          await supabase.from("disbursements").delete().eq("id", insertedDisbursement.id);
+        }
+        // Keep the pending row when the request outcome is unknown. The RPC may
+        // have committed before a network failure prevented its response.
+        throw rpcError;
+      }
+      if (rpcResult?.success === false) {
+        // The RPC is transactional, so a failure leaves this instruction pending.
+        // Remove it to avoid a stale item in the disbursement queue.
+        await supabase.from("disbursements").delete().eq("id", insertedDisbursement.id);
+        throw new Error(rpcResult.error || "Failed to complete disbursement");
+      }
+      if (rpcResult?.success !== true) throw new Error("Disbursement result was unclear; check the disbursement queue before retrying.");
 
-      return { netDisbursement, totalFees, accountName: freshAccount.account_name };
+      return { netDisbursement, totalFees, accountName: sourceAccount.account_name };
     },
     onSuccess: ({ netDisbursement, accountName }) => {
       queryClient.invalidateQueries({ queryKey: ["loan-repayments", loan?.id] });
@@ -1021,6 +973,9 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
       queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["account_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["disbursements"] });
       toast.success(`Loan disbursed! K${netDisbursement.toLocaleString()} from ${accountName}`);
       setIsDisburseOpen(false);
       setDisburseSourceAccountId("");
@@ -1695,7 +1650,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
 
-      const { data, error } = await supabase.rpc("admin_undo_loan_disbursement", {
+      const { data, error } = await (supabase.rpc as (
+        fn: string,
+        args: { p_loan_id: string },
+      ) => ReturnType<typeof supabase.rpc>)("admin_undo_loan_disbursement", {
         p_loan_id: loan.id,
       });
       if (error) throw error;
@@ -1789,29 +1747,6 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     },
   });
 
-
-  const updateStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      if (!loan) throw new Error("No loan selected");
-      // Permission check: only users with approve permission can move to approved
-      if (status === "approved" && !canApprove) {
-        throw new Error("You don't have permission to approve loans");
-      }
-      const { error } = await supabase
-        .from("loan_applications")
-        .update({ status: status as any })
-        .eq("id", loan.id);
-      if (error) throw error;
-    },
-    onSuccess: (_, newStatus) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-active-loans"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-loans"] });
-      toast.success(`Moved to ${getCanonicalStatusLabel(newStatus)}`);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update status");
-    },
-  });
 
   // Save notes mutation
   const saveNotesMutation = useMutation({

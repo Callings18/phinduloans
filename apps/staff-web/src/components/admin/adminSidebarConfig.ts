@@ -44,6 +44,8 @@ export interface SidebarMenuItem {
   adminOnly?: boolean;
   /** When set and VITE_BETA_MODULES contains this key, sidebar shows a Beta badge. */
   betaKey?: string;
+  /** Release note badge shown to staff in the admin navigation. */
+  status?: "New" | "Updated";
 }
 
 export interface SidebarMenuGroup {
@@ -61,7 +63,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
     items: [
       { icon: LayoutGrid, label: "Product Houses", path: "/admin/houses", perm: { module: "house", action: "dashboard_view" }, betaKey: "house_routes_enabled" },
       { icon: Package, label: "Loan products", path: "/admin/loan-products", adminOnly: true },
-      { icon: FileText, label: "Applications (inbox)", path: "/admin/applications", perm: { module: "loans", action: "view" } },
+      { icon: FileText, label: "Applications (inbox)", path: "/admin/applications", perm: { module: "loans", action: "view" }, status: "Updated" },
       { icon: FileEdit, label: "Loan drafts", path: "/admin/loan-drafts", perm: { module: "loans", action: "view" } },
       { icon: Users, label: "Borrowers", path: "/admin/borrowers", perm: { module: "borrowers", action: "view" } },
       { icon: Building2, label: "Employers", path: "/admin/employers", adminOnly: true },
@@ -71,6 +73,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
         path: "/admin/loans",
         perm: { module: "loans", action: "view" },
         betaKey: "loans_by_product",
+        status: "Updated",
       },
     ],
   },
@@ -84,7 +87,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
   {
     label: "Finance",
     items: [
-      { icon: CreditCard, label: "Disbursements (global)", path: "/admin/disbursements", perm: { module: "disbursement", action: "view" } },
+      { icon: CreditCard, label: "Disbursements (global)", path: "/admin/disbursements", perm: { module: "disbursement", action: "view" }, status: "Updated" },
       { icon: Banknote, label: "Repayments", path: "/admin/repayments", perm: { module: "repayments", action: "view" } },
       { icon: ListOrdered, label: "Bulk repayments", path: "/admin/bulk-repayments", perm: { module: "repayments", action: "view" } },
       { icon: Wallet, label: "Accounts", path: "/admin/accounts", perm: { module: "disbursement", action: "view" } },
@@ -139,6 +142,7 @@ export const adminMenuGroups: SidebarMenuGroup[] = [
         icon: BarChart3,
         label: "Reports",
         path: "/admin/reports",
+        status: "New",
         anyOf: [
           { module: "reports", action: "view" },
           { module: "reports", action: "export" },
