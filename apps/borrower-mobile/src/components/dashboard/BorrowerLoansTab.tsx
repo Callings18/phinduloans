@@ -25,6 +25,7 @@ import {
   Banknote,
   FileText,
   Activity,
+  type LucideIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ApplicationStatusTracker } from "./ApplicationStatusTracker";
@@ -37,7 +38,10 @@ import {
   borrowerRepaymentRemaining,
   borrowerRepaymentStatusDisplay,
 } from "@phinduloans/shared/utils/borrowerRepaymentDisplay";
-import type { BorrowerDashboardLoan } from "@phinduloans/shared/types/borrowerDashboard";
+import type {
+  BorrowerDashboardLoan,
+  BorrowerDashboardRepayment,
+} from "@phinduloans/shared/types/borrowerDashboard";
 import { getCanonicalStatusLabel, getCanonicalStatusBadgeClasses } from "@phinduloans/shared/constants/loanStatusLabels";
 import { getBorrowerPaymentClaimAction } from "@phinduloans/shared/constants/paymentClaims";
 
@@ -53,7 +57,7 @@ function loanFrequencySource(loan: BorrowerDashboardLoan) {
 
 // Icons remain product-specific; labels and colors come from the canonical
 // status helpers so borrower wording matches admin wording 1:1.
-const statusIcons: Record<string, any> = {
+const statusIcons: Record<string, LucideIcon> = {
   pending: Clock,
   under_review: FileText,
   approved: CheckCircle,
@@ -77,7 +81,7 @@ function getStatusDisplay(status: string) {
 interface Props {
   userId: string;
   loans: BorrowerDashboardLoan[];
-  repayments: any[];
+  repayments: BorrowerDashboardRepayment[];
   paymentClaims?: Array<{ repayment_id: string; status?: string | null }>;
   loadError?: boolean;
   loanEvents?: Array<{
@@ -88,10 +92,10 @@ interface Props {
     created_at: string;
     new_values?: Record<string, unknown> | null;
   }>;
-  onDownloadStatement: (loan: any) => void;
-  onDownloadStatementCsv: (loan: any) => void;
-  onDownloadSchedule: (loan: any) => void;
-  onSubmitPayment: (rep: any) => void;
+  onDownloadStatement: (loan: BorrowerDashboardLoan) => void;
+  onDownloadStatementCsv: (loan: BorrowerDashboardLoan) => void;
+  onDownloadSchedule: (loan: BorrowerDashboardLoan) => void;
+  onSubmitPayment: (rep: BorrowerDashboardRepayment) => void;
   isGenerating: string | null;
   onApply: () => void;
 }
@@ -124,7 +128,7 @@ export default function BorrowerLoansTab({
   const completedLoans = loans.filter((l) => l.status === "completed");
   const recentEvents = loanEvents.slice(0, 5);
 
-  const getRepaymentStatus = (rep: any) => {
+  const getRepaymentStatus = (rep: BorrowerDashboardRepayment) => {
     const display = borrowerRepaymentStatusDisplay(rep);
     const icon =
       display.label.startsWith("Paid") ? CheckCircle
@@ -142,7 +146,7 @@ export default function BorrowerLoansTab({
     return totalOriginal > 0 ? (totalPaidPrincipal / totalOriginal) * 100 : 0;
   };
 
-  const renderLoanCard = (loan: any, showSchedule = true) => {
+  const renderLoanCard = (loan: BorrowerDashboardLoan, showSchedule = true) => {
     const config = getStatusDisplay(loan.status);
     const StatusIcon = config.icon;
     const loanRepayments = repayments.filter((r) => r.loan_id === loan.id);
@@ -279,7 +283,7 @@ export default function BorrowerLoansTab({
     );
   };
 
-  const EmptyState = ({ icon: Icon, title, subtitle, showCta = false }: { icon: any; title: string; subtitle: string; showCta?: boolean }) => (
+  const EmptyState = ({ icon: Icon, title, subtitle, showCta = false }: { icon: LucideIcon; title: string; subtitle: string; showCta?: boolean }) => (
     <Card className="border-border/60 shadow-card">
       <CardContent className="p-8 text-center">
         <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 mx-auto mb-3 flex items-center justify-center">

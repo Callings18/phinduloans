@@ -51,13 +51,13 @@ export function BorrowerGoogleAuthSection({
   embedded = false,
   externalTermsAccepted,
 }: BorrowerGoogleAuthButtonProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
   if (!isBorrowerGoogleOAuthEnabled()) {
     return null;
   }
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [acceptTerms, setAcceptTerms] = useState(false);
-  const [termsError, setTermsError] = useState<string | null>(null);
   const termsOk = purpose === "login" || (externalTermsAccepted ?? acceptTerms);
 
   const handleGoogle = async () => {
