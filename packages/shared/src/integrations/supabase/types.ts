@@ -4287,6 +4287,18 @@ export type Database = {
       }
     }
     Views: {
+      account_balance_reconciliation: {
+        Row: {
+          account_id: string
+          account_name: string
+          current_balance: number
+          has_ledger_entry: boolean
+          last_ledger_at: string | null
+          last_ledger_balance: number | null
+          variance: number
+        }
+        Relationships: []
+      }
       overdue_loans_view: {
         Row: {
           active_ptp_amount: number | null
