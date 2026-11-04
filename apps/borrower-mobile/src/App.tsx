@@ -8,7 +8,6 @@ import { TooltipProvider } from "@phinduloans/shared/components/ui/tooltip";
 import { AuthProvider } from "@phinduloans/shared/hooks/useAuth";
 import { ThemeProvider } from "@phinduloans/shared/theme/ThemeProvider";
 import { BorrowerInstallNudge } from "./components/common/BorrowerInstallNudge";
-import { BorrowerThemeSync } from "./components/common/BorrowerThemeSync";
 
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -21,7 +20,7 @@ const queryClient = new QueryClient();
 
 function App() {
   return (
-    <ThemeProvider>
+    <ThemeProvider defaultTheme="schedule" storageKey="phindu-borrower-theme" scheduleTimeZone="Africa/Lusaka">
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
@@ -29,7 +28,6 @@ function App() {
               <Toaster />
               <Sonner />
               <BrowserRouter>
-                <BorrowerThemeSync />
                 {/* Soft optional nudge for logged-in borrowers only — never blocks web apply/login */}
                 <BorrowerInstallNudge />
                 <Routes>
