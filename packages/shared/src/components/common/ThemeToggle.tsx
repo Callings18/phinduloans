@@ -6,7 +6,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@phinduloans/shared/components/ui/dropdown-menu";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, Clock3 } from "lucide-react";
 import { useTheme } from "@phinduloans/shared/theme/ThemeProvider";
 import { cn } from "@phinduloans/shared/lib/utils";
 
@@ -23,7 +23,7 @@ const ThemeToggle = ({ variant = "default", className }: ThemeToggleProps) => {
             <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                onClick={() => setTheme(theme === "schedule" ? (resolvedTheme === "dark" ? "light" : "dark") : "schedule")}
                 className={cn("h-9 w-9", className)}
             >
                 {resolvedTheme === "dark" ? (
@@ -31,7 +31,7 @@ const ThemeToggle = ({ variant = "default", className }: ThemeToggleProps) => {
                 ) : (
                     <Moon size={18} className="text-slate-700" />
                 )}
-                <span className="sr-only">Toggle theme</span>
+                <span className="sr-only">{theme === "schedule" ? "Automatic theme enabled" : "Set automatic theme"}</span>
             </Button>
         );
     }
@@ -62,6 +62,13 @@ const ThemeToggle = ({ variant = "default", className }: ThemeToggleProps) => {
                 >
                     <Moon size={16} className="text-slate-400" />
                     Dark
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={() => setTheme("schedule")}
+                    className={cn("cursor-pointer gap-2", theme === "schedule" && "bg-primary/10")}
+                >
+                    <Clock3 size={16} className="text-primary" />
+                    Auto (Zambia time)
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     onClick={() => setTheme("system")}

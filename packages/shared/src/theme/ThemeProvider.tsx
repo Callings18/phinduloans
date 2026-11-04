@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 
-export type Theme = "dark" | "light" | "system";
+export type Theme = "dark" | "light" | "system" | "schedule";
 
 export interface ThemeContextType {
   theme: Theme;
@@ -25,29 +25,66 @@ function getSystemTheme(): "dark" | "light" {
   return "dark";
 }
 
-function getStoredTheme(): Theme {
+function getStoredTheme(storageKey: string, defaultTheme: Theme): Theme {
   if (typeof window !== "undefined") {
-    const stored = localStorage.getItem("phindu-theme") as Theme | null;
-    return stored || "dark";
+    const stored = localStorage.getItem(storageKey) as Theme | null;
+    return stored && ["dark", "light", "system", "schedule"].includes(stored) ? stored : defaultTheme;
   }
-  return "dark";
+  return defaultTheme;
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+function getScheduledTheme(timeZone: string): "dark" | "light" {
+  try {
+    const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+    return hour >= 18 || hour < 6 ? "dark" : "light";
+  } catch {
+    const hour = new Date().getHours();
+    return hour >= 18 || hour < 6 ? "dark" : "light";
+  }
+}
+
+function themeFor(selected: Theme, timeZone: string): "dark" | "light" {
+  return selected === "system" ? getSystemTheme() : selected === "schedule" ? getScheduledTheme(timeZone) : selected;
+}
+
+export function ThemeProvider({
+  children,
+  defaultTheme = "dark",
+  storageKey = "phindu-theme",
+  scheduleTimeZone = "Africa/Lusaka",
+}: {
+  children: React.ReactNode;
+  defaultTheme?: Theme;
+  storageKey?: string;
+  scheduleTimeZone?: string;
+}) {
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme(storageKey, defaultTheme));
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">(() =>
+    themeFor(getStoredTheme(storageKey, defaultTheme), scheduleTimeZone),
+  );
 
   useEffect(() => {
     const root = document.documentElement;
-    const resolved = theme === "system" ? getSystemTheme() : theme;
+    const resolved = themeFor(theme, scheduleTimeZone);
     setResolvedTheme(resolved);
     root.classList.remove("light", "dark");
     root.classList.add(resolved);
-    localStorage.setItem("phindu-theme", theme);
-  }, [theme]);
+    localStorage.setItem(storageKey, theme);
+  }, [theme, storageKey, scheduleTimeZone]);
 
   useEffect(() => {
-    if (theme !== "system") return;
+    if (theme !== "system" && theme !== "schedule") return;
+    if (theme === "schedule") {
+      const refresh = () => {
+        const next = getScheduledTheme(scheduleTimeZone);
+        setResolvedTheme(next);
+        document.documentElement.classList.remove("light", "dark");
+        document.documentElement.classList.add(next);
+      };
+      refresh();
+      const timer = window.setInterval(refresh, 30_000);
+      return () => window.clearInterval(timer);
+    }
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
       const newTheme = e.matches ? "dark" : "light";
@@ -57,7 +94,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
     mediaQuery.addEventListener("change", handler);
     return () => mediaQuery.removeEventListener("change", handler);
-  }, [theme]);
+  }, [theme, scheduleTimeZone]);
 
   const value = useMemo(() => ({ theme, setTheme, resolvedTheme }), [theme, resolvedTheme]);
 

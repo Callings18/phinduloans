@@ -64,6 +64,7 @@ import { officePath } from "@phinduloans/shared/config/siteMode";
 
 import BorrowerBottomNav from "@/components/dashboard/BorrowerBottomNav";
 import { BorrowerBrandLockup } from "@/components/common/BorrowerBrandLockup";
+import { useTheme } from "@phinduloans/shared/theme/ThemeProvider";
 import type { BorrowerTab } from "@/components/dashboard/BorrowerBottomNav";
 export type { BorrowerTab };
 
@@ -76,6 +77,7 @@ const sidebarItems: { id: BorrowerTab; label: string; icon: typeof Home }[] = [
 ];
 
 const Dashboard = () => {
+  const { resolvedTheme } = useTheme();
   const { user, isLoading, isAdmin, isStaff, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -585,7 +587,7 @@ const Dashboard = () => {
     .join("");
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex relative">
+    <div className="borrower-app min-h-screen bg-background text-foreground flex relative">
       <div className="pointer-events-none absolute inset-0 overflow-hidden md:hidden">
         <div className="absolute -top-20 -right-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute bottom-32 -left-10 h-48 w-48 rounded-full bg-violet-200/40 blur-3xl" />
@@ -600,7 +602,7 @@ const Dashboard = () => {
       >
         {/* Logo */}
         <div className="flex items-center h-16 px-4 border-b border-border shrink-0">
-          <img src={phinduLogoDark} alt="Phindu" className={cn("transition-all", sidebarCollapsed ? "h-7" : "h-8")} />
+          <img src={resolvedTheme === "dark" ? phinduLogoDark : phinduLogoLight} alt="Phindu" className={cn("transition-all", sidebarCollapsed ? "h-7" : "h-8")} />
         </div>
 
         {/* Nav Items */}
@@ -660,7 +662,7 @@ const Dashboard = () => {
                 <Menu size={20} />
               </button>
               <div className="min-w-0 md:hidden">
-                <BorrowerBrandLockup variant="header" theme="light" />
+                <BorrowerBrandLockup variant="header" theme={resolvedTheme} />
               </div>
               <div className="min-w-0 hidden md:block">
                 <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
@@ -672,9 +674,7 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-              <div className="hidden md:block">
-                <ThemeToggle variant="minimal" />
-              </div>
+              <ThemeToggle className="h-9 w-9" />
               <NotificationCenter />
               {isStaff && (
                 <Button size="sm" variant="outline" className="h-9 shrink-0 px-2 text-xs sm:px-3" asChild>
