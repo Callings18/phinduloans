@@ -139,10 +139,10 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
   const apiToken = cleanApiToken(creds.apiToken);
   if (!apiToken) throw new Error("ExciteSMS is not configured. Set EXCITESMS_API_TOKEN in Supabase Edge secrets / Admin Settings.");
 
-  // ExciteSMS accepts Zambian MSISDNs as 260XXXXXXXXX (no "+"). Keep E.164 for logs.
+  // ExciteSMS accepts Zambian MSISDNs as 260XXXXXXXXX (no "+").
   const e164 = formatPhoneNumber(to);
   const msisdn = e164.replace(/^\+/, "");
-  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, tokenLen=${apiToken.length}, urlHost=${new URL(creds.apiUrl).host}, to=${msisdn}`);
+  console.log(`[OTP] ExciteSMS route=${route.label}, sender=${creds.senderId}, urlHost=${new URL(creds.apiUrl).host}`);
 
   const attempt = async (recipient: string, includeType: boolean) => {
     const body: Record<string, string> = {
@@ -152,25 +152,36 @@ async function sendViaExciteSms(to: string, message: string, route: ExciteSmsRou
     };
     if (includeType) body.type = "plain";
 
-    const response = await fetch(`${creds.apiUrl}/sms/send`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    const responseText = await response.text();
-    let parsedResult: unknown;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12_000);
     try {
-      parsedResult = JSON.parse(responseText);
-    } catch {
-      console.error(`[OTP] ExciteSMS returned non-JSON (${response.status}): ${responseText.slice(0, 200)}`);
-      throw new Error("ExciteSMS delivery failed (invalid provider response)");
+      const response = await fetch(`${creds.apiUrl}/sms/send`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      const responseText = await response.text();
+      let parsedResult: unknown;
+      try {
+        parsedResult = JSON.parse(responseText);
+      } catch {
+        console.error(`[OTP] ExciteSMS returned non-JSON (${response.status}): ${responseText.slice(0, 200)}`);
+        throw new Error("ExciteSMS delivery failed (invalid provider response)");
+      }
+      return { response, result: asRecord(parsedResult) };
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error("ExciteSMS timed out. Please try again.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return { response, result: asRecord(parsedResult) };
   };
 
   // Prefer MSISDN without "+", then retry with "+" if the gateway rejects the first form.

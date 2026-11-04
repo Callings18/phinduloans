@@ -29,7 +29,7 @@ const formatNrc = (value: string): string => {
 
 const nrcSchema = z.string().trim().regex(/^\d{6}\/\d{2}\/\d$/, "NRC must be in the format 123456/78/9");
 
-type AuthMode = "signup_details" | "phone_login" | "otp_verify";
+type AuthMode = "signup_phone" | "signup_details" | "phone_login" | "otp_verify";
 type AuthPurpose = "signup" | "login";
 
 interface PhoneAuthFormProps {
@@ -110,7 +110,7 @@ function ZambiaPhoneField({
 }
 
 export const PhoneAuthForm = ({ purpose, onSuccess, oauthSlot }: PhoneAuthFormProps) => {
-  const [mode, setMode] = useState<AuthMode>(purpose === "signup" ? "signup_details" : "phone_login");
+  const [mode, setMode] = useState<AuthMode>(purpose === "signup" ? "signup_phone" : "phone_login");
   const [phoneLocal, setPhoneLocal] = useState("");
   const [nrcNumber, setNrcNumber] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -172,6 +172,12 @@ export const PhoneAuthForm = ({ purpose, onSuccess, oauthSlot }: PhoneAuthFormPr
     return true;
   };
 
+  const handleContinueSignup = () => {
+    if (!validatePhone()) return;
+    setErrors({});
+    setMode("signup_details");
+  };
+
   const handleSendOTP = async () => {
     if (!validatePhone()) return;
 
@@ -196,6 +202,7 @@ export const PhoneAuthForm = ({ purpose, onSuccess, oauthSlot }: PhoneAuthFormPr
     try {
       const { data, error } = await supabase.functions.invoke("send-otp", {
         body: { phone: phoneE164, purpose },
+        timeout: 35_000,
       });
       if (error) throw new Error(await parseInvokeError(error));
       if (!data?.success) throw new Error(sanitizeAuthError(data?.error || "Failed to send OTP"));
@@ -281,12 +288,53 @@ export const PhoneAuthForm = ({ purpose, onSuccess, oauthSlot }: PhoneAuthFormPr
     if (mode === "otp_verify") {
       setMode(purpose === "signup" ? "signup_details" : "phone_login");
       setOtp("");
+    } else if (mode === "signup_details") {
+      setMode("signup_phone");
     }
   };
+
+  if (mode === "signup_phone") {
+    return (
+      <div className="glass rounded-3xl p-6 sm:p-8 shadow-card border border-border/50">
+        <div className="space-y-5">
+          <ZambiaPhoneField
+            id="signup-phone"
+            value={phoneLocal}
+            onChange={(value) => {
+              setPhoneLocal(value);
+              if (errors.phone) setErrors((current) => ({ ...current, phone: "" }));
+            }}
+            error={errors.phone}
+            describedBy={errors.phone ? "signup-phone-error" : undefined}
+          />
+          <p className="text-sm text-muted-foreground flex items-start gap-2">
+            <Phone className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+            We will send a one-time code by SMS. Standard message rates may apply.
+          </p>
+          <Button
+            type="button"
+            onClick={handleContinueSignup}
+            variant="hero"
+            className="w-full h-14 text-base rounded-xl"
+            disabled={isLoading}
+          >
+            Continue <ArrowRight size={18} aria-hidden />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (mode === "signup_details") {
     return (
       <div className="glass rounded-3xl p-6 sm:p-8 shadow-card border border-border/50">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="mb-5 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft size={16} aria-hidden /> Back
+        </button>
         <SignupStepHeader step={1} />
         <div className="space-y-5">
           <ZambiaPhoneField
