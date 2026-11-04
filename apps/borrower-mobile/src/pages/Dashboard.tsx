@@ -133,7 +133,7 @@ const Dashboard = () => {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from('loan_applications')
-        .select('*, loan_products(repayment_frequency, interest_period)')
+        .select('*, loan_products!loan_applications_loan_product_id_fkey(repayment_frequency, interest_period)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
