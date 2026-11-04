@@ -95,11 +95,13 @@ const AdminReports = () => {
   const downloadAdjustmentsCsv = () => {
     const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const rows = [
-      ["Date", "Action", "Loan ID", "Borrower", "Previous status", "Loan amount", "Gross disbursed", "Refunded", "Scheduled amount removed"],
+      ["Date", "Action", "Loan ID", "Borrower", "Previous status", "Loan amount", "Gross disbursed", "Refunded by action", "Refunded to date", "Scheduled amount removed"],
       ...loanAdjustments.map((row) => {
         const d = row.details ?? {};
+        const undone = row.action === "UNDO_DISBURSEMENT";
         return [row.created_at, row.action, row.entity_id, d.borrower_name, d.previous_status,
-          d.loan_amount, d.gross_disbursed_amount, d.refunded_amount, d.scheduled_amount_removed];
+          d.loan_amount, d.gross_disbursed_amount, undone ? d.refunded_amount : 0,
+          d.amount_refunded ?? d.refunded_amount, d.scheduled_amount_removed];
       }),
     ];
     const blob = new Blob([rows.map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
@@ -227,7 +229,7 @@ const AdminReports = () => {
                     const undone = row.action === "UNDO_DISBURSEMENT";
                     return <div key={row.id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1fr_auto] sm:items-center">
                       <div className="flex items-start gap-3"><span className="mt-0.5 text-muted-foreground">{undone ? <RotateCcw size={16} /> : <Trash2 size={16} />}</span><div><p className="font-medium">{undone ? "Disbursement undone" : "Loan deleted"} · {String(d.borrower_name || "Borrower")}</p><p className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yyyy HH:mm")} · loan {row.entity_id} · previous status: {String(d.previous_status || "unknown")}</p></div></div>
-                      <div className="text-sm sm:text-right"><p>Loan value: K{Number(d.loan_amount ?? 0).toLocaleString()} · Disbursed: K{Number(d.gross_disbursed_amount ?? 0).toLocaleString()}</p><p>Refunded: <strong>K{Number(d.refunded_amount ?? 0).toLocaleString()}</strong> · Recovered: K{Number(d.amount_recovered ?? 0).toLocaleString()}</p><p className="text-muted-foreground">Schedule removed: K{Number(d.scheduled_amount_removed ?? 0).toLocaleString()}</p></div>
+                      <div className="text-sm sm:text-right"><p>Loan value: K{Number(d.loan_amount ?? 0).toLocaleString()} · Disbursed: K{Number(d.gross_disbursed_amount ?? 0).toLocaleString()}</p><p>Refunded {undone ? "by this undo" : "to date"}: <strong>K{Number(undone ? d.refunded_amount ?? 0 : d.amount_refunded ?? d.refunded_amount ?? 0).toLocaleString()}</strong> · Recovered: K{Number(d.amount_recovered ?? 0).toLocaleString()}</p><p className="text-muted-foreground">Schedule removed: K{Number(d.scheduled_amount_removed ?? 0).toLocaleString()}</p></div>
                     </div>;
                   })}
                 </CardContent>
