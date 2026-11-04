@@ -93,7 +93,7 @@ const AdminReports = () => {
   }, { undone: 0, refunded: 0, grossUndone: 0, scheduleRemoved: 0, deleted: 0, deletedLoanAmount: 0 });
 
   const downloadAdjustmentsCsv = () => {
-    const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const rows = [
       ["Date", "Action", "Loan ID", "Borrower", "Previous status", "Loan amount", "Gross disbursed", "Refunded", "Scheduled amount removed"],
       ...loanAdjustments.map((row) => {

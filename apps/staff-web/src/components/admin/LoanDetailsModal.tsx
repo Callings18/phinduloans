@@ -1650,7 +1650,10 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
     mutationFn: async () => {
       if (!loan) throw new Error("No loan selected");
 
-      const { data, error } = await supabase.rpc("admin_undo_loan_disbursement", {
+      const { data, error } = await (supabase.rpc as (
+        fn: string,
+        args: { p_loan_id: string },
+      ) => ReturnType<typeof supabase.rpc>)("admin_undo_loan_disbursement", {
         p_loan_id: loan.id,
       });
       if (error) throw error;

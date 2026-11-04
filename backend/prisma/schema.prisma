@@ -15,7 +15,6 @@ model LoanProduct {
   amount_logic                 String?
   auto_disbursement            Boolean?
   blacklist_check_required     Boolean?
-  channels                     String[]?
   collateral_required          Boolean?
   contract_template_url        String?
   crb_auto_approve_score       Decimal?  @db.Decimal(18, 4)
@@ -28,9 +27,7 @@ model LoanProduct {
   digital_signature_required     Boolean?
   early_repayment_allowed      Boolean?
   early_repayment_fee_percent  Decimal?  @db.Decimal(18, 4)
-  eligible_locations           String[]?
   employer_whitelist_enabled   Boolean?
-  employment_types             String[]?
   enforcement_fee_percent      Decimal?  @db.Decimal(18, 4)
   flat_interest_mode           String?
   grace_period_days            Int?
@@ -68,9 +65,7 @@ model LoanProduct {
   processing_fee_percent       Decimal?  @db.Decimal(18, 4)
   product_code                 String?
   repayment_frequency          String?
-  repayment_methods            String[]?
   required_documents           Json?
-  requirements                 String[]?
   status                       String?
   term_unit                    String
   updated_at                   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
