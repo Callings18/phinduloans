@@ -64,6 +64,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
       "disbursements",
       "payment_claims",
       "account_transactions",
+      "accounts",
     ],
     [
       ["admin-stats", loanProductId || null],
@@ -78,7 +79,7 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
     queryKey: ["admin-operational-risk"],
     queryFn: async () => {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const [disbursements, pendingClaims, staleKycDocs] = await Promise.all([
+      const [disbursements, pendingClaims, staleKycDocs, accountReconciliation] = await Promise.all([
         supabase.from("disbursements").select("id, amount, status"),
         supabase.from("payment_claims").select("id, created_at, status").eq("status", "pending_review"),
         supabase
@@ -86,10 +87,20 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
           .select("id, uploaded_at, is_verified")
           .eq("is_verified", false)
           .lt("uploaded_at", since),
+        supabase.from("account_balance_reconciliation").select("account_id, variance"),
       ]);
       if (disbursements.error) throw disbursements.error;
       if (pendingClaims.error) throw pendingClaims.error;
       if (staleKycDocs.error) throw staleKycDocs.error;
+      if (accountReconciliation.error) throw accountReconciliation.error;
+
+      const accountBalanceMismatches = (accountReconciliation.data || []).filter(
+        (account) => Math.abs(Number(account.variance || 0)) > 0.01,
+      );
+      const accountBalanceVariance = accountBalanceMismatches.reduce(
+        (sum, account) => sum + Math.abs(Number(account.variance || 0)),
+        0,
+      );
 
       const completedDisbursements = (disbursements.data || []).filter((d) => d.status === "completed");
       const completedIds = completedDisbursements.map((d) => d.id);
@@ -133,6 +144,8 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
         missingLedgerCount: missingLedger.length,
         missingLedgerAmount: Math.round(missingLedger.reduce((sum, d) => sum + Number(d.amount || 0), 0) * 100) / 100,
         mismatchedLedgerCount: mismatchedLedger.length,
+        accountBalanceMismatchCount: accountBalanceMismatches.length,
+        accountBalanceVariance: Math.round(accountBalanceVariance * 100) / 100,
       };
     },
   });
@@ -261,6 +274,21 @@ export function AdminDashboardContent({ loanProductId, title, productFilterSlot,
                       {operationalRisk?.missingLedgerCount ?? 0} missing ledger rows (K{(operationalRisk?.missingLedgerAmount ?? 0).toLocaleString()}); {operationalRisk?.mismatchedLedgerCount ?? 0} amount mismatches.
                     </p>
                   ) : null}
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Account balance reconciliation</span>
+                    <Badge
+                      variant="outline"
+                      className={
+                        (operationalRisk?.accountBalanceMismatchCount ?? 0) === 0
+                          ? "bg-success/20 text-success border-success/30"
+                          : "bg-destructive/20 text-destructive border-destructive/30"
+                      }
+                    >
+                      {(operationalRisk?.accountBalanceMismatchCount ?? 0) === 0
+                        ? "PASS"
+                        : `REVIEW K${(operationalRisk?.accountBalanceVariance ?? 0).toLocaleString()} · ${operationalRisk?.accountBalanceMismatchCount} account(s)`}
+                    </Badge>
+                  </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">No failed disbursements outstanding</span>
                     <Badge variant="outline">{(operationalRisk?.failedDisbursements ?? 0) === 0 ? "PASS" : "REVIEW"}</Badge>
