@@ -52,10 +52,35 @@ export function useHouseProduct(productCode: string) {
 }
 
 export function useHouseLoans(productCode: string) {
+  const normalized = productCode.trim().toUpperCase();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!normalized) return;
+
+    const refreshHouseData = () => {
+      void queryClient.invalidateQueries({ queryKey: ["house-loans", normalized] });
+      void queryClient.invalidateQueries({ queryKey: ["house-repayments", normalized] });
+      void queryClient.invalidateQueries({ queryKey: ["house-report-summary", normalized] });
+    };
+
+    const channel = supabase
+      .channel(`house-loans-live-${normalized}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_applications" }, refreshHouseData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "loan_repayments" }, refreshHouseData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [normalized, queryClient]);
+
   return useQuery({
-    queryKey: ["house-loans", productCode],
-    queryFn: () => fetchHouseLoans(productCode),
-    enabled: Boolean(productCode),
+    queryKey: ["house-loans", normalized],
+    queryFn: () => fetchHouseLoans(normalized),
+    enabled: Boolean(normalized),
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
@@ -68,10 +93,13 @@ export function useHouseBorrowers(productCode: string) {
 }
 
 export function useHouseRepayments(productCode: string) {
+  const normalized = productCode.trim().toUpperCase();
   return useQuery({
-    queryKey: ["house-repayments", productCode],
-    queryFn: () => fetchHouseRepayments(productCode),
-    enabled: Boolean(productCode),
+    queryKey: ["house-repayments", normalized],
+    queryFn: () => fetchHouseRepayments(normalized),
+    enabled: Boolean(normalized),
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 

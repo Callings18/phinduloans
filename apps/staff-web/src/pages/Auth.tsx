@@ -21,6 +21,14 @@ const Auth = () => {
   const navigate = useNavigate();
   const handledRef = useRef(false);
 
+  const loginErrorDescription = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || "Sign-in failed");
+    if (/failed to fetch|networkerror|fetch failed/i.test(message)) {
+      return "Your browser could not reach the sign-in service. Check your connection, refresh this page, and try again. If it continues, try another network.";
+    }
+    return message;
+  };
+
   useEffect(() => {
     if (getSiteModeFromHostname() === "marketing") {
       window.location.replace(borrowerAppPath("/auth") + window.location.search);
@@ -63,13 +71,18 @@ const Auth = () => {
     }
     handledRef.current = false;
     setStaffLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    setStaffLoading(false);
-    if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
-      return;
+    try {
+      const { error } = await signIn(email.trim(), password);
+      if (error) {
+        toast({ title: "Login failed", description: loginErrorDescription(error), variant: "destructive" });
+        return;
+      }
+      toast({ title: "Welcome back!", description: "Loading your staff dashboard…" });
+    } catch (error) {
+      toast({ title: "Login failed", description: loginErrorDescription(error), variant: "destructive" });
+    } finally {
+      setStaffLoading(false);
     }
-    toast({ title: "Welcome back!", description: "Loading your staff dashboard…" });
   };
 
   if (isLoading || (user && isStaff)) {
