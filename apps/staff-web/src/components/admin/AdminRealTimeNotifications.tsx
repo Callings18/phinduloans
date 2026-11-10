@@ -3,6 +3,7 @@ import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { X, Bell, CheckCircle, AlertTriangle, Info, FileText, Download, ExternalLink, ClipboardList } from "lucide-react";
 import { cn } from "@phinduloans/shared/lib/utils";
 import { Button } from "@phinduloans/shared/components/ui/button";
+import { getSignedUrl } from "@phinduloans/shared/utils/storageHelpers";
 
 interface Notification {
   id: string;
@@ -153,21 +154,17 @@ const AdminRealTimeNotifications = forwardRef<HTMLDivElement>((_, ref) => {
 
   const handleViewContract = async (notification: Notification) => {
     if (notification.provider_response?.signedContractUrl) {
-      window.open(notification.provider_response.signedContractUrl, "_blank");
+      const url = await getSignedUrl(notification.provider_response.signedContractUrl, "loan-documents");
+      if (url) window.open(url, "_blank");
       return;
     }
 
     if (notification.provider_response?.signatureUrl) {
       try {
-        const { data } = await supabase.storage
-          .from("loan-documents")
-          .createSignedUrl(notification.provider_response.signatureUrl, 3600);
-
-        if (data?.signedUrl) {
-          window.open(data.signedUrl, "_blank");
-        }
+        const url = await getSignedUrl(notification.provider_response.signatureUrl, "loan-documents");
+        if (url) window.open(url, "_blank");
       } catch (error) {
-        console.error("Failed to get signed URL:", error);
+        console.error("Failed to download document:", error);
       }
     }
   };

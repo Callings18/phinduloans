@@ -2,6 +2,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import AdminDocumentUpload from "./AdminDocumentUpload";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
+import { getSignedUrl } from "@phinduloans/shared/utils/storageHelpers";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@phinduloans/shared/components/ui/button";
@@ -423,24 +424,6 @@ export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
     );
   };
 
-  // Helper to get signed URL for viewing documents
-  const getSignedUrl = async (filePath: string | null): Promise<string | null> => {
-    if (!filePath) return null;
-    
-    // If it's already a full URL, return as-is (legacy data)
-    if (filePath.startsWith('http')) return filePath;
-    
-    const { data, error } = await supabase.storage
-      .from('loan-documents')
-      .createSignedUrl(filePath, 3600); // 1 hour expiry
-    
-    if (error) {
-      console.error('Failed to create signed URL:', error);
-      return null;
-    }
-    return data.signedUrl;
-  };
-
   const handleViewDocument = async (
     fileUrl: string | null,
     opts?: { label?: string; payslipPassword?: string | null; mimeType?: string | null }
@@ -448,7 +431,7 @@ export default function DocumentVerificationTab({ loanId, borrowerId }: Props) {
     const signedUrl = await getSignedUrl(fileUrl);
     if (signedUrl) {
       const mime = opts?.mimeType?.toLowerCase() ?? "";
-      const isPdf = mime.includes("pdf") || signedUrl.toLowerCase().includes(".pdf");
+      const isPdf = mime.includes("pdf") || fileUrl?.split("?")[0].toLowerCase().endsWith(".pdf") === true;
       setPreviewState({
         url: signedUrl,
         type: isPdf ? "pdf" : "image",
