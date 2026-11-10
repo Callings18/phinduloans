@@ -1311,7 +1311,7 @@ const AdminApplications = () => {
 
     try {
     switch (actionId) {
-      case 'approve':
+      case 'approve': {
         // Bulk approve (use transition_loan_status for each; only succeeds if both verifications done)
         let approveFailed = 0;
         for (const id of selectedApplications) {
@@ -1326,6 +1326,7 @@ const AdminApplications = () => {
         if (approveFailed > 0) toast({ title: 'Bulk approve', description: `${approveFailed} application(s) could not be approved (e.g. verifications not done).`, variant: 'destructive' });
         else toast({ title: 'Bulk approve completed' });
         break;
+      }
 
       case 'verify_documents':
         for (const id of selectedApplications) {
@@ -1345,7 +1346,7 @@ const AdminApplications = () => {
         toast({ title: 'Bulk finance approve completed' });
         break;
 
-      case 'reject':
+      case 'reject': {
         // Bulk reject via transition_loan_status (audited)
         const rejectReason = inputValue || "Bulk rejection";
         for (const id of selectedApplications) {
@@ -1355,8 +1356,9 @@ const AdminApplications = () => {
         setSelectedApplications([]);
         toast({ title: "Bulk rejection completed" });
         break;
+      }
 
-      case 'assign':
+      case 'assign': {
         // Bulk assign to officer
         if (!inputValue) throw new Error('Please select an officer');
         const assignPromises = selectedApplications.map(id =>
@@ -1373,8 +1375,9 @@ const AdminApplications = () => {
         setSelectedApplications([]);
         toast({ title: "Applications assigned" });
         break;
+      }
 
-      case 'send_email':
+      case 'send_email': {
         // Get email addresses and send bulk email notification
         const emailApps = applications?.filter(app => selectedApplications.includes(app.id));
         for (const app of emailApps || []) {
@@ -1391,8 +1394,9 @@ const AdminApplications = () => {
         }
         setSelectedApplications([]);
         break;
+      }
 
-      case 'send_sms':
+      case 'send_sms': {
         // Get phone numbers and send bulk SMS
         const smsApps = applications?.filter(app => selectedApplications.includes(app.id));
         for (const app of smsApps || []) {
@@ -1408,8 +1412,9 @@ const AdminApplications = () => {
         }
         setSelectedApplications([]);
         break;
+      }
 
-      case 'export':
+      case 'export': {
         // Export selected applications to CSV
         const exportApps = applications?.filter((app: any) => selectedApplications.includes(app.id));
         if (exportApps && exportApps.length > 0) {
@@ -1434,8 +1439,9 @@ const AdminApplications = () => {
         }
         setSelectedApplications([]);
         break;
+      }
 
-      case 'delete':
+      case 'delete': {
         // Use the same audited, ledger-aware RPC as single-loan deletion.
         // Run sequentially so a blocked loan does not leave the remaining
         // deletion results ambiguous to the operator.
@@ -1447,6 +1453,7 @@ const AdminApplications = () => {
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
         break;
+      }
 
       default:
         throw new Error('Unknown action');
