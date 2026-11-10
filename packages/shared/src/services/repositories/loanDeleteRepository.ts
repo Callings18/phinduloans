@@ -41,11 +41,8 @@ export async function deleteLoanApplication(
 
   if (error) {
     if (isMissingPurgeRpcError(error)) {
-      if (options?.allowPrivilegedDelete || isDeletableLoanStatus(status)) {
-        return deleteLoanApplicationFallback(loanId, status, options);
-      }
       throw new Error(
-        "Loan delete is not set up on the database yet. Ask an engineer to run supabase/scripts/APPLY_admin_purge_loan_rpc.sql in Supabase SQL Editor, then try again.",
+        "The audited loan deletion service is unavailable. No records were deleted. Contact support to restore the database migration, then retry.",
       );
     }
     throw error;
@@ -62,37 +59,4 @@ function isMissingPurgeRpcError(error: unknown): boolean {
   if (e.code === "42883" || e.code === "PGRST202") return true;
   const msg = e.message ?? "";
   return msg.includes("admin_purge_loan_application") || msg.includes("schema cache");
-}
-
-/** Legacy path if migration not applied yet (pre-disbursement only). */
-async function deleteLoanApplicationFallback(
-  loanId: string,
-  status: string,
-  options?: { allowPrivilegedDelete?: boolean },
-) {
-  if (!options?.allowPrivilegedDelete && !isDeletableLoanStatus(status)) {
-    throw new Error(`Cannot delete a loan in status "${status}".`);
-  }
-  const byLoanId = [
-    "loan_repayments",
-    "disbursements",
-    "loan_status_transitions",
-    "loan_events",
-    "payment_claims",
-    "loan_notes",
-  ] as const;
-  for (const table of byLoanId) {
-    const { error } = await supabase.from(table).delete().eq("loan_id", loanId);
-    if (error && (error as { code?: string }).code !== "42P01") throw error;
-  }
-  {
-    const { error } = await supabase.from("application_documents").delete().eq("application_id", loanId);
-    if (error && (error as { code?: string }).code !== "42P01") throw error;
-  }
-  {
-    const { error } = await supabase.from("loan_borrowers").delete().eq("loan_application_id", loanId);
-    if (error && (error as { code?: string }).code !== "42P01") throw error;
-  }
-  const { error } = await supabase.from("loan_applications").delete().eq("id", loanId);
-  if (error) throw error;
 }

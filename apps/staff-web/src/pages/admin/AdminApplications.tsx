@@ -83,6 +83,7 @@ import BulkActions, { defaultLoanApplicationActions, BulkAction } from "@/compon
 import { Checkbox } from "@phinduloans/shared/components/ui/checkbox";
 import { REQUIRED_DOC_TYPE_OPTIONS } from "@/pages/admin/AdminLoanProducts";
 import { logAudit, handleUnauthorized } from "@phinduloans/shared/utils/auditLog";
+import { deleteLoanApplication } from "@phinduloans/shared/services/repositories/loanDeleteRepository";
 import { transitionLoanStatus } from "@phinduloans/shared/services/repositories/workflowRepository";
 import { createRepaymentScheduleForLoan } from "@phinduloans/shared/utils/createRepaymentSchedule";
 import { assertBusinessDayForDisbursement } from "@phinduloans/shared/lib/disbursementCalendar";
@@ -750,15 +751,8 @@ const AdminApplications = () => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('loan_applications').delete().eq('id', id);
-      if (error) throw error;
-
-      await logAudit({
-        action: "DELETE",
-        entity_type: "loan_application",
-        entity_id: id,
-        module: "loans",
-      });
+      if (!selectedApp?.status) throw new Error("Loan status is unavailable. Refresh and try again.");
+      await deleteLoanApplication(id, selectedApp.status, { allowPrivilegedDelete: true });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
@@ -1442,13 +1436,13 @@ const AdminApplications = () => {
         break;
 
       case 'delete':
-        // Bulk delete
-        const deletePromises = selectedApplications.map(id =>
-          supabase.from('loan_applications').delete().eq('id', id)
-        );
-        const deleteResults = await Promise.all(deletePromises);
-        for (const r of deleteResults) {
-          if (r.error) throw r.error;
+        // Use the same audited, ledger-aware RPC as single-loan deletion.
+        // Run sequentially so a blocked loan does not leave the remaining
+        // deletion results ambiguous to the operator.
+        for (const id of selectedApplications) {
+          const application = applications.find((item: any) => item.id === id);
+          if (!application?.status) throw new Error(`Could not load the status for loan ${id}. Refresh and try again.`);
+          await deleteLoanApplication(id, application.status, { allowPrivilegedDelete: true });
         }
         await queryClient.invalidateQueries({ queryKey: ['admin-applications'] });
         setSelectedApplications([]);
