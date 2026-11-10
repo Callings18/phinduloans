@@ -54,6 +54,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
+import { getEdgeFunctionErrorMessage } from "@phinduloans/shared/utils/getEdgeFunctionErrorMessage";
 import GuidedTour from "@/components/common/GuidedTour";
 import BorrowerKYCSection from "@/components/admin/BorrowerKYCSection";
 import { PhinduCRBCard } from "@/components/admin/PhinduCRBCard";
@@ -321,7 +322,9 @@ const AdminBorrowers = () => {
         },
       });
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        throw new Error(await getEdgeFunctionErrorMessage(response.error, "Borrower creation failed."));
+      }
       if (response.data?.error) throw new Error(response.data.error);
 
       const created = response.data;
@@ -404,7 +407,9 @@ const AdminBorrowers = () => {
             product_code: targetProductCode,
           },
         });
-        if (responseError) throw responseError;
+        if (responseError) {
+          throw new Error(await getEdgeFunctionErrorMessage(responseError, "Borrower creation failed."));
+        }
         if (response?.error) throw new Error(response.error);
         const userId = response?.user_id;
         if (!userId) continue;

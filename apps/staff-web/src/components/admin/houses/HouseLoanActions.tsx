@@ -88,6 +88,7 @@ export default function HouseLoanActions({ loan, product, productCode, onChanged
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["house-loan-repayments", loanId] });
     queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+    queryClient.invalidateQueries({ queryKey: ["house-repayments", productCode] });
     queryClient.invalidateQueries({ queryKey: ["house-report-summary", productCode] });
     queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
     queryClient.invalidateQueries({ queryKey: ["house-loan-events", loanId] });

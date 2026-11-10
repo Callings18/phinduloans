@@ -10,7 +10,6 @@ import { Button } from "@phinduloans/shared/components/ui/button";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Label } from "@phinduloans/shared/components/ui/label";
 import { Progress } from "@phinduloans/shared/components/ui/progress";
-import { Badge } from "@phinduloans/shared/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@phinduloans/shared/components/ui/alert";
 import {
   useExciteSmsBalance,
@@ -36,8 +35,9 @@ export default function SmsPackageUsageCard({ compact = false }: SmsPackageUsage
   const {
     data: exciteBalance,
     isFetching: exciteFetching,
+    error: exciteBalanceError,
     refetch: refetchExcite,
-  } = useExciteSmsBalance(refreshExcite);
+  } = useExciteSmsBalance(compact || refreshExcite);
 
   const [form, setForm] = useState<SmsPackageConfig | null>(null);
 
@@ -76,18 +76,28 @@ export default function SmsPackageUsageCard({ compact = false }: SmsPackageUsage
     },
   });
 
-  const used = usage?.sms_units_used ?? 0;
   const packageSize = config?.package_size ?? 0;
-  const remainingEstimate = packageSize > 0 ? Math.max(packageSize - used, 0) : null;
-  const usedPct = packageSize > 0 ? Math.min(100, Math.round((used / packageSize) * 100)) : 0;
+  const packageStartConfigured = Boolean(config?.package_start_at);
+  const exciteRemaining = exciteBalance?.success && Number.isFinite(exciteBalance.remaining_units)
+    ? Number(exciteBalance.remaining_units)
+    : null;
+  const remainingEstimate = packageSize > 0 && packageStartConfigured && usage
+    ? Math.max(packageSize - usage.sms_units_used, 0)
+    : null;
+  const remainingUnits = exciteRemaining ?? remainingEstimate;
+  const usedThisPackage = exciteRemaining !== null && packageSize > 0
+    ? Math.max(packageSize - exciteRemaining, 0)
+    : packageStartConfigured && usage
+      ? usage.sms_units_used
+      : null;
+  const usedPct = packageSize > 0 && usedThisPackage !== null
+    ? Math.min(100, Math.round((usedThisPackage / packageSize) * 100))
+    : 0;
   const lowThreshold = config?.low_balance_threshold ?? 200;
-  const isLow =
-    packageSize > 0 && remainingEstimate !== null && remainingEstimate <= lowThreshold;
-
-  const exciteRemaining = exciteBalance?.success ? exciteBalance.remaining_units : null;
+  const isLow = packageSize > 0 && remainingUnits !== null && remainingUnits <= lowThreshold;
 
   const periodLabel = useMemo(() => {
-    if (!config?.package_start_at) return "All time (set a package start date to match your Excite top-up)";
+    if (!config?.package_start_at) return "Set a package start date to estimate usage from Phindu sends";
     try {
       return `Since ${format(new Date(config.package_start_at), "dd MMM yyyy")}`;
     } catch {
@@ -97,7 +107,7 @@ export default function SmsPackageUsageCard({ compact = false }: SmsPackageUsage
 
   if (!isStaff) return null;
 
-  const loading = configLoading || usageLoading;
+  const loading = configLoading || (packageStartConfigured && usageLoading);
 
   const handleRefreshExcite = () => {
     setRefreshExcite(true);
@@ -128,7 +138,7 @@ export default function SmsPackageUsageCard({ compact = false }: SmsPackageUsage
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => void refetchUsage()} disabled={loading}>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refetchUsage()} disabled={loading || !packageStartConfigured}>
               <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${usageLoading ? "animate-spin" : ""}`} />
               Refresh usage
             </Button>
@@ -151,9 +161,9 @@ export default function SmsPackageUsageCard({ compact = false }: SmsPackageUsage
             {isLow && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Low SMS balance (estimate)</AlertTitle>
+                <AlertTitle>{exciteRemaining !== null ? "Low ExciteSMS balance" : "Low SMS balance (estimate)"}</AlertTitle>
                 <AlertDescription>
-                  About {remainingEstimate?.toLocaleString()} SMS units left on this package ({lowThreshold} alert threshold).
+                  About {remainingUnits?.toLocaleString()} SMS units left on this package ({lowThreshold} alert threshold).
                   Top up ExciteSMS or adjust the package size after renewal.
                 </AlertDescription>
               </Alert>
@@ -161,44 +171,44 @@ export default function SmsPackageUsageCard({ compact = false }: SmsPackageUsage
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Stat label="Package size" value={packageSize > 0 ? packageSize.toLocaleString() : "—"} />
-              <Stat label="Used (Phindu)" value={used.toLocaleString()} hint={periodLabel} />
               <Stat
-                label="Remaining (est.)"
-                value={remainingEstimate !== null ? remainingEstimate.toLocaleString() : "—"}
+                label={exciteRemaining !== null ? "Used this package" : "Used (Phindu)"}
+                value={usedThisPackage !== null ? usedThisPackage.toLocaleString() : "—"}
+                hint={exciteRemaining !== null ? "Calculated from ExciteSMS balance" : periodLabel}
               />
-              <Stat label="Sent messages" value={(usage?.messages_sent ?? 0).toLocaleString()} hint="Successful sends" />
+              <Stat
+                label={exciteRemaining !== null ? "Remaining (ExciteSMS live)" : "Remaining (estimate)"}
+                value={remainingUnits !== null ? remainingUnits.toLocaleString() : "—"}
+                hint={exciteBalance?.fetched_at ? `Checked ${format(new Date(exciteBalance.fetched_at), "HH:mm dd MMM")}` : undefined}
+              />
+              <Stat
+                label="Sent messages"
+                value={packageStartConfigured ? (usage?.messages_sent ?? 0).toLocaleString() : "—"}
+                hint={packageStartConfigured ? "Successful sends since package start" : "Set package start date to count sends"}
+              />
             </div>
 
-            {packageSize > 0 && (
+            {packageSize > 0 && usedThisPackage !== null && (
               <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>{usedPct}% of package used</span>
                   <span>
-                    {used.toLocaleString()} / {packageSize.toLocaleString()} units
+                    {usedThisPackage.toLocaleString()} / {packageSize.toLocaleString()} units
                   </span>
                 </div>
                 <Progress value={usedPct} className="h-2" />
               </div>
             )}
 
-            {exciteRemaining != null && (
-              <div className="flex items-center gap-2 text-sm">
-                <Badge variant="outline" className="border-primary/40 text-primary">
-                  Excite live
-                </Badge>
-                <span>
-                  Provider reports <strong>{exciteRemaining.toLocaleString()}</strong> units remaining
-                  {exciteBalance?.fetched_at
-                    ? ` · ${format(new Date(exciteBalance.fetched_at), "HH:mm dd MMM")}`
-                    : ""}
-                </span>
-              </div>
-            )}
-
-            {refreshExcite && exciteBalance && !exciteBalance.success && !compact && (
+            {((refreshExcite && !compact) || compact) && exciteBalance && !exciteBalance.success && (
               <p className="text-xs text-muted-foreground">
                 {exciteBalance.message ??
                   "Live Excite balance is not available for this API key yet. Package + Phindu usage above is your dashboard view."}
+              </p>
+            )}
+            {((refreshExcite && !compact) || compact) && exciteBalanceError && (
+              <p className="text-xs text-muted-foreground">
+                Could not retrieve the live ExciteSMS balance. Historical SMS sends are not being used as the package balance.
               </p>
             )}
 

@@ -41,6 +41,7 @@ import PaginationControls from "@/components/common/PaginationControls";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
 import { deleteLoanApplication } from "@phinduloans/shared/services/repositories/loanDeleteRepository";
+import { getRepaymentOutstandingAmount } from "@/utils/houseLoanListCalculations";
 
 const DELETABLE_STATUSES = new Set([
   "pending",
@@ -130,11 +131,11 @@ export default function HouseLoansPage() {
     const map: Record<string, { count: number; amount: number; oldestDueDate: string | null; daysLate: number }> = {};
     (repayments ?? []).forEach((r: any) => {
       if (!activeLoanIds.has(r.loan_id)) return;
-      if (r.status === "paid" || r.status === "cancelled") return;
+      if (r.status === "paid" || r.status === "cancelled" || r.is_reversed) return;
       if (!r.due_date || r.due_date >= todayStr) return;
       const entry = map[r.loan_id] ?? { count: 0, amount: 0, oldestDueDate: null, daysLate: 0 };
       entry.count += 1;
-      entry.amount += Number(r.amount || 0);
+      entry.amount += getRepaymentOutstandingAmount(r);
       entry.oldestDueDate =
         !entry.oldestDueDate || r.due_date < entry.oldestDueDate ? r.due_date : entry.oldestDueDate;
       map[r.loan_id] = entry;
@@ -156,13 +157,13 @@ export default function HouseLoansPage() {
     const map: Record<string, { dueDate: string; amount: number; status: string | null }> = {};
     (repayments ?? []).forEach((r: any) => {
       if (!activeLoanIds.has(r.loan_id)) return;
-      if (r.status === "paid" || r.status === "cancelled") return;
+      if (r.status === "paid" || r.status === "cancelled" || r.is_reversed) return;
       if (!r.due_date) return;
       const existing = map[r.loan_id];
       if (!existing || r.due_date < existing.dueDate) {
         map[r.loan_id] = {
           dueDate: r.due_date,
-          amount: Number(r.amount || 0),
+          amount: getRepaymentOutstandingAmount(r),
           status: r.status ?? null,
         };
       }

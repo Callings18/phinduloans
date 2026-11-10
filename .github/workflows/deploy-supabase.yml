@@ -1,0 +1,73 @@
+name: Deploy Supabase Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/config.toml"
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - ".github/workflows/deploy-supabase.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: seobilifwyxhtjvsgqpc
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Check Supabase deployment credentials
+        shell: bash
+        run: |
+          if [[ -z "$SUPABASE_ACCESS_TOKEN" || -z "$SUPABASE_DB_PASSWORD" ]]; then
+            echo "::error::Add SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD to the GitHub Actions secrets before deploying Supabase changes."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.0.0
+
+      - name: Link production project
+        run: supabase link --project-ref "$PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+
+      # These migrations were applied through the connected Supabase tool,
+      # which assigned its own migration versions. Repair only these known
+      # already-applied files so db push cannot execute them a second time.
+      - name: Reconcile known migration history drift
+        shell: bash
+        run: |
+          migration_list="$(supabase migration list --linked)"
+          for version in \
+            20261104003000 \
+            20261104100031 \
+            20261104101243 \
+            20261104101808 \
+            20261104130000 \
+            20261110080000 \
+            20261110080500; do
+            if ! printf '%s\n' "$migration_list" | awk -F '│' -v version="$version" 'NF >= 3 && $2 ~ version { found = 1 } END { exit found ? 0 : 1 }'; then
+              supabase migration repair --status applied "$version" --linked --yes
+            fi
+          done
+
+      - name: Preview database changes
+        run: supabase db push --dry-run --linked
+
+      - name: Apply database migrations
+        run: supabase db push --linked --yes
+
+      - name: Deploy Edge Functions
+        run: supabase functions deploy --project-ref "$PROJECT_ID"

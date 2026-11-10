@@ -225,7 +225,9 @@ export default function BorrowerHomeTab({
   })();
   const NextStepIcon = nextStep.icon;
 
-  const hour = new Date().getHours();
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lusaka", hour: "2-digit", hourCycle: "h23" }).format(new Date()),
+  );
   const timeGreeting =
     hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -379,8 +381,8 @@ export default function BorrowerHomeTab({
         <PaymentReminder repayments={repayments} />
       )}
 
-      <Card className="border-primary/30 bg-primary/5 shadow-card hidden md:block">
-        <CardContent className="p-4 flex items-start justify-between gap-3">
+      <Card className="border-primary/25 bg-card shadow-sm">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0">
               <NextStepIcon size={18} />
@@ -393,7 +395,7 @@ export default function BorrowerHomeTab({
           </div>
           <Button
             size="sm"
-            className="gradient-primary text-primary-foreground hover:opacity-90 h-8 px-3 text-xs shrink-0"
+            className="gradient-primary text-primary-foreground hover:opacity-90 h-10 px-4 text-sm shrink-0 w-full sm:w-auto"
             onClick={() => {
               if (nextStep.navigate) nextStep.navigate();
               else onTabChange(nextStep.tab);

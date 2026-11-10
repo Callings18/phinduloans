@@ -55,8 +55,8 @@ export function useSmsPackageConfig() {
 
 export function useSmsUsageStats(packageStartAt: string | null | undefined) {
   const queryClient = useQueryClient();
-  const since = packageStartAt || "1970-01-01T00:00:00.000Z";
   useEffect(() => {
+    if (!packageStartAt) return;
     const channel = supabase
       .channel("sms-usage-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "notification_logs", filter: "type=eq.sms" }, () => {
@@ -64,18 +64,20 @@ export function useSmsUsageStats(packageStartAt: string | null | undefined) {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [packageStartAt, queryClient]);
   return useQuery({
-    queryKey: ["sms-usage-stats", since],
+    queryKey: ["sms-usage-stats", packageStartAt ?? "no-package-start"],
+    enabled: Boolean(packageStartAt),
     queryFn: async (): Promise<SmsUsageStats> => {
+      if (!packageStartAt) throw new Error("Set a package start date before calculating bundle usage.");
       const { data, error } = await (supabase.rpc as (fn: string, args: { p_since: string }) => ReturnType<typeof supabase.rpc>)(
         "get_sms_usage_stats",
-        { p_since: since },
+        { p_since: packageStartAt },
       );
       if (error) throw error;
       const row = data as SmsUsageStats | null;
       return {
-        since: row?.since ?? since,
+        since: row?.since ?? packageStartAt,
         messages_sent: Number(row?.messages_sent ?? 0),
         messages_failed: Number(row?.messages_failed ?? 0),
         messages_pending: Number(row?.messages_pending ?? 0),
@@ -84,7 +86,7 @@ export function useSmsUsageStats(packageStartAt: string | null | undefined) {
     },
     // Realtime updates immediately; polling remains a recovery path if a
     // browser sleeps or the Realtime socket reconnects.
-    refetchInterval: 5 * 60_000,
+    refetchInterval: packageStartAt ? 5 * 60_000 : false,
   });
 }
 
@@ -98,6 +100,7 @@ export function useExciteSmsBalance(enabled: boolean) {
       return (data ?? { success: false, source: "unavailable" }) as ExciteBalanceResponse;
     },
     staleTime: 5 * 60_000,
+    refetchInterval: enabled ? 60_000 : false,
     retry: false,
   });
 }

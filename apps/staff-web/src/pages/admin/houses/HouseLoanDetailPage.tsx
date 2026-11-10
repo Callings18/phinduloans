@@ -89,6 +89,7 @@ export default function HouseLoanDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["house-loan-repayments", loanId] });
     queryClient.invalidateQueries({ queryKey: ["house-loan-disbursement", loanId] });
     queryClient.invalidateQueries({ queryKey: ["house-loans", productCode] });
+    queryClient.invalidateQueries({ queryKey: ["house-repayments", productCode] });
     queryClient.invalidateQueries({ queryKey: ["house-disbursements", productCode] });
     queryClient.invalidateQueries({ queryKey: ["house-report-summary", productCode] });
     queryClient.invalidateQueries({ queryKey: ["accounts-active"] });
