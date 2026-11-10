@@ -15,6 +15,7 @@ import {
 import { useHouseBorrowers, useHouseLoans } from "@/hooks/useHouseData";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@phinduloans/shared/hooks/use-toast";
+import { getEdgeFunctionErrorMessage } from "@phinduloans/shared/utils/getEdgeFunctionErrorMessage";
 import { Search, User, Plus, Phone, IdCard, MapPin, CreditCard } from "lucide-react";
 import PaginationControls from "@/components/common/PaginationControls";
 
@@ -113,8 +114,7 @@ export default function HouseBorrowersPage() {
         },
       });
       if (response.error) {
-        const details = (response.error as any)?.context?.json?.error || (response.error as any)?.message;
-        throw new Error(details || "Borrower creation failed.");
+        throw new Error(await getEdgeFunctionErrorMessage(response.error, "Borrower creation failed."));
       }
       if (response.data?.error) throw new Error(response.data.error);
       return response.data;
