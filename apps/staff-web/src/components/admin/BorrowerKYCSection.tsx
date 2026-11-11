@@ -235,14 +235,14 @@ export default function BorrowerKYCSection({ borrowerId }: BorrowerKYCSectionPro
   });
 
   const handlePreview = async (fileUrl: string) => {
-    const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
+    const url = await getSignedUrl(fileUrl);
     if (url) setPreviewUrl(url);
     else toast({ title: "Permission denied", description: "Contact an admin for access.", variant: "destructive" });
   };
 
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
-      const url = fileUrl.startsWith("http") ? fileUrl : await getSignedUrl(fileUrl);
+    const url = await getSignedUrl(fileUrl);
       if (!url) {
         toast({ title: "Could not generate download link", variant: "destructive" });
         return;

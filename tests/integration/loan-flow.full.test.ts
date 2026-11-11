@@ -18,6 +18,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isProductionSupabaseUrl } from "../../supabase/functions/create-borrower/borrowerIdentity";
 
 const URL = process.env.E2E_SUPABASE_URL;
 const SERVICE_KEY = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY;
@@ -26,6 +27,9 @@ const PRODUCT_CODE = process.env.E2E_PRODUCT_CODE || "MARKETEER";
 const FUNDING_ACCOUNT_ID = process.env.E2E_FUNDING_ACCOUNT_ID || null;
 
 const enabled = Boolean(URL && SERVICE_KEY && STAFF_USER_ID);
+if (enabled && isProductionSupabaseUrl(URL)) {
+  throw new Error("The mutation-based loan flow test refuses to run against the production Supabase project.");
+}
 const d = enabled ? describe : describe.skip;
 
 d("loan flow (full) — staff can complete every stage without permission/product gaps", () => {

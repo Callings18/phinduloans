@@ -249,9 +249,14 @@ export default function LoanDocumentsCard({ loan, bucket = "loan-documents" }: P
         window.open(doc.path, "_blank", "noopener,noreferrer");
         return;
       }
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(doc.path, 3600, { download: true });
-      if (error || !data?.signedUrl) throw error || new Error("No signed URL");
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      const url = await getSignedUrl(doc.path, bucket);
+      if (!url) throw new Error("Authenticated document download failed");
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = doc.path.split("/").pop() || doc.label || "loan-document";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
     } catch (e: any) {
       toast.error(`Could not download ${doc.label}: ${e?.message ?? "unknown error"}`);
     }

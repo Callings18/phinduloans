@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, addMonths, differenceInDays } from "date-fns";
 import { supabase } from "@phinduloans/shared/integrations/supabase/client";
 import { borrowerInstallmentLabel, borrowerSchedulePaymentColumnTitle } from "@phinduloans/shared/utils/repaymentFrequencyLabels";
+import { getSignedUrl } from "@phinduloans/shared/utils/storageHelpers";
 import { callRpc } from "@phinduloans/shared/utils/rpcResult";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -2734,10 +2735,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           size="sm"
                           variant="outline"
                           onClick={async () => {
-                            const { data } = await supabase.storage
-                              .from('loan-documents')
-                              .createSignedUrl((loan as any).contract_url!, 3600);
-                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                            const url = await getSignedUrl((loan as any).contract_url!, 'loan-documents');
+                            if (url) window.open(url, '_blank');
                             else toast.error('Could not load contract');
                           }}
                         >
@@ -2780,10 +2779,8 @@ export default function LoanDetailsModal({ loan, open, onOpenChange }: Props) {
                           size="sm"
                           variant="outline"
                           onClick={async () => {
-                            const { data } = await supabase.storage
-                              .from('loan-documents')
-                              .createSignedUrl(loan.signed_contract_url!, 3600);
-                            if (data?.signedUrl) setSignaturePreviewUrl(data.signedUrl);
+                            const url = await getSignedUrl(loan.signed_contract_url!, 'loan-documents');
+                            if (url) setSignaturePreviewUrl(url);
                             else toast.error('Could not load contract');
                           }}
                         >
