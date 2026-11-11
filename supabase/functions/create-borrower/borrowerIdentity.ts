@@ -29,3 +29,13 @@ export function matchesBorrowerAuthIdentity(
   const phoneMatches = Boolean(normalizedPhone && normalizeBorrowerPhone(user.phone) === normalizedPhone);
   return emailMatches || phoneMatches;
 }
+
+/** Prevent destructive integration suites from ever writing to production. */
+export function isProductionSupabaseUrl(value?: string | null): boolean {
+  if (!value) return false;
+  try {
+    return new URL(value).hostname.toLowerCase() === "seobilifwyxhtjvsgqpc.supabase.co";
+  } catch {
+    return false;
+  }
+}

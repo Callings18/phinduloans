@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isDuplicateBorrowerAuthError,
+  isProductionSupabaseUrl,
   matchesBorrowerAuthIdentity,
   normalizeBorrowerPhone,
 } from "../../supabase/functions/create-borrower/borrowerIdentity";
@@ -26,5 +27,11 @@ describe("borrower identity normalization", () => {
     expect(isDuplicateBorrowerAuthError({ message: "Phone number already registered" })).toBe(true);
     expect(isDuplicateBorrowerAuthError({ code: "email_exists" })).toBe(true);
     expect(isDuplicateBorrowerAuthError({ message: "Phone number is invalid" })).toBe(false);
+  });
+
+  it("blocks production Supabase from mutation-based integration tests", () => {
+    expect(isProductionSupabaseUrl("https://seobilifwyxhtjvsgqpc.supabase.co")).toBe(true);
+    expect(isProductionSupabaseUrl("https://uat-branch.supabase.co")).toBe(false);
+    expect(isProductionSupabaseUrl(undefined)).toBe(false);
   });
 });

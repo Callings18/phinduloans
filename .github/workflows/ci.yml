@@ -65,6 +65,10 @@ jobs:
           E2E_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
           E2E_STAFF_USER_ID: ${{ secrets.E2E_STAFF_USER_ID }}
         run: |
+          if [[ "$E2E_SUPABASE_URL" == *"seobilifwyxhtjvsgqpc.supabase.co"* ]]; then
+            echo "::error::Mutation-based loan integration tests must use an isolated non-production Supabase project."
+            exit 1
+          fi
           if [ -n "$E2E_SUPABASE_URL" ] && [ -n "$E2E_SUPABASE_SERVICE_ROLE_KEY" ] && [ -n "$E2E_STAFF_USER_ID" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
