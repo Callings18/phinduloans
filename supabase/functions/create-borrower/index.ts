@@ -1,32 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  isDuplicateBorrowerAuthError,
+  matchesBorrowerAuthIdentity,
+  normalizeBorrowerPhone,
+} from "./borrowerIdentity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-function normalizePhoneForAuth(phone?: string | null) {
-  const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.startsWith("260") && digits.length >= 12) return digits;
-  if (digits.startsWith("0") && digits.length >= 10) return `260${digits.slice(1)}`;
-  if (digits.length >= 9) return `260${digits}`;
-  return digits;
-}
-
-function looksLikeDuplicateUserError(error: { message?: string; code?: string } | null | undefined) {
-  const message = String(error?.message || "").toLowerCase();
-  const code = String(error?.code || "").toLowerCase();
-  return (
-    message.includes("already been registered") ||
-    message.includes("already registered") ||
-    message.includes("phone") ||
-    message.includes("email") ||
-    code === "email_exists" ||
-    code === "phone_exists" ||
-    code === "user_already_exists"
-  );
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -84,8 +66,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    const normalizedPhone = normalizePhoneForAuth(phone);
-    phone = normalizedPhone;
+    const normalizedPhone = normalizeBorrowerPhone(phone);
+    if (phone && !normalizedPhone) {
+      return new Response(JSON.stringify({ error: "Enter a valid Zambian mobile number (for example, 0979 943 293)." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Email is no longer collected. We still need a unique auth identifier, so we
     // synthesize one from the phone number, or fall back to a name-based slug.
@@ -95,7 +82,7 @@ Deno.serve(async (req) => {
       .replace(/^\.+|\.+$/g, "") || "borrower";
     const syntheticEmail = !email
       ? (normalizedPhone
-        ? `${normalizedPhone}@phone.phindu.local`
+        ? `${normalizedPhone.replace(/^\+/, "")}@phone.phindu.local`
         : `${nameSlug}.${Date.now()}@borrower.phindu.local`)
       : null;
     const authEmail = email || syntheticEmail!;
@@ -121,57 +108,40 @@ Deno.serve(async (req) => {
     });
 
     if (createError) {
-      if (looksLikeDuplicateUserError(createError)) {
-        console.log("Borrower already exists, resolving existing user", { authEmail, normalizedPhone });
+      if (isDuplicateBorrowerAuthError(createError)) {
+        let matchedUser: { id: string; email?: string | null; phone?: string | null } | null = null;
+        const perPage = 200;
+        const maxPages = 50;
 
-        let foundId: string | null = null;
-
-        const profileFilters = [];
-        if (authEmail) profileFilters.push(`email.eq.${authEmail}`);
-        if (normalizedPhone) profileFilters.push(`phone.eq.${normalizedPhone}`);
-
-        if (profileFilters.length > 0) {
-          const { data: profileMatches, error: profileError } = await supabaseAdmin
-            .from("profiles")
-            .select("id, email, phone")
-            .or(profileFilters.join(","))
-            .limit(5);
-
-          if (!profileError && profileMatches?.length) {
-            foundId = profileMatches[0].id;
+        for (let page = 1; page <= maxPages && !matchedUser; page++) {
+          const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+          if (listError) {
+            console.error("Could not resolve duplicate borrower account", { code: listError.code || "unknown" });
+            return new Response(JSON.stringify({ error: "An account already uses this phone number or email, but it could not be matched safely. Ask an administrator to review the borrower record." }), {
+              status: 409,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
           }
+
+          matchedUser = listData.users.find((user) => matchesBorrowerAuthIdentity(user, authEmail, normalizedPhone)) ?? null;
+          if (listData.users.length < perPage) break;
         }
 
-        if (!foundId) {
-          let page = 1;
-          while (!foundId) {
-            const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
-            if (listError || !listData.users.length) break;
-            const match = listData.users.find((u) => u.email === authEmail || (normalizedPhone ? u.phone === normalizedPhone : false));
-            if (match) {
-              foundId = match.id;
-              break;
-            }
-            if (listData.users.length < 100) break;
-            page++;
-          }
-        }
-
-        if (!foundId) {
-          return new Response(JSON.stringify({ error: `Borrower already exists, but the existing profile could not be resolved automatically. ${createError.message}` }), {
-            status: 400,
+        if (!matchedUser) {
+          return new Response(JSON.stringify({ error: "An account already uses this phone number or email, but its borrower profile could not be matched. Check the details or ask an administrator to review it." }), {
+            status: 409,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        userId = foundId;
+        userId = matchedUser.id;
 
         const { error: upsertExistingProfileError } = await supabaseAdmin.from("profiles").upsert(
           {
             id: userId,
-            email: profileEmail,
+            ...(matchedUser.email && !matchedUser.email.endsWith(".local") ? { email: matchedUser.email } : {}),
             full_name,
-            phone: normalizedPhone || null,
+            phone: normalizedPhone || matchedUser.phone || null,
             nrc_number: nrc_number || null,
             address: address || null,
             city: city || null,
@@ -182,8 +152,8 @@ Deno.serve(async (req) => {
         );
 
         if (upsertExistingProfileError) {
-          console.error("Error upserting existing borrower profile:", upsertExistingProfileError);
-          return new Response(JSON.stringify({ error: `Profile update failed: ${upsertExistingProfileError.message}` }), {
+          console.error("Error updating existing borrower profile", { code: upsertExistingProfileError.code || "unknown" });
+          return new Response(JSON.stringify({ error: "The existing borrower account was found, but the profile could not be updated. Please try again or contact an administrator." }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -200,7 +170,7 @@ Deno.serve(async (req) => {
           );
 
           if (houseLinkError) {
-            console.error("Error linking existing borrower to product house:", houseLinkError);
+            console.error("Error linking existing borrower to product house", { code: houseLinkError.code || "unknown" });
             return new Response(JSON.stringify({ error: houseLinkError.message }), {
               status: 400,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -224,7 +194,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.error("Error creating user:", createError);
+      console.error("Error creating borrower Auth user", { code: createError.code || "unknown" });
       return new Response(JSON.stringify({ error: createError.message }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -250,7 +220,7 @@ Deno.serve(async (req) => {
     );
 
     if (upsertError) {
-      console.error("Error upserting profile:", upsertError);
+      console.error("Error creating borrower profile", { code: upsertError.code || "unknown" });
       return new Response(JSON.stringify({ error: `Profile creation failed: ${upsertError.message}` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -280,7 +250,7 @@ Deno.serve(async (req) => {
       );
 
       if (houseLinkError) {
-        console.error("Error linking new borrower to product house:", houseLinkError);
+        console.error("Error linking new borrower to product house", { code: houseLinkError.code || "unknown" });
         return new Response(JSON.stringify({ error: houseLinkError.message }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -301,7 +271,7 @@ Deno.serve(async (req) => {
       },
     );
   } catch (error: unknown) {
-    console.error("Error:", error);
+    console.error("Borrower creation request failed", { name: error instanceof Error ? error.name : "unknown" });
     const message = error instanceof Error ? error.message : "An unknown error occurred";
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
