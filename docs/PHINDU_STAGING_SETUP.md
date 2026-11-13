@@ -4,25 +4,38 @@ Staging is isolated from the live Phindu database and has separate Supabase and 
 
 ## Provisioning status
 
-The Supabase project must be created in the `NABA CENTRAL` organization in `us-east-1`. The quoted cost was **$10/month**, approved by the owner. Creation is currently blocked by overdue invoices on the organization. Do not substitute the production project or copy production borrower data. After billing is resolved, create `Phindu Loans Staging` and complete the secrets below.
+The dedicated Supabase project is provisioned in the `NABA CENTRAL` organization in `us-east-1`:
+
+- Project ref: `ajoowxdvfsnverwdhipg`
+- API URL: `https://ajoowxdvfsnverwdhipg.supabase.co`
+- Supabase quoted cost: **$10/month**, approved by the owner.
+- The project has the Phindu schema and migrations through `20261104121914`; application tables are empty and no Edge Functions are deployed yet.
+
+Do not substitute either production project (`seobilifwyxhtjvsgqpc` or `yqrfheavftgybhcafzpt`) or copy production borrower data. Complete the staging secrets and deploy workflow before using this project for UAT.
 
 ## GitHub configuration
 
-Create GitHub Environments named `staging` and `production`:
+GitHub Environments `staging` and `production` are configured with required reviewers, admin bypass disabled, and branch rules. `staging` accepts `codex/*` branches; `production` accepts `main`. The current repository owner is the configured reviewer.
 
-- Set `staging` secrets listed below. Restrict deployments to trusted repository branches and require a reviewer for workflows that execute pull-request code with staging credentials.
-- Set `production` required reviewers and deployment branch rules. Production deploy workflows use this environment; without protection configured in GitHub, the environment name alone does not enforce approval.
-- Keep production Supabase and Cloudflare credentials separate from staging-specific Supabase values.
+Staging project ID, URL, browser API key, Cloudflare account ID, test product code (`MARKETEER`), and a generated staging seed password are set in the `staging` environment. `CLOUDFLARE_API_TOKEN` is available as the existing repository secret. The Supabase browser key currently uses this empty project's legacy anon key; it is public and may be replaced with a modern publishable key when one is issued.
+
+The workflow is not ready to run until these staging-only secrets are also set:
+
+- `SUPABASE_STAGING_ACCESS_TOKEN` — Supabase CLI management access.
+- `SUPABASE_STAGING_DB_PASSWORD` — database password for this staging project.
+- `SUPABASE_STAGING_SERVICE_ROLE_KEY` — staging-only seed and integration test credential.
+
+Keep production Supabase credentials separate from staging values. The environment gates are now in place, but a required reviewer can still approve their own deployment because this repository currently has only one collaborator. Add a second trusted reviewer if independent approval is required.
 
 Required `staging` secrets:
 
 | Secret | Purpose |
 |---|---|
-| `SUPABASE_STAGING_PROJECT_ID` | Staging project reference; must not be either Phindu production project. |
+| `SUPABASE_STAGING_PROJECT_ID` | `ajoowxdvfsnverwdhipg`; must not be either Phindu production project. |
 | `SUPABASE_STAGING_ACCESS_TOKEN` | Supabase CLI management access. |
 | `SUPABASE_STAGING_DB_PASSWORD` | Staging database password. |
 | `SUPABASE_STAGING_URL` | Must match `https://<project-ref>.supabase.co`. |
-| `SUPABASE_STAGING_PUBLISHABLE_KEY` | Staging browser key. |
+| `SUPABASE_STAGING_PUBLISHABLE_KEY` | Staging browser key (legacy anon API key currently available on this project). |
 | `SUPABASE_STAGING_SERVICE_ROLE_KEY` | Staging-only seed and integration test credential. Never use in browser builds. |
 | `STAGING_SEED_PASSWORD` | Password assigned to disposable staging UAT users. |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Deploy staging workers to the Phindu zone/account. |
