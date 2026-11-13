@@ -396,6 +396,27 @@ const AdminBorrowers = () => {
 
       let createdCount = 0;
       for (const item of MARKETEER_BORROWERS) {
+        // Make the one-time starter-loan import safe to repeat. A previous run
+        // may have created some rows before a later item failed; never create a
+        // second approved loan for a borrower already imported by this batch.
+        const { data: matchingProfiles, error: profileLookupError } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("full_name", item.full_name);
+        if (profileLookupError) throw profileLookupError;
+
+        const existingBorrowerIds = (matchingProfiles ?? []).map((profile) => profile.id);
+        if (existingBorrowerIds.length > 0) {
+          const { data: importedLoans, error: loanLookupError } = await supabase
+            .from("loan_applications")
+            .select("id")
+            .in("user_id", existingBorrowerIds)
+            .eq("source", "admin_marketeers_batch")
+            .limit(1);
+          if (loanLookupError) throw loanLookupError;
+          if (importedLoans?.length) continue;
+        }
+
         const targetProductCode = (loanProducts.find((p: any) => p.id === targetProductId) as any)?.product_code ?? null;
         const { data: response, error: responseError } = await supabase.functions.invoke("create-borrower", {
           body: {

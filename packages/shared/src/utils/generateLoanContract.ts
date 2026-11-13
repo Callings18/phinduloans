@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import { supabase } from '@phinduloans/shared/integrations/supabase/client';
 import { logAudit } from '@phinduloans/shared/utils/auditLog';
 import { PDF_THEME } from '@phinduloans/shared/utils/pdfTheme';
+import { getSignedUrl } from '@phinduloans/shared/utils/storageHelpers';
 
 interface LoanData {
   id: string;
@@ -799,11 +800,9 @@ export const generateLoanContract = async (loan: LoanData & { contract_url?: str
   // Prefer stored contract to ensure consistency
   if (loan.contract_url) {
     try {
-      const { data, error } = await supabase.storage
-        .from('loan-documents')
-        .createSignedUrl(loan.contract_url, 300);
-      if (!error && data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
+      const url = await getSignedUrl(loan.contract_url, 'loan-documents');
+      if (url) {
+        window.open(url, '_blank');
         return;
       }
     } catch (e) {
@@ -823,20 +822,14 @@ export const downloadLoanContract = async (loan: LoanData & { contract_url?: str
   // Prefer stored contract to ensure all users see the same version
   if (loan.contract_url) {
     try {
-      const { data, error } = await supabase.storage
-        .from('loan-documents')
-        .createSignedUrl(loan.contract_url, 300);
-      if (!error && data?.signedUrl) {
-        const response = await fetch(data.signedUrl);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
+      const url = await getSignedUrl(loan.contract_url, 'loan-documents');
+      if (url) {
         const a = document.createElement('a');
         a.href = url;
         a.download = `Loan_Contract_${loan.full_name.replace(/\s+/g, '_')}_${loan.id.slice(0, 8)}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
         return;
       }
     } catch (e) {

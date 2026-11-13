@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import SignaturePad from "@phinduloans/shared/components/common/SignaturePad";
 import { validateBorrowerContractUploadFile } from "@phinduloans/shared/utils/borrowerUploadValidation";
 import { downloadLoanContract, generateSignedContractPDF } from "@phinduloans/shared/utils/generateLoanContract";
+import { getSignedUrl } from "@phinduloans/shared/utils/storageHelpers";
 import { logAudit } from "@phinduloans/shared/utils/auditLog";
 import { Input } from "@phinduloans/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@phinduloans/shared/components/ui/tabs";
@@ -292,12 +293,12 @@ export default function ContractSigningWidget({ userId }: Props) {
   };
 
   const handleViewSignedContract = async (signedUrl: string) => {
-    const { data, error } = await supabase.storage.from("loan-documents").createSignedUrl(signedUrl, 300);
-    if (error || !data?.signedUrl) {
+    const url = await getSignedUrl(signedUrl, "loan-documents");
+    if (!url) {
       toast.error("Could not open signed contract");
       return;
     }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   if (isLoading) {

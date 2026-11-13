@@ -1072,28 +1072,6 @@ const AdminApplications = () => {
     return fileName;
   };
 
-  // Helper to get signed URL for viewing documents securely
-  const getSignedUrl = async (filePath: string | null): Promise<string | null> => {
-    if (!filePath) return null;
-    
-    // If it's already a full URL (legacy data), return as-is
-    if (filePath.startsWith('http')) return filePath;
-    
-    const { data, error } = await supabase.storage
-      .from('loan-documents')
-      .createSignedUrl(filePath, 3600); // 1 hour expiry
-    
-    if (error) {
-      toast({
-        title: "Could not open document",
-        description: mapSupabaseError(error),
-        variant: "destructive",
-      });
-      return null;
-    }
-    return data.signedUrl;
-  };
-
   const handleProductSelect = (productId: string) => {
     const product = loanProducts?.find(p => p.id === productId);
     if (product) {
@@ -2343,10 +2321,8 @@ const AdminApplications = () => {
                           variant="outline"
                           size="sm"
                           onClick={async () => {
-                            const { data } = await supabase.storage
-                              .from("loan-documents")
-                              .createSignedUrl(selectedApp.signed_contract_url, 3600);
-                            if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                            const url = await getSignedUrl(selectedApp.signed_contract_url, "loan-documents");
+                            if (url) window.open(url, "_blank");
                           }}
                         >
                           <Eye size={14} className="mr-1" /> View
