@@ -34,7 +34,12 @@ export function matchesBorrowerAuthIdentity(
 export function isProductionSupabaseUrl(value?: string | null): boolean {
   if (!value) return false;
   try {
-    return new URL(value).hostname.toLowerCase() === "seobilifwyxhtjvsgqpc.supabase.co";
+    const host = new URL(value).hostname.toLowerCase();
+    return (
+      host === "seobilifwyxhtjvsgqpc.supabase.co" ||
+      host === "yqrfheavftgybhcafzpt.supabase.co" ||
+      /(^|[-.])(prod|production|live)([-.]|$)/.test(host)
+    );
   } catch {
     return false;
   }
